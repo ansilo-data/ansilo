@@ -1,0 +1,98 @@
+{
+  "id": "n-accounts",
+  "name": "Accounts",
+  "url": "TODO",
+  "tags": [
+    {
+      "id": "t-banking",
+      "name": "Banking",
+      "description": ""
+    }
+  ],
+  "schema": {
+    "entities": [
+      {
+        "id": "e-account",
+        "name": "Accounts",
+        "description": "Transaction, credit, debit or other types of accounts held by our customers",
+        "tags": ["t-banking"],
+        "versions": [
+          {
+            "id": "e-account-v-1.0",
+            "version": { "major": 1, "minor": 0, "patch": 0 },
+            "attributes": [
+              {
+                "id": "e-account-a-id",
+                "name": "id",
+                "description": "The primary key of the account",
+                "type": { "name": "INT" }
+              },
+              {
+                "id": "e-account-a-type",
+                "name": "type",
+                "description": "Specifies the type of bank account",
+                "type": { "name": "VARCHAR(10)" }
+              },
+              {
+                "id": "e-account-a-label",
+                "name": "label",
+                "description": "The customer-managed label for the account",
+                "type": { "name": "VARCHAR(255)" }
+              },
+              {
+                "id": "e-account-a-created",
+                "name": "created",
+                "description": "The timestamp at which the account was created",
+                "type": { "name": "TIMESTAMP" }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "e-transaction",
+        "name": "Transactions",
+        "description": "Transactions made between customer accounts",
+        "tags": ["t-banking"],
+        "versions": [
+          {
+            "id": "e-transaction-v-1.0",
+            "version": { "major": 1, "minor": 0, "patch": 0 },
+            "attributes": [
+              {
+                "id": "e-transaction-a-id",
+                "name": "id",
+                "description": "The primary key of the interaction",
+                "type": { "name": "INT" }
+              },
+              {
+                "id": "e-transaction-src-account",
+                "name": "source_account_id",
+                "description": "The account the funds were transferred from",
+                "type": { "name": "INT" }
+              },
+              {
+                "id": "e-transaction-a-dest-account",
+                "name": "dest_account_id",
+                "description": "The destination account receiving the funds",
+                "type": { "name": "VARCHAR(10)" }
+              },
+              {
+                "id": "e-transaction-a-amount",
+                "name": "amount",
+                "description": "The total amount of the transaction",
+                "type": { "name": "INT" }
+              },
+              {
+                "id": "e-transaction-a-recorded",
+                "name": "recorded",
+                "description": "The time at which this interaction was recorded",
+                "type": { "name": "TIMESTAMP" }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
