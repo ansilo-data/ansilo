@@ -1,12 +1,12 @@
-import * as React from 'react';
-import type { NextPage } from 'next';
-import Dashboard from '../old/Dashboard';
-import { Template } from '../components/template/Template';
+import * as React from "react";
+import type { NextPage } from "next";
+import { Template } from "../components/template/Template";
+import { Sql } from "../components/sql/Sql";
 
 const Catalog: NextPage = () => {
   return (
-    <Template title="Data Catalog">
-      test
+    <Template title="Workbench">
+      <Sql />
     </Template>
   );
 };

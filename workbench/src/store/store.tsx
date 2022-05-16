@@ -1,10 +1,11 @@
 import { configureStore, ThunkAction, Action } from '@reduxjs/toolkit'
 import catalogReducer from '../components/catalog/catalog.slice'
+import sqlReducer from '../components/sql/sql.slice'
 
 
 export function makeStore() {
   return configureStore({
-    reducer: { catalog: catalogReducer },
+    reducer: { catalog: catalogReducer, sql: sqlReducer },
   })
 }
 

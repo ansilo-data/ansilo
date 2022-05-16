@@ -28,6 +28,12 @@
                 "type": { "name": "INT" }
               },
               {
+                "id": "e-account-a-contact-id",
+                "name": "owner_contact_id",
+                "description": "The primary account owner.",
+                "type": { "name": "INT" }
+              },
+              {
                 "id": "e-account-a-type",
                 "name": "type",
                 "description": "Specifies the type of bank account",
@@ -75,7 +81,7 @@
                 "id": "e-transaction-a-dest-account",
                 "name": "dest_account_id",
                 "description": "The destination account receiving the funds",
-                "type": { "name": "VARCHAR(10)" }
+                "type": { "name": "INT" }
               },
               {
                 "id": "e-transaction-a-amount",
