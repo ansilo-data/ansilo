@@ -7,10 +7,10 @@ import TreeItem from "@mui/lab/TreeItem";
 import EntityIcon from "@mui/icons-material/TableChartOutlined";
 import VersionIcon from "@mui/icons-material/ArrowRightOutlined";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { fetchCatalogAsync, selectCatalog } from "./catalog.slice";
+import { fetchCatalogAsync, selectCatalog, Node } from "./catalog.slice";
 import { styled } from "@mui/material/styles";
-import { useAnchor } from "../../util/useAnchor";
 import { versionLabel } from "../../util/versionLabel";
+import Typography from "@mui/material/Typography";
 
 const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
   "& .MuiTreeItem-content": {
@@ -18,12 +18,23 @@ const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
   },
 }));
 
+const Note = styled(Typography)(({ theme }) => ({
+  "&": {
+    fontSize: 12,
+    color: theme.palette.grey["500"],
+    display: 'inline'
+  },
+}));
+
 interface Props {
-  onClick: (versionId: string) => void
+  onClick: (versionId: string) => void;
 }
 
 export default function CatalogTreeView(props: Props) {
   const catalog = useAppSelector(selectCatalog);
+  const isAuthoritative = (node: Node) =>
+    node.url.startsWith(window.location.origin);
+
   return (
     <TreeView
       defaultCollapseIcon={<ExpandMoreIcon />}
@@ -35,7 +46,12 @@ export default function CatalogTreeView(props: Props) {
           icon={<NodeIcon />}
           key={i.id}
           nodeId={i.id}
-          label={i.name}
+          label={
+            <>
+              {i.name}{" "}
+              {isAuthoritative(i) ? <Note>(Authoritative)</Note> : null}
+            </>
+          }
         >
           {i.schema.entities.map((e) => (
             <StyledTreeItem

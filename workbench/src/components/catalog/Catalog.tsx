@@ -21,7 +21,7 @@ import LoadingButton from "@mui/lab/LoadingButton";
 const navigationWidth: number = 240;
 
 export const Catalog = () => {
-  const dispatch = useAppDispatch()
+  const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectCatalog);
   const [anchor, setAnchor] = useAnchor();
 
@@ -77,9 +77,18 @@ export const Catalog = () => {
               version={currentVersion!}
             />
           ) : (
-            <Typography>
-              Please select an entity from the navigation to the left
-            </Typography>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                flexGrow: 1,
+              }}
+            >
+              <Typography>
+                Please select an entity to view the details
+              </Typography>
+            </Box>
           )}
         </Paper>
       </Container>
