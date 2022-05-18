@@ -6,7 +6,7 @@ import Paper from "@mui/material/Paper";
 import Container from "@mui/material/Container";
 import Box from "@mui/material/Box";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import { createJob, selectJobs } from "../jobs.slice";
+import { createJob, Job, selectJobs } from "../jobs.slice";
 import Link from "next/link";
 import Button from "@mui/material/Button";
 import { JobForm } from "./JobForm";
@@ -42,7 +42,7 @@ export const CreateJob = () => {
           }}
           elevation={8}
         >
-          <JobForm onSubmit={(job) => handleCreateJob} />
+          <JobForm onSubmit={(job) => handleCreateJob(job)} />
         </Paper>
       </Container>
     </Box>
