@@ -8,9 +8,9 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import LoadingButton from "@mui/lab/LoadingButton";
 import GovernanceMenu from "../GovernanceMenu";
-import { AuthoritiesTable } from "./AuthoritiesTable";
+import { RolesTable } from "./RolesTable";
 
-export const Authorities = () => {
+export const Roles = () => {
   return (
     <Box sx={{ flexGrow: "1", display: "flex" }}>
       <GovernanceMenu />
@@ -24,7 +24,7 @@ export const Authorities = () => {
         }}
       >
         <Paper sx={{ display: "flex", p: 4 }} elevation={8}>
-          <AuthoritiesTable />
+          <RolesTable />
         </Paper>
       </Container>
     </Box>

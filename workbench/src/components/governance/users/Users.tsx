@@ -8,9 +8,8 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import LoadingButton from "@mui/lab/LoadingButton";
 import GovernanceMenu from "../GovernanceMenu";
-import { AuthoritiesTable } from "./AuthoritiesTable";
 
-export const Authorities = () => {
+export const Users = () => {
   return (
     <Box sx={{ flexGrow: "1", display: "flex" }}>
       <GovernanceMenu />
@@ -24,7 +23,7 @@ export const Authorities = () => {
         }}
       >
         <Paper sx={{ display: "flex", p: 4 }} elevation={8}>
-          <AuthoritiesTable />
+          Users are managed through Microsoft Azure AD
         </Paper>
       </Container>
     </Box>
