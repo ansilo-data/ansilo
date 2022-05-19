@@ -86,7 +86,7 @@ export const JobForm = (props: Props) => {
           display: "flex",
           flexDirection: "column",
         }}
-        onSubmit={(e) => {
+        onSubmit={(e: React.FormEvent<any>) => {
           e.preventDefault();
           handleNext();
         }}
@@ -350,7 +350,7 @@ const Review = ({ job }: { job: Job }) => {
             {_.toPairs(job.destination.options).map(([k, v]) => (
               <TableRow key={k}>
                 <TableCell>{k}</TableCell>
-                <TableCell>{v}</TableCell>
+                <TableCell>{v as any}</TableCell>
               </TableRow>
             ))}
             <TableRow>
@@ -363,7 +363,7 @@ const Review = ({ job }: { job: Job }) => {
             {_.toPairs(job.trigger.options).map(([k, v]) => (
               <TableRow key={k}>
                 <TableCell>{k}</TableCell>
-                <TableCell>{v}</TableCell>
+                <TableCell>{v as any}</TableCell>
               </TableRow>
             ))}
           </TableBody>
