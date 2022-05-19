@@ -7,12 +7,12 @@ import Container from "@mui/material/Container";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import LoadingButton from "@mui/lab/LoadingButton";
-import GovernanceMenu from "../GovernanceMenu";
+import OperationsMenu from "./OperationsMenu";
 
-export const Users = () => {
+export const OperationsIndex = () => {
   return (
     <Box sx={{ flexGrow: "1", display: "flex" }}>
-      <GovernanceMenu />
+      <OperationsMenu />
       <Container
         sx={{
           maxWidth: 800,
@@ -22,8 +22,8 @@ export const Users = () => {
           padding: 4,
         }}
       >
-        <Paper sx={{ display: "flex", p: 4, alignItems: "center" }} elevation={8}>
-          Users are managed through Microsoft Azure AD
+        <Paper sx={{ display: "flex", p: 4, alignItems: 'center' }} elevation={8}>
+          Select an menu item from the panel to the left.
         </Paper>
       </Container>
     </Box>

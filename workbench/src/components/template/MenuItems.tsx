@@ -2,7 +2,7 @@ import * as React from "react";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
-import ListAlt from "@mui/icons-material/ListALt";
+import ListAlt from '@mui/icons-material/ListAlt';
 import AccountTree from "@mui/icons-material/AccountTree";
 import ModelTraining from "@mui/icons-material/ModelTraining";
 import QueryStats from "@mui/icons-material/QueryStats";
