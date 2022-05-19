@@ -6,7 +6,7 @@ import Container from "@mui/material/Container";
 
 const Home: NextPage = () => {
   return (
-    <Template title="Test">
+    <Template title="">
       <Container
         sx={{ py: 2, display: "flex", flexDirection: "column", flexGrow: 1 }}
       >
