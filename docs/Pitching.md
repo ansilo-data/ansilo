@@ -3,7 +3,7 @@ Pitching
 
 ## The problem
 
-Enterprises organically develop systems or acquire technologies which:
+Enterprises organically develop systems and acquire technologies which:
 
  - store data in different (often proprietary) formats
  - speak different languages and operate over incompatible protocols
@@ -21,7 +21,7 @@ Having a single queryable view for and integration point for datasets, regardles
 Where the exposed datasets (aka data products) are developed and managed alongside the systems themselves, by the team responsible for those systems. 
 These are the principles of the emerging "Data Mesh" architecture.
 
-Ansilo is designed from the ground up to be distributed and composed of nodes which are hosted, configured, scaled and deployed independently from one another. They are containerised and suited to be deployed as "side cars" alongside applications. They offer the ability to define a documented, versioned data product schema, treated as a first class interface like any other of the services's APIs. They discover each other, and provide a single catalog of data products across the organisation. They expose industry-standard protocols and authentication to easily integrate with an organisation's existing warehouse, ETL or orchestration tool, authentication mechanism and IdP. Importantly this lets Ansilo be additive in value to the existing tech landscape, providing efficiencies within established organisations.
+Ansilo is designed from the ground up to be distributed and composed of nodes which are hosted, configured, scaled and deployed independently from one another. They are containerised and suited to be deployed as "side cars" alongside applications. They offer the ability to define a documented, versioned data product schema, treated as a first class interface like any other of the services's APIs. They discover each other, and provide a single catalog of data products across the organisation. They expose industry-standard protocols and authentication to easily integrate with an organisation's existing warehouse, ETL or orchestration tool, authentication mechanism and IdP. Importantly, this lets Ansilo be additive in value to the existing tech landscape, providing efficiencies within established organisations.
 
 ## The insight
 
@@ -54,6 +54,10 @@ Denodo/Starburst provide "data virtualisation" does not require the copying of d
  - Ansilo democratises enterprise data management 
  - We make enterprise data management cheaper and faster
  - We make enterprise data management efficient
+
+ Longer version:
+
+ - We make enterprise data management efficient by distributing the workload across teams.
 
 ## What is your company going to make? Please describe your product and what it does or will do.
 
