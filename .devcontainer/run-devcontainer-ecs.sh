@@ -56,16 +56,43 @@ PUB_IP=$(aws ec2 describe-network-interfaces \
      --query 'NetworkInterfaces[0].Association.PublicIp' \
      --output text)
 
-echo "Fowarding local port $LOCAL_PORT to task container at $PUB_IP:22"
+echo "Waiting for sshd on remote task container at $PUB_IP"
 TRIES=0
 while [[ $TRIES -le 10 ]];
 do
     echo "Connecting..."
-    SSH_OUT=$(ssh -oStrictHostKeyChecking=no -NL $LOCAL_PORT:localhost:22 vscode@$PUB_IP 2>&1 || true)
-    if [[ $SSH_OUT != *"Connection refused"* ]];
+    set +e
+    CON_CODE=$(timeout 2 nc -vz $PUB_IP 22; echo $?)
+    set -e
+
+    if [[ $CON_CODE == 0 ]];
     then 
-        exit 0
+        break
     fi
     echo "Failed to connect, sleeping..."
     sleep 10
 done
+
+echo "SSH is listening on devcontainer..."
+echo "Updating ~/.ssh/config"
+
+cp -a ~/.ssh/config ~/.ssh/config.bk
+
+set +e
+if [[ $(grep rustdevcontainer ~/.ssh/config > /dev/null; echo $?) == "0" ]];
+then
+    set -e
+    sed -i.bk "s/.*#devcontainerip/HostName $PUB_IP #devcontainerip/" ~/.ssh/config
+else
+    set -e
+    echo "
+Host rustdevcontainer
+HostName $PUB_IP #devcontainerip
+User vscode
+StrictHostKeyChecking no
+" >> ~/.ssh/config
+
+fi
+
+echo "Ready to ssh rustdevcontainer! sleeping..."
+while :; do sleep 100; done

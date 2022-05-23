@@ -6,7 +6,9 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     curl vim htop ssh openssl libssl-dev sudo \
     # postges reqs
     build-essential pkg-config \
-    libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc
+    libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc clang
+
+RUN mkdir -p /run/sshd
 
 USER vscode
 RUN mkdir -p ~/.ssh
@@ -15,5 +17,3 @@ RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOIgym/c2xk7m+WbgHrm0joP87hQohUj
 
 RUN cargo install cargo-pgx
 RUN cargo pgx init --pg14 download
-
-RUN sudo mkdir -p /run/sshd
