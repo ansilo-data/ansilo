@@ -1,0 +1,5 @@
+comment = 'ansilopg:  Created by pgx'
+default_version = '@CARGO_VERSION@'
+module_pathname = '$libdir/ansilopg'
+relocatable = false
+superuser = false

@@ -1,0 +1,8 @@
+{
+    "terminal.integrated.env.linux": {},
+    "remote.SSH.defaultExtensions": [
+        "eamodio.gitlens",
+        "mutantdino.resourcemonitor",
+        "rust-lang.rust-analyzer"
+    ]
+}
