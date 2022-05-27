@@ -5,8 +5,8 @@
   "icon": "icons/oracle.svg",
   "tags": [
     {
-      "id": "t-banking",
-      "name": "Banking",
+      "id": "t-vertical",
+      "name": "Business Vertical",
       "description": ""
     }
   ],
@@ -16,7 +16,7 @@
         "id": "e-account",
         "name": "Accounts",
         "description": "Transaction, credit, debit or other types of accounts held by our customers",
-        "tags": ["t-banking"],
+        "tags": [{"key": "t-vertical", "value": "Banking"}],
         "versions": [
           {
             "id": "e-account-v-1.0",
@@ -60,7 +60,7 @@
         "id": "e-transaction",
         "name": "Transactions",
         "description": "Transactions made between customer accounts",
-        "tags": ["t-banking"],
+        "tags": [{"key": "t-vertical", "value": "Banking"}],
         "versions": [
           {
             "id": "e-transaction-v-1.0",

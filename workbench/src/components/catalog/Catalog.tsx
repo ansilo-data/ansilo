@@ -17,13 +17,23 @@ import {
 import Typography from "@mui/material/Typography";
 import EntityVersionDetails from "./EntityVersionDetails";
 import LoadingButton from "@mui/lab/LoadingButton";
+import TextField from "@mui/material/TextField";
+import { useState } from "react";
+import MenuItem from "@mui/material/MenuItem";
+import _ from "lodash";
 
 export const navigationWidth: number = 440;
 
 export const Catalog = () => {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectCatalog);
+  const [categorisation, setCategorisation] = useState<"node" | string>("node");
   const [anchor, setAnchor] = useAnchor();
+
+  const tagCategories = _.uniqBy(
+    catalog.nodes?.flatMap((i) => i.tags),
+    (i) => i.id
+  );
 
   const forceRefresh = () => {
     dispatch(fetchCatalogAsync());
@@ -48,7 +58,22 @@ export const Catalog = () => {
             pr: [1],
           }}
         >
-          Nodes{" "}
+          <TextField
+            sx={{mr: 2}}
+            required
+            select
+            label=""
+            variant="standard"
+            value={categorisation}
+            onChange={(e) => setCategorisation(e.target.value)}
+          >
+            <MenuItem value="node">Node</MenuItem>
+            {tagCategories.map((i) => (
+              <MenuItem key={i.id} value={i.id}>
+                {i.name}
+              </MenuItem>
+            ))}
+          </TextField>
           <LoadingButton
             onClick={forceRefresh}
             loading={catalog.status === "loading"}
@@ -58,7 +83,7 @@ export const Catalog = () => {
         </Toolbar>
         <Divider />
         <List component="nav">
-          <CatalogTreeView onClick={(versionId) => setAnchor(versionId)} />
+          <CatalogTreeView categorisation={categorisation} onClick={(versionId) => setAnchor(versionId)} />
         </List>
       </Paper>
       <Container

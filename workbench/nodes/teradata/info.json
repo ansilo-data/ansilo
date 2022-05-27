@@ -5,43 +5,43 @@
   "icon": "icons/teradata.svg",
   "tags": [
     {
-      "id": "t-marketing",
-      "name": "Marketing",
+      "id": "t-vendor",
+      "name": "Vendor",
       "description": ""
     }
   ],
   "schema": {
     "entities": [
       {
-        "id": "e-teradata-teradata",
+        "id": "e-teradata-contacts",
         "name": "Contacts",
         "description": "The list of entities (individuals or businesses) which interact with the organisation",
-        "tags": ["t-marketing"],
+        "tags": [{"key": "t-vertical", "value": "Marketing"}],
         "versions": [
           {
-            "id": "e-teradata-teradata-v-1.0",
+            "id": "e-teradata-contacts-v-1.0",
             "version": { "major": 1, "minor": 0, "patch": 0 },
             "attributes": [
               {
-                "id": "e-teradata-teradata-a-id",
+                "id": "e-teradata-contacts-a-id",
                 "name": "id",
                 "description": "The primary key of the contact",
                 "type": { "name": "INT" }
               },
               {
-                "id": "e-teradata-teradata-a-type",
+                "id": "e-teradata-contacts-a-type",
                 "name": "type",
                 "description": "Discriminates whether the contact is an individual or legal entity",
                 "type": { "name": "VARCHAR(10)" }
               },
               {
-                "id": "e-teradata-teradata-a-name",
+                "id": "e-teradata-contacts-a-name",
                 "name": "name",
                 "description": "This is the legal name of the individual or business",
                 "type": { "name": "VARCHAR(255)" }
               },
               {
-                "id": "e-teradata-teradata-a-registered",
+                "id": "e-teradata-contacts-a-registered",
                 "name": "registered",
                 "description": "The timestamp which the contact became a client of our business",
                 "type": { "name": "TIMESTAMP" }
@@ -49,35 +49,35 @@
             ]
           },
           {
-            "id": "e-teradata-teradata-v-1.1",
+            "id": "e-teradata-contacts-v-1.1",
             "version": { "major": 1, "minor": 1, "patch": 0 },
             "attributes": [
               {
-                "id": "e-teradata-teradata-a-id",
+                "id": "e-teradata-contacts-a-id",
                 "name": "id",
                 "description": "The primary key of the contact",
                 "type": { "name": "INT" }
               },
               {
-                "id": "e-teradata-teradata-a-type",
+                "id": "e-teradata-contacts-a-type",
                 "name": "type",
                 "description": "Discriminates whether the contact is an individual or legal entity",
                 "type": { "name": "VARCHAR(10)" }
               },
               {
-                "id": "e-teradata-teradata-a-name",
+                "id": "e-teradata-contacts-a-name",
                 "name": "name",
                 "description": "This is the legal name of the individual or business",
                 "type": { "name": "VARCHAR(255)" }
               },
               {
-                "id": "e-teradata-teradata-a-dob",
+                "id": "e-teradata-contacts-a-dob",
                 "name": "date_of_birth",
                 "description": "For individual teradata, this is the legal date of birth of the individual",
                 "type": { "name": "DATE" }
               },
               {
-                "id": "e-teradata-teradata-a-registered",
+                "id": "e-teradata-contacts-a-registered",
                 "name": "registered",
                 "description": "The timestamp at which the contact became a client of our business",
                 "type": { "name": "TIMESTAMP" }
@@ -90,7 +90,7 @@
         "id": "e-teradata-interactions",
         "name": "Interactions",
         "description": "The list of recorded interactions teradata have had with our business across digital touch points.",
-        "tags": ["t-marketing"],
+        "tags": [{"key": "t-vertical", "value": "Marketing"}],
         "versions": [
           {
             "id": "e-teradata-interactions-v-1.0",

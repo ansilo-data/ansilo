@@ -20,7 +20,7 @@ export interface EntitySchema {
   id: Id;
   name: string;
   description: string;
-  tags: Id[];
+  tags: TagValue[];
   versions: EntitySchemaVersion[];
 }
 
@@ -28,6 +28,11 @@ export interface Tag {
   id: Id;
   name: string;
   description: string;
+}
+
+export interface TagValue {
+  key: Id;
+  value: string;
 }
 
 export interface EntitySchemaVersion {
