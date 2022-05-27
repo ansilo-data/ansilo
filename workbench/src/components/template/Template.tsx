@@ -132,7 +132,7 @@ export const Template = (props: TemplateProps) => {
             }}
           >
             <Image width={32} height={32} src="/squirrel.png" alt="" />
-            <span style={{ marginLeft: 24 }}>Squirrel</span>
+            <span style={{ marginLeft: 24 }}>Ansilo</span>
           </Container>
           <IconButton onClick={toggleDrawer}>
             <ChevronLeftIcon />

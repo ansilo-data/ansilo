@@ -18,7 +18,7 @@ import Typography from "@mui/material/Typography";
 import EntityVersionDetails from "./EntityVersionDetails";
 import LoadingButton from "@mui/lab/LoadingButton";
 
-const navigationWidth: number = 240;
+export const navigationWidth: number = 440;
 
 export const Catalog = () => {
   const dispatch = useAppDispatch();

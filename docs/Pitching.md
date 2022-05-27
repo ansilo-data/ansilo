@@ -55,7 +55,7 @@ Denodo/Starburst provide "data virtualisation" does not require the copying of d
  - We make enterprise data management cheaper and faster
  - We make enterprise data management efficient
 
- Longer version:
+Longer version:
 
  - We make enterprise data management efficient by distributing the workload across teams.
 

@@ -2,6 +2,7 @@
   "id": "n-accounts",
   "name": "Accounts",
   "url": "TODO",
+  "icon": "icons/oracle.svg",
   "tags": [
     {
       "id": "t-banking",

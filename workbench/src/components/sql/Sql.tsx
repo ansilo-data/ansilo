@@ -85,7 +85,7 @@ export const Sql = () => {
         </Toolbar>
         <Divider />
         <List component="nav">
-          <CatalogTreeView onClick={(versionId) => handleVersionClick(versionId)} />
+          <CatalogTreeView narrow onClick={(versionId) => handleVersionClick(versionId)} />
         </List>
       </Paper>
       <Box

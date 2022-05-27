@@ -1,7 +1,8 @@
 {
-  "id": "n-contacts",
-  "name": "Contacts",
-  "icon": "icons/oracle.svg",
+  "id": "n-teradata",
+  "name": "Teradata",
+  "url": "TODO",
+  "icon": "icons/teradata.svg",
   "tags": [
     {
       "id": "t-marketing",
@@ -12,35 +13,35 @@
   "schema": {
     "entities": [
       {
-        "id": "e-contacts",
+        "id": "e-teradata-teradata",
         "name": "Contacts",
         "description": "The list of entities (individuals or businesses) which interact with the organisation",
         "tags": ["t-marketing"],
         "versions": [
           {
-            "id": "e-contacts-v-1.0",
+            "id": "e-teradata-teradata-v-1.0",
             "version": { "major": 1, "minor": 0, "patch": 0 },
             "attributes": [
               {
-                "id": "e-contacts-a-id",
+                "id": "e-teradata-teradata-a-id",
                 "name": "id",
                 "description": "The primary key of the contact",
                 "type": { "name": "INT" }
               },
               {
-                "id": "e-contacts-a-type",
+                "id": "e-teradata-teradata-a-type",
                 "name": "type",
                 "description": "Discriminates whether the contact is an individual or legal entity",
                 "type": { "name": "VARCHAR(10)" }
               },
               {
-                "id": "e-contacts-a-name",
+                "id": "e-teradata-teradata-a-name",
                 "name": "name",
                 "description": "This is the legal name of the individual or business",
                 "type": { "name": "VARCHAR(255)" }
               },
               {
-                "id": "e-contacts-a-registered",
+                "id": "e-teradata-teradata-a-registered",
                 "name": "registered",
                 "description": "The timestamp which the contact became a client of our business",
                 "type": { "name": "TIMESTAMP" }
@@ -48,35 +49,35 @@
             ]
           },
           {
-            "id": "e-contacts-v-1.1",
+            "id": "e-teradata-teradata-v-1.1",
             "version": { "major": 1, "minor": 1, "patch": 0 },
             "attributes": [
               {
-                "id": "e-contacts-a-id",
+                "id": "e-teradata-teradata-a-id",
                 "name": "id",
                 "description": "The primary key of the contact",
                 "type": { "name": "INT" }
               },
               {
-                "id": "e-contacts-a-type",
+                "id": "e-teradata-teradata-a-type",
                 "name": "type",
                 "description": "Discriminates whether the contact is an individual or legal entity",
                 "type": { "name": "VARCHAR(10)" }
               },
               {
-                "id": "e-contacts-a-name",
+                "id": "e-teradata-teradata-a-name",
                 "name": "name",
                 "description": "This is the legal name of the individual or business",
                 "type": { "name": "VARCHAR(255)" }
               },
               {
-                "id": "e-contacts-a-dob",
+                "id": "e-teradata-teradata-a-dob",
                 "name": "date_of_birth",
-                "description": "For individual contacts, this is the legal date of birth of the individual",
+                "description": "For individual teradata, this is the legal date of birth of the individual",
                 "type": { "name": "DATE" }
               },
               {
-                "id": "e-contacts-a-registered",
+                "id": "e-teradata-teradata-a-registered",
                 "name": "registered",
                 "description": "The timestamp at which the contact became a client of our business",
                 "type": { "name": "TIMESTAMP" }
@@ -86,35 +87,35 @@
         ]
       },
       {
-        "id": "e-interactions",
+        "id": "e-teradata-interactions",
         "name": "Interactions",
-        "description": "The list of recorded interactions contacts have had with our business across digital touch points.",
+        "description": "The list of recorded interactions teradata have had with our business across digital touch points.",
         "tags": ["t-marketing"],
         "versions": [
           {
-            "id": "e-interactions-v-1.0",
+            "id": "e-teradata-interactions-v-1.0",
             "version": { "major": 1, "minor": 0, "patch": 0 },
             "attributes": [
               {
-                "id": "e-interactions-a-id",
+                "id": "e-teradata-interactions-a-id",
                 "name": "id",
                 "description": "The primary key of the interaction",
                 "type": { "name": "INT" }
               },
               {
-                "id": "e-interactions-a-contact",
+                "id": "e-teradata-interactions-a-contact",
                 "name": "contact_id",
                 "description": "The ID of the contact who was responsible for this interaction",
                 "type": { "name": "INT" }
               },
               {
-                "id": "e-interactions-a-type",
+                "id": "e-teradata-interactions-a-type",
                 "name": "type",
                 "description": "The type of interaction against this contact",
                 "type": { "name": "VARCHAR(10)" }
               },
               {
-                "id": "e-interactions-a-recorded",
+                "id": "e-teradata-interactions-a-recorded",
                 "name": "recorded",
                 "description": "The time at which this interaction was recorded",
                 "type": { "name": "TIMESTAMP" }

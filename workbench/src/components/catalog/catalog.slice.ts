@@ -7,6 +7,7 @@ export interface Node {
   name: string;
   id: Id;
   url: string;
+  icon?: string;
   schema: Schema;
   tags: Tag[];
 }

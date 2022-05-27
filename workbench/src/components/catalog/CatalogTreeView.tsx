@@ -11,6 +11,8 @@ import { fetchCatalogAsync, selectCatalog, Node } from "./catalog.slice";
 import { styled } from "@mui/material/styles";
 import { versionLabel } from "../../util/versionLabel";
 import Typography from "@mui/material/Typography";
+import { navigationWidth } from "./Catalog";
+import Box from "@mui/material/Box";
 
 const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
   "& .MuiTreeItem-content": {
@@ -22,11 +24,20 @@ const Note = styled(Typography)(({ theme }) => ({
   "&": {
     fontSize: 12,
     color: theme.palette.grey["500"],
-    display: 'inline'
+    display: "inline",
+  },
+}));
+
+const VendorIcon = styled("img")(({ theme }) => ({
+  "&": {
+    marginLeft: 'auto',
+    paddingLeft: 16,
+    height: 16,
   },
 }));
 
 interface Props {
+  narrow?:boolean
   onClick: (versionId: string) => void;
 }
 
@@ -39,7 +50,7 @@ export default function CatalogTreeView(props: Props) {
     <TreeView
       defaultCollapseIcon={<ExpandMoreIcon />}
       defaultExpandIcon={<ChevronRightIcon />}
-      sx={{ height: "100%", flexGrow: 1, maxWidth: 240, overflowY: "auto" }}
+      sx={{ height: "100%", flexGrow: 1, width: '100%', overflowY: "auto" }}
     >
       {catalog.nodes?.map((i) => (
         <StyledTreeItem
@@ -47,10 +58,15 @@ export default function CatalogTreeView(props: Props) {
           key={i.id}
           nodeId={i.id}
           label={
-            <>
+            <Box sx={{display: 'flex', flexDirection: 'row', alignItems: 'center'}}>
               {i.name}{" "}
-              {isAuthoritative(i) ? <Note>(Authoritative)</Note> : null}
-            </>
+              {isAuthoritative(i) ? <Note sx={{pl: 1}}>(Authoritative)</Note> : null}
+              {i.icon && !props.narrow && (
+                <>
+                  <VendorIcon src={i.icon} />
+                </>
+              )}
+            </Box>
           }
         >
           {i.schema.entities.map((e) => (
