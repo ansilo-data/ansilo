@@ -1,4 +1,5 @@
 import Box from "@mui/material/Box";
+import { darken } from "@mui/material/styles";
 import * as d3 from "d3";
 import _ from "lodash";
 import { useEffect, useRef, useState } from "react";
@@ -110,7 +111,6 @@ const D3ErdGraph = (
   {
     linkStroke = "#999", // link stroke color
     linkStrokeOpacity = 0.6, // link stroke opacity
-    linkStrokeWidth = 1.5, // given d in links, returns a stroke width in pixels
     linkStrokeLinecap = "round", // link stroke linecap
     colors = d3.schemeDark2, // an array of color strings, for the node groups
     width = 640, // outer width, in pixels
@@ -122,12 +122,42 @@ const D3ErdGraph = (
   const nodeGroups = d3.sort(GROUP);
   const color = d3.scaleOrdinal(nodeGroups, colors);
 
+  // Compute unique starting positions
+  // (calculated as a point on circle centered around a point on a bigger circle)
+  const GLOBAL_CIRCLE_RADIUS = Math.min(width, height) / 2;
+  const GROUP_CIRCLE_RADIUS = 50;
+  const uniqueGroups = _.uniq(nodeGroups);
+  const groupData = uniqueGroups.reduce((a, i, idx) => {
+    a[i] = {
+      idx,
+      entities: entities.filter((e) => groupingFn(e) === i),
+    };
+    return a;
+  }, {});
+  const startingAngle = (e: Entity) =>
+    (groupData[groupingFn(e)].idx / uniqueGroups.length) * Math.PI * 2;
+  const groupAngle = (e: Entity) => {
+    const ents = groupData[groupingFn(e)].entities;
+
+    return (ents.indexOf(e) / ents.length) * Math.PI * 2;
+  };
+  const startingX = (e: Entity) =>
+    Math.round(
+      Math.sin(startingAngle(e)) * GLOBAL_CIRCLE_RADIUS +
+        Math.sin(groupAngle(e)) * GROUP_CIRCLE_RADIUS
+    );
+  const startingY = (e: Entity) =>
+    Math.round(
+      Math.cos(startingAngle(e)) * GLOBAL_CIRCLE_RADIUS +
+        Math.cos(groupAngle(e)) * GROUP_CIRCLE_RADIUS
+    );
+
   // Compute values.
   const EID = d3.map(entities, (e) => e.id).map(intern);
   const RSRC = d3.map(relationships, (r) => r.source).map(intern);
   const RTGT = d3.map(relationships, (r) => r.target).map(intern);
   const ENTITY_HTML_DOCS = d3.map(entities, (e) =>
-    renderEntityHtml(e, color(e.node.id))
+    renderEntityHtml(e, color(groupingFn(e)))
   );
 
   // Replace the input nodes and links with mutable objects for the simulation.
@@ -141,16 +171,18 @@ const D3ErdGraph = (
           open: true,
           width: 0,
           height: 0,
+          x: startingX(e),
+          y: startingY(e),
         } as EntityNode)
     )
     .map((d) => ({ ...d, ...calculateEntityDimensions(d) }));
-  const links = d3.map(relationships, (_, i) => ({
+  const links = d3.map(relationships, (r, i) => ({
     source: RSRC[i],
     target: RTGT[i],
   }));
 
   // Construct the forces.
-  const forceNode = d3.forceManyBody().strength(500);
+  const forceNode = d3.forceManyBody().strength(20);
   const forceLink = d3
     .forceLink(links)
     .id(({ index: i }) => EID[i!])
@@ -170,9 +202,6 @@ const D3ErdGraph = (
     )
     .id(({ index: i }) => EID[i!])
     .strength(0.01);
-
-  // TODO: right angle lines
-  // TODO: unique starting position by category
 
   const simulation = d3
     .forceSimulation(nodes)
@@ -195,12 +224,12 @@ const D3ErdGraph = (
   const link = g
     .append("g")
     .attr("stroke", linkStroke)
-    .attr("stroke-opacity", linkStrokeOpacity)
     .attr("stroke-width", 3)
     .attr("stroke-linecap", linkStrokeLinecap)
-    .selectAll("line")
+    .attr("fill", "none")
+    .selectAll("polyline")
     .data(links)
-    .join("line");
+    .join("polyline");
 
   const node = g
     .append("g")
@@ -226,22 +255,20 @@ const D3ErdGraph = (
   }
 
   const clipX = (x: number, d: EntityNode) => {
-    return x
+    return x;
     // return Math.max(Math.min(x, width / 2 - d.width), -width / 2);
   };
   const clipY = (y: number, d: any) => {
-    return y
+    return y;
     // return Math.max(Math.min(y, 3 * height / 2 - d.height), -height / 2);
   };
 
   function ticked() {
-    link
-      .attr("x1", (d) => d.source.x + d.source.width / 2)
-      .attr("y1", (d) => d.source.y + d.source.height / 2)
-      .attr("x2", (d) => d.target.x + d.target.width / 2)
-      .attr("y2", (d) => d.target.y + d.target.height / 2);
+    link.attr("points", (d) => calculateRelationshipPoints(d));
 
-    node.attr("x", (d) => clipX(d.x!, d)).attr("y", (d) => clipY(d.y!, d));
+    node
+      .attr("x", (d) => Math.round(clipX(d.x!, d)))
+      .attr("y", (d) => Math.round(clipY(d.y!, d)));
   }
 
   function drag(simulation: d3.Simulation<any, any>) {
@@ -323,11 +350,11 @@ const renderEntityHtml = (e: Entity, color: string): string => {
         cursor: pointer;
         width: 100%;
         padding: 4px;
-        background: ${color};
+        background: ${darken(color, 0.2)};
       }
 
       #${id}-erd table {
-        background: ${color};
+        background: ${darken(color, 0.4)};
         border-collapse: collapse;
         table-layout: fixed;
       }
@@ -380,4 +407,21 @@ const calculateEntityDimensions = (d?: EntityNode) => {
     width: 200,
     height: 34 + (d?.open ? d.entity.attributes.length * 22.5 : 0),
   };
+};
+
+const calculateRelationshipPoints = (d: {
+  source: EntityNode;
+  target: EntityNode;
+}) => {
+  const dx = Math.abs(d.target.x! - d.source.x!);
+  const dy = Math.abs(d.target.y! - d.source.y!);
+
+  const scx = d.source.x! + d.source.width / 2;
+  const scy = d.source.y! + d.source.height / 2;
+  const tcx = d.target.x! + d.target.width / 2;
+  const tcy = d.target.y! + d.target.height / 2;
+
+  return [[scx, scy], dx < dy ? [tcx, scy] : [scx, tcy], [tcx, tcy]]
+    .map((i) => i.join(","))
+    .join(" ");
 };
