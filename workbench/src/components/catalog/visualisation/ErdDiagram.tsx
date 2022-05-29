@@ -1,4 +1,5 @@
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import { darken } from "@mui/material/styles";
 import * as d3 from "d3";
 import _ from "lodash";
@@ -7,6 +8,8 @@ import { EntitySchema, EntitySchemaVersion, Id, Node } from "../catalog.slice";
 
 interface Props {
   nodes: Node[];
+  categorisation: "node" | string;
+  selectedEntity?: EntitySchema;
 }
 
 type Entity = EntitySchema & EntitySchemaVersion & { node: Node };
@@ -20,6 +23,13 @@ interface Relationship {
 
 export const ErdDiagram = (props: Props) => {
   const container = useRef<HTMLDivElement>();
+  const [graph, setGraph] = useState<ReturnType<typeof D3ErdGraph>>();
+
+  const groupingFn =
+    props.categorisation === "node"
+      ? (e: Entity) => e.node.id
+      : (e: Entity) =>
+          e.tags.find((i) => i.key === props.categorisation)?.value || "";
 
   // @ts-ignore
   useEffect(() => {
@@ -31,24 +41,59 @@ export const ErdDiagram = (props: Props) => {
 
       const [entities, relationships] = constructGraphData(props.nodes);
 
-      const chart = D3ErdGraph(entities, relationships, (e) => e.node.id, {
-        width: container.current.clientWidth,
-        height: container.current.clientHeight,
-      });
+      const graph = D3ErdGraph(
+        entities,
+        relationships,
+        groupingFn,
+        props.selectedEntity,
+        {
+          width: container.current.clientWidth,
+          height: container.current.clientHeight,
+        }
+      );
 
       for (const child of Array.from(container.current.childNodes)) {
         child.remove();
       }
-      container.current?.appendChild(chart);
+      container.current?.appendChild(graph);
+      setGraph(graph);
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.nodes.length]);
+  }, [props.nodes.length, props.categorisation]);
+
+  useEffect(() => {
+    if (graph && props.selectedEntity) {
+      graph.callbacks.zoomToEntity(props.selectedEntity);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, props.selectedEntity?.id]);
 
   return (
     <Box
-      sx={{ width: "100%", height: "100%", overflow: "hidden" }}
-      ref={container}
-    ></Box>
+      sx={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+      }}
+    >
+      <Button
+        sx={{ position: "absolute", right: 0, top: 0 }}
+        onClick={() => graph?.callbacks.zoomToFitAll()}
+        variant="contained"
+        color="secondary"
+      >
+        Reset Zoom
+      </Button>
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          overflow: "hidden",
+          opacity: graph ? 1 : 0,
+        }}
+        ref={container}
+      ></Box>
+    </Box>
   );
 };
 
@@ -103,15 +148,12 @@ interface EntityNode extends d3.SimulationNodeDatum {
   height: number;
 }
 
-// @ts-ignore
 const D3ErdGraph = (
   entities: Entity[],
   relationships: Relationship[],
   groupingFn: (e: Entity) => any,
+  selectedEntity?: EntitySchema,
   {
-    linkStroke = "#999", // link stroke color
-    linkStrokeOpacity = 0.6, // link stroke opacity
-    linkStrokeLinecap = "round", // link stroke linecap
     colors = d3.schemeDark2, // an array of color strings, for the node groups
     width = 640, // outer width, in pixels
     height = 400, // outer height, in pixels
@@ -223,9 +265,9 @@ const D3ErdGraph = (
 
   const link = g
     .append("g")
-    .attr("stroke", linkStroke)
+    .attr("stroke", "#999")
     .attr("stroke-width", 3)
-    .attr("stroke-linecap", linkStrokeLinecap)
+    .attr("stroke-linecap", "round")
     .attr("fill", "none")
     .selectAll("polyline")
     .data(links)
@@ -256,11 +298,9 @@ const D3ErdGraph = (
 
   const clipX = (x: number, d: EntityNode) => {
     return x;
-    // return Math.max(Math.min(x, width / 2 - d.width), -width / 2);
   };
-  const clipY = (y: number, d: any) => {
+  const clipY = (y: number, d: EntityNode) => {
     return y;
-    // return Math.max(Math.min(y, 3 * height / 2 - d.height), -height / 2);
   };
 
   function ticked() {
@@ -299,6 +339,7 @@ const D3ErdGraph = (
   // handle opening/closing entities
   node.on("click", function (e: MouseEvent) {
     if (e.defaultPrevented) return; // dragged
+    if (e.target instanceof Element && e.target.tagName !== "H1") return; // only toggle if clicked on header
 
     const node = d3.select(this);
     const d = node.datum() as EntityNode;
@@ -315,12 +356,84 @@ const D3ErdGraph = (
 
   // zooming
   const zoom = d3.zoom();
-  svg.call(zoom as any);
+  svg.call(zoom as any).on("dblclick.zoom", null);
+
   zoom.on("zoom", (e: d3.D3ZoomEvent<any, any>) => {
-    g.attr("transform", e.transform as any);
+    if (e.sourceEvent?.type !== "mousemove") {
+      g.transition()
+        .duration(200)
+        .delay(0)
+        .attr("transform", e.transform as any);
+    } else {
+      g.attr("transform", e.transform as any);
+    }
   });
 
-  return Object.assign(svg.node(), { scales: { color } });
+  const zoomToFitAll = () => {
+    const padding = 20;
+    const xmin = Math.min(...nodes.map((i) => i.x!)) - padding;
+    const ymin = Math.min(...nodes.map((i) => i.y!)) - padding;
+    const xmax = Math.max(...nodes.map((i) => i.x! + i.width)) + padding;
+    const ymax = Math.max(...nodes.map((i) => i.y! + i.height)) + padding;
+
+    const dx = xmax - xmin;
+    const dy = ymax - ymin;
+
+    const zx = width / dx;
+    const zy = height / dy;
+
+    const cx = (xmax + xmin) / 2;
+    const cy = (ymax + ymin) / 2;
+
+    svg.call(
+      zoom.transform as any,
+      d3.zoomIdentity.scale(Math.min(zx, zy)).translate(-cx, -cy)
+    );
+  };
+
+  const zoomToEntity = (e: EntitySchema) => {
+    const node = nodes.find((n) => n.entity.id === e.id);
+
+    if (!node) return;
+
+    const zx = width / node.width;
+    const zy = height / node.height;
+    const cx = node.x! + node.width / 2;
+    const cy = node.y! + node.height / 2;
+
+    svg.call(
+      zoom.transform as any,
+      d3.zoomIdentity.scale(Math.min(zx, zy) * 0.5).translate(-cx, -cy)
+    );
+  };
+
+  // run simulation until stable
+  while (true) {
+    for (let i = 0; i <= 50; i++) {
+      simulation.tick();
+    }
+
+    const vmax = Math.max(
+      ...nodes.map((i) => i.vx!),
+      ...nodes.map((i) => i.vy!)
+    );
+
+    if (vmax < 5) {
+      break;
+    }
+  }
+
+  // initial zoom
+  if (selectedEntity) {
+    zoomToEntity(selectedEntity);
+  } else {
+    zoomToFitAll();
+  }
+
+  return Object.assign(svg.node(), {
+    scales: { color },
+    callbacks: { zoomToEntity, zoomToFitAll },
+  });
 };
 
 const renderEntityHtml = (e: Entity, color: string): string => {
@@ -380,7 +493,7 @@ const renderEntityHtml = (e: Entity, color: string): string => {
     </head>
     <div id="${id}-erd">
       <h1>${e.name}</h1>
-      <table cellspacing="0">
+      <table class="attrs" cellspacing="0">
         <tbody>
         ${e.attributes
           .map(

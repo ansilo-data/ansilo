@@ -22,14 +22,17 @@ import { useState } from "react";
 import MenuItem from "@mui/material/MenuItem";
 import _ from "lodash";
 import { ErdDiagram } from "./visualisation/ErdDiagram";
+import Button from "@mui/material/Button";
+import Switch from "@mui/material/Switch";
 
-export const navigationWidth: number = 440;
+export const navigationWidth: number = 340;
 
 export const Catalog = () => {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectCatalog);
   const [categorisation, setCategorisation] = useState<"node" | string>("node");
   const [anchor, setAnchor] = useAnchor();
+  const [viewMode, setViewMode] = useState<"erd" | "doc">("erd");
 
   const tagCategories = _.uniqBy(
     catalog.nodes?.flatMap((i) => i.tags),
@@ -48,8 +51,16 @@ export const Catalog = () => {
     ?.find(([e, v]) => v.id === anchor) || [undefined, undefined];
 
   return (
-    <Box sx={{ flexGrow: "1", display: "flex" }}>
-      <Paper sx={{ maxWidth: navigationWidth, flexGrow: 1 }} elevation={6}>
+    <Box sx={{ flexGrow: "1", display: "flex", overflow: "hidden" }}>
+      <Paper
+        sx={{
+          width: navigationWidth,
+          flexGrow: 0,
+          display: "flex",
+          flexDirection: "column",
+        }}
+        elevation={6}
+      >
         <Toolbar
           sx={{
             display: "flex",
@@ -83,12 +94,29 @@ export const Catalog = () => {
           </LoadingButton>
         </Toolbar>
         <Divider />
-        <List component="nav">
+        <List sx={{ flexGrow: 1, overflowY: "auto" }} component="nav">
           <CatalogTreeView
             categorisation={categorisation}
             onClick={(versionId) => setAnchor(versionId)}
           />
         </List>
+        <Divider sx={{ marginTop: "auto" }} />
+        <Toolbar
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pl: [2],
+          }}
+        >
+          <Typography variant="body1">Document</Typography>
+          <Switch
+            checked={viewMode === "erd"}
+            onChange={(e) => setViewMode(e.target.checked ? "erd" : "doc")}
+            color="success"
+          />
+          <Typography variant="body1">ERD</Typography>
+        </Toolbar>
       </Paper>
       <Container
         sx={{
@@ -103,29 +131,37 @@ export const Catalog = () => {
           sx={{
             display: "flex",
             p: 4,
-            width: currentEntity && currentVersion ? undefined : "100%",
+            width: viewMode === "erd" ? "100%" : undefined,
+            overflowY: viewMode === "doc" ? "auto" : undefined,
           }}
           elevation={8}
         >
-          {currentEntity && currentVersion ? (
-            <EntityVersionDetails
-              entity={currentEntity!}
-              version={currentVersion!}
+          {viewMode === "doc" &&
+            (currentEntity && currentVersion ? (
+              <EntityVersionDetails
+                entity={currentEntity!}
+                version={currentVersion!}
+              />
+            ) : (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  flexGrow: 1,
+                }}
+              >
+                <Typography>
+                  Please select an entity to view the details
+                </Typography>
+              </Box>
+            ))}
+          {viewMode === "erd" && catalog.nodes && (
+            <ErdDiagram
+              nodes={catalog.nodes}
+              categorisation={categorisation}
+              selectedEntity={currentEntity}
             />
-          ) : (
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                flexGrow: 1,
-              }}
-            >
-              {/* <Typography>
-                Please select an entity to view the details
-              </Typography> */}
-              {catalog.nodes && <ErdDiagram nodes={catalog.nodes} />}
-            </Box>
           )}
         </Paper>
       </Container>
