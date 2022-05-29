@@ -21,6 +21,7 @@ import TextField from "@mui/material/TextField";
 import { useState } from "react";
 import MenuItem from "@mui/material/MenuItem";
 import _ from "lodash";
+import { ErdDiagram } from "./visualisation/ErdDiagram";
 
 export const navigationWidth: number = 440;
 
@@ -59,7 +60,7 @@ export const Catalog = () => {
           }}
         >
           <TextField
-            sx={{mr: 2}}
+            sx={{ mr: 2 }}
             required
             select
             label=""
@@ -83,7 +84,10 @@ export const Catalog = () => {
         </Toolbar>
         <Divider />
         <List component="nav">
-          <CatalogTreeView categorisation={categorisation} onClick={(versionId) => setAnchor(versionId)} />
+          <CatalogTreeView
+            categorisation={categorisation}
+            onClick={(versionId) => setAnchor(versionId)}
+          />
         </List>
       </Paper>
       <Container
@@ -95,7 +99,14 @@ export const Catalog = () => {
           padding: 4,
         }}
       >
-        <Paper sx={{ display: "flex", p: 4 }} elevation={8}>
+        <Paper
+          sx={{
+            display: "flex",
+            p: 4,
+            width: currentEntity && currentVersion ? undefined : "100%",
+          }}
+          elevation={8}
+        >
           {currentEntity && currentVersion ? (
             <EntityVersionDetails
               entity={currentEntity!}
@@ -110,9 +121,10 @@ export const Catalog = () => {
                 flexGrow: 1,
               }}
             >
-              <Typography>
+              {/* <Typography>
                 Please select an entity to view the details
-              </Typography>
+              </Typography> */}
+              {catalog.nodes && <ErdDiagram nodes={catalog.nodes} />}
             </Box>
           )}
         </Paper>

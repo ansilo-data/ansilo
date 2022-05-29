@@ -16,7 +16,7 @@
         "id": "e-account",
         "name": "Accounts",
         "description": "Transaction, credit, debit or other types of accounts held by our customers",
-        "tags": [{"key": "t-vertical", "value": "Banking"}],
+        "tags": [{ "key": "t-vertical", "value": "Banking" }],
         "versions": [
           {
             "id": "e-account-v-1.0",
@@ -54,13 +54,22 @@
               }
             ]
           }
+        ],
+        "constraints": [
+          {
+            "id": "c-account-contact-fk",
+            "type": "fk",
+            "attributes": ["e-account-a-contact-id"],
+            "targetEntity": "e-contacts",
+            "targetAttributes": ["e-contact-a-id"]
+          }
         ]
       },
       {
         "id": "e-transaction",
         "name": "Transactions",
         "description": "Transactions made between customer accounts",
-        "tags": [{"key": "t-vertical", "value": "Banking"}],
+        "tags": [{ "key": "t-vertical", "value": "Banking" }],
         "versions": [
           {
             "id": "e-transaction-v-1.0",
@@ -73,7 +82,7 @@
                 "type": { "name": "INT" }
               },
               {
-                "id": "e-transaction-src-account",
+                "id": "e-transaction-a-src-account",
                 "name": "source_account_id",
                 "description": "The account the funds were transferred from",
                 "type": { "name": "INT" }
@@ -97,6 +106,22 @@
                 "type": { "name": "TIMESTAMP" }
               }
             ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "c-transaction-src-account-fk",
+            "type": "fk",
+            "attributes": ["e-transaction-a-src-account"],
+            "targetEntity": "e-account",
+            "targetAttributes": ["e-account-a-id"]
+          },
+          {
+            "id": "c-transaction-dest-account-fk",
+            "type": "fk",
+            "attributes": ["e-transaction-a-dest-account"],
+            "targetEntity": "e-account",
+            "targetAttributes": ["e-account-a-id"]
           }
         ]
       }

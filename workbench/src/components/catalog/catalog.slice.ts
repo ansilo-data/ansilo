@@ -39,6 +39,7 @@ export interface EntitySchemaVersion {
   id: Id;
   version: VersionNumber;
   attributes: EntitySchemaAttribute[];
+  constraints?: Constraint[];
 }
 
 export interface VersionNumber {
@@ -52,8 +53,7 @@ export interface EntitySchemaAttribute {
   name: string;
   description: string;
   type: DataType;
-  constraints?: Constraint[]
-  validations?: Validation[]
+  validations?: Validation[];
 }
 
 export interface DataType {
@@ -62,11 +62,16 @@ export interface DataType {
 }
 
 export interface Constraint {
-  name: string
+  id: Id;
+  type: "fk"|"unique"
+  attributes: Id[];
+  // fk attributes
+  targetEntity?: Id;
+  targetAttributes?: Id[];
 }
 
 export interface Validation {
-  name: string
+  name: string;
 }
 
 // export interface Relation {

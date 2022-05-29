@@ -46,9 +46,6 @@ export default function EntityAttributesTable(props: Props) {
               <TableCell>{a.type.name}</TableCell>
               <TableCell>
                 <ul>
-                  {a.constraints?.map((i) => (
-                    <li key={i.name}>{i.name}</li>
-                  ))}
                   {a.validations?.map((i) => (
                     <li key={i.name}>{i.name}</li>
                   ))}

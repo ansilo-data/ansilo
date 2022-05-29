@@ -15,7 +15,7 @@
         "id": "e-contacts",
         "name": "Contacts",
         "description": "The list of entities (individuals or businesses) which interact with the organisation",
-        "tags": [{"key": "t-vertical", "value": "Marketing"}],
+        "tags": [{ "key": "t-vertical", "value": "Marketing" }],
         "versions": [
           {
             "id": "e-contacts-v-1.0",
@@ -89,7 +89,7 @@
         "id": "e-interactions",
         "name": "Interactions",
         "description": "The list of recorded interactions contacts have had with our business across digital touch points.",
-        "tags": [{"key": "t-vertical", "value": "Marketing"}],
+        "tags": [{ "key": "t-vertical", "value": "Marketing" }],
         "versions": [
           {
             "id": "e-interactions-v-1.0",
@@ -120,6 +120,15 @@
                 "type": { "name": "TIMESTAMP" }
               }
             ]
+          }
+        ],
+        "constraints": [
+          {
+            "id": "c-interaction-contact-fk",
+            "type": "fk",
+            "attributes": ["e-interactions-a-contact"],
+            "targetEntity": "e-contacts",
+            "targetAttributes": ["e-contacts-a-id"]
           }
         ]
       }
