@@ -16,7 +16,7 @@
         "id": "e-teradata-contacts",
         "name": "Contacts",
         "description": "The list of entities (individuals or businesses) which interact with the organisation",
-        "tags": [{"key": "t-vertical", "value": "Marketing"}],
+        "tags": [{ "key": "t-vertical", "value": "Marketing" }],
         "versions": [
           {
             "id": "e-teradata-contacts-v-1.0",
@@ -90,7 +90,7 @@
         "id": "e-teradata-interactions",
         "name": "Interactions",
         "description": "The list of recorded interactions teradata have had with our business across digital touch points.",
-        "tags": [{"key": "t-vertical", "value": "Marketing"}],
+        "tags": [{ "key": "t-vertical", "value": "Marketing" }],
         "versions": [
           {
             "id": "e-teradata-interactions-v-1.0",
@@ -125,5 +125,52 @@
         ]
       }
     ]
-  }
+  },
+  "jobs": [
+    {
+      "id": "j-teradata-import-contacts",
+      "name": "Import contacts",
+      "description": "Retrieves the latest batch of contact records",
+      "query": {
+        "sql": "SELECT * from contacts.contacts_v1_0"
+      },
+      "destination": {
+        "type": "table",
+        "options": {}
+      },
+      "trigger": { "type": "manual" },
+      "runs": [{ "status": "success", "recordsCount": 500 }]
+    },
+    {
+      "id": "j-teradata-import-accounts",
+      "name": "Import accounts",
+      "description": "Merges the latest account records",
+      "query": {
+        "sql": "SELECT a.* FROM accounts.accounts_v1_0 ...."
+      },
+      "destination": {
+        "type": "table",
+        "options": {}
+      },
+      "trigger": { "type": "manual" },
+      "runs": [{ "status": "success", "recordsCount": 100 }]
+    },
+    {
+      "id": "j-teradata-import-transactions",
+      "name": "Import transactions",
+      "description": "Merges the latest transaction records",
+      "query": {
+        "sql": "SELECT a.* FROM accounts.transactions_v1_0 ...."
+      },
+      "destination": {
+        "type": "table",
+        "options": {}
+      },
+      "trigger": { "type": "manual" },
+      "runs": [
+        { "status": "success", "recordsCount": 300 },
+        { "status": "error" }
+      ]
+    }
+  ]
 }

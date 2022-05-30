@@ -133,5 +133,35 @@
         ]
       }
     ]
-  }
+  },
+  "jobs": [
+    {
+      "id": "j-contacts-transaction-totals",
+      "name": "Retrieve transaction totals",
+      "description": "Saves latest transaction aggregates against contact records",
+      "query": {
+        "sql": "SELECT SUM(t.amount) FROM accounts.transactions_v1_0 t ... TODO"
+      },
+      "destination": {
+        "type": "table",
+        "options": {}
+      },
+      "trigger": { "type": "manual" },
+      "runs": [{ "status": "success", "recordsCount": 100 }]
+    },
+    {
+      "id": "j-contacts-import-sf",
+      "name": "Import contacts from Salesforce",
+      "description": "Merges the latest contact records from Salesforce",
+      "query": {
+        "sql": "SELECT c.* FROM salesforce_crm.contacts ...."
+      },
+      "destination": {
+        "type": "table",
+        "options": {}
+      },
+      "trigger": { "type": "manual" },
+      "runs": [{ "status": "success", "recordsCount": 500 }]
+    }
+  ]
 }

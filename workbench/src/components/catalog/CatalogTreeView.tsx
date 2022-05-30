@@ -19,6 +19,7 @@ import Typography from "@mui/material/Typography";
 import { navigationWidth } from "./Catalog";
 import Box from "@mui/material/Box";
 import _ from "lodash";
+import { isAuthoritative } from "./catalog.api";
 
 const StyledTreeItem = styled(TreeItem)(({ theme }) => ({
   "& .MuiTreeItem-content": {
@@ -50,8 +51,7 @@ interface Props {
 
 export default function CatalogTreeView(props: Props) {
   const catalog = useAppSelector(selectCatalog);
-  const isAuthoritative = (node: Node) =>
-    node.url.startsWith(window.location.origin);
+
 
   const renderEntity = (e: EntitySchema) => {
     return (

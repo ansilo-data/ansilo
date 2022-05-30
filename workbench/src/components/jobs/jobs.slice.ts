@@ -1,5 +1,6 @@
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type { AppState, AppThunk } from "../../store/store";
+import { selectAuthoritativeNode } from "../catalog/catalog.slice";
 
 export interface Job {
   name: string;
@@ -8,6 +9,7 @@ export interface Job {
   query: JobQuery;
   destination: JobDestination;
   trigger: JobTrigger; // todo: multiple
+  runs: JobResult[];
 }
 
 export interface JobQuery {
@@ -24,22 +26,26 @@ export interface JobTrigger {
   options: any;
 }
 
+export interface JobResult {
+  status: "success" | "error";
+  message?: string;
+  recordsCount?: number;
+}
+
 export type Id = string;
 
 export interface JobState {
-  jobs: Job[];
+  newJobs: Job[];
 }
 
-const initialState: JobState = {
-  jobs: [],
-};
+const initialState: JobState = { newJobs: [] };
 
 export const jobSlice = createSlice({
   name: "job",
   initialState,
   reducers: {
     createJob: (state, action: PayloadAction<Job>) => {
-      state.jobs.push(action.payload);
+      state.newJobs.push(action.payload);
     },
   },
   extraReducers: (builder) => {},
@@ -47,6 +53,7 @@ export const jobSlice = createSlice({
 
 export const { createJob } = jobSlice.actions;
 
-export const selectJobs = (state: AppState) => state.jobs;
+export const selectJobs = (state: AppState) =>
+  (selectAuthoritativeNode(state)?.jobs || []).concat(state.jobs.newJobs);
 
 export default jobSlice.reducer;

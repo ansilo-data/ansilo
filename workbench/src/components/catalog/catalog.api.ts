@@ -20,3 +20,6 @@ export const fetchNodes = async (): Promise<Node[]> => {
 
   return responses.filter((i) => i) as Node[];
 };
+
+export const isAuthoritative = (node: Node) =>
+  node.url.startsWith(window.location.origin);

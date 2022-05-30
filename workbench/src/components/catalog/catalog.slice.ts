@@ -1,7 +1,8 @@
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 import type { AppState, AppThunk } from "../../store/store";
-import { fetchNodes } from "./catalog.api";
+import { Job } from "../jobs/jobs.slice";
+import { fetchNodes, isAuthoritative } from "./catalog.api";
 
 export interface Node {
   name: string;
@@ -10,6 +11,7 @@ export interface Node {
   icon?: string;
   schema: Schema;
   tags: Tag[];
+  jobs: Job[];
 }
 
 export interface Schema {
@@ -63,7 +65,7 @@ export interface DataType {
 
 export interface Constraint {
   id: Id;
-  type: "fk"|"unique"
+  type: "fk" | "unique";
   attributes: Id[];
   // fk attributes
   targetEntity?: Id;
@@ -126,5 +128,7 @@ export const catalogSlice = createSlice({
 // export const {} = catalogSlice.actions;
 
 export const selectCatalog = (state: AppState) => state.catalog;
+export const selectAuthoritativeNode = (state: AppState) =>
+  state.catalog.nodes?.find(isAuthoritative);
 
 export default catalogSlice.reducer;

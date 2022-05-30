@@ -41,7 +41,7 @@ export const JobsList = () => {
             </Link>
           </Box>
           <Divider sx={{my: 2}} />
-          <JobsTable jobs={jobs.jobs} />
+          <JobsTable jobs={jobs} />
         </Paper>
       </Container>
     </Box>
