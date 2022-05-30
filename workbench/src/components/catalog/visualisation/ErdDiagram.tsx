@@ -1,6 +1,8 @@
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import { darken } from "@mui/material/styles";
+import Typography from "@mui/material/Typography";
+import EntityIcon from "@mui/icons-material/AccountTreeOutlined";
 import * as d3 from "d3";
 import _ from "lodash";
 import { useEffect, useRef, useState } from "react";
@@ -74,10 +76,25 @@ export const ErdDiagram = (props: Props) => {
         width: "100%",
         height: "100%",
         position: "relative",
+        p: 4,
       }}
     >
+      <Typography
+        variant="h4"
+        sx={{
+          position: "absolute",
+          left: 32,
+          top: 32,
+          display: "flex",
+          alignItems: "center",
+          zIndex: 1,
+          background: '#'
+        }}
+      >
+        <EntityIcon fontSize="large" sx={{ mr: 1 }} /> ERD
+      </Typography>
       <Button
-        sx={{ position: "absolute", right: 0, top: 0 }}
+        sx={{ position: "absolute", right: 32, top: 32, zIndex: 1 }}
         onClick={() => graph?.callbacks.zoomToFitAll()}
         variant="contained"
         color="secondary"
@@ -86,8 +103,11 @@ export const ErdDiagram = (props: Props) => {
       </Button>
       <Box
         sx={{
-          width: "100%",
-          height: "100%",
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           overflow: "hidden",
           opacity: graph ? 1 : 0,
         }}
@@ -370,7 +390,7 @@ const D3ErdGraph = (
   });
 
   const zoomToFitAll = () => {
-    const padding = 20;
+    const padding = 50;
     const xmin = Math.min(...nodes.map((i) => i.x!)) - padding;
     const ymin = Math.min(...nodes.map((i) => i.y!)) - padding;
     const xmax = Math.max(...nodes.map((i) => i.x! + i.width)) + padding;

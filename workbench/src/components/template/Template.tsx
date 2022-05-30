@@ -131,8 +131,7 @@ export const Template = (props: TemplateProps) => {
               px: [0],
             }}
           >
-            <Image width={32} height={32} src="/squirrel.png" alt="" />
-            <span style={{ marginLeft: 24 }}>Ansilo</span>
+            <Typography variant="h6" sx={{fontWeight: '100', lineHeight: '16px'}}>Ansilo</Typography>
           </Container>
           <IconButton onClick={toggleDrawer}>
             <ChevronLeftIcon />

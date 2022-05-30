@@ -130,7 +130,7 @@ export const Catalog = () => {
         <Paper
           sx={{
             display: "flex",
-            p: 4,
+            p: viewMode === "doc" && 4,
             width: viewMode === "erd" ? "100%" : undefined,
             overflowY: viewMode === "doc" ? "auto" : undefined,
           }}
