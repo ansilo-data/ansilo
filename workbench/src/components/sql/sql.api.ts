@@ -18,7 +18,7 @@ export const executeQuery = async (
   );
 
   for (const [file, node] of files) {
-    db.run(`ATTACH DATABASE '/${file}' AS ${node.name.toLowerCase()};`);
+    db.run(`ATTACH DATABASE '/${file}' AS ${node.name.replace(/ /g, '_').toLowerCase()};`);
   }
 
   const res = db.exec(query.sql);

@@ -50,9 +50,9 @@ export const Sql = () => {
     }
 
     const sqlName =
-      node.name.toLowerCase() +
+      node.name.replace(/ /g, '_').toLowerCase() +
       "." +
-      entity.name.toLowerCase() +
+      entity.name.replace(/ /g, '_').toLowerCase() +
       "_v" +
       version.version.major +
       "_" +
