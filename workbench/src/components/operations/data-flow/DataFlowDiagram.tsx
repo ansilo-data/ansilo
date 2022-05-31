@@ -161,7 +161,7 @@ const D3DataFlowGraph = (
     d3.max(flowData.map((i) => i.throughput))!,
   ];
   const linkStrength = d3.scaleLinear(throughputDomain, [0.03, 0.1]);
-  const linkWidth = d3.scaleLinear(throughputDomain, [2, 6]);
+  const linkWidth = d3.scaleLinear(throughputDomain, [2, 8]);
 
   // Replace the input nodes and links with mutable objects for the simulation.
   const nodes = d3
@@ -215,9 +215,10 @@ const D3DataFlowGraph = (
     .selectAll("line")
     .data(links)
     .join("line")
+    .attr("stroke-linecap", "round")
     .attr("stroke", (l) => (l.failure ? "#aa5555" : "#555"))
     .attr("stroke-width", (l) => l.width)
-    .attr("stroke-dasharray", (l) => `${l.width} ${l.width * 1}`);
+    .attr("stroke-dasharray", (l) => `${l.width * 0} ${l.width * 2}`);
 
   // // flow animation
   const animateFlow = () => {
