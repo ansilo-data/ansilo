@@ -3,13 +3,7 @@
   "name": "Teradata",
   "url": "TODO",
   "icon": "icons/teradata.svg",
-  "tags": [
-    {
-      "id": "t-vendor",
-      "name": "Vendor",
-      "description": ""
-    }
-  ],
+  "tags": [],
   "schema": {
     "entities": [
       {
@@ -139,7 +133,7 @@
         "options": {}
       },
       "trigger": { "type": "manual" },
-      "runs": [{ "status": "success", "recordsCount": 500 }]
+      "runs": [{ "status": "success", "recordsCount": 200 }]
     },
     {
       "id": "j-teradata-import-accounts",
@@ -170,6 +164,22 @@
       "runs": [
         { "status": "success", "recordsCount": 300 },
         { "status": "error" }
+      ]
+    },
+    {
+      "id": "j-teradata-import-sf",
+      "name": "Import Salesforce data",
+      "description": "Retrieves the latest customer data from Salesforce",
+      "query": {
+        "sql": "SELECT a.* FROM salesforce_crm.contacts_v1_0 ...."
+      },
+      "destination": {
+        "type": "table",
+        "options": {}
+      },
+      "trigger": { "type": "manual" },
+      "runs": [
+        { "status": "success", "recordsCount": 500 }
       ]
     }
   ]

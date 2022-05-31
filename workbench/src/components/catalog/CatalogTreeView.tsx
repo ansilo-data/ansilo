@@ -52,20 +52,19 @@ interface Props {
 export default function CatalogTreeView(props: Props) {
   const catalog = useAppSelector(selectCatalog);
 
-
-  const renderEntity = (e: EntitySchema) => {
+  const renderEntity = (n: Node, e: EntitySchema) => {
     return (
       <StyledTreeItem
         icon={<EntityIcon />}
-        key={e.id}
-        nodeId={e.id}
+        key={n.id + "-" + e.id}
+        nodeId={n.id + "-" + e.id}
         label={e.name}
       >
         {e.versions.map((v) => (
           <StyledTreeItem
             icon={<VersionIcon />}
-            key={v.id}
-            nodeId={v.id}
+            key={n.id + '-' + v.id}
+            nodeId={n.id + '-' + v.id}
             label={versionLabel(v.version)}
             onClick={() => props.onClick(v.id)}
           />
@@ -77,6 +76,7 @@ export default function CatalogTreeView(props: Props) {
   if (props.categorisation === "node") {
     return (
       <TreeView
+        key={props.categorisation}
         defaultCollapseIcon={<ExpandMoreIcon />}
         defaultExpandIcon={<ChevronRightIcon />}
         sx={{ height: "100%", flexGrow: 1, width: "100%", overflowY: "auto" }}
@@ -106,13 +106,13 @@ export default function CatalogTreeView(props: Props) {
               </Box>
             }
           >
-            {i.schema.entities.map(renderEntity)}
+            {i.schema.entities.map((e) => renderEntity(i, e))}
           </StyledTreeItem>
         ))}
       </TreeView>
     );
   } else {
-    const tagValues = _.sortedUniq(
+    const tagValues = _.uniq(
       catalog.nodes
         ?.flatMap((i) =>
           i.schema.entities.flatMap((e) =>
@@ -124,6 +124,7 @@ export default function CatalogTreeView(props: Props) {
 
     return (
       <TreeView
+        key={props.categorisation}
         defaultCollapseIcon={<ExpandMoreIcon />}
         defaultExpandIcon={<ChevronRightIcon />}
         sx={{ height: "100%", flexGrow: 1, width: "100%", overflowY: "auto" }}
@@ -147,13 +148,15 @@ export default function CatalogTreeView(props: Props) {
           >
             {catalog.nodes
               ?.flatMap((n) =>
-                n.schema.entities.filter((e) =>
-                  e.tags.some(
-                    (t) => t.key === props.categorisation && t.value === tv
+                n.schema.entities
+                  .filter((e) =>
+                    e.tags.some(
+                      (t) => t.key === props.categorisation && t.value === tv
+                    )
                   )
-                )
+                  .map((e) => [n, e] as [Node, EntitySchema])
               )
-              .map(renderEntity)}
+              .map(([n, e]) => renderEntity(n, e))}
           </StyledTreeItem>
         ))}
       </TreeView>

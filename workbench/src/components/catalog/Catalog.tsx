@@ -77,7 +77,10 @@ export const Catalog = () => {
             label=""
             variant="standard"
             value={categorisation}
-            onChange={(e) => setCategorisation(e.target.value)}
+            onChange={(e) => {
+              setAnchor("");
+              setCategorisation(e.target.value);
+            }}
           >
             <MenuItem value="node">Node</MenuItem>
             {tagCategories.map((i) => (

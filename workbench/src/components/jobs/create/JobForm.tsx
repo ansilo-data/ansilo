@@ -36,6 +36,7 @@ export const JobForm = (props: Props) => {
       query: { sql: "" },
       destination: { type: "table", options: {} },
       trigger: { type: "manual", options: {} },
+      runs: []
     }
   );
   const [activeStep, setActiveStep] = React.useState(0);
@@ -294,7 +295,7 @@ const Trigger = (props: StepProps) => {
               })
             }
           >
-            {jobs.jobs.map((j) => (
+            {jobs.map((j) => (
               <MenuItem key={j.id} value={j.id}>
                 {j.name}
               </MenuItem>

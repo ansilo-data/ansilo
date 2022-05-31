@@ -161,7 +161,7 @@
         "options": {}
       },
       "trigger": { "type": "manual" },
-      "runs": [{ "status": "success", "recordsCount": 500 }]
+      "runs": [{ "status": "success", "recordsCount": 200 }]
     }
   ]
 }

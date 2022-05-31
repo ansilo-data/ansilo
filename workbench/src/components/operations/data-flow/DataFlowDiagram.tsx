@@ -15,7 +15,7 @@ interface Props {
 interface Flow {
   source: string;
   target: string;
-  records: number;
+  throughput: number;
   failures: number;
 }
 
@@ -95,27 +95,41 @@ export const DataFlowDiagram = (props: Props) => {
 
 const constructGraphData = (nodes: Node[]): [Node[], Flow[]] => {
   // TODO: use proper node SQL name
-  const flows: Flow[] = nodes.flatMap(
-    (n) =>
-      n.jobs?.flatMap((j) =>
-        nodes
-          .filter((n2) =>
-            j.query.sql.includes(
-              " " + n2.name.replace(/ /g, "_").toLowerCase() + "."
+  const flows: Flow[] = nodes.flatMap((n) =>
+    _.values(
+      (
+        n.jobs?.flatMap((j) =>
+          nodes
+            .filter((n2) =>
+              j.query.sql.includes(
+                " " + n2.name.replace(/ /g, "_").toLowerCase() + "."
+              )
             )
-          )
-          .map(
-            (n2) =>
-              ({
-                source: n2.id,
-                target: n.id,
-                records:
-                  _.sum(j.runs.map((r) => r.recordsCount || 0)) /
-                  j.runs.filter((r) => r.status === "success").length,
-                failures: j.runs.filter((r) => r.status === "error").length,
-              } as Flow)
-          )
-      ) || []
+            .map(
+              (n2) =>
+                ({
+                  source: n2.id,
+                  target: n.id,
+                  throughput:
+                    _.sum(j.runs.map((r) => r.recordsCount || 0)) /
+                    j.runs.filter((r) => r.status === "success").length,
+                  failures: j.runs.filter((r) => r.status === "error").length,
+                } as Flow)
+            )
+        ) || []
+      )
+        // group by [source, target]
+        .reduce((a, i) => {
+          const key = `${i.source}-${i.target}`;
+          if (a[key]) {
+            a[key].throughput += i.throughput;
+            a[key].failures += i.failures;
+          } else {
+            a[key] = i;
+          }
+          return a;
+        }, {} as { [k: string]: Flow })
+    )
   );
 
   return [nodes, flows];
@@ -141,6 +155,13 @@ const D3DataFlowGraph = (
   const NODE_HTML_DOCS = d3.map(nodeData, (e) =>
     renderNodeHtml(e, color(e.id))
   );
+  
+  const throughputDomain = [
+    d3.min(flowData.map((i) => i.throughput))!,
+    d3.max(flowData.map((i) => i.throughput))!,
+  ];
+  const linkStrength = d3.scaleLinear(throughputDomain, [0.03, 0.1]);
+  const linkWidth = d3.scaleLinear(throughputDomain, [2, 6]);
 
   // Replace the input nodes and links with mutable objects for the simulation.
   const nodes = d3
@@ -153,13 +174,14 @@ const D3DataFlowGraph = (
         } as GraphNode)
     )
     .map((d) => ({ ...d, ...calculateNodeDimensions(d) }));
+
   const links = d3.map(flowData, (r, i) => ({
-    source: nodes.find(n => n.id === r.source),
-    target: nodes.find(n => n.id === r.target),
-    strength: r.records,
+    source: r.source as any,
+    target: r.target as any,
+    strength: linkStrength(r.throughput),
+    width: linkWidth(r.throughput),
     failure: r.failures > 0,
   }));
-  console.log(links)
 
   // Construct the forces.
   const forceNode = d3.forceManyBody().strength(20);
@@ -167,14 +189,14 @@ const D3DataFlowGraph = (
     .forceLink(links)
     .id(({ index: i }) => EID[i!])
     .strength(1)
-    .distance(300)
-    // .strength((l) => l.strength);
+    .distance(200)
+    .strength((l) => l.strength);
 
   const simulation = d3
     .forceSimulation(nodes)
-    // .force("link", forceLink)
+    .force("link", forceLink)
     .force("charge", forceNode)
-    .force("collide", d3.forceCollide(150))
+    .force("collide", d3.forceCollide(100))
     .force("center", d3.forceCenter(0, 0))
     .on("tick", ticked);
 
@@ -189,13 +211,25 @@ const D3DataFlowGraph = (
 
   const link = g
     .append("g")
-    .attr("stroke-linecap", "round")
     .attr("fill", "none")
     .selectAll("line")
     .data(links)
     .join("line")
-    .attr("stroke", (l) => (l.failure ? "#ff9999" : "#999"))
-    .attr("stroke-width", (l) => l.strength / 100);
+    .attr("stroke", (l) => (l.failure ? "#aa5555" : "#555"))
+    .attr("stroke-width", (l) => l.width)
+    .attr("stroke-dasharray", (l) => `${l.width} ${l.width * 1}`);
+
+  // // flow animation
+  const animateFlow = () => {
+    link
+      .transition()
+      .duration(5000)
+      .ease(d3.easeLinear)
+      .attrTween("stroke-dashoffset", ((l: any) =>
+        d3.interpolate(l.width * 2 * 3, 0)) as any)
+      .on("end", animateFlow);
+  };
+  animateFlow();
 
   const node = g
     .append("g")
@@ -222,10 +256,10 @@ const D3DataFlowGraph = (
 
   function ticked() {
     link
-      .attr("x1", (l) => l.source.x!)
-      .attr("y1", (l) => l.source.y!)
-      .attr("x2", (l) => l.target.x!)
-      .attr("y2", (l) => l.target.y!);
+      .attr("x1", (l) => Math.round(l.source.x! + l.source.width! / 2))
+      .attr("y1", (l) => Math.round(l.source.y! + l.source.height! / 2))
+      .attr("x2", (l) => Math.round(l.target.x! + l.target.width! / 2))
+      .attr("y2", (l) => Math.round(l.target.y! + l.target.height! / 2));
 
     node.attr("x", (d) => Math.round(d.x!)).attr("y", (d) => Math.round(d.y!));
   }
@@ -292,21 +326,21 @@ const D3DataFlowGraph = (
     );
   };
 
-  // // run simulation until stable
-  // while (true) {
-  //   for (let i = 0; i <= 50; i++) {
-  //     simulation.tick();
-  //   }
+  // run simulation until stable
+  while (true) {
+    for (let i = 0; i <= 50; i++) {
+      simulation.tick();
+    }
 
-  //   const vmax = Math.max(
-  //     ...nodes.map((i) => i.vx!),
-  //     ...nodes.map((i) => i.vy!)
-  //   );
+    const vmax = Math.max(
+      ...nodes.map((i) => i.vx!),
+      ...nodes.map((i) => i.vy!)
+    );
 
-  //   if (vmax < 5) {
-  //     break;
-  //   }
-  // }
+    if (vmax < 5) {
+      break;
+    }
+  }
 
   // initial zoom
   zoomToFitAll();
@@ -328,25 +362,41 @@ const renderNodeHtml = (n: Node, color: string): string => {
       #${id}-node {
         font-family: "Roboto","Helvetica","Arial",sans-serif;
         width: ${dims.width}px;
-        background: none;
-        color: #eee;
+        height: ${dims.height}px;
+        background: #222;
+        border: 2px solid #1f1f1f;
+        border-radius: 400px;
+        padding: 18px;
         overflow: hidden;
+        cursor: pointer;
+        position: relative;
+        display: flex;
+        justify-content: center;
       }
 
-      #${id}-erd h1 {
-        margin: 0;
-        font-size: 20px;
+      #${id}-node h1 {
         text-align: center;
-        font-weight: normal;
-        border: 1px solid #ccc;
+        margin: 0;
+        font-size: 7px;
+        font-weight: 100;
         cursor: pointer;
-        width: 100%;
-        padding: 4px;
-        background: ${darken(color, 0.2)};
+        color: #eee;
+        position: absolute;
+        top: 14px;
+        left: 0;
+        right: 0;
+      }
+
+      #${id}-node img {
+        max-width: 100%;
+        max-height: 100%;
+        height: 100%;
+        width: auto;
       }
       </style>
     </head>
     <div id="${id}-node">
+      ${n.icon ? `<img src="/${n.icon}" />` : ""}
       <h1>${n.name}</h1>
     </div>
   </html>`;
@@ -354,7 +404,7 @@ const renderNodeHtml = (n: Node, color: string): string => {
 
 const calculateNodeDimensions = (d?: GraphNode) => {
   return {
-    width: 200,
-    height: 50,
+    width: 80,
+    height: 80,
   };
 };
