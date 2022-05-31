@@ -256,10 +256,10 @@ const D3DataFlowGraph = (
 
   function ticked() {
     link
-      .attr("x1", (l) => Math.round(l.source.x! + l.source.width! / 2))
-      .attr("y1", (l) => Math.round(l.source.y! + l.source.height! / 2))
-      .attr("x2", (l) => Math.round(l.target.x! + l.target.width! / 2))
-      .attr("y2", (l) => Math.round(l.target.y! + l.target.height! / 2));
+      .attr("x1", (l) => (l.source.x! + l.source.width! / 2).toFixed(1))
+      .attr("y1", (l) => (l.source.y! + l.source.height! / 2).toFixed(1))
+      .attr("x2", (l) => (l.target.x! + l.target.width! / 2).toFixed(1))
+      .attr("y2", (l) => (l.target.y! + l.target.height! / 2).toFixed(1));
 
     node.attr("x", (d) => Math.round(d.x!)).attr("y", (d) => Math.round(d.y!));
   }
