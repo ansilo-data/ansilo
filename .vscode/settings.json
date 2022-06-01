@@ -3,6 +3,8 @@
     "remote.SSH.defaultExtensions": [
         "eamodio.gitlens",
         "mutantdino.resourcemonitor",
-        "rust-lang.rust-analyzer"
-    ]
+        "rust-lang.rust-analyzer",
+        "bungcip.better-toml"
+    ],
+    "remote.downloadExtensionsLocally": true
 }

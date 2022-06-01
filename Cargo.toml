@@ -1,0 +1,15 @@
+[workspace]
+
+members = [
+    "ansilopg",
+]
+
+[profile.dev]
+panic = "unwind"
+lto = "thin"
+
+[profile.release]
+panic = "unwind"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
