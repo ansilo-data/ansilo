@@ -140,11 +140,7 @@
       "name": "Retrieve transaction totals",
       "description": "Saves latest transaction aggregates against contact records",
       "query": {
-        "sql": "SELECT SUM(t.amount) FROM accounts.transactions_v1_0 t ... TODO"
-      },
-      "destination": {
-        "type": "table",
-        "options": {}
+        "sql": "UPDATE contacts.transaction_totals = SELECT SUM(t.amount) FROM accounts.transactions_v1_0 t ... TODO"
       },
       "trigger": { "type": "manual" },
       "runs": [{ "status": "success", "recordsCount": 100 }]
@@ -152,13 +148,9 @@
     {
       "id": "j-contacts-import-sf",
       "name": "Import contacts from Salesforce",
-      "description": "Merges the latest contact records from Salesforce",
+      "description": "Loads the latest contact records from Salesforce",
       "query": {
-        "sql": "SELECT c.* FROM salesforce_crm.contacts ...."
-      },
-      "destination": {
-        "type": "table",
-        "options": {}
+        "sql": "INSERT INTO contacts SELECT c.* FROM salesforce_crm.contacts ...."
       },
       "trigger": { "type": "manual" },
       "runs": [{ "status": "success", "recordsCount": 200 }]

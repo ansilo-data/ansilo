@@ -7,18 +7,12 @@ export interface Job {
   description: string;
   id: Id;
   query: JobQuery;
-  destination: JobDestination;
   trigger: JobTrigger; // todo: multiple
   runs: JobResult[];
 }
 
 export interface JobQuery {
   sql: string;
-}
-
-export interface JobDestination {
-  type: "table" | "file";
-  options: any;
 }
 
 export interface JobTrigger {

@@ -138,9 +138,9 @@
     {
       "id": "j-teradata-import-accounts",
       "name": "Import accounts",
-      "description": "Merges the latest account records",
+      "description": "Loads the latest account records",
       "query": {
-        "sql": "SELECT a.* FROM accounts.accounts_v1_0 ...."
+        "sql": "INSERT INTO t1.accounts SELECT a.* FROM accounts.accounts_v1_0 ...."
       },
       "destination": {
         "type": "table",
@@ -152,9 +152,9 @@
     {
       "id": "j-teradata-import-transactions",
       "name": "Import transactions",
-      "description": "Merges the latest transaction records",
+      "description": "Loads the latest transaction records",
       "query": {
-        "sql": "SELECT a.* FROM accounts.transactions_v1_0 ...."
+        "sql": "INSERT INTO t1.transactions_srchst SELECT a.* FROM accounts.transactions_v1_0 ...."
       },
       "destination": {
         "type": "table",
@@ -169,9 +169,9 @@
     {
       "id": "j-teradata-import-sf",
       "name": "Import Salesforce data",
-      "description": "Retrieves the latest customer data from Salesforce",
+      "description": "Loads the latest customer data from Salesforce",
       "query": {
-        "sql": "SELECT a.* FROM salesforce_crm.contacts_v1_0 ...."
+        "sql": "INSERT INTO t1.sf_contacts_srchst SELECT a.* FROM salesforce_crm.contacts_v1_0 ...."
       },
       "destination": {
         "type": "table",

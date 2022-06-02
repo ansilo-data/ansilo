@@ -88,7 +88,7 @@ export const ErdDiagram = (props: Props) => {
           display: "flex",
           alignItems: "center",
           zIndex: 1,
-          background: '#'
+          background: "#",
         }}
       >
         <EntityIcon fontSize="large" sx={{ mr: 1 }} /> ERD
@@ -281,6 +281,17 @@ const D3ErdGraph = (
     .attr("viewBox", [-width / 2, -height / 2, width, height])
     .attr("style", "max-width: 100%; height: auto; height: intrinsic;");
 
+    // legend
+  svg
+    .append("svg")
+    .attr("y", (height / 2) - 40)
+    .attr("x", -(width / 2))
+    .append("foreignObject")
+    .attr("width", width)
+    .attr("height", 30)
+    .append("xhtml:div")
+    .html(renderLegend(uniqueGroups, color));
+
   const g = svg.append("g");
 
   const link = g
@@ -394,7 +405,7 @@ const D3ErdGraph = (
     const xmin = Math.min(...nodes.map((i) => i.x!)) - padding;
     const ymin = Math.min(...nodes.map((i) => i.y!)) - padding;
     const xmax = Math.max(...nodes.map((i) => i.x! + i.width)) + padding;
-    const ymax = Math.max(...nodes.map((i) => i.y! + i.height)) + padding;
+    const ymax = Math.max(...nodes.map((i) => i.y! + i.height)) + padding + 30;
 
     const dx = xmax - xmin;
     const dy = ymax - ymin;
@@ -557,4 +568,57 @@ const calculateRelationshipPoints = (d: {
   return [[scx, scy], dx < dy ? [tcx, scy] : [scx, tcy], [tcx, tcy]]
     .map((i) => i.join(","))
     .join(" ");
+};
+
+const renderLegend = (
+  uniqueGroups: string[],
+  color: (g: string) => string
+): string => {
+  return `<html>
+    <head>
+      <style>
+      .erd-legend {
+        font-family: "Roboto","Helvetica","Arial",sans-serif;
+        width: 100%px;
+        background: none;
+        color: #eee;
+        overflow: hidden;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .erd-legend-item {
+        margin-right: 16px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .erd-legend-text {
+        margin-bottom: 2px;
+        font-size: 16px;
+      }
+
+      .erd-legend-icon {
+        width: 8px;
+        height: 8px;
+        border-radius: 8px;
+        display: block;
+        margin-right: 4px;
+      }
+      </style>
+    </head>
+    <div class="erd-legend">
+      ${uniqueGroups
+        .map(
+          (g) => `<span class="erd-legend-item">
+          <span class="erd-legend-icon" style="background: ${color(g)}"></span>
+          <span class="erd-legend-text">${g.replace('n-', '')}</span>
+      </span>`
+        )
+        .join("")}
+    </div>
+  </html>`;
 };

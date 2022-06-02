@@ -47,7 +47,7 @@ export const JobsTable = ({ jobs }: Props) => {
               <TableCell>Name</TableCell>
               <TableCell>Description</TableCell>
               <TableCell>Trigger</TableCell>
-              <TableCell>Destination</TableCell>
+              <TableCell>Query</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -56,7 +56,7 @@ export const JobsTable = ({ jobs }: Props) => {
                 <TableCell>{j.name}</TableCell>
                 <TableCell>{j.description}</TableCell>
                 <TableCell>{j.trigger.type}</TableCell>
-                <TableCell>{j.destination.type}</TableCell>
+                <TableCell>{j.query.sql.substring(0, 30)}...</TableCell>
               </TableRow>
             ))}
           </TableBody>

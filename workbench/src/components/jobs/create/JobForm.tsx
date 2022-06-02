@@ -34,7 +34,6 @@ export const JobForm = (props: Props) => {
       name: "",
       description: "",
       query: { sql: "" },
-      destination: { type: "table", options: {} },
       trigger: { type: "manual", options: {} },
       runs: []
     }
@@ -42,7 +41,7 @@ export const JobForm = (props: Props) => {
   const [activeStep, setActiveStep] = React.useState(0);
 
   const handleNext = () => {
-    if (activeStep === 4) {
+    if (activeStep === 3) {
       props.onSubmit(job);
       return;
     }
@@ -68,10 +67,7 @@ export const JobForm = (props: Props) => {
           <StepLabel>General options</StepLabel>
         </Step>
         <Step>
-          <StepLabel>Source</StepLabel>
-        </Step>
-        <Step>
-          <StepLabel>Destination</StepLabel>
+          <StepLabel>Query</StepLabel>
         </Step>
         <Step>
           <StepLabel>Trigger</StepLabel>
@@ -95,10 +91,9 @@ export const JobForm = (props: Props) => {
         {activeStep === 0 && (
           <GeneralSettings job={job} updateJob={updateJob} />
         )}
-        {activeStep === 1 && <Source job={job} updateJob={updateJob} />}
-        {activeStep === 2 && <Destination job={job} updateJob={updateJob} />}
-        {activeStep === 3 && <Trigger job={job} updateJob={updateJob} />}
-        {activeStep === 4 && <Review job={job} />}
+        {activeStep === 1 && <Query job={job} updateJob={updateJob} />}
+        {activeStep === 2 && <Trigger job={job} updateJob={updateJob} />}
+        {activeStep === 3 && <Review job={job} />}
         <Box sx={{ display: "flex", flexDirection: "row", pt: 2 }}>
           <Button
             color="inherit"
@@ -109,7 +104,7 @@ export const JobForm = (props: Props) => {
             Back
           </Button>
           <Box sx={{ flex: "1 1 auto" }} />
-          <Button type="submit">{activeStep === 4 ? "Finish" : "Next"}</Button>
+          <Button type="submit">{activeStep === 3 ? "Finish" : "Next"}</Button>
         </Box>
       </Box>
     </Box>
@@ -147,7 +142,7 @@ const GeneralSettings = (props: StepProps) => {
   );
 };
 
-const Source = (props: StepProps) => {
+const Query = (props: StepProps) => {
   const catalog = useAppSelector(selectCatalog);
 
   return (
@@ -164,74 +159,6 @@ const Source = (props: StepProps) => {
         catalog={catalog}
         onChange={(sql) => props.updateJob({ query: { sql } })}
       />
-    </Box>
-  );
-};
-
-const Destination = (props: StepProps) => {
-  return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        "& > *:not(:last-child)": { pb: 2 },
-      }}
-    >
-      <TextField
-        required
-        select
-        label="Type"
-        value={props.job.destination.type}
-        onChange={(e) =>
-          props.updateJob({ destination: { type: e.target.value as any } })
-        }
-      >
-        <MenuItem value="table">Database Table</MenuItem>
-        <MenuItem value="file">File</MenuItem>
-      </TextField>
-      {props.job.destination.type === "table" && (
-        <>
-          <TextField
-            required
-            label="Table Name"
-            value={props.job.destination.options?.tableName}
-            onChange={(e) =>
-              props.updateJob({
-                destination: { options: { tableName: e.target.value as any } },
-              })
-            }
-          />
-        </>
-      )}
-      {props.job.destination.type === "file" && (
-        <>
-          <TextField
-            required
-            select
-            label="File Format"
-            value={props.job.destination.options?.format}
-            onChange={(e) =>
-              props.updateJob({
-                destination: { options: { format: e.target.value as any } },
-              })
-            }
-          >
-            <MenuItem value="csv">CSV</MenuItem>
-            <MenuItem value="parquet">Parquet</MenuItem>
-            <MenuItem value="nd-json">ND-JSON</MenuItem>
-          </TextField>
-          <TextField
-            required
-            label="File Path"
-            value={props.job.destination.options?.filePath}
-            onChange={(e) =>
-              props.updateJob({
-                destination: { options: { filePath: e.target.value as any } },
-              })
-            }
-          />
-        </>
-      )}
     </Box>
   );
 };
@@ -341,19 +268,6 @@ const Review = ({ job }: { job: Job }) => {
               <TableCell>Query</TableCell>
               <TableCell>{job.query.sql}</TableCell>
             </TableRow>
-            <TableRow>
-              <SectionCell colSpan={2}>Destination</SectionCell>
-            </TableRow>
-            <TableRow>
-              <TableCell>Type</TableCell>
-              <TableCell>{job.destination.type}</TableCell>
-            </TableRow>
-            {_.toPairs(job.destination.options).map(([k, v]) => (
-              <TableRow key={k}>
-                <TableCell>{k}</TableCell>
-                <TableCell>{v as any}</TableCell>
-              </TableRow>
-            ))}
             <TableRow>
               <SectionCell colSpan={2}>Trigger</SectionCell>
             </TableRow>

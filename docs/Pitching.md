@@ -62,3 +62,28 @@ Longer version:
 ## What is your company going to make? Please describe your product and what it does or will do.
 
 
+## Topline description of Ansilo:
+
+What if moving your data was as simple to construct, audit and maintain as a single SQL query?
+    
+    "INSERT INTO teradata.t1.contacts_srchst SELECT * FROM openshift.contact_service.contacts"
+    "INSERT INTO aws.s3.combined_contact_history SELECT * FROM teradata.t3.combined_contact_history"
+
+Ansilo is the only distributed platform that unifies the process for developing, discovering, querying and moving data, regardless of on-prem/cloud, database vendor or software stack.
+Its unique distributed design allows it to integrate seamlessly across microservices and monolithic data platforms alike.
+Its data abstractions features allows for truly segregated ownership of data and full autonomy across teams but central policies ensure consistent standards and access across the organisation.
+
+=====
+
+Notes for ANZ:
+
+ - Agnostic system (not locked in to single vendor)
+
+ Actions
+
+[x] get back to Mark with topline product description.
+[ ] tooltips for data flow
+[x] legend for ERD
+[ ] equity sharing alternatives
+[ ] refine the pitch decks
+[ ] rehearsing!
