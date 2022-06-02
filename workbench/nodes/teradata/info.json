@@ -126,11 +126,7 @@
       "name": "Import contacts",
       "description": "Retrieves the latest batch of contact records",
       "query": {
-        "sql": "SELECT * from contacts.contacts_v1_0"
-      },
-      "destination": {
-        "type": "table",
-        "options": {}
+        "sql": "INSERT INTO t1.contacts SELECT * from contacts.contacts_v1_0"
       },
       "trigger": { "type": "manual" },
       "runs": [{ "status": "success", "recordsCount": 200 }]
@@ -142,10 +138,6 @@
       "query": {
         "sql": "INSERT INTO t1.accounts SELECT a.* FROM accounts.accounts_v1_0 ...."
       },
-      "destination": {
-        "type": "table",
-        "options": {}
-      },
       "trigger": { "type": "manual" },
       "runs": [{ "status": "success", "recordsCount": 100 }]
     },
@@ -156,14 +148,10 @@
       "query": {
         "sql": "INSERT INTO t1.transactions_srchst SELECT a.* FROM accounts.transactions_v1_0 ...."
       },
-      "destination": {
-        "type": "table",
-        "options": {}
-      },
       "trigger": { "type": "manual" },
       "runs": [
         { "status": "success", "recordsCount": 300 },
-        { "status": "error" }
+        { "status": "error", "message": "Failed to connect to data source" }
       ]
     },
     {
@@ -173,14 +161,8 @@
       "query": {
         "sql": "INSERT INTO t1.sf_contacts_srchst SELECT a.* FROM salesforce_crm.contacts_v1_0 ...."
       },
-      "destination": {
-        "type": "table",
-        "options": {}
-      },
       "trigger": { "type": "manual" },
-      "runs": [
-        { "status": "success", "recordsCount": 500 }
-      ]
+      "runs": [{ "status": "success", "recordsCount": 500 }]
     }
   ]
 }

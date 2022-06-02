@@ -13,10 +13,13 @@ interface Props {
 }
 
 interface Flow {
+  id: string;
   source: string;
   target: string;
   throughput: number;
+  runs: number;
   failures: number;
+  lastFailureMessage?: string;
 }
 
 export const DataFlowDiagram = (props: Props) => {
@@ -30,9 +33,13 @@ export const DataFlowDiagram = (props: Props) => {
         return;
       }
 
+      if (graph) {
+        graph.callbacks.dispose();
+      }
+
       const [nodes, flows] = constructGraphData(props.nodes);
 
-      const graph = D3DataFlowGraph(nodes, flows, {
+      const newGraph = D3DataFlowGraph(nodes, flows, {
         width: container.current.clientWidth,
         height: container.current.clientHeight,
       });
@@ -40,9 +47,10 @@ export const DataFlowDiagram = (props: Props) => {
       for (const child of Array.from(container.current.childNodes)) {
         child.remove();
       }
-      container.current?.appendChild(graph);
-      setGraph(graph);
+      container.current?.appendChild(newGraph);
+      setGraph(newGraph);
     }, 0);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.nodes.length]);
 
@@ -95,6 +103,8 @@ export const DataFlowDiagram = (props: Props) => {
 
 const constructGraphData = (nodes: Node[]): [Node[], Flow[]] => {
   // TODO: use proper node SQL name
+  let id = 0;
+
   const flows: Flow[] = nodes.flatMap((n) =>
     _.values(
       (
@@ -108,12 +118,15 @@ const constructGraphData = (nodes: Node[]): [Node[], Flow[]] => {
             .map(
               (n2) =>
                 ({
+                  id: `f-${id++}`,
                   source: n2.id,
                   target: n.id,
                   throughput:
                     _.sum(j.runs.map((r) => r.recordsCount || 0)) /
                     j.runs.filter((r) => r.status === "success").length,
+                  runs: j.runs.length,
                   failures: j.runs.filter((r) => r.status === "error").length,
+                  lastFailureMessage: j.runs.find(r => r.status === "error" && r.message)?.message,
                 } as Flow)
             )
         ) || []
@@ -124,6 +137,7 @@ const constructGraphData = (nodes: Node[]): [Node[], Flow[]] => {
           if (a[key]) {
             a[key].throughput += i.throughput;
             a[key].failures += i.failures;
+            a[key].lastFailureMessage = a[key].lastFailureMessage || i.lastFailureMessage;
           } else {
             a[key] = i;
           }
@@ -178,6 +192,7 @@ const D3DataFlowGraph = (
   const links = d3.map(flowData, (r, i) => ({
     source: r.source as any,
     target: r.target as any,
+    flow: r,
     strength: linkStrength(r.throughput),
     width: linkWidth(r.throughput),
     failure: r.failures > 0,
@@ -211,6 +226,7 @@ const D3DataFlowGraph = (
 
   const link = g
     .append("g")
+    .style("pointer-events", "none")
     .attr("fill", "none")
     .selectAll("line")
     .data(links)
@@ -220,7 +236,18 @@ const D3DataFlowGraph = (
     .attr("stroke-width", (l) => l.width)
     .attr("stroke-dasharray", (l) => `${l.width * 0} ${l.width * 2}`);
 
-  // // flow animation
+  const linkHoverLines = g
+    .append("g")
+    .attr("fill", "none")
+    .selectAll("line")
+    .data(links)
+    .join("line")
+    .attr("stroke", (l) => (l.failure ? "#aa5555" : "#555"))
+    .style("z-index", 10)
+    .style("opacity", "0")
+    .attr("stroke-width", (l) => l.width * 2);
+
+  // flow animation
   const animateFlow = () => {
     link
       .transition()
@@ -231,6 +258,51 @@ const D3DataFlowGraph = (
       .on("end", animateFlow);
   };
   animateFlow();
+
+  // tooltips
+  const tooltips = d3
+    .select("body")
+    .append("div")
+    .attr("id", "data-flow-tooltips")
+    .selectAll("div")
+    .data(links)
+    .join("div")
+    .style("position", "fixed")
+    .attr("id", (f) => f.flow.id)
+    .style("font", "14px 'Helvetica Neue'")
+    .html((f) => renderTooltip(f.flow));
+
+  linkHoverLines.each((f, i, lines) => {
+    d3.selectAll([lines[i]])
+      .on(
+        "mouseenter",
+        _.debounce((e: MouseEvent) => {
+          const el = document.getElementById(f.flow.id);
+          if (el) {
+            el.style.display = "block";
+          }
+        }, 1)
+      )
+      .on(
+        "mouseleave",
+        _.debounce((e: MouseEvent) => {
+          const f = d3.select(e.target as any).datum() as any;
+          const el = document.getElementById(f.flow.id);
+          console.log(el)
+          if (el) {
+            el.style.display = "none";
+          }
+        }, 1000)
+      )
+      .on("mousemove", (e: MouseEvent) => {
+        const f = d3.select(e.target as any).datum() as any;
+        const el = document.getElementById(f.flow.id);
+        if (el) {
+          el.style.left = e.pageX + "px";
+          el.style.top = e.pageY + "px";
+        }
+      });
+  });
 
   const node = g
     .append("g")
@@ -256,11 +328,13 @@ const D3DataFlowGraph = (
   }
 
   function ticked() {
-    link
-      .attr("x1", (l) => Math.round(l.source.x! + l.source.width! / 2))
-      .attr("y1", (l) => Math.round(l.source.y! + l.source.height! / 2))
-      .attr("x2", (l) => Math.round(l.target.x! + l.target.width! / 2))
-      .attr("y2", (l) => Math.round(l.target.y! + l.target.height! / 2));
+    for (const links of [link, linkHoverLines]) {
+      links
+        .attr("x1", (l) => Math.round(l.source.x! + l.source.width! / 2))
+        .attr("y1", (l) => Math.round(l.source.y! + l.source.height! / 2))
+        .attr("x2", (l) => Math.round(l.target.x! + l.target.width! / 2))
+        .attr("y2", (l) => Math.round(l.target.y! + l.target.height! / 2));
+    }
 
     node
       .attr("x", (d) => (d.x || 0).toFixed(1))
@@ -348,9 +422,13 @@ const D3DataFlowGraph = (
   // initial zoom
   zoomToFitAll();
 
+  const dispose = () => {
+    document.getElementById("data-flow-tooltips")?.remove();
+  };
+
   return Object.assign(svg.node(), {
     scales: { color },
-    callbacks: { zoomToFitAll },
+    callbacks: { zoomToFitAll, dispose },
   });
 };
 
@@ -410,4 +488,67 @@ const calculateNodeDimensions = (d?: GraphNode) => {
     width: 80,
     height: 80,
   };
+};
+
+const renderTooltip = (flow: Flow): string => {
+  const id = flow.id;
+
+  return `<html>
+    <head>
+      <style>
+      #${id}-flow {
+        font-family: "Roboto","Helvetica","Arial",sans-serif;
+        background: #222;
+        border: 2px solid #1f1f1f;
+        color: #eee;
+        display: flex;
+        justify-content: center;
+      }
+
+      #${id}-flow table {
+        width: auto;
+        table-layout: fixed;
+        border-collapse: collapse;
+        font-size: 12px;
+        text-align: left;
+      }
+
+      #${id}-flow table td, #${id}-flow th {
+        padding: 2px;
+      }
+      </style>
+    </head>
+    <div id="${id}-flow" class="${flow.failures ? 'flow-failures' : ''}">
+      <table>
+        <tr>
+          <th>Source</th>
+          <td>${flow.source.replace("n-", "")}</td>
+        </tr>
+        <tr>
+          <th>Target</th>
+          <td>${flow.target.replace("n-", "")}</td>
+        </tr>
+        <tr>
+          <th>Status</th>
+          <td>${
+            flow.failures === 0
+              ? "Nominal"
+              : `<span style="color: #ff9999">${flow.failures}/${flow.runs} job failures</span>`
+          }</td>
+        </tr>
+        <tr>
+          <th>Throughput</th>
+          <td>${flow.throughput}k records/day</td>
+        </tr>
+        ${
+          flow.failures
+            ? `<tr>
+          <th>Error</th>
+          <td>${(flow.lastFailureMessage || "").substring(0, 20)}...</td>
+        </tr>`
+            : ""
+        }
+      </table>
+    </div>
+  </html>`;
 };
