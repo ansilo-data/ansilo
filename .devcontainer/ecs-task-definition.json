@@ -20,9 +20,7 @@
                 "-c",
                 "sudo /usr/sbin/sshd -De"
             ],
-            "environment": [
-                {"name": "CARGO_HOME", "value": "/workspace/.cargo"}
-            ],
+            "environment": [],
             "mountPoints": [
                 {
                     "sourceVolume": "dev-volume",
