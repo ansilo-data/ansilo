@@ -1,15 +1,16 @@
 [workspace]
-
 members = [
-    "ansilopg",
+    "ansilo-main",
+    "ansilo-pgx",
+    "ansilo-pg",
+    "ansilo-core",
+    "ansilo-config",
+    "ansilo-secrets",
+    "ansilo-auth",
+    "ansilo-catalog",
+    "ansilo-jobs",
+    "ansilo-connectors",
+    "ansilo-workbench",
+    "ansilo-deploy",
+    "ansilo-logging",
 ]
-
-[profile.dev]
-panic = "unwind"
-lto = "thin"
-
-[profile.release]
-panic = "unwind"
-opt-level = 3
-lto = "fat"
-codegen-units = 1

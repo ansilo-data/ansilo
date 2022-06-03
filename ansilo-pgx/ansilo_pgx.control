@@ -1,0 +1,5 @@
+comment = 'ansilo_pgx:  Created by pgx'
+default_version = '@CARGO_VERSION@'
+module_pathname = '$libdir/ansilo_pgx'
+relocatable = false
+superuser = false

@@ -14,6 +14,7 @@ mod tests {
 
     #[pg_test]
     fn test_hello_ansilopg() {
+        // GetForeignRelSize();
         assert_eq!("Hello, ansilopg", crate::hello_ansilopg());
     }
 

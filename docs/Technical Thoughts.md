@@ -48,4 +48,51 @@ Not certain it is necessary for the MVP at this stage. Handling authentication c
 With regards to authentication, we are enterprise-focused, so almost definitely auth is federated through some external IdP/JWT token.
 This means we really just need to authenticate tokens on incoming requests and somehow federate the access down to the Postgres instance.
 
+### Ansilo PoC Design
+
+```
+------ container ----------------------------------------------------------------------------------------
+|                                                                                                       |
+|                                                                                                       |
+|                                                                                                       |
+|  ----- postgres -----                   ----- ansilo ------              ------ source -------        |
+|  |                  |                   |                 |              |                   |        |
+|  |  - ansilo-pg -   | <- unix socket -> | -- connector--  | <- tcp/ip -> |                   |        |
+|  |     - fdw -      |                   |                 |              |                   |        |
+|  |                  |                   |                 |              |                   |        |
+|  --------------------                   -------------------              ---------------------        |
+|                                                                                                       |
+|                                                                                                       |
+|                                                                                                       |
+---------------------------------------------------------------------------------------------------------
+
+```
+
+### Atomic commit in a distributed database
+
+Looks like Postgres internals have a had a lot of discussion on solving this but nothing has landed yet.
+
+ - https://wiki.postgresql.org/wiki/Atomic_Commit_of_Distributed_Transactions
+ - https://www.postgresql.org/message-id/flat/CAFjFpRfQaCTt1vD9E35J%2BXxfCnZC5HONqgJgGpUjfktJdoYZVw%40mail.gmail.com#CAFjFpRfQaCTt1vD9E35J+XxfCnZC5HONqgJgGpUjfktJdoYZVw@mail.gmail.com
+ - https://www.google.com/search?q=postgres+fdw+rollback&oq=postgres+fdw+rollback
+
+Given this is not solved, for writing queries we may have to solve this on the ansilo side.
+Although this is more effort and complexity to tackle it is not all back, potentially helping us decouple a bit from Postgres.
+My current thinking is having transactions being handled on the ansilo end, where we have callbacks for 2PC for each connector.
+We can handle the transaction management using a 2PC procedure:
+
+ 1. For each mutated FDW
+    - START TRANSACTION
+ 2. TRY {
+    1. `queries...`
+    2. For each mutated FDW
+        - PREPARE TRANSACTION ...
+    3. For each mutated FDW
+        - COMMIT 
+  } CATCH {
+    1. For each mutated FDW
+        - ROLLBACK 
+  }
+
+  This definitely is not perfect but the 2PC approach should minimise the window that a crash or termination could leave it in an inconsistent state.
 
