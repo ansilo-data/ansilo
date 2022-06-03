@@ -4,5 +4,6 @@ target/
 *.iml
 **/*.rs.bk
 Cargo.lock
+!.cargo/config
 .cargo
 
