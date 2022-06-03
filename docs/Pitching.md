@@ -82,8 +82,18 @@ Notes for ANZ:
  Actions
 
 [x] get back to Mark with topline product description.
-[ ] tooltips for data flow
+[x] tooltips for data flow
 [x] legend for ERD
-[ ] equity sharing alternatives
+[x] equity sharing alternatives
 [ ] refine the pitch decks
 [ ] rehearsing!
+
+====
+
+Notes from TD's:
+
+ - [x] Rework introduction slides (potentially show product screenshots)
+ - [x] More in-depth around the governance piece, potentially add governance visualisation
+ - [x] Make the data product feature more explicit
+ - [ ] Add FAQ for security, performance etc
+

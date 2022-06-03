@@ -5,7 +5,7 @@ import { DataFlow } from "../../../components/operations/data-flow/DataFlow";
 
 const Page: NextPage = () => {
   return (
-    <Template title="Data Flow">
+    <Template title="Operations > Data Flow">
       <DataFlow />
     </Template>
   );
