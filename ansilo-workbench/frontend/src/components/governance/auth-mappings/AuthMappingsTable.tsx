@@ -14,7 +14,7 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import GovernanceMenu from "../GovernanceMenu";
 
-export const PoliciesTable = () => {
+export const AuthMappingsTable = () => {
   return (
     <TableContainer>
       <Table stickyHeader>

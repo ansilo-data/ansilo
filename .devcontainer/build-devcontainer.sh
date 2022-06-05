@@ -2,10 +2,7 @@
 
 set -e
 
-docker build -t rust-devcontainer \
- --build-arg CARGO_HOME=/workspace/ansilo/.cargo \
- --build-arg RUSTUP_HOME=/workspace/ansilo/.rustup \
- .
+docker build -t rust-devcontainer .
 
 docker tag rust-devcontainer 059160323628.dkr.ecr.ap-southeast-2.amazonaws.com/rust-devcontainer:latest
 

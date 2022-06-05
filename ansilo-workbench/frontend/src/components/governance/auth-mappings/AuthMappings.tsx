@@ -8,9 +8,9 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import LoadingButton from "@mui/lab/LoadingButton";
 import GovernanceMenu from "../GovernanceMenu";
-import { PoliciesTable } from "./PoliciesTable";
+import { AuthMappingsTable } from "./AuthMappingsTable";
 
-export const Policies = () => {
+export const AuthMappings = () => {
   return (
     <Box sx={{ flexGrow: "1", display: "flex" }}>
       <GovernanceMenu />
@@ -24,7 +24,7 @@ export const Policies = () => {
         }}
       >
         <Paper sx={{ display: "flex", p: 4 }} elevation={8}>
-          <PoliciesTable />
+          <AuthMappingsTable />
         </Paper>
       </Container>
     </Box>
