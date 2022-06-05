@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use super::*;
 
 /// Authentication options for the node
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub struct AuthConfig {
     /// List of node authorities, used to validate incoming auth tokens
     pub authorities: Vec<AuthorityConfig>,

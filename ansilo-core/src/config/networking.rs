@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 
 /// Networking options for the node
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub struct NetworkingConfig {
     /// The listening port of the node
     pub port: u16

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 mod ari;
 pub use ari::*;
@@ -16,7 +16,7 @@ pub use jobs::*;
 // TODO: consider ansilo versioning
 
 /// An entire configuration for an ansilo node
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub struct NodeConfig {
     /// The human-readable name of the node
     pub name: String,
@@ -28,8 +28,8 @@ pub struct NodeConfig {
     pub auth: AuthConfig,
     /// List of data source configurations for the node
     pub sources: Vec<DataSourceConfig>,
-    /// List of entities exposed by the node 
+    /// List of entities exposed by the node
     pub entities: Vec<EntityConfig>,
     /// List of jobs run by the node
-    pub jobs: Vec<JobConfig>
+    pub jobs: Vec<JobConfig>,
 }
