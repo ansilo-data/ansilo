@@ -18,6 +18,8 @@ RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOIgym/c2xk7m+WbgHrm0joP87hQohUj
 RUN cargo install cargo-pgx
 RUN cargo pgx init --pg14 download
 
+RUN cargo install cargo-edit
+
 RUN echo 'export CARGO_HOME="/workspace/ansilo/.cargo"' >> ~/.bashrc && \
     echo 'if [[ "${PATH}" != *"${CARGO_HOME}/bin"* ]]; then export PATH="${CARGO_HOME}/bin:${PATH}"; fi' >> ~/.bashrc
 RUN echo 'export CARGO_HOME="/workspace/ansilo/.cargo"' >> ~/.zshrc && \
