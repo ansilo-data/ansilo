@@ -1,12 +1,12 @@
 import * as React from "react";
 import type { NextPage } from "next";
 import { Template } from "../../../components/template/Template";
-import { Policies } from "../../../components/governance/policies/Policies";
+import { AuthMappings } from "../../../components/governance/auth-mappings/AuthMappings";
 
 const Page: NextPage = () => {
   return (
-    <Template title="Governance > Authorities">
-      <Policies />
+    <Template title="Governance > Mappings">
+      <AuthMappings />
     </Template>
   );
 };

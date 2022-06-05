@@ -42,14 +42,14 @@ export default function GovernanceMenu(props: Props) {
             <ListItemText primary="Roles" />
           </ListItemButton>
         </Link>
-        <Link href="/governance/policies">
+        <Link href="/governance/auth-mappings">
           <ListItemButton
-            selected={router.asPath.startsWith("/governance/policies")}
+            selected={router.asPath.startsWith("/governance/auth-mappings")}
           >
             <ListItemIcon>
               <GppGoodIcon />
             </ListItemIcon>
-            <ListItemText primary="Policies" />
+            <ListItemText primary="Mappings" />
           </ListItemButton>
         </Link>
         <Link href="/governance/users">
