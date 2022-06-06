@@ -8,8 +8,31 @@ pub(crate) trait ConfigProcessor {
     /// Gets the human readable display name for the processor
     fn display_name(&self) -> &str;
     /// Applies any transformations to the config
-    /// The transformations may be recursively applied using the supplied &ConfigLoader 
+    /// The transformations may be recursively applied using the supplied &ConfigLoader
     fn process(&self, loader: &ConfigLoader, conf: &mut serde_yaml::Value) -> Result<()>;
 }
 
+/// AST used to represent configuration expressions
+#[Derive(Debug, PartialEq, Clone)]
+pub(crate) enum ConfigStringExpr {
+    Constant(String),
+    Concat(Vec<ConfigStringExpr>),
+    Interpolation(ConfigStringInterpolation),
+}
+
+/// Represents an interpolated value used in the configuration
+/// Format ${[part 1]:[part 2]..:[part n]}
+/// For instance, ${ENV:some_env_var}
+#[Derive(Debug, PartialEq, Clone)]
+pub(crate) struct ConfigStringInterpolation {
+    pub parts: Vec<ConfigStringExpr>,
+}
+
+impl ConfigStringInterpolation {
+    pub fn new(parts: Vec<ConfigStringExpr>) -> Self {
+        Self { parts }
+    }
+}
+
 pub(crate) mod env;
+pub(self) mod util;

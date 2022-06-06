@@ -1,4 +1,5 @@
 use ansilo_core::err::Result;
+use serde_yaml::Value;
 
 use crate::loader::ConfigLoader;
 
@@ -13,7 +14,14 @@ impl ConfigProcessor for EnvConfigProcessor {
         "environment"
     }
 
-    fn process(&self, loader: &ConfigLoader, conf: &mut serde_yaml::Value) -> Result<()> {
-        todo!()
+    fn process(&self, loader: &ConfigLoader, conf: &mut Value) -> Result<()> {
+        match conf {
+            Value::Null => todo!(),
+            Value::Bool(_) => todo!(),
+            Value::Number(_) => todo!(),
+            Value::String(_) => todo!(),
+            Value::Sequence(_) => todo!(),
+            Value::Mapping(_) => todo!(),
+        }
     }
 }
