@@ -1,7 +1,9 @@
+use std::mem;
+
 use ansilo_core::err::{bail, Context, Result};
 use serde_yaml::{Mapping, Value};
 
-use super::{ConfigStringExpr, ConfigStringInterpolation};
+use super::ConfigStringExpr as X;
 
 /// Recursively walks the configuration nodes uses the supplied callback
 /// to transforms any strings found
@@ -27,81 +29,274 @@ pub fn process_strings(node: Value, cb: &impl Fn(String) -> Result<String>) -> R
 }
 
 /// Parse strings into an expression AST
-pub fn parse_expressions(str: &str) -> Result<ConfigStringExpr> {
-    let mut brackets = 0u16;
-    let mut prev = None;
-    let mut stack = vec![];
-    let mut exp = ConfigStringExpr::Concat(vec![]);
+fn parse_expression(str: &str) -> Result<X> {
+    #[derive(Debug, Clone, Copy)]
+    enum State {
+        Consume,
+        Escaped,
+        Skip,
+        Break,
+    }
 
-    for (i, c) in str.char_indices() {
-        match (prev, c, &mut exp) {
+    let mut stack = vec![];
+    let mut exp = X::Concat(vec![]);
+
+    let chars = str.chars().collect::<Vec<char>>();
+    let mut state = State::Consume;
+
+    for i in 0..chars.len() {
+        let c = chars[i];
+        let next = chars.get(i + 1);
+
+        match (state, c, next) {
             // escape using \
-            (Some(_), '\\', _) => {
-                prev = None;
-                continue;
+            (State::Consume, '\\', _) => {
+                state = State::Escaped;
             }
-            // ignore escaped char
-            (None, _, _) => {}
+            (State::Escaped, c, _) => {
+                append_char(&mut exp, c);
+                state = State::Consume;
+            }
             // start parsing ${...} expression
-            (Some('$'), '{', exp) => {
-                stack.push(exp);
-                *exp = ConfigStringExpr::Interpolation(ConfigStringInterpolation::new(vec![]));
+            (State::Consume | State::Break, '$', Some('{')) => {
+                let inner = mem::replace(&mut exp, X::Interpolation(vec![]));
+                stack.push(inner);
+                state = State::Skip;
             }
             // end parsing ${...} expressions
-            (Some(_), '}', exp) => {
-                if let ConfigStringExpr::Interpolation(interpolation) = exp {
-                    *exp = stack.pop().unwrap();
-                    append_node(exp, ConfigStringExpr::Interpolation(interpolation));
+            (State::Consume | State::Break, '}', _) => {
+                if let X::Interpolation(_) = exp {
+                    let outer = stack.pop().unwrap();
+                    exp = append_node(outer, exp);
+                    state = if let Some(':') = next {
+                        State::Consume
+                    } else {
+                        State::Break
+                    };
                 } else {
                     bail!("Failed to parse ${{...}} expression, could not match closing bracket in string \"{}\"", str);
                 }
             }
             // handle ':' seperator in ${...} expressions
-            (Some(_), ':', ConfigStringExpr::Interpolation(ref mut interpolation)) => {
-                interpolation.parts.push(ConfigStringExpr::Concat(vec![]))
-            }
+            (State::Consume, ':', _) => match exp {
+                X::Interpolation(ref mut parts) => {
+                    state = State::Break;
+                }
+                _ => {
+                    append_char(&mut exp, c);
+                }
+            },
             // append current char to expression
-            (Some(_), c, exp) => {
-                append_char(exp, c);
+            (State::Consume, c, _) => {
+                append_char(&mut exp, c);
+            }
+            // break parts in ${..:..} expression
+            (State::Break, c, _) => match exp {
+                X::Interpolation(ref mut parts) => {
+                    state = if c == ':' {
+                        parts.push(X::Constant(alloc_string(None)));
+                        State::Break
+                    } else {
+                        parts.push(X::Constant(alloc_string(Some(c))));
+                        State::Consume
+                    };
+                }
+                X::Concat(ref mut parts) => {
+                    parts.push(X::Constant(alloc_string(Some(c))));
+                    state = State::Consume;
+                }
+                _ => {
+                    append_char(&mut exp, c);
+                    state = State::Consume;
+                }
+            },
+            (State::Skip, _, _) => {
+                state = State::Consume;
             }
         }
-
-        prev = Some(c);
     }
 
-    // TODO: simply unneccessary nodes
-    todo!()
+    if !stack.is_empty() {
+        bail!(
+            "Failed to parse expression \"{}\", found unclosed ${{...}}",
+            str
+        )
+    }
+
+    exp = simplify_node(exp).unwrap_or_else(|| X::Constant(alloc_string(None)));
+
+    Ok(exp)
 }
 
 /// allocate a reasonable buffer for each new string
 fn alloc_string(c: Option<char>) -> String {
-    let s = String::with_capacity(64);
+    let mut s = String::with_capacity(64);
     if let Some(c) = c {
         s.push(c);
     }
+
     s
 }
 
-fn append_node(exp: &mut ConfigStringExpr, interpolation: ConfigStringExpr) {
-    todo!()
+/// Appends the supplied node to exp
+fn append_node(exp: X, node: X) -> X {
+    match exp {
+        c @ X::Constant(_) => X::Concat(vec![c, node]),
+        X::Concat(mut parts) => {
+            parts.push(node);
+            X::Concat(parts)
+        }
+        X::Interpolation(mut parts) => {
+            parts.push(node);
+            X::Interpolation(parts)
+        }
+    }
 }
 
-fn append_char(exp: &mut ConfigStringExpr, c: char) {
+/// Appends the supplied char to exp
+fn append_char(exp: &mut X, c: char) {
     match exp {
-        ConfigStringExpr::Constant(ref mut str) => str.push(c),
-        ConfigStringExpr::Interpolation(ref mut interpolation) => {
-            if let Some(p) = interpolation.parts.last_mut() {
+        X::Constant(ref mut str) => str.push(c),
+        X::Interpolation(ref mut parts) => {
+            if let Some(p) = parts.last_mut() {
                 append_char(p, c);
             } else {
-                interpolation.parts.push(alloc_string(Some(c)))
+                parts.push(X::Constant(alloc_string(Some(c))))
             }
         }
-        ConfigStringExpr::Concat(ref mut parts) => {
-            if let Some(ref mut p) = parts.last() {
+        X::Concat(ref mut parts) => {
+            if let Some(p) = parts.last_mut() {
                 append_char(p, c)
             } else {
-                parts.push(ConfigStringExpr::Constant(alloc_string(Some(c))))
+                parts.push(X::Constant(alloc_string(Some(c))))
             }
         }
+    }
+}
+
+/// Simplifies the supplied expression node
+fn simplify_node(exp: X) -> Option<X> {
+    match exp {
+        // remove redundant concat nodes
+        X::Concat(parts) if parts.len() == 0 => None,
+        X::Concat(mut parts) if parts.len() == 1 => simplify_node(parts.pop().unwrap()),
+        X::Concat(parts) => Some(X::Concat(simplify_nodes(parts.into_iter()))),
+        X::Interpolation(parts) => Some(X::Interpolation(simplify_nodes(parts.into_iter().map(
+            |n| match n {
+                X::Concat(parts) if parts.len() == 0 => X::Constant(alloc_string(None)),
+                _ => n,
+            },
+        )))),
+        _ => Some(exp),
+    }
+}
+
+/// Simplifies the supplied expression node
+fn simplify_nodes(nodes: impl Iterator<Item = X>) -> Vec<X> {
+    nodes
+        .into_iter()
+        .map(simplify_node)
+        .filter(|n| n.is_some())
+        .map(|i| i.unwrap())
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_expression_constants() {
+        assert_eq!(parse_expression("").unwrap(), X::Constant("".to_string()));
+        assert_eq!(
+            parse_expression("abc").unwrap(),
+            X::Constant("abc".to_string())
+        );
+        assert_eq!(
+            parse_expression("abc:123").unwrap(),
+            X::Constant("abc:123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_expression_escaping() {
+        assert_eq!(
+            parse_expression("test\\escaped").unwrap(),
+            X::Constant("testescaped".to_string())
+        );
+        assert_eq!(
+            parse_expression("\\escaped").unwrap(),
+            X::Constant("escaped".to_string())
+        );
+        assert_eq!(
+            parse_expression("escaped\\").unwrap(),
+            X::Constant("escaped".to_string())
+        );
+        assert_eq!(
+            parse_expression("\\e\\s\\c\\a\\p\\e\\d").unwrap(),
+            X::Constant("escaped".to_string())
+        );
+        assert_eq!(
+            parse_expression("\\\\").unwrap(),
+            X::Constant("\\".to_string())
+        );
+        assert_eq!(
+            parse_expression("\\\\\\\\").unwrap(),
+            X::Constant("\\\\".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_expression_interpolation() {
+        assert_eq!(parse_expression("${}").unwrap(), X::Interpolation(vec![]));
+        assert_eq!(
+            parse_expression("${abc}").unwrap(),
+            X::Interpolation(vec![X::Constant("abc".to_owned())])
+        );
+        assert_eq!(
+            parse_expression("${abc:def:ghi}").unwrap(),
+            X::Interpolation(vec![
+                X::Constant("abc".to_owned()),
+                X::Constant("def".to_owned()),
+                X::Constant("ghi".to_owned())
+            ])
+        );
+        assert_eq!(
+            parse_expression("${FOO::BAR}").unwrap(),
+            X::Interpolation(vec![
+                X::Constant("FOO".to_owned()),
+                X::Constant("".to_owned()),
+                X::Constant("BAR".to_owned()),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_parse_expression_interpolation_nested() {
+        assert_eq!(
+            parse_expression("${${}}").unwrap(),
+            X::Interpolation(vec![X::Interpolation(vec![])])
+        );
+        assert_eq!(
+            parse_expression("${abc:${def}:ghi}").unwrap(),
+            X::Interpolation(vec![
+                X::Constant("abc".to_owned()),
+                X::Interpolation(vec![X::Constant("def".to_owned())]),
+                X::Constant("ghi".to_owned())
+            ])
+        );
+    }
+
+    #[test]
+    fn test_parse_expression_interpolation_concat() {
+        assert_eq!(
+            parse_expression("a${b}c${d}").unwrap(),
+            X::Concat(vec![
+                X::Constant("a".to_owned()),
+                X::Interpolation(vec![X::Constant("b".to_owned())]),
+                X::Constant("c".to_owned()),
+                X::Interpolation(vec![X::Constant("d".to_owned())])
+            ])
+        );
     }
 }

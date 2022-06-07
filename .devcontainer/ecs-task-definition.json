@@ -1,4 +1,7 @@
 {
+    "kernelCapabilities": [
+        "SYS_PTRACE"
+    ],
     "containerDefinitions": [
         {
             "name": "devcontainer",

@@ -13,25 +13,14 @@ pub(crate) trait ConfigProcessor {
 }
 
 /// AST used to represent configuration expressions
-#[Derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub(crate) enum ConfigStringExpr {
     Constant(String),
     Concat(Vec<ConfigStringExpr>),
-    Interpolation(ConfigStringInterpolation),
-}
-
-/// Represents an interpolated value used in the configuration
-/// Format ${[part 1]:[part 2]..:[part n]}
-/// For instance, ${ENV:some_env_var}
-#[Derive(Debug, PartialEq, Clone)]
-pub(crate) struct ConfigStringInterpolation {
-    pub parts: Vec<ConfigStringExpr>,
-}
-
-impl ConfigStringInterpolation {
-    pub fn new(parts: Vec<ConfigStringExpr>) -> Self {
-        Self { parts }
-    }
+    /// Represents an interpolated value used in the configuration
+    /// Format ${[part 1]:[part 2]..:[part n]}
+    /// For instance, ${ENV:some_env_var}
+    Interpolation(Vec<ConfigStringExpr>),
 }
 
 pub(crate) mod env;
