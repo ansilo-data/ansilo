@@ -1,73 +1,66 @@
 {
-    "kernelCapabilities": [
-        "SYS_PTRACE"
-    ],
-    "containerDefinitions": [
+  "containerDefinitions": [
+    {
+      "name": "devcontainer",
+      "image": "059160323628.dkr.ecr.ap-southeast-2.amazonaws.com/rust-devcontainer:latest",
+      "cpu": 0,
+      "links": [],
+      "portMappings": [
         {
-            "name": "devcontainer",
-            "image": "059160323628.dkr.ecr.ap-southeast-2.amazonaws.com/rust-devcontainer:latest",
-            "cpu": 0,
-            "links": [],
-            "portMappings": [
-                {
-                    "containerPort": 22,
-                    "hostPort": 22,
-                    "protocol": "tcp"
-                }
-            ],
-            "essential": true,
-            "entryPoint": [
-                "/bin/sh"
-            ],
-            "command": [
-                "-c",
-                "sudo /usr/sbin/sshd -De"
-            ],
-            "environment": [],
-            "mountPoints": [
-                {
-                    "sourceVolume": "dev-volume",
-                    "containerPath": "/workspace",
-                    "readOnly": false
-                }
-            ],
-            "volumesFrom": [],
-            "dnsServers": [],
-            "dnsSearchDomains": [],
-            "dockerSecurityOptions": [],
-            "systemControls": []
+          "containerPort": 22,
+          "hostPort": 22,
+          "protocol": "tcp"
         }
-    ],
-    "family": "rust-devcontainer",
-    "executionRoleArn": "arn:aws:iam::059160323628:role/ECSTaskExecutionRoleForPullingECR",
-    "networkMode": "awsvpc",
-    "volumes": [
+      ],
+      "essential": true,
+      "entryPoint": ["/bin/sh"],
+      "command": ["-c", "sudo /usr/sbin/sshd -De"],
+      "linuxParameters": {
+        "capabilities": { "add": ["SYS_PTRACE"] }
+      },
+      "environment": [],
+      "mountPoints": [
         {
-            "name": "dev-volume",
-            "efsVolumeConfiguration": {
-                "fileSystemId": "fs-05e01131eb60766df",
-                "rootDirectory": "/ecs-devcontainer",
-                "transitEncryption": "DISABLED",
-                "authorizationConfig": {
-                    "iam": "DISABLED"
-                }
-            }
+          "sourceVolume": "dev-volume",
+          "containerPath": "/workspace",
+          "readOnly": false
         }
-    ],
-    "placementConstraints": [],
-    "runtimePlatform": {
-        "cpuArchitecture": "X86_64",
-        "operatingSystemFamily": "LINUX"
-    },
-    "requiresCompatibilities": [
-        "FARGATE"
-    ],
-    "cpu": "4096",
-    "memory": "8192",
-    "tags": [
-        {
-            "key": "ecs:taskDefinition:createdFrom",
-            "value": "ecs-console-v2"
+      ],
+      "volumesFrom": [],
+      "dnsServers": [],
+      "dnsSearchDomains": [],
+      "dockerSecurityOptions": [],
+      "systemControls": []
+    }
+  ],
+  "family": "rust-devcontainer",
+  "executionRoleArn": "arn:aws:iam::059160323628:role/ECSTaskExecutionRoleForPullingECR",
+  "networkMode": "awsvpc",
+  "volumes": [
+    {
+      "name": "dev-volume",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "fs-05e01131eb60766df",
+        "rootDirectory": "/ecs-devcontainer",
+        "transitEncryption": "DISABLED",
+        "authorizationConfig": {
+          "iam": "DISABLED"
         }
-    ]
+      }
+    }
+  ],
+  "placementConstraints": [],
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "4096",
+  "memory": "8192",
+  "tags": [
+    {
+      "key": "ecs:taskDefinition:createdFrom",
+      "value": "ecs-console-v2"
+    }
+  ]
 }
