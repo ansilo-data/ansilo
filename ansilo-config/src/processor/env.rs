@@ -3,25 +3,22 @@ use serde_yaml::Value;
 
 use crate::loader::ConfigLoader;
 
-use super::ConfigProcessor;
+use super::{ConfigExprProcessor, ConfigStringExpr, ConfigExprResult};
 
 /// Interpolates configuration using environment variables
 #[derive(Default)]
 pub struct EnvConfigProcessor {}
 
-impl ConfigProcessor for EnvConfigProcessor {
+impl ConfigExprProcessor for EnvConfigProcessor {
     fn display_name(&self) -> &str {
         "environment"
     }
 
-    fn process(&self, loader: &ConfigLoader, conf: &mut Value) -> Result<()> {
-        match conf {
-            Value::Null => todo!(),
-            Value::Bool(_) => todo!(),
-            Value::Number(_) => todo!(),
-            Value::String(_) => todo!(),
-            Value::Sequence(_) => todo!(),
-            Value::Mapping(_) => todo!(),
+    fn process(&self, _loader: &ConfigLoader, expr: ConfigStringExpr) -> Result<ConfigExprResult> {
+        match expr {
+            ConfigStringExpr::Constant(_) => todo!(),
+            ConfigStringExpr::Concat(_) => todo!(),
+            ConfigStringExpr::Interpolation(_) => todo!(),
         }
     }
 }

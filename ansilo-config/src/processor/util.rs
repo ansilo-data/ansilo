@@ -3,15 +3,15 @@ use std::mem;
 use ansilo_core::err::{bail, Context, Result};
 use serde_yaml::{Mapping, Value};
 
-use super::ConfigStringExpr as X;
+use super::{ConfigExprResult, ConfigStringExpr as X};
 
 /// Recursively walks the configuration nodes uses the supplied callback
 /// to transforms any strings found
-pub fn process_strings(node: Value, cb: &impl Fn(String) -> Result<String>) -> Result<Value> {
+pub(crate) fn process_strings(node: Value, cb: &impl Fn(String) -> Result<Value>) -> Result<Value> {
     Ok(match node {
-        Value::String(str) => Value::String(
-            cb(str.clone()).context(format!("Failed to process config string {}", str))?,
-        ),
+        Value::String(str) => {
+            cb(str.clone()).context(format!("Failed to process config string {}", str))?
+        }
         Value::Sequence(seq) => Value::Sequence(
             seq.into_iter()
                 .map(|n| process_strings(n, cb))
@@ -28,8 +28,35 @@ pub fn process_strings(node: Value, cb: &impl Fn(String) -> Result<String>) -> R
     })
 }
 
+/// Recursively walks the configuration nodes uses the supplied callback
+/// to transforms any strings found
+pub(crate) fn process_expression(
+    exp: X,
+    cb: &impl Fn(X) -> Result<ConfigExprResult>,
+) -> Result<ConfigExprResult> {
+    fn process_vec(exp: Vec<X>, cb: &impl Fn(X) -> Result<ConfigExprResult>) -> Result<Vec<X>> {
+        exp.into_iter()
+            .map(|i| process_expression(i, cb))
+            .collect::<Result<Vec<ConfigExprResult>>>()?
+            .into_iter()
+            .map(|i| match i {
+                ConfigExprResult::Expr(exp) => Ok(exp),
+                ConfigExprResult::Yaml(_) => bail!("Found yaml embedded inside config expression"),
+            })
+            .collect::<Result<Vec<X>>>()
+    }
+
+    Ok(match exp {
+        X::Concat(parts) => ConfigExprResult::Expr(X::Concat(process_vec(parts, cb)?)),
+        X::Interpolation(parts) => {
+            ConfigExprResult::Expr(X::Interpolation(process_vec(parts, cb)?))
+        }
+        _ => ConfigExprResult::Expr(exp),
+    })
+}
+
 /// Parse strings into an expression AST
-fn parse_expression(str: &str) -> Result<X> {
+pub(crate) fn parse_expression(str: &str) -> Result<X> {
     #[derive(Debug, Clone, Copy)]
     enum State {
         Consume,
@@ -79,7 +106,7 @@ fn parse_expression(str: &str) -> Result<X> {
             }
             // handle ':' seperator in ${...} expressions
             (State::Consume, ':', _) => match exp {
-                X::Interpolation(ref mut parts) => {
+                X::Interpolation(_) => {
                     state = State::Break;
                 }
                 _ => {
@@ -201,9 +228,56 @@ fn simplify_nodes(nodes: impl Iterator<Item = X>) -> Vec<X> {
         .collect()
 }
 
+/// Converts the supplied expression back to a string
+pub(crate) fn expression_to_string(exp: X) -> String {
+    match exp {
+        X::Constant(str) => str,
+        X::Concat(parts) => parts
+            .into_iter()
+            .map(expression_to_string)
+            .collect::<Vec<String>>()
+            .join(""),
+        X::Interpolation(parts) => format!(
+            "${{{}}}",
+            parts
+                .into_iter()
+                .map(expression_to_string)
+                .collect::<Vec<String>>()
+                .join(":")
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_process_strings() {
+        let input = serde_yaml::from_str::<serde_yaml::Value>(
+            "
+a: foo
+b:
+  c: bar
+d:
+ - qux",
+        )
+        .unwrap();
+
+        let expected = serde_yaml::from_str::<serde_yaml::Value>(
+            "
+a!: foo!
+b!:
+  c!: bar!
+d!:
+ - qux!",
+        )
+        .unwrap();
+
+        let actual = process_strings(input, &|s| Ok(Value::String(s + "!"))).unwrap();
+
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn test_parse_expression_constants() {
@@ -297,6 +371,27 @@ mod tests {
                 X::Constant("c".to_owned()),
                 X::Interpolation(vec![X::Constant("d".to_owned())])
             ])
+        );
+    }
+
+    #[test]
+    fn test_expression_to_string() {
+        assert_eq!(expression_to_string(X::Constant("abc".to_owned())), "abc");
+        assert_eq!(
+            expression_to_string(X::Interpolation(vec![
+                X::Constant("a".to_owned()),
+                X::Constant("b".to_owned()),
+            ])),
+            "${a:b}"
+        );
+        assert_eq!(
+            expression_to_string(X::Concat(vec![
+                X::Constant("a".to_owned()),
+                X::Interpolation(vec![X::Constant("b".to_owned())]),
+                X::Constant("c".to_owned()),
+                X::Interpolation(vec![X::Constant("d".to_owned())])
+            ])),
+            "a${b}c${d}"
         );
     }
 }

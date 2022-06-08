@@ -4,12 +4,12 @@ use crate::loader::ConfigLoader;
 
 /// A config processor applies transformations to the yaml config
 /// This is used for interpolating config items from various sources
-pub(crate) trait ConfigProcessor {
+pub(crate) trait ConfigExprProcessor {
     /// Gets the human readable display name for the processor
     fn display_name(&self) -> &str;
     /// Applies any transformations to the config
     /// The transformations may be recursively applied using the supplied &ConfigLoader
-    fn process(&self, loader: &ConfigLoader, conf: &mut serde_yaml::Value) -> Result<()>;
+    fn process(&self, loader: &ConfigLoader, expr: ConfigStringExpr) -> Result<ConfigExprResult>;
 }
 
 /// AST used to represent configuration expressions
@@ -23,5 +23,12 @@ pub(crate) enum ConfigStringExpr {
     Interpolation(Vec<ConfigStringExpr>),
 }
 
+/// Result from parsing config expression
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum ConfigExprResult {
+    Expr(ConfigStringExpr),
+    Yaml(serde_yaml::Value)
+}
+
 pub(crate) mod env;
-pub(self) mod util;
+pub(crate) mod util;
