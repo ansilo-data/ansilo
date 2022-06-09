@@ -96,3 +96,11 @@ We can handle the transaction management using a 2PC procedure:
 
   This definitely is not perfect but the 2PC approach should minimise the window that a crash or termination could leave it in an inconsistent state.
 
+SQLIL
+=====
+
+SQLIL === SQL Intermediate Language
+Planning on implementing a simpler subset of the SQL syntax that can be represented in an AST.
+This means the FDW will translate queries into SQLIL such that it can be passed to the connectors for execution.
+The purpose of this is to give the connectors a common, stable and smaller surface area that they have to support.
+If the relevant postgres syntax cannot be SQLIL then we fallback to fetching all the data from the connector and executing the query on the postgres engine.
