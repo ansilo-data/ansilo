@@ -1,3 +1,4 @@
+use core::borrow::Borrow;
 use std::mem;
 
 use ansilo_core::err::{bail, Context, Result};
@@ -30,6 +31,9 @@ pub(crate) fn process_strings(node: Value, cb: &impl Fn(String) -> Result<Value>
 
 /// Recursively walks the configuration nodes uses the supplied callback
 /// to transforms any strings found
+///
+/// Importantly, this applies the callback bottom-up, this is importantly for correctly
+/// processing nested interpolations, eg ${outer:${inner}}
 pub(crate) fn process_expression(
     exp: X,
     cb: &impl Fn(X) -> Result<ConfigExprResult>,
@@ -46,13 +50,13 @@ pub(crate) fn process_expression(
             .collect::<Result<Vec<X>>>()
     }
 
-    Ok(match exp {
-        X::Concat(parts) => ConfigExprResult::Expr(X::Concat(process_vec(parts, cb)?)),
-        X::Interpolation(parts) => {
-            ConfigExprResult::Expr(X::Interpolation(process_vec(parts, cb)?))
-        }
-        _ => ConfigExprResult::Expr(exp),
-    })
+    let exp = match exp {
+        X::Concat(parts) => X::Concat(process_vec(parts, cb)?),
+        X::Interpolation(parts) => X::Interpolation(process_vec(parts, cb)?),
+        _ => exp,
+    };
+
+    cb(exp)
 }
 
 /// Parse strings into an expression AST
@@ -229,23 +233,46 @@ fn simplify_nodes(nodes: impl Iterator<Item = X>) -> Vec<X> {
 }
 
 /// Converts the supplied expression back to a string
-pub(crate) fn expression_to_string(exp: X) -> String {
-    match exp {
-        X::Constant(str) => str,
+pub(crate) fn expression_to_string(exp: impl Borrow<X>) -> String {
+    match exp.borrow() {
+        X::Constant(str) => str.to_owned(),
         X::Concat(parts) => parts
             .into_iter()
-            .map(expression_to_string)
+            .map(|i| expression_to_string(i))
             .collect::<Vec<String>>()
             .join(""),
         X::Interpolation(parts) => format!(
             "${{{}}}",
             parts
                 .into_iter()
-                .map(expression_to_string)
+                .map(|i| expression_to_string(i))
                 .collect::<Vec<String>>()
                 .join(":")
         ),
     }
+}
+
+/// Matches the supplied expr for '${...}' interpolations and returns the inner '...' part strings
+pub(crate) fn match_interpolation(exp: impl Borrow<X>, prefix: &[&str]) -> Option<Vec<String>> {
+    let parts = match exp.borrow() {
+        X::Interpolation(parts) => parts,
+        _ => return None,
+    };
+
+    let parts = parts
+        .iter()
+        .map(expression_to_string)
+        .collect::<Vec<String>>();
+
+    if parts.len() < prefix.len() {
+        return None;
+    }
+
+    if parts[..prefix.len()] != *prefix {
+        return None;
+    }
+
+    return Some(parts.clone());
 }
 
 #[cfg(test)]
@@ -384,6 +411,7 @@ d!:
             ])),
             "${a:b}"
         );
+
         assert_eq!(
             expression_to_string(X::Concat(vec![
                 X::Constant("a".to_owned()),
@@ -392,6 +420,71 @@ d!:
                 X::Interpolation(vec![X::Constant("d".to_owned())])
             ])),
             "a${b}c${d}"
+        );
+
+        assert_eq!(
+            expression_to_string(X::Interpolation(vec![X::Interpolation(vec![X::Constant(
+                "abc".to_owned()
+            )]),])),
+            "${${abc}}"
+        );
+    }
+
+    #[test]
+    fn test_match_interpolation() {
+        assert_eq!(
+            match_interpolation(X::Constant("a".to_owned()), &["abc"]),
+            None
+        );
+        assert_eq!(
+            match_interpolation(
+                X::Interpolation(vec![X::Constant("a".to_owned())]),
+                &["abc"]
+            ),
+            None
+        );
+        assert_eq!(
+            match_interpolation(X::Interpolation(vec![X::Constant("a".to_owned())]), &[]),
+            Some(vec!["a".to_string()])
+        );
+        assert_eq!(
+            match_interpolation(
+                X::Interpolation(vec![X::Constant("abc".to_owned())]),
+                &["abc"]
+            ),
+            Some(vec!["abc".to_string()])
+        );
+        assert_eq!(
+            match_interpolation(
+                X::Interpolation(vec![X::Constant("a".to_owned())]),
+                &["a", "b", "c"]
+            ),
+            None
+        );
+        assert_eq!(
+            match_interpolation(
+                X::Interpolation(vec![
+                    X::Constant("a".to_owned()),
+                    X::Constant("b".to_owned()),
+                    X::Constant("c".to_owned())
+                ]),
+                &["a", "b"]
+            ),
+            Some(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+        assert_eq!(
+            match_interpolation(
+                X::Interpolation(vec![X::Interpolation(vec![X::Constant("a".to_owned())]),]),
+                &[]
+            ),
+            Some(vec!["${a}".to_string()])
+        );
+        assert_eq!(
+            match_interpolation(
+                X::Interpolation(vec![X::Interpolation(vec![X::Constant("a".to_owned())]),]),
+                &["${a}"]
+            ),
+            Some(vec!["${a}".to_string()])
         );
     }
 }

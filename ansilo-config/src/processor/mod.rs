@@ -24,7 +24,7 @@ pub(crate) enum ConfigStringExpr {
 }
 
 /// Result from parsing config expression
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum ConfigExprResult {
     Expr(ConfigStringExpr),
     Yaml(serde_yaml::Value)
