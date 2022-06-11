@@ -97,3 +97,15 @@ Notes from TD's:
  - [x] Make the data product feature more explicit
  - [x] Add FAQ for security, performance etc
 
+
+Meeting with Justin
+===================
+
+Show product after problem statement - let them join the dots. 
+Commission based model?
+Security - internet access exposure notification system
+
+Feedback from Mark
+==================
+
+Have a more punchy opening.
