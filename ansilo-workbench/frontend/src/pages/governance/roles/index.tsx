@@ -5,7 +5,7 @@ import { Roles } from "../../../components/governance/roles/Roles";
 
 const Page: NextPage = () => {
   return (
-    <Template title="Governance > Authorities">
+    <Template title="Governance > Roles">
       <Roles />
     </Template>
   );

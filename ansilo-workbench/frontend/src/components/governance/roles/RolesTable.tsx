@@ -13,6 +13,7 @@ import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import GovernanceMenu from "../GovernanceMenu";
+import Link from "next/link";
 
 export const RolesTable = () => {
   return (
@@ -30,16 +31,24 @@ export const RolesTable = () => {
             <TableCell>Grants full access to all data and operations</TableCell>
           </TableRow>
           <TableRow>
-            <TableCell>Analyst</TableCell>
-            <TableCell>Grants read-only access to metadata and ability to execute queries</TableCell>
+            <TableCell sx={{ "& a": { color: "white" } }}>
+              <Link href="/governance/roles/specific">Analyst</Link>
+            </TableCell>
+            <TableCell>
+              Grants read-only access to metadata and ability to execute queries
+            </TableCell>
           </TableRow>
           <TableRow>
             <TableCell>Support</TableCell>
-            <TableCell>Read-only access to operational data such as audit and system logs</TableCell>
+            <TableCell>
+              Read-only access to operational data such as audit and system logs
+            </TableCell>
           </TableRow>
           <TableRow>
             <TableCell>Data Consumer</TableCell>
-            <TableCell>Grants read-only access to metadata and ability to execute queries</TableCell>
+            <TableCell>
+              Grants read-only access to metadata and ability to execute queries
+            </TableCell>
           </TableRow>
         </TableBody>
       </Table>
