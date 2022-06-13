@@ -17,8 +17,9 @@ pub struct EntityConfig {
     pub tags: Vec<TagValueConfig>,
     /// The versions of the entity
     pub versions: Vec<EntityVersionConfig>,
+    /// The accessility of the entity
+    pub accessibility: EntityAccessiblity,
 }
-
 /// A tag attached to an entity. 
 /// These are key-value pairs use for custom categorisation
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -88,5 +89,14 @@ pub struct EntitySourceConfig {
     /// The ID of the data source this entity is retrieved from
     pub data_source_id: String,
     /// The data source specific options for reading/writing to the entity
-    pub options: HashMap<String, String>
+    pub options: serde_yaml::Value
+}
+
+/// The levels of accessibility of an entity
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum EntityAccessiblity {
+    /// The entity can only be accessed from the node itself
+    Internal,
+    /// The entity is accessible from other nodes
+    Public
 }

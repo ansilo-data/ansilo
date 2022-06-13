@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::{Serialize, Deserialize};
 
 /// Defines a data source
@@ -13,5 +11,5 @@ pub struct DataSourceConfig {
     /// eg "postgres", "oracle", "mysql" etc
     pub r#type: String,
     /// The type specific connection options for the data source
-    pub options: HashMap<String, String>,
+    pub options: serde_yaml::Value
 }
