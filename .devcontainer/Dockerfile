@@ -20,7 +20,10 @@ RUN cargo pgx init --pg14 download
 
 RUN cargo install cargo-edit
 
-RUN echo 'export CARGO_HOME="/workspace/ansilo/.cargo"' >> ~/.bashrc && \
-    echo 'if [[ "${PATH}" != *"${CARGO_HOME}/bin"* ]]; then export PATH="${CARGO_HOME}/bin:${PATH}"; fi' >> ~/.bashrc
-RUN echo 'export CARGO_HOME="/workspace/ansilo/.cargo"' >> ~/.zshrc && \
-    echo 'if [[ "${PATH}" != *"${CARGO_HOME}/bin"* ]]; then export PATH="${CARGO_HOME}/bin:${PATH}"; fi' >> ~/.zshrc
+RUN echo 'export CARGO_HOME="/workspace/ansilo/.cargo"' | tee -a ~/.bashrc ~/.zshrc && \
+    echo 'if [[ "${PATH}" != *"${CARGO_HOME}/bin"* ]]; then export PATH="${CARGO_HOME}/bin:${PATH}"; fi' | tee -a ~/.bashrc ~/.zshrc
+
+# Install OpenJDK
+RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
+    sudo apt-get -y install openjdk-17-jdk
+RUN echo "export JAVA_HOME=\"$(dirname $(dirname $(readlink -f $(which java))))\"" | tee -a ~/.bashrc ~/.zshrc 
