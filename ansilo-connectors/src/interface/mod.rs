@@ -68,6 +68,7 @@ pub trait ConnectionOpener<TConnectionConfig, TConnection> {
     /// Opens a connection to the target data source using the supplied options
     fn open(&self, options: TConnectionConfig) -> Result<TConnection>;
 }
+
 /// An open connection to a data source
 pub trait Connection<TQuery, TResultSet> {
     /// Executes the supplied query

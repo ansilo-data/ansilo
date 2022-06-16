@@ -1,12 +1,5 @@
 {
-    "terminal.integrated.env.linux": {
-        "CARGO_HOME": "/workspace/.cargo"
-    },
-    "remote.SSH.defaultExtensions": [
-        "eamodio.gitlens",
-        "mutantdino.resourcemonitor",
-        "rust-lang.rust-analyzer",
-        "bungcip.better-toml"
-    ],
     "remote.downloadExtensionsLocally": true,
+    "java.configuration.updateBuildConfiguration": "disabled",
+    "java.jdt.ls.java.home": "/usr/lib/jvm/java-17-openjdk-amd64",
 }

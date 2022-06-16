@@ -6,4 +6,6 @@ target/
 Cargo.lock
 !.cargo/config
 .cargo
+.m2/
+.vscode-server/
 
