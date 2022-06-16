@@ -25,5 +25,6 @@ RUN echo 'export CARGO_HOME="/workspace/ansilo/.cargo"' | tee -a ~/.bashrc ~/.zs
 
 # Install OpenJDK
 RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
-    sudo apt-get -y install openjdk-17-jdk
+    sudo apt-get -y install openjdk-17-jdk maven
 RUN echo "export JAVA_HOME=\"$(dirname $(dirname $(readlink -f $(which java))))\"" | tee -a ~/.bashrc ~/.zshrc 
+RUN echo "export M2_HOME=\"/workspace/ansilo/.m2\"" | tee -a ~/.bashrc ~/.zshrc 
