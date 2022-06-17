@@ -15,6 +15,7 @@ use ansilo_core::{
 /// An ansilo connector
 /// A common abstraction over a data sources
 pub trait Connector<
+'a,
     TConnectionConfig,
     TConnectionOpener,
     TConnection,
@@ -31,6 +32,7 @@ pub trait Connector<
     TEntityValidator: EntityValidator<TConnection, TSourceConfig>,
     TQueryPlanner: QueryPlanner<TConnection, TQuery, TSourceConfig>,
     TResultSet: ResultSet,
+    TConnection: 'a
 {
     /// Gets the type of the connector, usually the name of the target platform, eg 'postgres'
     fn r#type() -> &'static str;

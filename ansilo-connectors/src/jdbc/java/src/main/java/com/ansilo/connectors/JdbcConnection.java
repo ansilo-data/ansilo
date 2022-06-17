@@ -26,10 +26,7 @@ public class JdbcConnection {
      * @param props
      * @throws SQLException
      */
-    public JdbcConnection(String jdbcUrl, Map<String, String> props) throws SQLException {
-        var jdbcProps = new Properties();
-        jdbcProps.putAll(props);
-
+    public JdbcConnection(String jdbcUrl, Properties jdbcProps) throws SQLException {
         // TODO: logging
         this.connection = DriverManager.getConnection(jdbcUrl, jdbcProps);
     }

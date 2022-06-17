@@ -1,20 +1,24 @@
 package com.ansilo.connectors.result;
 
-import java.sql.ResultSetMetaData;
+import java.util.List;
 
 /**
  * The JDBC row structure wrapper class
  */
 public class JdbcRowStructure {
     /**
-     * The inner JDBC result set metadata
+     * The list of columns in the row
      */
-    private ResultSetMetaData metaData;
+    private List<JdbcRowColumnInfo> cols;
 
     /**
      * Initialises the row structure
      */
-    public JdbcRowStructure(ResultSetMetaData metaData) {
-        this.metaData = metaData;
+    public JdbcRowStructure(List<JdbcRowColumnInfo> cols) {
+        this.cols = cols;
+    }
+
+    public List<JdbcRowColumnInfo> getCols() {
+        return cols;
     }
 }

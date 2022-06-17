@@ -9,3 +9,4 @@ edition = "2021"
 ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
 jni = { version = "0.19", features = ["invocation"] }
+lazy_static = "1.4.0"

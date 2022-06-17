@@ -74,7 +74,7 @@ public interface JdbcDataType {
                 return new Int32DataType();
 
             default:
-                throw new SQLException(String.format("Unknown sql type: {}", sqlType));
+                throw new SQLException(String.format("Unknown sql type: %d", sqlType));
         }
     }
 }

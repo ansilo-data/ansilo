@@ -13,16 +13,17 @@ pub use jvm::*;
 /// the target data source
 /// We bridge into a JVM running within the process to start the JDBC driver
 pub trait JdbcConnector<
+    'a,
     TConnectionConfig,
     TEntitySearcher,
     TEntityValidator,
     TSourceConfig,
     TQueryPlanner,
 >:
-    Connector<
+    Connector<'a,
     TConnectionConfig,
     JdbcConnectionOpener,
-    JdbcConnection,
+    JdbcConnection<'a>,
     TEntitySearcher,
     TEntityValidator,
     TSourceConfig,
@@ -31,9 +32,9 @@ pub trait JdbcConnector<
     JdbcResultSet,
 > where
     TConnectionConfig: JdbcConnectionConfig,
-    TEntitySearcher: EntitySearcher<JdbcConnection, TSourceConfig>,
-    TEntityValidator: EntityValidator<JdbcConnection, TSourceConfig>,
-    TQueryPlanner: QueryPlanner<JdbcConnection, JdbcQuery, TSourceConfig>,
+    TEntitySearcher: EntitySearcher<JdbcConnection<'a>, TSourceConfig>,
+    TEntityValidator: EntityValidator<JdbcConnection<'a>, TSourceConfig>,
+    TQueryPlanner: QueryPlanner<JdbcConnection<'a>, JdbcQuery, TSourceConfig>,
 {
 }
 

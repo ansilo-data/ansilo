@@ -4,7 +4,8 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
 import com.ansilo.connectors.data.JdbcDataType;
 import com.ansilo.connectors.data.JdbcFixedSizeDataType;
 import com.ansilo.connectors.data.JdbcStreamDataType;
@@ -62,24 +63,20 @@ public class JdbcResultSet {
         this.dataTypes = this.getDataTypes();
     }
 
-    private JdbcDataType[] getDataTypes() throws SQLException {
-        var metadata = this.resultSet.getMetaData();
-        JdbcDataType[] dataTypes = new JdbcDataType[metadata.getColumnCount()];
-
-        for (int i = 0; i < dataTypes.length; i++) {
-            dataTypes[i] = JdbcDataType.create(metadata.getColumnType(i));
-        }
-
-        return dataTypes;
-    }
-
     /**
      * Gets the row structure of the result set.
      * 
      * @throws SQLException
      */
     public JdbcRowStructure getRowStructure() throws SQLException {
-        return new JdbcRowStructure(this.resultSet.getMetaData());
+        var metadata = this.resultSet.getMetaData();
+        List<JdbcRowColumnInfo> cols = new ArrayList<>();
+
+        for (int i = 0; i < metadata.getColumnCount(); i++) {
+            cols.add(new JdbcRowColumnInfo(metadata.getColumnName(i), this.dataTypes[i]));
+        }
+
+        return new JdbcRowStructure(cols);
     }
 
     /**
@@ -92,14 +89,6 @@ public class JdbcResultSet {
     public int read(ByteBuffer buff) throws Exception {
         int originalRemaining = buff.remaining();
 
-        if (this.requireAtLeastBytes != null && originalRemaining < this.requireAtLeastBytes) {
-            throw new SQLException(
-                    String.format("At least {} bytes are required to read the next value",
-                            this.requireAtLeastBytes));
-        }
-
-        this.requireAtLeastBytes = null;
-
         // Advance to first row
         if (this.rowIndex == 0 && !this.nextRow()) {
             // If zero results...
@@ -111,8 +100,9 @@ public class JdbcResultSet {
             return 0;
         }
 
-        // Tight loop for reading data from JDBC
-        // Performance sensitive
+        this.requireAtLeastBytes = null;
+
+        // Tight loop for reading data from JDBC (performance sensitive)
         while (true) {
             if (this.columnIndex == this.dataTypes.length) {
                 if (this.lastRow || !this.nextRow()) {
@@ -128,10 +118,12 @@ public class JdbcResultSet {
 
             if (dataType instanceof JdbcFixedSizeDataType) {
                 var fixedDataType = (JdbcFixedSizeDataType) dataType;
-                if (fixedDataType.getFixedSize() < buff.remaining()) {
+                if (fixedDataType.getFixedSize() <= buff.remaining()) {
                     fixedDataType.writeToByteBuffer(buff, this.resultSet, this.columnIndex);
+                    this.columnIndex++;
                 } else {
                     this.requireAtLeastBytes = fixedDataType.getFixedSize();
+                    break;
                 }
             } else if (dataType instanceof JdbcStreamDataType) {
                 var streamDataType = (JdbcStreamDataType) dataType;
@@ -144,7 +136,7 @@ public class JdbcResultSet {
                 }
 
                 // For streaming data, we frame each read with the length (int32) of that read
-                while (this.currentStream != null && buff.remaining() > 4) {
+                while (this.currentStream != null && buff.remaining() >= 5) {
                     // Write a 0 placeholder
                     int pos = buff.position();
                     buff.putInt(0);
@@ -152,27 +144,43 @@ public class JdbcResultSet {
                     int read = this.currentStream.read(buff.array(), buff.position(),
                             buff.remaining());
 
-                    // Override the placeholder with the actual read length
-                    buff.putInt(pos, read);
-                    // Advance the position to the end of the read
-                    buff.position(buff.position() + read);
-
-                    if (read == 0) {
+                    if (read <= 0) {
                         this.currentStream.close();
                         this.currentStream = null;
+                        this.columnIndex++;
                         break;
+                    } else {
+                        // Override the placeholder with the actual read length
+                        buff.putInt(pos, read);
+                        // Advance the position to the end of the read
+                        buff.position(buff.position() + read);
+
+                        // Require at least 5 bytes to store the read header frame + 1 byte of read
+                        // data
+                        // (assume the buffer will be far larger as that would be terribly
+                        // inefficient)
+                        this.requireAtLeastBytes = 5;
                     }
+                }
+
+                if (buff.remaining() < 5) {
+                    break;
                 }
             } else {
                 throw new SQLException(
-                        String.format("Unknown data type class {}", dataType.getClass().getName()));
+                        String.format("Unknown data type class %s", dataType.getClass().getName()));
             }
-
-            this.columnIndex++;
         }
 
+        var read = originalRemaining - buff.remaining();
 
-        return originalRemaining - buff.remaining();
+        if (read == 0 && this.requireAtLeastBytes != null) {
+            throw new SQLException(
+                    String.format("At least %d bytes are required to read the next value",
+                            this.requireAtLeastBytes));
+        }
+
+        return read;
     }
 
     private boolean nextRow() throws SQLException {
@@ -186,5 +194,16 @@ public class JdbcResultSet {
         }
 
         return res;
+    }
+
+    private JdbcDataType[] getDataTypes() throws SQLException {
+        var metadata = this.resultSet.getMetaData();
+        JdbcDataType[] dataTypes = new JdbcDataType[metadata.getColumnCount()];
+
+        for (int i = 0; i < dataTypes.length; i++) {
+            dataTypes[i] = JdbcDataType.create(metadata.getColumnType(i));
+        }
+
+        return dataTypes;
     }
 }
