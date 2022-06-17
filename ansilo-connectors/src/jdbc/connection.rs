@@ -1,7 +1,8 @@
 use ansilo_core::err::{Context, Result};
 use jni::{
-    objects::{JString, JValue, JObject, GlobalRef},
-    strings::JNIString, JNIEnv,
+    objects::{GlobalRef, JObject, JString, JValue},
+    strings::JNIString,
+    JNIEnv,
 };
 
 use crate::interface::{Connection, ConnectionOpener};
@@ -9,7 +10,11 @@ use crate::interface::{Connection, ConnectionOpener};
 use super::{result_set::JdbcResultSet, JdbcConnectionConfig, Jvm};
 
 /// Implementation for opening JDBC connections
-pub struct JdbcConnectionOpener {}
+pub struct JdbcConnectionOpener;
+
+impl JdbcConnectionOpener {
+    fn new () -> Self {Self {}}
+}
 
 impl<'a, TConnectionOptions> ConnectionOpener<TConnectionOptions, JdbcConnection<'a>>
     for JdbcConnectionOpener
@@ -38,11 +43,13 @@ where
             .context("Failed to set property")?;
         }
 
-        let jdbc_con = env.new_object(
-            "com/ansilo/connectors/JdbcConnection",
-            "(Ljava/lang/String;Ljava/util/Properties;)V",
-            &[JValue::Object(*url), JValue::Object(props)],
-        ).context("Failed to initialise JDBC connection")?;
+        let jdbc_con = env
+            .new_object(
+                "com/ansilo/connectors/JdbcConnection",
+                "(Ljava/lang/String;Ljava/util/Properties;)V",
+                &[JValue::Object(*url), JValue::Object(props)],
+            )
+            .context("Failed to initialise JDBC connection")?;
 
         let jdbc_con = env.new_global_ref(jdbc_con)?;
 
@@ -53,12 +60,35 @@ where
 /// Implementation of the JDBC connection
 pub struct JdbcConnection<'a> {
     jvm: Jvm<'a>,
-    jdbc_con: GlobalRef
+    jdbc_con: GlobalRef,
 }
 
-impl<'a, TQuery> Connection<TQuery, JdbcResultSet> for JdbcConnection<'a>
-{
+impl<'a, TQuery> Connection<TQuery, JdbcResultSet> for JdbcConnection<'a> {
     fn execute(&self, query: TQuery) -> Result<JdbcResultSet> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    struct MockJdbcConnectionConfig;
+
+    impl JdbcConnectionConfig for MockJdbcConnectionConfig {
+        fn get_jdbc_url(&self) -> String {
+            "test".to_string()
+        }
+
+        fn get_jdbc_props(&self) -> HashMap<String, String> {
+            HashMap::new()
+        }
+    }
+
+    #[test]
+    fn test_init_jdbc_connection() {
+        let con = JdbcConnectionOpener::new().open(MockJdbcConnectionConfig).unwrap();
     }
 }

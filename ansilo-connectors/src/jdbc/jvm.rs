@@ -1,4 +1,7 @@
+use std::{env, fs, path::Path};
+
 use ansilo_core::err::{Context, Result};
+use ansilo_logging::warn;
 use jni::{AttachGuard, InitArgsBuilder, JNIVersion, JavaVM};
 
 // Global JVM instance
@@ -6,8 +9,11 @@ use jni::{AttachGuard, InitArgsBuilder, JNIVersion, JavaVM};
 // should be fine to be shared across threads
 lazy_static::lazy_static! {
     static ref JVM: Result<JavaVM> = {
+        let jars = find_jars(None).map_err(|e| warn!("Failed to find jars: {:?}", e)).unwrap_or(vec![]);
+
         let jvm_args = InitArgsBuilder::new()
             .version(JNIVersion::V8)
+            .option(format!("-Djava.class.path={}", jars.join(";")).as_str())
             // .option("-Xcheck:jni")
             .build()
             .context("Failed to init JVM args")?;
@@ -18,9 +24,35 @@ lazy_static::lazy_static! {
     };
 }
 
+/// Finds jars to add to the JVM class path
+fn find_jars(class_path: Option<&str>) -> Result<Vec<String>> {
+    let class_path = class_path.map(|s| s.to_owned()).unwrap_or_else(|| {
+        env::var("ANSILO_CLASSPATH")
+            .context("ANSILO_CLASSPATH not set")
+            .or_else(|_| {
+                env::current_exe()
+                    .context("Failed to get current bin path")
+                    .and_then(|p| p.parent().map(|p| p.to_path_buf()).context("Failed to get parent path"))
+                    .map(|p| p.to_string_lossy().to_string())
+            })
+            .map_err(|e| warn!("Failed to get current class path {:?}", e))
+            .unwrap_or_else(|_| "".to_owned())
+    });
+
+    let jars = vec![];
+
+    for dir in class_path.split(':') {
+        // let path = &Path::from(dir);
+
+        // fs::wa
+        // TODO: find paths
+    }
+
+    Ok(jars)
+}
+
 /// Wrapper for booting and interaction with the JVM
-pub struct Jvm<'a>
-{
+pub struct Jvm<'a> {
     pub env: AttachGuard<'a>,
 }
 
