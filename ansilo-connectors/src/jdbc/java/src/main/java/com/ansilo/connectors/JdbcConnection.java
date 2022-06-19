@@ -3,7 +3,7 @@ package com.ansilo.connectors;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.Map;
+import java.util.List;
 import java.util.Properties;
 import com.ansilo.connectors.params.JdbcParameter;
 import com.ansilo.connectors.result.JdbcResultSet;
@@ -38,12 +38,14 @@ public class JdbcConnection {
      * @param params
      * @return
      */
-    public JdbcResultSet execute(String query, Map<Integer, JdbcParameter> params) throws SQLException {
+    public JdbcResultSet execute(String query, List<JdbcParameter> params) throws SQLException {
         var statement = this.connection.prepareStatement(query);
-        
-        for (Map.Entry<Integer, JdbcParameter> param : params.entrySet()) {
+        var i = 0;
+
+        for (var param : params) {
             // TODO
-            // param.getValue().bind(statement, param.getKey());
+            // param.getValue().bind(statement, i);
+            // i++;
         }
 
         return new JdbcResultSet(statement.executeQuery());
@@ -51,6 +53,7 @@ public class JdbcConnection {
 
     /**
      * Closes the connection
+     * 
      * @throws SQLException
      */
     public void close() throws SQLException {

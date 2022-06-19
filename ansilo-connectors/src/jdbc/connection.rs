@@ -7,13 +7,15 @@ use jni::{
 
 use crate::interface::{Connection, ConnectionOpener};
 
-use super::{result_set::JdbcResultSet, JdbcConnectionConfig, Jvm};
+use super::{result_set::JdbcResultSet, JdbcConnectionConfig, JdbcQuery, Jvm};
 
 /// Implementation for opening JDBC connections
 pub struct JdbcConnectionOpener;
 
 impl JdbcConnectionOpener {
-    fn new () -> Self {Self {}}
+    fn new() -> Self {
+        Self {}
+    }
 }
 
 impl<'a, TConnectionOptions> ConnectionOpener<TConnectionOptions, JdbcConnection<'a>>
@@ -63,9 +65,43 @@ pub struct JdbcConnection<'a> {
     jdbc_con: GlobalRef,
 }
 
-impl<'a, TQuery> Connection<TQuery, JdbcResultSet> for JdbcConnection<'a> {
-    fn execute(&self, query: TQuery) -> Result<JdbcResultSet> {
-        todo!()
+impl<'a> Connection<'a, JdbcQuery, JdbcResultSet<'a>> for JdbcConnection<'a> {
+    fn execute(&'a self, query: JdbcQuery) -> Result<JdbcResultSet<'a>> {
+        let env = &self.jvm.env;
+
+        let params = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .context("Failed to create ArrayList")?;
+
+        // TODO: use method id and unchecked call
+        for val in query.params.into_iter() {
+            env.call_method(
+                params,
+                "add",
+                "(Lcom/ansilo/connectors/params/JdbcParameter;)V",
+                // &[val.to_jvalue(env)?],
+                &[],
+            )
+            .context("Failed to set query param")?;
+        }
+
+        let jdbc_result_set = env
+            .call_method(
+                self.jdbc_con.as_obj(),
+                "execute",
+                "(Ljava/lang/String;Ljava/util/List;)Lcom/ansilo/connectors/result/JdbcResultSet;",
+                &[
+                    JValue::Object(*env.new_string(query.query)?),
+                    JValue::Object(params),
+                ],
+            )
+            .context("Failed to invoke JdbcConnection::execute")?
+            .l()
+            .context("Failed to convert JdbcResultSet into object")?;
+
+        let jdbc_result_set = env.new_global_ref(jdbc_result_set)?;
+
+        Ok(JdbcResultSet::new(&self.jvm, jdbc_result_set))
     }
 }
 
@@ -89,6 +125,8 @@ mod tests {
 
     #[test]
     fn test_init_jdbc_connection() {
-        let con = JdbcConnectionOpener::new().open(MockJdbcConnectionConfig).unwrap();
+        let con = JdbcConnectionOpener::new()
+            .open(MockJdbcConnectionConfig)
+            .unwrap();
     }
 }

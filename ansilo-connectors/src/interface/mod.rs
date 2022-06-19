@@ -15,7 +15,7 @@ use ansilo_core::{
 /// An ansilo connector
 /// A common abstraction over a data sources
 pub trait Connector<
-'a,
+    'a,
     TConnectionConfig,
     TConnectionOpener,
     TConnection,
@@ -27,12 +27,13 @@ pub trait Connector<
     TResultSet,
 > where
     TConnectionOpener: ConnectionOpener<TConnectionConfig, TConnection>,
-    TConnection: Connection<TQuery, TResultSet>,
+    TConnection: Connection<'a, TQuery, TResultSet>,
     TEntitySearcher: EntitySearcher<TConnection, TSourceConfig>,
     TEntityValidator: EntityValidator<TConnection, TSourceConfig>,
     TQueryPlanner: QueryPlanner<TConnection, TQuery, TSourceConfig>,
-    TResultSet: ResultSet,
-    TConnection: 'a
+    TResultSet: ResultSet<'a>,
+    TConnection: 'a,
+    TResultSet: 'a,
 {
     /// Gets the type of the connector, usually the name of the target platform, eg 'postgres'
     fn r#type() -> &'static str;
@@ -64,7 +65,7 @@ where
     /// The entity source config
     pub source_config: TSourceConfig,
 }
-    
+
 /// Opens a connection to the target data source
 pub trait ConnectionOpener<TConnectionConfig, TConnection> {
     /// Opens a connection to the target data source using the supplied options
@@ -72,9 +73,10 @@ pub trait ConnectionOpener<TConnectionConfig, TConnection> {
 }
 
 /// An open connection to a data source
-pub trait Connection<TQuery, TResultSet> {
+pub trait Connection<'a, TQuery, TResultSet>
+{
     /// Executes the supplied query
-    fn execute(&self, query: TQuery) -> Result<TResultSet>;
+    fn execute(&'a self, query: TQuery) -> Result<TResultSet>;
 }
 
 /// Discovers entity schemas from the data source
@@ -220,7 +222,7 @@ impl OperationCost {
 }
 
 /// A result set from an executed query
-pub trait ResultSet {
+pub trait ResultSet<'a> {
     /// Gets the row structure of the result set
     fn get_structure(&self) -> Result<RowStructure>;
 

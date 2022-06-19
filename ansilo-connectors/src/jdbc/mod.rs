@@ -4,6 +4,8 @@ use crate::interface::*;
 
 mod connection;
 pub use connection::*;
+mod data;
+pub use data::*;
 mod result_set;
 pub use result_set::*;
 mod jvm;
@@ -29,7 +31,7 @@ pub trait JdbcConnector<
     TSourceConfig,
     TQueryPlanner,
     JdbcQuery,
-    JdbcResultSet,
+    JdbcResultSet<'a>,
 > where
     TConnectionConfig: JdbcConnectionConfig,
     TEntitySearcher: EntitySearcher<JdbcConnection<'a>, TSourceConfig>,

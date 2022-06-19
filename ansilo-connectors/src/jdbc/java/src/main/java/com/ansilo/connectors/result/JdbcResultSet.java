@@ -80,10 +80,9 @@ public class JdbcResultSet {
     }
 
     /**
-     * Reads the next potion of the result set into the supplied byte buffer.
+     * Reads the next portion of the result set into the supplied byte buffer.
      * 
      * @param buff
-     * @return
      * @throws Exception
      */
     public int read(ByteBuffer buff) throws Exception {

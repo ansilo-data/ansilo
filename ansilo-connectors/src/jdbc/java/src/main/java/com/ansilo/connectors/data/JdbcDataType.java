@@ -7,6 +7,9 @@ import java.sql.Types;
  * The interface of the JDBC data type.
  * 
  * Used for converting data from JDBC values to our rust connector.
+ * 
+ * @see ansilo-connectors/src/jdbc/data.rs
+ * @see https://docs.oracle.com/cd/E19830-01/819-4721/beajw/index.html
  */
 public interface JdbcDataType {
     public static final int MODE_FIXED = 1;

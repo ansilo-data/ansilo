@@ -28,4 +28,8 @@ public class JdbcRowColumnInfo {
     public JdbcDataType getDataType() {
         return dataType;
     }
+
+    public int getDataTypeId() {
+        return dataType.getTypeId();
+    }
 }

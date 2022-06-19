@@ -1,6 +1,6 @@
 use std::{
     env, fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Command, Stdio},
 };
 
@@ -37,7 +37,14 @@ fn compile_jdbc_java() {
 fn get_target_dir() -> PathBuf {
     let mut out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    while out_dir.parent().unwrap().file_name().unwrap().to_string_lossy() != "target" {
+    while out_dir
+        .parent()
+        .unwrap()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        != "target"
+    {
         out_dir = out_dir.parent().unwrap().to_path_buf();
     }
 
