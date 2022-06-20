@@ -29,3 +29,5 @@ RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
 RUN echo "export JAVA_HOME=\"$(dirname $(dirname $(readlink -f $(which java))))\"" | tee -a ~/.bashrc ~/.zshrc 
 RUN echo "export MAVEN_OPTS=\"-Dmaven.repo.local=/workspace/ansilo/.m2\"" | tee -a ~/.bashrc ~/.zshrc 
 RUN echo "export LD_LIBRARY_PATH=\"\$LD_LIBRARY_PATH:\$(dirname \$(find \$JAVA_HOME -name libjvm.so))\"" | tee -a ~/.bashrc ~/.zshrc 
+
+RUN echo "export HISTFILE=\"/workspace/.sh_history\"" | tee -a ~/.bashrc ~/.zshrc 
