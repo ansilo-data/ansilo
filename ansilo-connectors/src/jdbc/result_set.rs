@@ -6,7 +6,7 @@ use jni::objects::{GlobalRef, JList, JString};
 
 use crate::interface::{ResultSet, RowStructure};
 
-use super::{Jvm, JdbcDataType};
+use super::{JdbcDataType, Jvm};
 
 /// Implementation of the JDBC result set
 pub struct JdbcResultSet<'a> {
@@ -78,5 +78,94 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
 
     fn read(&mut self, buff: &mut [u8]) -> Result<u32> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ansilo_core::common::data::{EncodingType, VarcharOptions};
+    use jni::objects::JValue;
+
+    use super::*;
+
+    #[test]
+    fn test_get_row_structure() {
+        let jvm = Jvm::boot().unwrap();
+        let env = &jvm.env;
+
+        // ensure sqlite is loaded
+        let class = env.find_class("org/sqlite/JDBC").unwrap();
+        println!("class: {:?}", class);
+
+        // create sqlite in-memory jdbc instance
+        // let drivers = env
+        //     .call_static_method(
+        //         "java/sql/DriverManager",
+        //         "getDrivers",
+        //         "()Ljava/util/Enumeration;",
+        //         &[],
+        //     )
+        //     .unwrap()
+        //     .l()
+        //     .unwrap();
+            
+        // let drivers = JList::from_env(env, drivers).context("Failed to read list").unwrap();
+
+        // for driver in drivers.iter().unwrap() {
+        //     let name = env.call_method(driver, "toString", "()Ljava/lang/String;", &[]).unwrap().l().unwrap();
+        //     let name = env.get_string(JString::from(name)).unwrap();
+        //     println!("driver: {:?}", name.to_string_lossy());
+        // }
+
+        // create sqlite in-memory jdbc instance
+        let jdbc_con = env
+            .call_static_method(
+                "java/sql/DriverManager",
+                "getConnection",
+                "(Ljava/lang/String;)Ljava/sql/Connection;",
+                &[JValue::Object(
+                    *env.new_string("jdbc:sqlite::memory:").unwrap(),
+                )],
+            )
+            .unwrap()
+            .l()
+            .unwrap();
+
+        // create statement
+        let jdbc_statement = env
+            .call_method(jdbc_con, "createStatement", "()Ljava/sql/Statement;", &[])
+            .unwrap()
+            .l()
+            .unwrap();
+
+        // execute query
+        let jdbc_result_set = env
+            .call_method(
+                jdbc_statement,
+                "executeQuery",
+                "()Ljava/sql/ResultSet;",
+                &[JValue::Object(
+                    *env.new_string("SELECT 1 as num, \"foo\" as str").unwrap(),
+                )],
+            )
+            .unwrap()
+            .l()
+            .unwrap();
+        let jdbc_result_set = env.new_global_ref(jdbc_result_set).unwrap();
+
+        let rust_wrapper = JdbcResultSet::new(&jvm, jdbc_result_set);
+
+        let row_structure = rust_wrapper.get_structure().unwrap();
+
+        assert_eq!(
+            row_structure,
+            RowStructure::new(vec![
+                ("num".to_string(), DataType::Int32),
+                (
+                    "str".to_string(),
+                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                ),
+            ])
+        );
     }
 }

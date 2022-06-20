@@ -200,7 +200,7 @@ public class JdbcResultSet {
         JdbcDataType[] dataTypes = new JdbcDataType[metadata.getColumnCount()];
 
         for (int i = 0; i < dataTypes.length; i++) {
-            dataTypes[i] = JdbcDataType.create(metadata.getColumnType(i));
+            dataTypes[i] = JdbcDataType.createFromJdbcType(metadata.getColumnType(i));
         }
 
         return dataTypes;

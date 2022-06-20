@@ -5,7 +5,7 @@ use std::{
 };
 
 use ansilo_core::err::{Context, Result};
-use ansilo_logging::warn;
+use ansilo_logging::{warn, debug};
 use jni::{AttachGuard, InitArgsBuilder, JNIVersion, JavaVM};
 
 // Global JVM instance
@@ -18,7 +18,7 @@ lazy_static::lazy_static! {
 
         let jvm_args = InitArgsBuilder::new()
             .version(JNIVersion::V8)
-            .option(format!("-Djava.class.path={}", jars.join(";")).as_str())
+            .option(format!("-Djava.class.path={}", jars.join(":")).as_str())
             // .option("-Xcheck:jni")
             .build()
             .context("Failed to init JVM args")?;
@@ -56,14 +56,20 @@ fn find_jars(class_path: Option<&str>) -> Result<Vec<PathBuf>> {
         }
     }
 
+    debug!("Found following jars: {:?}", jars);
     Ok(jars)
 }
 
 /// Gets the default class path to search for jars
 fn get_default_class_paths() -> Vec<PathBuf> {
+    #[cfg(not(test))]
+    let default_class_path = get_current_exe_path;
+    #[cfg(test)]
+    let default_class_path = get_current_target_dir;
+
     let paths = env::var("ANSILO_CLASSPATH")
         .context("ANSILO_CLASSPATH not set")
-        .or_else(|_| get_current_exe_path().map(|i| i.to_string_lossy().to_string()))
+        .or_else(|_| default_class_path().map(|i| i.to_string_lossy().to_string()))
         .map_err(|e| warn!("Failed to get current class path {:?}", e))
         .unwrap_or_else(|_| "".to_owned());
 
@@ -83,7 +89,31 @@ fn get_current_exe_path() -> Result<PathBuf> {
         })
 }
 
+/// Gets the current target directory for the build artifacts
+/// During testing mode we default to target dir as this is where the jdbc jar is outputted
+/// @see ansilo-connectors/build.rs
+#[cfg(test)]
+fn get_current_target_dir() -> Result<PathBuf> {
+    env::current_exe()
+        .context("Failed to get current bin path")
+        .and_then(|mut p| {
+            while p
+                .parent()
+                .context("Failed to get target dir")?
+                .file_name()
+                .context("Failed to get target dir")?
+                .to_string_lossy()
+                != "target"
+            {
+                p = p.parent().unwrap().to_path_buf();
+            }
+
+            Ok(p)
+        })
+}
+
 /// Wrapper for booting and interaction with the JVM
+
 pub struct Jvm<'a> {
     pub env: AttachGuard<'a>,
 }
@@ -168,5 +198,12 @@ mod tests {
         let res = get_current_exe_path().unwrap();
 
         assert_ne!(res.to_string_lossy(), "");
+    }
+
+    #[test]
+    fn test_get_target_dir() {
+        let target_dir = get_current_target_dir().unwrap();
+
+        assert_eq!(target_dir.parent().unwrap().file_name().unwrap(), "target");
     }
 }

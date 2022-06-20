@@ -1,5 +1,6 @@
 package com.ansilo.connectors.data;
 
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
 
@@ -60,9 +61,14 @@ public interface JdbcDataType {
     public int getTypeId();
 
     /**
+     * Binds the supplied value to the prepared statement.
+     */
+    public void bindParam(PreparedStatement statement, int index, Object value) throws SQLException;
+
+    /**
      * Creates a new data type instance
      */
-    public static JdbcDataType create(int sqlType) throws SQLException {
+    public static JdbcDataType createFromJdbcType(int sqlType) throws SQLException {
         switch (sqlType) {
             case Types.VARCHAR:
             case Types.CHAR:
@@ -78,6 +84,25 @@ public interface JdbcDataType {
 
             default:
                 throw new SQLException(String.format("Unknown sql type: %d", sqlType));
+        }
+    }
+
+    /**
+     * Creates a new data type instance from the type id as defined by the TYPE_* constants above
+     */
+    public static JdbcDataType createFromTypeId(int dataTypeId) throws SQLException {
+        switch (dataTypeId) {
+            case TYPE_INTEGER:
+                return new Int32DataType();
+
+            case TYPE_VARCHAR:
+                return new VarcharDataType();
+
+            case TYPE_NVARCHAR:
+                return new NVarcharDataType();
+
+            default:
+                throw new SQLException(String.format("Unknown data type id: %d", dataTypeId));
         }
     }
 }

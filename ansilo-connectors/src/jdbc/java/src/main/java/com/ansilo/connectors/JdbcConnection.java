@@ -12,6 +12,8 @@ import com.ansilo.connectors.result.JdbcResultSet;
  * The JDBC Connection wrapper class.
  * 
  * This acts an entrypoint called from our rust code to initialise the JDBC connection.
+ *
+ * TODO: Test
  */
 public class JdbcConnection {
     /**
@@ -43,9 +45,8 @@ public class JdbcConnection {
         var i = 0;
 
         for (var param : params) {
-            // TODO
-            // param.getValue().bind(statement, i);
-            // i++;
+            param.bindTo(statement, i);
+            i++;
         }
 
         return new JdbcResultSet(statement.executeQuery());

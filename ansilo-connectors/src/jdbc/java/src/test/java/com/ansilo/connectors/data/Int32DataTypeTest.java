@@ -3,6 +3,7 @@ package com.ansilo.connectors.data;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import java.sql.Types;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -46,5 +47,19 @@ public class Int32DataTypeTest extends DataTypeTest {
 
         verify(this.byteBuffer, times(1)).put((byte)1);
         verify(this.byteBuffer, times(1)).putInt(12345);
+    }
+
+    @Test
+    void testBindParam() throws Exception {
+        this.dataType.bindParam(this.preparedStatement, 1, 123);
+
+        verify(this.preparedStatement, times(1)).setInt(1, 123);
+    }
+
+    @Test
+    void testBindParamNull() throws Exception {
+        this.dataType.bindParam(this.preparedStatement, 1, null);
+
+        verify(this.preparedStatement, times(1)).setNull(1, Types.INTEGER);
     }
 }

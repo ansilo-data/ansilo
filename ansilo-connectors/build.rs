@@ -15,7 +15,12 @@ fn compile_jdbc_java() {
     println!("Running mvn build...");
 
     Command::new("mvn")
-        .args(&["clean", "compile", "package"])
+        .args(&[
+            "clean",
+            "compile",
+            "package",
+            "dependency:copy-dependencies",
+        ])
         .current_dir("src/jdbc/java")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -27,11 +32,16 @@ fn compile_jdbc_java() {
     let target_dir = get_target_dir();
 
     println!("Copying jar to target dir {} ...", target_dir.display());
-    fs::copy(
-        "src/jdbc/java/target/ansilo-jdbc-1.0-SNAPSHOT.jar",
-        target_dir.join("ansilo-jdbc-1.0-SNAPSHOT.jar"),
-    )
-    .unwrap();
+    for entry in fs::read_dir("src/jdbc/java/target").unwrap() {
+        let jar = match entry {
+            Ok(dir) if dir.file_name().to_string_lossy().ends_with(".jar") => dir,
+            _ => continue,
+        };
+
+        let dest = target_dir.join(jar.file_name());
+        println!("Copying {} to {}", jar.path().display(), dest.display());
+        fs::copy(jar.path(), dest).unwrap();
+    }
 }
 
 fn get_target_dir() -> PathBuf {
