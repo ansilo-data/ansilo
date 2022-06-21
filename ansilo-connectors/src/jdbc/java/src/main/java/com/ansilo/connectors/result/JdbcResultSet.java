@@ -2,6 +2,7 @@ package com.ansilo.connectors.result;
 
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -53,6 +54,11 @@ public class JdbcResultSet {
     private Integer requireAtLeastBytes;
 
     /**
+     * Internal read buffer for copying input streams into the byte buffer.
+     */
+    private byte[] readBuff;
+
+    /**
      * Initialises the result set wrapper
      * 
      * @param resultSet
@@ -61,6 +67,7 @@ public class JdbcResultSet {
     public JdbcResultSet(ResultSet resultSet) throws SQLException {
         this.resultSet = resultSet;
         this.dataTypes = this.getDataTypes();
+        this.readBuff = new byte[1024];
     }
 
     /**
@@ -73,7 +80,7 @@ public class JdbcResultSet {
         List<JdbcRowColumnInfo> cols = new ArrayList<>();
 
         for (int i = 0; i < metadata.getColumnCount(); i++) {
-            cols.add(new JdbcRowColumnInfo(metadata.getColumnName(i), this.dataTypes[i]));
+            cols.add(new JdbcRowColumnInfo(metadata.getColumnName(i + 1), this.dataTypes[i]));
         }
 
         return new JdbcRowStructure(cols);
@@ -82,10 +89,18 @@ public class JdbcResultSet {
     /**
      * Reads the next portion of the result set into the supplied byte buffer.
      * 
+     * This uses an instance-level mutable read buffer so this method is NOT THREAD SAFE.
+     * 
      * @param buff
      * @throws Exception
      */
     public int read(ByteBuffer buff) throws Exception {
+        // We are transfering data within the name process across JNI
+        // just use native-endianess
+        // We will take care of endianess during serialisation when
+        // transferring to remote systems.
+        buff.order(ByteOrder.nativeOrder());
+
         int originalRemaining = buff.remaining();
 
         // Advance to first row
@@ -118,7 +133,7 @@ public class JdbcResultSet {
             if (dataType instanceof JdbcFixedSizeDataType) {
                 var fixedDataType = (JdbcFixedSizeDataType) dataType;
                 if (fixedDataType.getFixedSize() <= buff.remaining()) {
-                    fixedDataType.writeToByteBuffer(buff, this.resultSet, this.columnIndex);
+                    fixedDataType.writeToByteBuffer(buff, this.resultSet, this.columnIndex + 1);
                     this.columnIndex++;
                 } else {
                     this.requireAtLeastBytes = fixedDataType.getFixedSize();
@@ -128,31 +143,32 @@ public class JdbcResultSet {
                 var streamDataType = (JdbcStreamDataType) dataType;
 
                 if (this.currentStream == null) {
-                    this.currentStream = streamDataType.getStream(this.resultSet, this.columnIndex);
+                    this.currentStream =
+                            streamDataType.getStream(this.resultSet, this.columnIndex + 1);
 
                     // The first byte indicates if the value is null or present
                     buff.put(this.currentStream == null ? (byte) 0 : 1);
                 }
 
                 // For streaming data, we frame each read with the length (int32) of that read
+                // TODO: change length header to int16 as it can only be <1024, consider byte?
                 while (this.currentStream != null && buff.remaining() >= 5) {
-                    // Write a 0 placeholder
-                    int pos = buff.position();
-                    buff.putInt(0);
-
-                    int read = this.currentStream.read(buff.array(), buff.position(),
-                            buff.remaining());
+                    // Calculate maximum read length as remaining bytes - sizeof(int32) header
+                    int len = Math.min(this.readBuff.length, buff.remaining() - 4);
+                    int read = this.currentStream.read(this.readBuff, 0, len);
 
                     if (read <= 0) {
+                        // Write 0 read length which signals EOF
+                        buff.putInt(0);
                         this.currentStream.close();
                         this.currentStream = null;
                         this.columnIndex++;
                         break;
                     } else {
-                        // Override the placeholder with the actual read length
-                        buff.putInt(pos, read);
-                        // Advance the position to the end of the read
-                        buff.position(buff.position() + read);
+                        // Write the actual read length
+                        buff.putInt(read);
+                        // Copy the read buffer into the
+                        buff.put(this.readBuff, 0, read);
 
                         // Require at least 5 bytes to store the read header frame + 1 byte of read
                         // data
@@ -200,7 +216,7 @@ public class JdbcResultSet {
         JdbcDataType[] dataTypes = new JdbcDataType[metadata.getColumnCount()];
 
         for (int i = 0; i < dataTypes.length; i++) {
-            dataTypes[i] = JdbcDataType.createFromJdbcType(metadata.getColumnType(i));
+            dataTypes[i] = JdbcDataType.createFromJdbcType(metadata.getColumnType(i + 1));
         }
 
         return dataTypes;

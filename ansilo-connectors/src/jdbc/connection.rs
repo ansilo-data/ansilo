@@ -115,7 +115,7 @@ mod tests {
 
     impl JdbcConnectionConfig for MockJdbcConnectionConfig {
         fn get_jdbc_url(&self) -> String {
-            "test".to_string()
+            "jdbc:sqlite::memory:".to_string()
         }
 
         fn get_jdbc_props(&self) -> HashMap<String, String> {

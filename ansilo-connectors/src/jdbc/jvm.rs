@@ -1,11 +1,7 @@
-use std::{
-    env,
-    fs::{self, FileType},
-    path::{Path, PathBuf},
-};
+use std::{env, fs, path::PathBuf};
 
 use ansilo_core::err::{Context, Result};
-use ansilo_logging::{warn, debug};
+use ansilo_logging::{debug, warn};
 use jni::{AttachGuard, InitArgsBuilder, JNIVersion, JavaVM};
 
 // Global JVM instance
@@ -19,7 +15,8 @@ lazy_static::lazy_static! {
         let jvm_args = InitArgsBuilder::new()
             .version(JNIVersion::V8)
             .option(format!("-Djava.class.path={}", jars.join(":")).as_str())
-            // .option("-Xcheck:jni")
+            // TODO: configurable temp directory
+            .option("-Xcheck:jni")
             .build()
             .context("Failed to init JVM args")?;
 

@@ -228,7 +228,7 @@ pub trait ResultSet<'a> {
 
     /// Reads row data from the result set into the supplied slice
     /// Returns the number of bytes read of 0 if no bytes are left to read
-    fn read(&mut self, buff: &mut [u8]) -> Result<u32>;
+    fn read(&mut self, buff: &mut [u8]) -> Result<usize>;
 }
 
 /// The structure of a row

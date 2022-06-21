@@ -2,7 +2,10 @@ use ansilo_core::{
     common::data::DataType,
     err::{Context, Result},
 };
-use jni::objects::{GlobalRef, JList, JString};
+use jni::{
+    objects::{GlobalRef, JList, JMethodID, JString, JValue},
+    signature::{JavaType, Primitive},
+};
 
 use crate::interface::{ResultSet, RowStructure};
 
@@ -12,6 +15,7 @@ use super::{JdbcDataType, Jvm};
 pub struct JdbcResultSet<'a> {
     pub jvm: &'a Jvm<'a>,
     pub jdbc_result_set: GlobalRef,
+    pub read_method_id: Option<JMethodID<'a>>,
 }
 
 impl<'a> JdbcResultSet<'a> {
@@ -19,6 +23,7 @@ impl<'a> JdbcResultSet<'a> {
         Self {
             jvm,
             jdbc_result_set,
+            read_method_id: None,
         }
     }
 }
@@ -63,7 +68,7 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
                 })?;
 
             let data_type_id = env
-                .call_method(col, "getDataTypeId", "()LI;", &[])
+                .call_method(col, "getDataTypeId", "()I", &[])
                 .context("Failed to call JdbcRowColumnInfo::getDataTypeId")?
                 .i()
                 .context("Failed to convert to int")?;
@@ -76,60 +81,93 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
         Ok(structure)
     }
 
-    fn read(&mut self, buff: &mut [u8]) -> Result<u32> {
-        todo!()
+    fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
+        let env = &self.jvm.env;
+
+        if self.read_method_id.is_none() {
+            self.read_method_id = Some(
+                env.get_method_id(
+                    "com/ansilo/connectors/result/JdbcResultSet",
+                    "read",
+                    "(Ljava/nio/ByteBuffer;)I",
+                )
+                .context("Failed to get method id of JdbcResultSet::read")?,
+            );
+        }
+
+        let jvm_buff = env
+            .new_direct_byte_buffer(buff)
+            .context("Failed to create java ByteBuffer")?;
+
+        let result = env
+            .call_method_unchecked(
+                self.jdbc_result_set.as_obj(),
+                self.read_method_id.unwrap(),
+                JavaType::Primitive(Primitive::Int),
+                &[JValue::Object(*jvm_buff)],
+            )
+            .context("Failed to call JdbcResultSet::read")?
+            .i()
+            .context("Failed to parse return value of JdbcResultSet::read")?;
+
+        result
+            .try_into()
+            .context("Return value of JdbcResuletSet::read cannot be < 0")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use ansilo_core::common::data::{EncodingType, VarcharOptions};
-    use jni::objects::JValue;
+    use jni::objects::{JObject, JValue};
 
     use super::*;
 
-    #[test]
-    fn test_get_row_structure() {
-        let jvm = Jvm::boot().unwrap();
-        let env = &jvm.env;
-
-        // ensure sqlite is loaded
-        let class = env.find_class("org/sqlite/JDBC").unwrap();
-        println!("class: {:?}", class);
-
-        // create sqlite in-memory jdbc instance
-        // let drivers = env
+    fn create_sqlite_memory_connection<'a>(jvm: &'a Jvm<'a>) -> JObject<'a> {
+        // in theory we should be able to invoke DriverManager.getConnection
+        // directly through JNI using the following code:
+        // let jdbc_con = env
         //     .call_static_method(
         //         "java/sql/DriverManager",
-        //         "getDrivers",
-        //         "()Ljava/util/Enumeration;",
-        //         &[],
+        //         "getConnection",
+        //         "(Ljava/lang/String;)Ljava/sql/Connection;",
+        //         &[JValue::Object(
+        //             *env.new_string("jdbc:sqlite::memory:").unwrap(),
+        //         )],
         //     )
         //     .unwrap()
         //     .l()
         //     .unwrap();
-            
-        // let drivers = JList::from_env(env, drivers).context("Failed to read list").unwrap();
+        // However this code complains it cannot find the driver
+        // I have not worked out why this fails but calling our wrapper succeeds...
 
-        // for driver in drivers.iter().unwrap() {
-        //     let name = env.call_method(driver, "toString", "()Ljava/lang/String;", &[]).unwrap().l().unwrap();
-        //     let name = env.get_string(JString::from(name)).unwrap();
-        //     println!("driver: {:?}", name.to_string_lossy());
-        // }
+        let env = &jvm.env;
+        let url = env.new_string("jdbc:sqlite::memory:").unwrap();
+        let props = env.new_object("java/util/Properties", "()V", &[]).unwrap();
 
-        // create sqlite in-memory jdbc instance
         let jdbc_con = env
-            .call_static_method(
-                "java/sql/DriverManager",
-                "getConnection",
-                "(Ljava/lang/String;)Ljava/sql/Connection;",
-                &[JValue::Object(
-                    *env.new_string("jdbc:sqlite::memory:").unwrap(),
-                )],
+            .new_object(
+                "com/ansilo/connectors/JdbcConnection",
+                "(Ljava/lang/String;Ljava/util/Properties;)V",
+                &[JValue::Object(*url), JValue::Object(props)],
             )
+            .unwrap();
+
+        let jdbc_con = env
+            .get_field(jdbc_con, "connection", "Ljava/sql/Connection;")
             .unwrap()
             .l()
             .unwrap();
+
+        jdbc_con
+    }
+
+    fn execute_query<'a>(
+        jvm: &'a Jvm<'a>,
+        jdbc_con: JObject<'a>,
+        query: &str,
+    ) -> JdbcResultSet<'a> {
+        let env = &jvm.env;
 
         // create statement
         let jdbc_statement = env
@@ -143,19 +181,34 @@ mod tests {
             .call_method(
                 jdbc_statement,
                 "executeQuery",
-                "()Ljava/sql/ResultSet;",
-                &[JValue::Object(
-                    *env.new_string("SELECT 1 as num, \"foo\" as str").unwrap(),
-                )],
+                "(Ljava/lang/String;)Ljava/sql/ResultSet;",
+                &[JValue::Object(*env.new_string(query).unwrap())],
             )
             .unwrap()
             .l()
             .unwrap();
+
+        let jdbc_result_set = env
+            .new_object(
+                "com/ansilo/connectors/result/JdbcResultSet",
+                "(Ljava/sql/ResultSet;)V",
+                &[JValue::Object(jdbc_result_set)],
+            )
+            .unwrap();
+
         let jdbc_result_set = env.new_global_ref(jdbc_result_set).unwrap();
 
-        let rust_wrapper = JdbcResultSet::new(&jvm, jdbc_result_set);
+        JdbcResultSet::new(&jvm, jdbc_result_set)
+    }
 
-        let row_structure = rust_wrapper.get_structure().unwrap();
+    #[test]
+    fn test_get_row_structure() {
+        let jvm = Jvm::boot().unwrap();
+
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+        let result_set = execute_query(&jvm, jdbc_con, "SELECT 1 as num, \"abc\" as str");
+
+        let row_structure = result_set.get_structure().unwrap();
 
         assert_eq!(
             row_structure,
@@ -163,9 +216,51 @@ mod tests {
                 ("num".to_string(), DataType::Int32),
                 (
                     "str".to_string(),
-                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Ascii))
                 ),
             ])
+        );
+    }
+
+    #[test]
+    fn test_result_set_read_int() {
+        let jvm = Jvm::boot().unwrap();
+
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+        let mut result_set = execute_query(&jvm, jdbc_con, "SELECT 1 as num");
+
+        let mut buff = [0; 1024];
+        let read = result_set.read(&mut buff[..]).unwrap();
+
+        assert_eq!(
+            buff[..read],
+            [
+                vec![1u8], // (not null)
+                1i32.to_ne_bytes().to_vec()
+            ]
+            .concat()
+        );
+    }
+
+    #[test]
+    fn test_result_set_read_string() {
+        let jvm = Jvm::boot().unwrap();
+
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+        let mut result_set = execute_query(&jvm, jdbc_con, "SELECT \"abc\" as str");
+
+        let mut buff = [0; 1024];
+        let read = result_set.read(&mut buff[..]).unwrap();
+
+        assert_eq!(
+            buff[..read],
+            [
+                vec![1u8], // (not null)
+                3i32.to_ne_bytes().to_vec(), // (read length)
+                "abc".as_bytes().to_vec(), // (data)
+                0i32.to_ne_bytes().to_vec(), // (EOF)
+            ]
+            .concat()
         );
     }
 }

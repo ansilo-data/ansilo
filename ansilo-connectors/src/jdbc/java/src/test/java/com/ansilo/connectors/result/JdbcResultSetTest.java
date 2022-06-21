@@ -29,8 +29,8 @@ public class JdbcResultSetTest {
     void testGetRowStructure() throws SQLException {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(2);
 
-        when(this.innerResultSetMetadata.getColumnType(0)).thenReturn(Types.VARCHAR);
-        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.INTEGER);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
+        when(this.innerResultSetMetadata.getColumnType(2)).thenReturn(Types.INTEGER);
 
         var resultSet = new JdbcResultSet(this.innerResultSet);
         var rowStructure = resultSet.getRowStructure();
@@ -53,7 +53,7 @@ public class JdbcResultSetTest {
     @Test
     void readNoRows() throws Exception {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
-        when(this.innerResultSetMetadata.getColumnType(0)).thenReturn(Types.INTEGER);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.INTEGER);
 
         when(this.innerResultSet.next()).thenReturn(false);
 
@@ -66,10 +66,10 @@ public class JdbcResultSetTest {
     @Test
     void readFixedWidthInt() throws Exception {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
-        when(this.innerResultSetMetadata.getColumnType(0)).thenReturn(Types.INTEGER);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.INTEGER);
 
         when(this.innerResultSet.next()).thenReturn(true, false);
-        when(this.innerResultSet.getInt(0)).thenReturn(123);
+        when(this.innerResultSet.getInt(1)).thenReturn(123);
 
         var resultSet = new JdbcResultSet(this.innerResultSet);
         var buff = ByteBuffer.allocate(1024);
@@ -89,10 +89,10 @@ public class JdbcResultSetTest {
     @Test
     void readVarcharStream() throws Exception {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
-        when(this.innerResultSetMetadata.getColumnType(0)).thenReturn(Types.VARCHAR);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
 
         when(this.innerResultSet.next()).thenReturn(true, false);
-        when(this.innerResultSet.getString(0)).thenReturn("abc123");
+        when(this.innerResultSet.getString(1)).thenReturn("abc123");
 
         var resultSet = new JdbcResultSet(this.innerResultSet);
         var buff = ByteBuffer.allocate(1024);
@@ -114,10 +114,10 @@ public class JdbcResultSetTest {
     @Test
     void testReadFixedWidthNotEnoughBuffer() throws Exception {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
-        when(this.innerResultSetMetadata.getColumnType(0)).thenReturn(Types.INTEGER);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.INTEGER);
 
         when(this.innerResultSet.next()).thenReturn(true, false);
-        when(this.innerResultSet.getInt(0)).thenReturn(123);
+        when(this.innerResultSet.getInt(1)).thenReturn(123);
 
         var resultSet = new JdbcResultSet(this.innerResultSet);
         var tooSmallBuff = ByteBuffer.allocate(3);
@@ -141,10 +141,10 @@ public class JdbcResultSetTest {
     @Test
     void testReadPartialStream() throws Exception {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
-        when(this.innerResultSetMetadata.getColumnType(0)).thenReturn(Types.VARCHAR);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
 
         when(this.innerResultSet.next()).thenReturn(true, false);
-        when(this.innerResultSet.getString(0)).thenReturn("abc123");
+        when(this.innerResultSet.getString(1)).thenReturn("abc123");
 
         var resultSet = new JdbcResultSet(this.innerResultSet);
         var partialRead = ByteBuffer.allocate(8);
@@ -179,12 +179,12 @@ public class JdbcResultSetTest {
     @Test
     void testMultipleColumns() throws Exception {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(2);
-        when(this.innerResultSetMetadata.getColumnType(0)).thenReturn(Types.INTEGER);
         when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.INTEGER);
+        when(this.innerResultSetMetadata.getColumnType(2)).thenReturn(Types.INTEGER);
 
         when(this.innerResultSet.next()).thenReturn(true, false);
-        when(this.innerResultSet.getInt(0)).thenReturn(1);
-        when(this.innerResultSet.getInt(1)).thenReturn(2);
+        when(this.innerResultSet.getInt(1)).thenReturn(1);
+        when(this.innerResultSet.getInt(2)).thenReturn(2);
 
         var resultSet = new JdbcResultSet(this.innerResultSet);
         var buff = ByteBuffer.allocate(1024);
@@ -206,10 +206,10 @@ public class JdbcResultSetTest {
     @Test
     void testMultipleRows() throws Exception {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
-        when(this.innerResultSetMetadata.getColumnType(0)).thenReturn(Types.INTEGER);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.INTEGER);
 
         when(this.innerResultSet.next()).thenReturn(true, true, false);
-        when(this.innerResultSet.getInt(0)).thenReturn(1, 2);
+        when(this.innerResultSet.getInt(1)).thenReturn(1, 2);
 
         var resultSet = new JdbcResultSet(this.innerResultSet);
         var buff = ByteBuffer.allocate(1024);
