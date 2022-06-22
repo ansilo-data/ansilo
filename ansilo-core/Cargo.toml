@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.57", features = ["backtrace"] }
+anyhow = { version = "1.0", features = ["backtrace"] }
+chrono = { version = "0.4", features = ["std", "clock", "time", "libc", "serde"] }
+chrono-tz = { version = "0.6", features = ["serde"] }
+rust_decimal = { version = "1.25", features = ["serde", "std"] }
 serde = { version = "1.0", features=["derive"] }
 serde_yaml = "0.8"
+uuid = { version = "1.1", features = ["serde"] }

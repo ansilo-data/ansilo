@@ -30,8 +30,8 @@ impl TryFrom<i32> for JdbcDataType {
             12 => DataType::Varchar(VarcharOptions::new(None, EncodingType::Ascii)),
             13 => DataType::Date,
             14 => DataType::Time,
-            15 => DataType::DateTime,
-            16 => DataType::DateTime,
+            15 => DataType::Timestamp,
+            16 => DataType::Timestamp,
             17 => DataType::Boolean, // TODO: verify
             18 => DataType::JSON,
             19 => DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
@@ -76,7 +76,7 @@ impl TryInto<i32> for JdbcDataType {
             DataType::JSON => 26,
             DataType::Date => 13,
             DataType::Time => 14,
-            DataType::DateTime => 15,
+            DataType::Timestamp => 15,
             DataType::DateTimeWithTZ => 31,
             DataType::Uuid => 12,
         };
@@ -104,7 +104,7 @@ mod tests {
             DataType::Decimal(DecimalOptions::default()),
             DataType::Date,
             DataType::Time,
-            DataType::DateTime,
+            DataType::Timestamp,
             DataType::DateTimeWithTZ,
         ];
 

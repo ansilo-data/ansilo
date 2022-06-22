@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+pub use chrono;
+pub use chrono_tz;
+pub use rust_decimal;
+pub use uuid;
+
 /// Data type of values
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum DataType {
@@ -20,9 +25,35 @@ pub enum DataType {
     JSON,
     Date,
     Time,
-    DateTime,
+    Timestamp,
     DateTimeWithTZ,
     Uuid,
+}
+
+/// Data container for respective types
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum DataValue {
+    Null,
+    Varchar(Vec<u8>),
+    Binary(Vec<u8>),
+    Boolean(bool),
+    Int8(i8),
+    UInt8(u8),
+    Int16(i16),
+    UInt16(u16),
+    Int32(i32),
+    UInt32(u32),
+    Int64(i64),
+    UInt64(u64),
+    FloatSingle(f32),
+    FloatDouble(f64),
+    Decimal(rust_decimal::Decimal),
+    JSON(String),
+    Date(chrono::NaiveDate),
+    Time(chrono::NaiveTime),
+    Timestamp(u64),
+    DateTimeWithTZ((chrono::NaiveDateTime, chrono_tz::Tz)),
+    Uuid(uuid::Uuid),
 }
 
 /// Options for the VARCHAR data type
