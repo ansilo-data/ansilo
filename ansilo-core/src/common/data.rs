@@ -28,6 +28,7 @@ pub enum DataType {
     Timestamp,
     DateTimeWithTZ,
     Uuid,
+    Null,
 }
 
 /// Data container for respective types
@@ -54,6 +55,35 @@ pub enum DataValue {
     Timestamp(u64),
     DateTimeWithTZ((chrono::NaiveDateTime, chrono_tz::Tz)),
     Uuid(uuid::Uuid),
+}
+
+/// Provide conversion from DataValue into DataType
+impl From<DataValue> for DataType {
+    fn from(v: DataValue) -> Self {
+        match v {
+            DataValue::Null => DataType::Null,
+            DataValue::Varchar(_) => DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
+            DataValue::Binary(_) => DataType::Binary,
+            DataValue::Boolean(_) => DataType::Boolean,
+            DataValue::Int8(_) => DataType::Int8,
+            DataValue::UInt8(_) => DataType::UInt8,
+            DataValue::Int16(_) => DataType::Int16,
+            DataValue::UInt16(_) => DataType::UInt16,
+            DataValue::Int32(_) => DataType::Int32,
+            DataValue::UInt32(_) => DataType::UInt32,
+            DataValue::Int64(_) => DataType::Int64,
+            DataValue::UInt64(_) => DataType::UInt64,
+            DataValue::FloatSingle(_) => DataType::FloatSingle,
+            DataValue::FloatDouble(_) => DataType::FloatDouble,
+            DataValue::Decimal(_) => DataType::Decimal(DecimalOptions::new(None, None)),
+            DataValue::JSON(_) => DataType::JSON,
+            DataValue::Date(_) => DataType::Date,
+            DataValue::Time(_) => DataType::Time,
+            DataValue::Timestamp(_) => DataType::Timestamp,
+            DataValue::DateTimeWithTZ(_) => DataType::DateTimeWithTZ,
+            DataValue::Uuid(_) => DataType::Uuid,
+        }
+    }
 }
 
 /// Options for the VARCHAR data type

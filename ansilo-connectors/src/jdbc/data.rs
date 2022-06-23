@@ -79,6 +79,7 @@ impl TryInto<i32> for JdbcDataType {
             DataType::Timestamp => 15,
             DataType::DateTimeWithTZ => 31,
             DataType::Uuid => 12,
+            DataType::Null => 17,
         };
 
         Ok(id)

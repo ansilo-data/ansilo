@@ -98,12 +98,12 @@ public class JdbcResultSetTest {
         var buff = ByteBuffer.allocate(1024);
         int read = resultSet.read(buff);
 
-        // should read 1 byte (not null) + 4 bytes (read length) + 6 bytes (utf8 string) + 4 byte (eof marker)
-        assertEquals(15, read);
+        // should read 1 byte (not null) + 1 byte (read length) + 6 bytes (utf8 string) + 1 byte (eof marker)
+        assertEquals(9, read);
         assertEquals(1, buff.get(0));
-        assertEquals(6, buff.getInt(1));
-        assertEquals("abc123", StandardCharsets.UTF_8.decode(buff.slice(5, 6)).toString());
-        assertEquals(0, buff.getInt(11));
+        assertEquals(6, this.byteToLength(buff.get(1)));
+        assertEquals("abc123", StandardCharsets.UTF_8.decode(buff.slice(2, 6)).toString());
+        assertEquals(0, this.byteToLength(buff.get(8)));
 
         // eof
         buff.rewind();
@@ -147,28 +147,28 @@ public class JdbcResultSetTest {
         when(this.innerResultSet.getString(1)).thenReturn("abc123");
 
         var resultSet = new JdbcResultSet(this.innerResultSet);
-        var partialRead = ByteBuffer.allocate(8);
+        var partialRead = ByteBuffer.allocate(5);
 
         // should read partial data
         int read = resultSet.read(partialRead);
-        assertEquals(8, read);
+        assertEquals(5, read);
         assertEquals(1, partialRead.get(0)); // not null
-        assertEquals(3, partialRead.getInt(1)); // read length
-        assertEquals("abc", StandardCharsets.UTF_8.decode(partialRead.slice(5, 3)).toString()); // read data
+        assertEquals(3, this.byteToLength(partialRead.get(1))); // read length
+        assertEquals("abc", StandardCharsets.UTF_8.decode(partialRead.slice(2, 3)).toString()); // read data
 
 
         // should read partial data
         partialRead.rewind();
         read = resultSet.read(partialRead);
-        assertEquals(7, read);
-        assertEquals(3, partialRead.getInt(0)); // read length
-        assertEquals("123", StandardCharsets.UTF_8.decode(partialRead.slice(4, 3)).toString()); // read data
+        assertEquals(4, read);
+        assertEquals(3, this.byteToLength(partialRead.get(0))); // read length
+        assertEquals("123", StandardCharsets.UTF_8.decode(partialRead.slice(1, 3)).toString()); // read data
 
         // end of string
         partialRead.rewind();
         read = resultSet.read(partialRead);
-        assertEquals(4, read);
-        assertEquals(0, partialRead.getInt(0)); // read length
+        assertEquals(1, read);
+        assertEquals(0, this.byteToLength(partialRead.get(0))); // read length
 
         // eof
         partialRead.rewind();
@@ -226,5 +226,70 @@ public class JdbcResultSetTest {
         buff.rewind();
         read = resultSet.read(buff);
         assertEquals(0, read);
+    }
+
+    @Test
+    void testIntsWithNulls() throws Exception {
+        when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.INTEGER);
+
+        when(this.innerResultSet.next()).thenReturn(true, true, true, true, false);
+        when(this.innerResultSet.getInt(1)).thenReturn(1, 0, 0, 2);
+        when(this.innerResultSet.wasNull()).thenReturn(false, true, true, false);
+
+        var resultSet = new JdbcResultSet(this.innerResultSet);
+        var buff = ByteBuffer.allocate(1024);
+
+        // should read to end
+        int read = resultSet.read(buff);
+        assertEquals(12, read); // 5 bytes * 2 + 1 bytes * 2 (nulls)
+        assertEquals(1, buff.get(0)); // not null
+        assertEquals(1, buff.getInt(1)); // int 1
+        assertEquals(0, buff.get(5)); // null
+        assertEquals(0, buff.get(6)); // null
+        assertEquals(1, buff.get(7)); // not null
+        assertEquals(2, buff.getInt(8)); // int 2
+
+        // eof
+        buff.rewind();
+        read = resultSet.read(buff);
+        assertEquals(0, read);
+    }
+
+    @Test
+    void readStreamsWithNulls() throws Exception {
+        when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
+
+        when(this.innerResultSet.next()).thenReturn(true, true, true, false);
+        when(this.innerResultSet.getString(1)).thenReturn("abc", null, "123");
+        when(this.innerResultSet.wasNull()).thenReturn(false, true, false);
+
+        var resultSet = new JdbcResultSet(this.innerResultSet);
+        var buff = ByteBuffer.allocate(1024);
+        int read = resultSet.read(buff);
+
+        // should read 1 byte (not null) + 1 byte (read length) + 3 bytes (utf8 string) + 1 byte (eof marker)
+        // should read 1 byte (not null)
+        // should read 1 byte (not null) + 1 byte (read length) + 3 bytes (utf8 string) + 1 byte (eof marker)
+        assertEquals(13, read);
+        assertEquals(1, buff.get(0));
+        assertEquals(3, this.byteToLength(buff.get(1)));
+        assertEquals("abc", StandardCharsets.UTF_8.decode(buff.slice(2, 3)).toString());
+        assertEquals(0, this.byteToLength(buff.get(5)));
+        assertEquals(0, buff.get(6));
+        assertEquals(1, buff.get(7));
+        assertEquals(3, this.byteToLength(buff.get(8)));
+        assertEquals("123", StandardCharsets.UTF_8.decode(buff.slice(9, 3)).toString());
+        assertEquals(0, this.byteToLength(buff.get(12)));
+
+        // eof
+        buff.rewind();
+        read = resultSet.read(buff);
+        assertEquals(0, read);
+    }
+
+    private Integer byteToLength(byte b) {
+        return (int)b + 128;
     }
 }

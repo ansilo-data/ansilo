@@ -67,7 +67,7 @@ public class JdbcResultSet {
     public JdbcResultSet(ResultSet resultSet) throws SQLException {
         this.resultSet = resultSet;
         this.dataTypes = this.getDataTypes();
-        this.readBuff = new byte[1024];
+        this.readBuff = new byte[255];
     }
 
     /**
@@ -150,23 +150,26 @@ public class JdbcResultSet {
                     buff.put(this.currentStream == null ? (byte) 0 : 1);
                 }
 
-                // For streaming data, we frame each read with the length (int32) of that read
-                // TODO: change length header to int16 as it can only be <1024, consider byte?
-                while (this.currentStream != null && buff.remaining() >= 5) {
-                    // Calculate maximum read length as remaining bytes - sizeof(int32) header
-                    int len = Math.min(this.readBuff.length, buff.remaining() - 4);
+                if (this.currentStream == null) {
+                    this.columnIndex++;
+                }
+
+                // For streaming data, we frame each read with the length (a byte) of that read
+                while (this.currentStream != null && buff.remaining() >= 2) {
+                    // Calculate maximum read length as remaining bytes - sizeof(byte) header
+                    int len = Math.min(255, buff.remaining() - 1);
                     int read = this.currentStream.read(this.readBuff, 0, len);
 
                     if (read <= 0) {
                         // Write 0 read length which signals EOF
-                        buff.putInt(0);
+                        buff.put((byte)-128);
                         this.currentStream.close();
                         this.currentStream = null;
                         this.columnIndex++;
                         break;
                     } else {
                         // Write the actual read length
-                        buff.putInt(read);
+                        buff.put((byte)(read - 128));
                         // Copy the read buffer into the
                         buff.put(this.readBuff, 0, read);
 
@@ -174,11 +177,11 @@ public class JdbcResultSet {
                         // data
                         // (assume the buffer will be far larger as that would be terribly
                         // inefficient)
-                        this.requireAtLeastBytes = 5;
+                        this.requireAtLeastBytes = 2;
                     }
                 }
 
-                if (buff.remaining() < 5) {
+                if (buff.remaining() < 2) {
                     break;
                 }
             } else {

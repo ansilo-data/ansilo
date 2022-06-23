@@ -15,12 +15,20 @@ pub struct ResultSetReader<'a, T>
 where
     T: ResultSet<'a>,
 {
+    /// The inner result set
+    /// We use a buf reader to ensure we dont call the underlying read impl
+    /// too frequently as it could be expensive
+    /// (eg across the JNI bridge)
     inner: BufReader<Reader<'a, T>>,
+    /// The row structure
     structure: Option<RowStructure>,
+    /// The current row index
     row_idx: u64,
+    /// The current column index
     col_idx: usize,
 }
 
+/// Wrapper to implement io::Read for the ResultSet trait
 struct Reader<'a, T>(pub T, PhantomData<&'a T>)
 where
     T: ResultSet<'a>;
@@ -54,6 +62,7 @@ where
     }
 
     /// Reads the next data value from the result set
+    /// Returns Ok(None) if there is no more data to read in the result set
     pub fn read_data_value(&mut self) -> Result<Option<DataValue>> {
         if self.structure.is_none() {
             let structure = self.inner.get_ref().0.get_structure()?;
@@ -70,7 +79,11 @@ where
 
         // Check for EOF
         if not_null.is_none() {
-            return Ok(None);
+            return if self.col_idx == 0 {
+                Ok(None)
+            } else {
+                bail!("Unexpected EOF occurred while reading row")
+            };
         }
 
         let res = if not_null.unwrap() != 0 {
@@ -96,6 +109,7 @@ where
                 DataType::Timestamp => todo!(),
                 DataType::DateTimeWithTZ => todo!(),
                 DataType::Uuid => todo!(),
+                DataType::Null => todo!(),
             }
         } else {
             DataValue::Null
@@ -113,11 +127,9 @@ where
         let mut read = 0usize;
 
         loop {
-            // TODO: change to u8 read length header?
-            let length = i32::from_ne_bytes(
-                self.read_exact::<4>()
-                    .context("Failed to read stream length")?,
-            );
+            let length = self
+                .read_exact::<1>()
+                .context("Failed to read stream length")?[0];
 
             // Check for EOF
             if length <= 0 {
@@ -155,10 +167,16 @@ where
         data_type.clone()
     }
 
-    fn advance(&mut self) {
-        let num_cols = self.structure.as_ref().unwrap().cols.len();
+    fn num_cols(&self) -> usize {
+        self.structure.as_ref().unwrap().cols.len()
+    }
 
-        if self.col_idx == num_cols - 1 {
+    fn is_last_col(&self) -> bool {
+        self.col_idx == self.num_cols() - 1
+    }
+
+    fn advance(&mut self) {
+        if self.is_last_col() {
             self.col_idx = 0;
             self.row_idx += 1;
         } else {
@@ -231,10 +249,10 @@ mod tests {
                 DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
             )]),
             [
-                vec![1u8],                    // not null
-                3_i32.to_ne_bytes().to_vec(), // read length
-                "abc".as_bytes().to_vec(),    // data
-                0_i32.to_ne_bytes().to_vec(), // read length (eof)
+                vec![1u8],                 // not null
+                vec![3u8],                 // read length
+                "abc".as_bytes().to_vec(), // data
+                vec![0u8],                 // read length (eof)
             ]
             .concat(),
         );
@@ -253,12 +271,12 @@ mod tests {
                 DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
             )]),
             [
-                vec![1u8],                    // not null
-                3_i32.to_ne_bytes().to_vec(), // read length
-                "abc".as_bytes().to_vec(),    // data
-                5_i32.to_ne_bytes().to_vec(), // read length
-                "12345".as_bytes().to_vec(),  // data
-                0_i32.to_ne_bytes().to_vec(), // read length (eof)
+                vec![1u8],                   // not null
+                vec![3u8],                   // read length
+                "abc".as_bytes().to_vec(),   // data
+                vec![5u8],                   // read length
+                "12345".as_bytes().to_vec(), // data
+                vec![0u8],                   // read length (eof)
             ]
             .concat(),
         );
@@ -323,15 +341,15 @@ mod tests {
                 vec![1u8],                      // not null
                 123_i32.to_ne_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                3_i32.to_ne_bytes().to_vec(),   // read length
+                vec![3u8],                      // read length
                 "abc".as_bytes().to_vec(),      // data
-                0_i32.to_ne_bytes().to_vec(),   // read length (eof)
+                vec![0u8],                      // read length (eof)
                 vec![1u8],                      // not null
                 456_i32.to_ne_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                3_i32.to_ne_bytes().to_vec(),   // read length
+                vec![3u8],                      // read length
                 "123".as_bytes().to_vec(),      // data
-                0_i32.to_ne_bytes().to_vec(),   // read length (eof)
+                vec![0u8],                      // read length (eof)
             ]
             .concat(),
         );
@@ -347,5 +365,23 @@ mod tests {
             Some(DataValue::Varchar("123".as_bytes().to_vec()))
         );
         assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_result_set_reader_end_mid_row() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                      // not null
+                123_i32.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int32(123)));
+        assert!(res.read_data_value().is_err());
     }
 }

@@ -24,15 +24,18 @@ pub trait Connector<
     TSourceConfig,
     TQueryPlanner,
     TQuery,
+    TQueryHandle,
     TResultSet,
 > where
     TConnectionOpener: ConnectionOpener<TConnectionConfig, TConnection>,
-    TConnection: Connection<'a, TQuery, TResultSet>,
+    TConnection: Connection<'a, TQuery, TQueryHandle>,
     TEntitySearcher: EntitySearcher<TConnection, TSourceConfig>,
     TEntityValidator: EntityValidator<TConnection, TSourceConfig>,
     TQueryPlanner: QueryPlanner<TConnection, TQuery, TSourceConfig>,
+    TQueryHandle: QueryHandle<'a, TResultSet>,
     TResultSet: ResultSet<'a>,
     TConnection: 'a,
+    TQueryHandle: 'a,
     TResultSet: 'a,
 {
     /// Gets the type of the connector, usually the name of the target platform, eg 'postgres'
@@ -73,10 +76,9 @@ pub trait ConnectionOpener<TConnectionConfig, TConnection> {
 }
 
 /// An open connection to a data source
-pub trait Connection<'a, TQuery, TResultSet>
-{
-    /// Executes the supplied query
-    fn execute(&'a self, query: TQuery) -> Result<TResultSet>;
+pub trait Connection<'a, TQuery, TQueryHandle> {
+    /// Prepares the supplied query
+    fn prepare(&'a self, query: TQuery) -> Result<TQueryHandle>;
 }
 
 /// Discovers entity schemas from the data source
@@ -218,6 +220,32 @@ impl OperationCost {
             connection_cost,
             total_cost,
         }
+    }
+}
+
+/// A query which is executing
+pub trait QueryHandle<'a, TResultSet> {
+    /// Gets the row structure of the result set
+    fn get_structure(&self) -> Result<QueryInputStructure>;
+
+    /// Writes query parameter data to the underlying query
+    /// Returns the number of bytes written
+    fn write(&mut self, buff: &[u8]) -> Result<usize>;
+
+    /// Executes the supplied query
+    fn execute(&mut self) -> Result<TResultSet>;
+}
+
+/// The structure of data expected by a query
+#[derive(Debug, Clone, PartialEq)]
+pub struct QueryInputStructure {
+    /// The data type of each query parameter
+    pub params: Vec<DataType>,
+}
+
+impl QueryInputStructure {
+    pub fn new(params: Vec<DataType>) -> Self {
+        Self { params }
     }
 }
 

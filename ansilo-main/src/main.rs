@@ -5,5 +5,5 @@ fn main() {
     //  1. Load config
     //  2. Start and configure postgres
     //  3. Start HTTP API
-    //  3. Start proxy and listen
+    //  4. Start proxy and listen
 }

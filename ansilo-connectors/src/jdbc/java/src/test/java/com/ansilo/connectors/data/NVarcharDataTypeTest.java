@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Types;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,14 +55,21 @@ public class NVarcharDataTypeTest extends DataTypeTest {
 
     @Test
     void testBindParam() throws Exception {
-        this.dataType.bindParam(this.preparedStatement, 1, "TEST");
+        var buff = ByteBuffer.allocate(5);
+        buff.put((byte) 1);
+        buff.put(StandardCharsets.UTF_8.encode("TEST"));
+        buff.rewind();
+        this.dataType.bindParam(this.preparedStatement, 1, buff);
 
         verify(this.preparedStatement, times(1)).setNString(1, "TEST");
     }
 
     @Test
     void testBindParamNull() throws Exception {
-        this.dataType.bindParam(this.preparedStatement, 1, null);
+        var buff = ByteBuffer.allocate(1);
+        buff.put((byte) 0);
+        buff.rewind();
+        this.dataType.bindParam(this.preparedStatement, 1, buff);
 
         verify(this.preparedStatement, times(1)).setNull(1, Types.NVARCHAR);
     }

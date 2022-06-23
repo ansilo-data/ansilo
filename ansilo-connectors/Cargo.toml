@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
-jni = { version = "0.19", features = ["invocation"] }
+jni = { git = "https://github.com/TimeToogo/jni-rs", features = ["invocation"] }
 lazy_static = "1.4.0"

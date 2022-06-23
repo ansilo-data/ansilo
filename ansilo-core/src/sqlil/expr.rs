@@ -1,4 +1,4 @@
-use crate::common::data::DataType;
+use crate::common::data::{DataType, DataValue};
 
 /// A SQLIL expression node
 #[derive(Debug, Clone, PartialEq)]
@@ -57,15 +57,13 @@ impl EntityVersionAttributeIdentifier {
 /// A constant embedded in the query
 #[derive(Debug, Clone, PartialEq)]
 pub struct Constant {
-    /// The data type of the constant
-    pub r#type: DataType,
-    /// A binary representation of the constant
-    pub value: Vec<u8>,
+    /// The value of the constant
+    pub value: DataValue,
 }
 
 impl Constant {
-    pub fn new(r#type: DataType, value: Vec<u8>) -> Self {
-        Self { r#type, value }
+    pub fn new(value: DataValue) -> Self {
+        Self { value }
     }
 }
 

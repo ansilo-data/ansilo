@@ -3,10 +3,11 @@ package com.ansilo.connectors;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import com.ansilo.connectors.params.JdbcParameter;
-import com.ansilo.connectors.result.JdbcResultSet;
+import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.query.JdbcPreparedQuery;
 
 /**
  * The JDBC Connection wrapper class.
@@ -34,22 +35,22 @@ public class JdbcConnection {
     }
 
     /**
-     * Executes the supplied query, returning the result set.
+     * Prepares the supplied query.
      * 
      * @param query
      * @param params
      * @return
      */
-    public JdbcResultSet execute(String query, List<JdbcParameter> params) throws SQLException {
-        var statement = this.connection.prepareStatement(query);
-        var i = 0;
-
-        for (var param : params) {
-            param.bindTo(statement, i);
-            i++;
+    public JdbcPreparedQuery prepare(String query, List<Integer> parameterTypes)
+            throws SQLException {
+        var jdbcTypes = new ArrayList<JdbcDataType>();
+        for (var typeId : parameterTypes) {
+            jdbcTypes.add(JdbcDataType.createFromTypeId(typeId));
         }
 
-        return new JdbcResultSet(statement.executeQuery());
+        var statement = this.connection.prepareStatement(query);
+
+        return new JdbcPreparedQuery(statement, jdbcTypes);
     }
 
     /**

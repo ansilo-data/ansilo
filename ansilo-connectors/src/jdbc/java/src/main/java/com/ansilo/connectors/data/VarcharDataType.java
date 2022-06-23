@@ -2,6 +2,7 @@ package com.ansilo.connectors.data;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -29,12 +30,14 @@ public class VarcharDataType implements JdbcStreamDataType {
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, Object value)
+    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
             throws SQLException {
-        if (value == null) {
+        boolean isNull = buff.get() == 0;
+
+        if (isNull) {
             statement.setNull(index, Types.VARCHAR);
         } else {
-            statement.setString(index, (String) value);
+            statement.setString(index, StandardCharsets.UTF_8.decode(buff).toString());
         }
     }
 }

@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use ansilo_core::common::data::{DataType, DataValue};
+use jni::objects::GlobalRef;
 
 use crate::interface::*;
 
@@ -8,6 +10,8 @@ mod data;
 pub use data::*;
 mod result_set;
 pub use result_set::*;
+mod query;
+pub use query::*;
 mod jvm;
 pub use jvm::*;
 
@@ -22,7 +26,8 @@ pub trait JdbcConnector<
     TSourceConfig,
     TQueryPlanner,
 >:
-    Connector<'a,
+    Connector<
+    'a,
     TConnectionConfig,
     JdbcConnectionOpener,
     JdbcConnection<'a>,
@@ -31,6 +36,7 @@ pub trait JdbcConnector<
     TSourceConfig,
     TQueryPlanner,
     JdbcQuery,
+    JdbcPreparedQuery<'a>,
     JdbcResultSet<'a>,
 > where
     TConnectionConfig: JdbcConnectionConfig,
@@ -49,35 +55,3 @@ pub trait JdbcConnectionConfig {
     fn get_jdbc_props(&self) -> HashMap<String, String>;
 }
 
-/// JDBC query
-#[derive(Debug, Clone, PartialEq)]
-pub struct JdbcQuery {
-    /// The query (likely SQL) as a string
-    pub query: String,
-    /// Any parameters which need to be bound to the query
-    pub params: Vec<JdbcQueryParamData>,
-}
-
-impl JdbcQuery {
-    pub fn new(query: String) -> Self {
-        Self {
-            query,
-            params: vec![],
-        }
-    }
-}
-
-/// The JDBC query param data
-#[derive(Debug, Clone, PartialEq)]
-pub enum JdbcQueryParamData {
-    String(String),
-    Bool(bool),
-    Byte(u8),
-    Short(u16),
-    Float(f64),
-    Int(i32),
-    Long(i64),
-    Null,
-    // TODO: date time, big decimal, etc
-    // Timestamp(u64),
-}

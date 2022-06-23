@@ -24,24 +24,30 @@ public class Int32DataType implements JdbcFixedSizeDataType {
     public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
             throws Exception {
         int val = resultSet.getInt(colIndex);
-        buff.put(resultSet.wasNull() ? (byte) 0 : 1);
+        if (resultSet.wasNull()) {
+            buff.put((byte) 0);
+            return;
+        }
 
-        // Note: we write the int directly to the byte buffer here
-        // without worrying about endianess.
+        buff.put((byte) 1);
+
+        // Note: we write the int directly to the byte buffer here without worrying about endianess.
         // This is fine if we assume the reader of the buffer is on the same host.
         // In the current version this assumption hosts as postgres is run in the same container
         // In future versions perhaps we have to revise this assumption if we start supporting
-        // running
-        // postgres on another host.
+        // running postgres on another host.
         buff.putInt(val);
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, Object value) throws SQLException {
-        if (value == null) {
+    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
+            throws SQLException {
+        boolean isNull = buff.get() == 0;
+        
+        if (isNull) {
             statement.setNull(index, Types.INTEGER);
         } else {
-            statement.setInt(index, (Integer) value);
+            statement.setInt(index, buff.getInt());
         }
     }
 }

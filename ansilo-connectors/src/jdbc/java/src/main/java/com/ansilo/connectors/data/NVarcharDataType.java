@@ -2,6 +2,8 @@ package com.ansilo.connectors.data;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -29,12 +31,14 @@ public class NVarcharDataType implements JdbcStreamDataType {
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, Object value)
+    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
             throws SQLException {
-        if (value == null) {
+        boolean isNull = buff.get() == 0;
+
+        if (isNull) {
             statement.setNull(index, Types.NVARCHAR);
         } else {
-            statement.setNString(index, (String) value);
+            statement.setNString(index, StandardCharsets.UTF_8.decode(buff).toString());
         }
     }
 }

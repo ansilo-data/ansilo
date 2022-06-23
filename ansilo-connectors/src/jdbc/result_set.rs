@@ -1,7 +1,4 @@
-use ansilo_core::{
-    common::data::DataType,
-    err::{Context, Result},
-};
+use ansilo_core::err::{Context, Result};
 use jni::{
     objects::{GlobalRef, JList, JMethodID, JString, JValue},
     signature::{JavaType, Primitive},
@@ -110,6 +107,8 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
             .i()
             .context("Failed to parse return value of JdbcResultSet::read")?;
 
+        // TODO: exception handling
+
         result
             .try_into()
             .context("Return value of JdbcResuletSet::read cannot be < 0")
@@ -118,7 +117,7 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::common::data::{EncodingType, VarcharOptions};
+    use ansilo_core::common::data::{EncodingType, VarcharOptions, DataType};
     use jni::objects::{JObject, JValue};
 
     use super::*;
@@ -255,9 +254,9 @@ mod tests {
         assert_eq!(
             buff[..read],
             [
-                vec![1u8], // (not null)
+                vec![1u8],                   // (not null)
                 3i32.to_ne_bytes().to_vec(), // (read length)
-                "abc".as_bytes().to_vec(), // (data)
+                "abc".as_bytes().to_vec(),   // (data)
                 0i32.to_ne_bytes().to_vec(), // (EOF)
             ]
             .concat()

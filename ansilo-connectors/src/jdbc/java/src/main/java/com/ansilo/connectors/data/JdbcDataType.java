@@ -1,5 +1,6 @@
 package com.ansilo.connectors.data;
 
+import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -63,7 +64,7 @@ public interface JdbcDataType {
     /**
      * Binds the supplied value to the prepared statement.
      */
-    public void bindParam(PreparedStatement statement, int index, Object value) throws SQLException;
+    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff) throws SQLException;
 
     /**
      * Creates a new data type instance
