@@ -31,3 +31,13 @@ RUN echo "export MAVEN_OPTS=\"-Dmaven.repo.local=/workspace/ansilo/.m2\"" | tee 
 RUN echo "export LD_LIBRARY_PATH=\"\$LD_LIBRARY_PATH:\$(dirname \$(find \$JAVA_HOME -name libjvm.so))\"" | tee -a ~/.bashrc ~/.zshrc 
 
 RUN echo "export HISTFILE=\"/workspace/.sh_history\"" | tee -a ~/.bashrc ~/.zshrc 
+
+# Install mold linker
+RUN cd ~/ && \
+    git clone https://github.com/rui314/mold.git && \
+    cd mold && \
+    sudo ./install-build-deps.sh && \
+    git checkout v1.3.0 && \
+    make -j$(nproc) CXX=clang++ && \
+    sudo make install && \
+    cd .. && sudo rm -rf ./mold/
