@@ -57,8 +57,6 @@ impl ConfigExprProcessor for EnvConfigProcessor {
 
 #[cfg(test)]
 mod tests {
-    use std::path;
-
     use crate::loader::ConfigLoader;
 
     use super::*;
