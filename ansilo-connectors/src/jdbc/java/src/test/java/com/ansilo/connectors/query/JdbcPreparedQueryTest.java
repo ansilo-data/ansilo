@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -52,7 +53,7 @@ public class JdbcPreparedQueryTest {
     void writeInt() throws Exception {
         this.innerParamTypes.add(new Int32DataType());
 
-        var buff = ByteBuffer.allocate(5);
+        var buff = this.newByteBuffer(5);
         buff.put((byte) 1); // not null
         buff.putInt(123); // val
         buff.rewind();
@@ -67,7 +68,7 @@ public class JdbcPreparedQueryTest {
     void writeIntNull() throws Exception {
         this.innerParamTypes.add(new Int32DataType());
 
-        var buff = ByteBuffer.allocate(1);
+        var buff = this.newByteBuffer(1);
         buff.put((byte) 0); // null
         buff.rewind();
 
@@ -81,7 +82,7 @@ public class JdbcPreparedQueryTest {
     void writeVarchar() throws Exception {
         this.innerParamTypes.add(new VarcharDataType());
 
-        var buff = ByteBuffer.allocate(6);
+        var buff = this.newByteBuffer(6);
         buff.put((byte) 1); // not null
         buff.put(this.lengthToByte(3)); // length
         buff.put(StandardCharsets.UTF_8.encode("abc"));
@@ -100,7 +101,7 @@ public class JdbcPreparedQueryTest {
         this.innerParamTypes.add(new Int32DataType());
         this.innerParamTypes.add(new Int32DataType());
 
-        var buff = ByteBuffer.allocate(15);
+        var buff = this.newByteBuffer(15);
         buff.put((byte) 1); // not null
         buff.putInt(123); // val
         buff.put((byte) 1); // not null
@@ -123,7 +124,7 @@ public class JdbcPreparedQueryTest {
         this.innerParamTypes.add(new VarcharDataType());
         this.innerParamTypes.add(new VarcharDataType());
 
-        var buff = ByteBuffer.allocate(18);
+        var buff = this.newByteBuffer(18);
         buff.put((byte) 1); // not null
         buff.put(this.lengthToByte(3)); // length
         buff.put(StandardCharsets.UTF_8.encode("abc"));
@@ -151,7 +152,7 @@ public class JdbcPreparedQueryTest {
         this.innerParamTypes.add(new Int32DataType());
         this.innerParamTypes.add(new VarcharDataType());
 
-        var buff = ByteBuffer.allocate(11);
+        var buff = this.newByteBuffer(11);
         buff.put((byte) 1); // not null
         buff.putInt(123); // value
         buff.put((byte) 1); // not null
@@ -171,7 +172,7 @@ public class JdbcPreparedQueryTest {
     void writePartialInt() throws Exception {
         this.innerParamTypes.add(new Int32DataType());
 
-        var buff = ByteBuffer.allocate(5);
+        var buff = this.newByteBuffer(5);
         buff.put((byte) 1); // not null
         buff.putInt(123); // value
         buff.rewind();
@@ -188,7 +189,7 @@ public class JdbcPreparedQueryTest {
     void writePartialVarchar() throws Exception {
         this.innerParamTypes.add(new VarcharDataType());
 
-        var buff = ByteBuffer.allocate(12);
+        var buff = this.newByteBuffer(12);
         buff.put((byte) 1); // not null
         buff.put(this.lengthToByte(3)); // length
         buff.put(StandardCharsets.UTF_8.encode("abc"));
@@ -214,7 +215,7 @@ public class JdbcPreparedQueryTest {
         this.innerParamTypes.add(new VarcharDataType());
         this.innerParamTypes.add(new Int32DataType());
 
-        var buff = ByteBuffer.allocate(13);
+        var buff = this.newByteBuffer(13);
         buff.put((byte) 1); // not null
         buff.put(this.lengthToByte(3)); // length
         buff.put(StandardCharsets.UTF_8.encode("abc"));
@@ -258,7 +259,7 @@ public class JdbcPreparedQueryTest {
         this.innerParamTypes.add(new Int32DataType());
         this.innerParamTypes.add(new Int32DataType());
 
-        var buff = ByteBuffer.allocate(5);
+        var buff = this.newByteBuffer(5);
         buff.put((byte) 1); // not null
         buff.putInt(123); // val
         buff.rewind();
@@ -278,7 +279,7 @@ public class JdbcPreparedQueryTest {
     void executeWithFullParamsSucceeds() throws Exception {
         this.innerParamTypes.add(new Int32DataType());
 
-        var buff = ByteBuffer.allocate(5);
+        var buff = this.newByteBuffer(5);
         buff.put((byte) 1); // not null
         buff.putInt(123); // val
         buff.rewind();
@@ -290,6 +291,12 @@ public class JdbcPreparedQueryTest {
 
         this.preparedQuery.execute();
         verify(this.innerStatement, times(1)).executeQuery();
+    }
+
+    private ByteBuffer newByteBuffer(int capacity) {
+        var buff = ByteBuffer.allocate(capacity);
+        buff.order(ByteOrder.nativeOrder());
+        return buff;
     }
 
     private byte lengthToByte(int i) {

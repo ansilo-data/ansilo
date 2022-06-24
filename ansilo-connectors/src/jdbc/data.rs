@@ -59,6 +59,7 @@ impl TryInto<i32> for JdbcDataType {
 
     fn try_into(self) -> Result<i32> {
         let id = match self.0 {
+            DataType::Varchar(opt) if opt.encoding == EncodingType::Ascii => 12,
             DataType::Varchar(_) => 26,
             DataType::Binary => 22,
             DataType::Boolean => 1,

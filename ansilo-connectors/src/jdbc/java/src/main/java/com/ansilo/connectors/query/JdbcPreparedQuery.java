@@ -3,6 +3,7 @@ package com.ansilo.connectors.query;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
@@ -53,6 +54,12 @@ public class JdbcPreparedQuery {
      * Parses the supplied buff as query parameters and binds them to the query
      */
     public int write(ByteBuffer buff) throws Exception {
+        // We are transfering data within the name process across JNI
+        // just use native-endianess
+        // We will take care of endianess during serialisation when
+        // transferring to remote systems.
+        buff.order(ByteOrder.nativeOrder());
+
         var originalPosition = buff.position();
 
         while (this.getLocalBuffer().size() + buff.remaining() > 0) {
@@ -82,6 +89,7 @@ public class JdbcPreparedQuery {
                     // If buffer contains full parameter, we read from it directly
                     var tmpBuff =
                             ByteBuffer.wrap(localBuffer.toByteArray(), 0, fixedType.getFixedSize());
+                    tmpBuff.order(ByteOrder.nativeOrder());
                     fixedType.bindParam(this.preparedStatement, this.paramIndex + 1, tmpBuff);
                     this.resetLocalBuffer();
                 } else if (buff.remaining() > 0) {
@@ -134,8 +142,9 @@ public class JdbcPreparedQuery {
                 }
 
                 // Chunk length == 0 => EOF, we then bind the parameter
-                streamType.bindParam(this.preparedStatement, this.paramIndex + 1,
-                        ByteBuffer.wrap(localBuffer.toByteArray()));
+                var streamBuff = ByteBuffer.wrap(localBuffer.toByteArray());
+                streamBuff.order(ByteOrder.nativeOrder());
+                streamType.bindParam(this.preparedStatement, this.paramIndex + 1, streamBuff);
                 this.resetLocalBuffer();
                 this.streamChunkLength = null;
             }

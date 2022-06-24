@@ -9,7 +9,7 @@ use jni::{
 
 use crate::interface::{QueryHandle, QueryInputStructure};
 
-use super::{JdbcDataType, JdbcResultSet, Jvm};
+use super::{JdbcResultSet, Jvm};
 
 /// JDBC query
 #[derive(Debug, Clone, PartialEq)]
@@ -71,7 +71,7 @@ impl<'a> JdbcPreparedQuery<'a> {
             self.as_read_only_buffer_method_id = Some(
                 env.get_method_id(
                     "java/nio/ByteBuffer",
-                    "asReadOnlyByteBuffer",
+                    "asReadOnlyBuffer",
                     "()Ljava/nio/ByteBuffer;",
                 )
                 .context("Failed to find ByteBuffer::asReadOnlyBuffer method")?,
@@ -140,11 +140,10 @@ impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
             .call_method(
                 self.jdbc_prepared_statement.as_obj(),
                 "execute",
-                "(Lcom/ansilo/connectors/query/JdbcPreparedQuery;)Lcom/ansilo/connectors/result/JdbcResultSet;",
-                &[
-                ]
+                "()Lcom/ansilo/connectors/result/JdbcResultSet;",
+                &[],
             )
-            .context("Failed to invoke JdbcConnection::execute")?
+            .context("Failed to invoke JdbcPreparedQuery::execute")?
             .l()
             .context("Failed to convert JdbcResultSet into object")?;
 
@@ -154,4 +153,163 @@ impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
 
         Ok(JdbcResultSet::new(&self.jvm, jdbc_result_set))
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use ansilo_core::common::data::{DataValue, EncodingType, VarcharOptions};
+    use jni::objects::JObject;
+
+    use crate::{
+        common::result_set_reader::ResultSetReader,
+        jdbc::{test::create_sqlite_memory_connection, JdbcDataType},
+    };
+
+    use super::*;
+
+    fn create_prepared_query<'a>(
+        jvm: &'a Jvm<'a>,
+        jdbc_con: JObject<'a>,
+        query: &str,
+        params: Vec<DataType>,
+    ) -> JdbcPreparedQuery<'a> {
+        let env = &jvm.env;
+
+        let prepared_statement = env
+            .call_method(
+                jdbc_con,
+                "prepareStatement",
+                "(Ljava/lang/String;)Ljava/sql/PreparedStatement;",
+                &[JValue::Object(*env.new_string(query).unwrap())],
+            )
+            .unwrap();
+
+        let param_types = env.new_object("java/util/ArrayList", "()V", &[]).unwrap();
+
+        for val in params.iter() {
+            let data_type = env
+                .call_static_method(
+                    "com/ansilo/connectors/data/JdbcDataType",
+                    "createFromTypeId",
+                    "(I)Lcom/ansilo/connectors/data/JdbcDataType;",
+                    &[JValue::Int(JdbcDataType(val.clone()).try_into().unwrap())],
+                )
+                .unwrap()
+                .l()
+                .unwrap();
+
+            env.call_method(
+                param_types,
+                "add",
+                "(Ljava/lang/Object;)Z",
+                &[JValue::Object(data_type)],
+            )
+            .unwrap();
+        }
+
+        let jdbc_prepared_query = env
+            .new_object(
+                "com/ansilo/connectors/query/JdbcPreparedQuery",
+                "(Ljava/sql/PreparedStatement;Ljava/util/List;)V",
+                &[prepared_statement, JValue::Object(param_types)],
+            )
+            .unwrap();
+
+        let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query).unwrap();
+
+        JdbcPreparedQuery::new(jvm, jdbc_prepared_query, params)
+    }
+
+    #[test]
+    fn test_prepared_query_no_params() {
+        let jvm = Jvm::boot().unwrap();
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+
+        let mut prepared_query = create_prepared_query(&jvm, jdbc_con, "SELECT 1 as num", vec![]);
+
+        let rs = prepared_query.execute().unwrap();
+        let mut rs = ResultSetReader::new(rs);
+
+        assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(1)));
+        assert_eq!(rs.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_prepared_query_with_int_param() {
+        let jvm = Jvm::boot().unwrap();
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+
+        let mut prepared_query =
+            create_prepared_query(&jvm, jdbc_con, "SELECT ? as num", vec![DataType::Int32]);
+
+        let wrote = prepared_query
+            .write(
+                [
+                    vec![1u8],                      // not null
+                    123_i32.to_ne_bytes().to_vec(), // value
+                ]
+                .concat()
+                .as_slice(),
+            )
+            .unwrap();
+
+        assert_eq!(wrote, 5);
+
+        let rs = prepared_query.execute().unwrap();
+        let mut rs = ResultSetReader::new(rs);
+
+        assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(123)));
+        assert_eq!(rs.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_prepared_query_with_varchar_param() {
+        let jvm = Jvm::boot().unwrap();
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+
+        let mut prepared_query = create_prepared_query(
+            &jvm,
+            jdbc_con,
+            "SELECT ? as str",
+            vec![DataType::Varchar(VarcharOptions::new(
+                None,
+                EncodingType::Ascii,
+            ))],
+        );
+
+        let wrote = prepared_query
+            .write(
+                [
+                    vec![1u8],                 // not null
+                    vec![3u8],                 // length
+                    "abc".as_bytes().to_vec(), // data
+                    vec![0u8],                 // eof
+                ]
+                .concat()
+                .as_slice(),
+            )
+            .unwrap();
+
+        assert_eq!(wrote, 6);
+
+        let rs = prepared_query.execute().unwrap();
+        let mut rs = ResultSetReader::new(rs);
+
+        assert_eq!(
+            rs.read_data_value().unwrap(),
+            Some(DataValue::Varchar("abc".as_bytes().to_vec()))
+        );
+        assert_eq!(rs.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_prepared_query_with_missing_param() {
+        let jvm = Jvm::boot().unwrap();
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+
+        let mut prepared_query = create_prepared_query(&jvm, jdbc_con, "SELECT ? as num", vec![DataType::Int32]);
+
+        assert!(prepared_query.execute().is_err());
+    }
+
 }

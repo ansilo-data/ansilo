@@ -15,6 +15,9 @@ pub use query::*;
 mod jvm;
 pub use jvm::*;
 
+#[cfg(test)]
+mod test;
+
 /// Base connector which relies on a JDBC driver for connecting to
 /// the target data source
 /// We bridge into a JVM running within the process to start the JDBC driver
