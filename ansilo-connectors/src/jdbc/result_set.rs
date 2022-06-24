@@ -27,9 +27,7 @@ impl<'a> JdbcResultSet<'a> {
 
 impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
     fn get_structure(&self) -> Result<RowStructure> {
-        let env = &self.jvm.env;
-
-        self.jvm.with_local_frame(32, || {
+        self.jvm.with_local_frame(32, |env| {
             let jdbc_structure = env
                 .call_method(
                     self.jdbc_result_set.as_obj(),
@@ -82,9 +80,7 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
     }
 
     fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
-        let env = &self.jvm.env;
-
-        self.jvm.with_local_frame(32, || {
+        self.jvm.with_local_frame(32, |env| {
             if self.read_method_id.is_none() {
                 self.read_method_id = Some(
                     env.get_method_id(

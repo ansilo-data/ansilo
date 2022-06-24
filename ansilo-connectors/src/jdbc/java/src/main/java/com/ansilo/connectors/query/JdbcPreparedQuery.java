@@ -50,6 +50,14 @@ public class JdbcPreparedQuery {
         this.parameterTypes = parameterTypes;
     }
 
+    public PreparedStatement getPreparedStatement() {
+        return preparedStatement;
+    }
+
+    public List<JdbcDataType> getParameterTypes() {
+        return parameterTypes;
+    }
+
     /**
      * Parses the supplied buff as query parameters and binds them to the query
      */

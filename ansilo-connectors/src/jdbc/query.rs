@@ -21,9 +21,9 @@ pub struct JdbcQuery {
 }
 
 impl JdbcQuery {
-    pub fn new(query: String) -> Self {
+    pub fn new(query: impl Into<String>) -> Self {
         Self {
-            query,
+            query: query.into(),
             params: vec![],
         }
     }
@@ -89,71 +89,69 @@ impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
 
     fn write(&mut self, buff: &[u8]) -> Result<usize> {
         self.init_method_ids()?;
-        let env = &self.jvm.env;
+        self.jvm.with_local_frame(32, |env| {
+            // Our supplied buff is a immutable reference however our jni interface
+            // requires an &mut [u8]. We use some unsafe code to override this restriction
+            // and manually enforce it using https://docs.oracle.com/javase/10/docs/api/java/nio/ByteBuffer.html#asReadOnlyBuffer()
+            let byte_buff = unsafe {
+                // TODO: Hopefully get https://github.com/jni-rs/jni-rs/pull/351 merged
+                let byte_buff = env
+                    .new_direct_byte_buffer_raw(buff.as_ptr() as *mut _, buff.len())
+                    .context("Failed to create direct byte buffer")?;
 
-        // Our supplied buff is a immutable reference however our jni interface
-        // requires an &mut [u8]. We use some unsafe code to override this restriction
-        // and manually enforce it using https://docs.oracle.com/javase/10/docs/api/java/nio/ByteBuffer.html#asReadOnlyBuffer()
-        let byte_buff = unsafe {
-            // TODO: Hopefully get https://github.com/jni-rs/jni-rs/pull/351 merged
-            let byte_buff = env
-                .new_direct_byte_buffer_raw(buff.as_ptr() as *mut _, buff.len())
-                .context("Failed to create direct byte buffer")?;
+                let byte_buff = env
+                    .call_method_unchecked(
+                        *byte_buff,
+                        self.as_read_only_buffer_method_id.unwrap(),
+                        JavaType::Object("java/nio/ByteBuffer".to_owned()),
+                        &[],
+                    )
+                    .context("Failed to call ByteBuffer::asReadOnlyBuffer")?
+                    .l()
+                    .context("Failed to convert ByteBuffer to object")?;
 
-            let byte_buff = env
+                byte_buff
+            };
+
+            let written = env
                 .call_method_unchecked(
-                    *byte_buff,
-                    self.as_read_only_buffer_method_id.unwrap(),
-                    JavaType::Object("java/nio/ByteBuffer".to_owned()),
-                    &[],
+                    self.jdbc_prepared_statement.as_obj(),
+                    self.write_method_id.unwrap(),
+                    JavaType::Primitive(Primitive::Int),
+                    &[JValue::Object(byte_buff)],
                 )
-                .context("Failed to call ByteBuffer::asReadOnlyBuffer")?
-                .l()
-                .context("Failed to convert ByteBuffer to object")?;
+                .context("Failed to invoke JdbcPreparedQuery::execute")?
+                .i()
+                .context("Failed to convert JdbcPreparedQuery::execute return value into int")?;
 
-            byte_buff
-        };
+            if written < 0 {
+                bail!("JdbcPreparedQuery::execute returned value less than 0");
+            }
 
-        let byte_buff = env.auto_local(byte_buff);
-
-        let written = env
-            .call_method_unchecked(
-                self.jdbc_prepared_statement.as_obj(),
-                self.write_method_id.unwrap(),
-                JavaType::Primitive(Primitive::Int),
-                &[JValue::Object(byte_buff.as_obj())],
-            )
-            .context("Failed to invoke JdbcPreparedQuery::execute")?
-            .i()
-            .context("Failed to convert JdbcPreparedQuery::execute return value into int")?;
-
-        if written < 0 {
-            bail!("JdbcPreparedQuery::execute returned value less than 0");
-        }
-
-        // TODO: exception handling
-        Ok(written.try_into().unwrap())
+            // TODO: exception handling
+            Ok(written.try_into().unwrap())
+        })
     }
 
     fn execute(&mut self) -> Result<JdbcResultSet<'a>> {
-        let env = &self.jvm.env;
+        self.jvm.with_local_frame(32, |env| {
+            let jdbc_result_set = env
+                .call_method(
+                    self.jdbc_prepared_statement.as_obj(),
+                    "execute",
+                    "()Lcom/ansilo/connectors/result/JdbcResultSet;",
+                    &[],
+                )
+                .context("Failed to invoke JdbcPreparedQuery::execute")?
+                .l()
+                .context("Failed to convert JdbcResultSet into object")?;
 
-        let jdbc_result_set = env
-            .call_method(
-                self.jdbc_prepared_statement.as_obj(),
-                "execute",
-                "()Lcom/ansilo/connectors/result/JdbcResultSet;",
-                &[],
-            )
-            .context("Failed to invoke JdbcPreparedQuery::execute")?
-            .l()
-            .context("Failed to convert JdbcResultSet into object")?;
+            // TODO: exception handling
 
-        // TODO: exception handling
+            let jdbc_result_set = env.new_global_ref(jdbc_result_set)?;
 
-        let jdbc_result_set = env.new_global_ref(jdbc_result_set)?;
-
-        Ok(JdbcResultSet::new(&self.jvm, jdbc_result_set))
+            Ok(JdbcResultSet::new(&self.jvm, jdbc_result_set))
+        })
     }
 }
 
@@ -216,7 +214,6 @@ mod tests {
                 &[prepared_statement, JValue::Object(param_types)],
             )
             .unwrap();
-
 
         let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query).unwrap();
 

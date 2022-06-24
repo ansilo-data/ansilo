@@ -131,13 +131,13 @@ impl<'a> Jvm<'a> {
     /// Executes the supplied function in a local frame
     pub fn with_local_frame<F, R>(&self, local_ref_capacity: i32, cb: F) -> Result<R>
     where
-        F: FnOnce() -> Result<R>,
+        F: FnOnce(&AttachGuard<'a>) -> Result<R>,
     {
         self.env
             .push_local_frame(local_ref_capacity)
             .context("Failed to push local frame")?;
 
-        let ret = cb();
+        let ret = cb(&self.env);
 
         self.env
             .pop_local_frame(JObject::null())
@@ -227,8 +227,8 @@ mod tests {
     fn test_jvm_with_local_frame() {
         let jvm = Jvm::boot().unwrap();
 
-        let ret = jvm.with_local_frame(10, || {
-            jvm.env.new_object("java/lang/Object", "()V", &[]).unwrap();
+        let ret = jvm.with_local_frame(10, |env| {
+            env.new_object("java/lang/Object", "()V", &[]).unwrap();
             Ok(())
         });
 

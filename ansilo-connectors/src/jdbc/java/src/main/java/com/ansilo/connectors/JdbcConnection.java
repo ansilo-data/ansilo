@@ -31,7 +31,14 @@ public class JdbcConnection {
      */
     public JdbcConnection(String jdbcUrl, Properties jdbcProps) throws SQLException {
         // TODO: logging
-        this.connection = DriverManager.getConnection(jdbcUrl, jdbcProps);
+        this(DriverManager.getConnection(jdbcUrl, jdbcProps));
+    }
+
+    /**
+     * Initialises a new JDBC connection
+     */
+    public JdbcConnection(Connection connection) {
+        this.connection = connection;
     }
 
     /**
@@ -44,6 +51,7 @@ public class JdbcConnection {
     public JdbcPreparedQuery prepare(String query, List<Integer> parameterTypes)
             throws SQLException {
         var jdbcTypes = new ArrayList<JdbcDataType>();
+
         for (var typeId : parameterTypes) {
             jdbcTypes.add(JdbcDataType.createFromTypeId(typeId));
         }
