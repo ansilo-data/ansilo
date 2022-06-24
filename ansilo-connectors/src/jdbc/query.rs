@@ -3,7 +3,7 @@ use ansilo_core::{
     err::{bail, Context, Result},
 };
 use jni::{
-    objects::{GlobalRef, JList, JMethodID, JString, JValue},
+    objects::{GlobalRef, JMethodID, JValue},
     signature::{JavaType, Primitive},
 };
 
@@ -114,12 +114,14 @@ impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
             byte_buff
         };
 
+        let byte_buff = env.auto_local(byte_buff);
+
         let written = env
             .call_method_unchecked(
                 self.jdbc_prepared_statement.as_obj(),
                 self.write_method_id.unwrap(),
                 JavaType::Primitive(Primitive::Int),
-                &[JValue::Object(byte_buff)],
+                &[JValue::Object(byte_buff.as_obj())],
             )
             .context("Failed to invoke JdbcPreparedQuery::execute")?
             .i()
@@ -161,7 +163,7 @@ mod tests {
     use jni::objects::JObject;
 
     use crate::{
-        common::result_set_reader::ResultSetReader,
+        common::ResultSetReader,
         jdbc::{test::create_sqlite_memory_connection, JdbcDataType},
     };
 
@@ -214,6 +216,7 @@ mod tests {
                 &[prepared_statement, JValue::Object(param_types)],
             )
             .unwrap();
+
 
         let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query).unwrap();
 
@@ -307,9 +310,39 @@ mod tests {
         let jvm = Jvm::boot().unwrap();
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
-        let mut prepared_query = create_prepared_query(&jvm, jdbc_con, "SELECT ? as num", vec![DataType::Int32]);
+        let mut prepared_query =
+            create_prepared_query(&jvm, jdbc_con, "SELECT ? as num", vec![DataType::Int32]);
 
         assert!(prepared_query.execute().is_err());
     }
 
+    #[test]
+    fn test_prepared_query_multiple_execute() {
+        let jvm = Jvm::boot().unwrap();
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+
+        let mut prepared_query =
+            create_prepared_query(&jvm, jdbc_con, "SELECT ? as num", vec![DataType::Int32]);
+
+        for i in [123_i32, 456, 789, 999] {
+            let wrote = prepared_query
+                .write(
+                    [
+                        vec![1u8],                // not null
+                        i.to_ne_bytes().to_vec(), // value
+                    ]
+                    .concat()
+                    .as_slice(),
+                )
+                .unwrap();
+
+            assert_eq!(wrote, 5);
+
+            let rs = prepared_query.execute().unwrap();
+            let mut rs = ResultSetReader::new(rs);
+
+            assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(i)));
+            assert_eq!(rs.read_data_value().unwrap(), None);
+        }
+    }
 }

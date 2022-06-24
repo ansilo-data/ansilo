@@ -1,16 +1,9 @@
 use ansilo_core::err::{Context, Result};
-use jni::{
-    objects::{GlobalRef, JObject, JString, JValue},
-    strings::JNIString,
-    JNIEnv,
-};
+use jni::objects::{GlobalRef, JValue};
 
 use crate::interface::{Connection, ConnectionOpener};
 
-use super::{
-    result_set::JdbcResultSet, JdbcConnectionConfig, JdbcDataType, JdbcPreparedQuery, JdbcQuery,
-    Jvm,
-};
+use super::{JdbcConnectionConfig, JdbcDataType, JdbcPreparedQuery, JdbcQuery, Jvm};
 
 /// Implementation for opening JDBC connections
 pub struct JdbcConnectionOpener;
@@ -72,43 +65,48 @@ impl<'a> Connection<'a, JdbcQuery, JdbcPreparedQuery<'a>> for JdbcConnection<'a>
     fn prepare(&'a self, query: JdbcQuery) -> Result<JdbcPreparedQuery<'a>> {
         let env = &self.jvm.env;
 
-        let param_types = env
-            .new_object("java/util/ArrayList", "()V", &[])
-            .context("Failed to create ArrayList")?;
+        let jdbc_prepared_query = self.jvm.with_local_frame(32, || {
+            let param_types = env
+                .new_object("java/util/ArrayList", "()V", &[])
+                .context("Failed to create ArrayList")?;
 
-        // TODO[minor]: use method id and unchecked call
-        for val in query.params.iter() {
-            let data_type_id = env
-                .new_object(
-                    "java/lang/Integer",
-                    "(I)V",
-                    &[JValue::Int(JdbcDataType(val.clone()).try_into()?)],
+            // TODO[minor]: use method id and unchecked call
+            for val in query.params.iter() {
+                let data_type_id = env.auto_local(
+                    env.new_object(
+                        "java/lang/Integer",
+                        "(I)V",
+                        &[JValue::Int(JdbcDataType(val.clone()).try_into()?)],
+                    )
+                    .context("Failed to convert data type id to java int")?,
+                );
+
+                env.call_method(
+                    param_types,
+                    "add",
+                    "(Ljava/lang/Integer)V",
+                    &[JValue::Object(data_type_id.as_obj())],
                 )
-                .context("Failed to convert data type id to java int")?;
+                .context("Failed to add Integer to array list")?;
+            }
 
-            env.call_method(
-                param_types,
-                "add",
-                "(Ljava/lang/Integer)V",
-                &[JValue::Object(data_type_id)],
-            )
-            .context("Failed to add Integer to array list")?;
-        }
+            let jdbc_prepared_query = env
+                .call_method(
+                    self.jdbc_con.as_obj(),
+                    "prepare",
+                    "(Ljava/lang/String;Ljava/util/List;)Lcom/ansilo/connectors/query/JdbcPreparedQuery;",
+                    &[JValue::Object(*env.new_string(query.query)?), JValue::Object(param_types)],
+                )
+                .context("Failed to invoke JdbcConnection::prepare")?
+                .l()
+                .context("Failed to convert JdbcPreparedQuery into object")?;
 
-        let jdbc_prepared_query = env
-            .call_method(
-                self.jdbc_con.as_obj(),
-                "prepare",
-                "(Ljava/lang/String;Ljava/util/List;)Lcom/ansilo/connectors/query/JdbcPreparedQuery;",
-                &[JValue::Object(*env.new_string(query.query)?), JValue::Object(param_types)],
-            )
-            .context("Failed to invoke JdbcConnection::prepare")?
-            .l()
-            .context("Failed to convert JdbcPreparedQuery into object")?;
+            // TODO: exception handling
 
-        // TODO: exception handling
+            let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query)?;
 
-        let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query)?;
+            Ok(jdbc_prepared_query)
+        })?;
 
         Ok(JdbcPreparedQuery::new(
             &self.jvm,

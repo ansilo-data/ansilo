@@ -2,7 +2,7 @@ use std::{env, fs, path::PathBuf};
 
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{debug, warn};
-use jni::{AttachGuard, InitArgsBuilder, JNIVersion, JavaVM};
+use jni::{AttachGuard, InitArgsBuilder, JNIVersion, JavaVM, objects::JObject};
 
 // Global JVM instance
 // According to the docs JavaVM is thread-safe and Sync so once instance
@@ -17,6 +17,7 @@ lazy_static::lazy_static! {
             .option(format!("-Djava.class.path={}", jars.join(":")).as_str())
             // TODO: configurable temp directory
             .option("-Xcheck:jni")
+            // .option("-verbose:jni")
             .build()
             .context("Failed to init JVM args")?;
 
@@ -126,6 +127,24 @@ impl<'a> Jvm<'a> {
 
         Ok(Self { env })
     }
+
+    /// Executes the supplied function in a local frame
+    pub fn with_local_frame<F, R>(&self, local_ref_capacity: i32, cb: F) -> Result<R>
+    where
+        F: FnOnce() -> Result<R>,
+    {
+        self.env
+            .push_local_frame(local_ref_capacity)
+            .context("Failed to push local frame")?;
+
+        let ret = cb();
+
+        self.env
+            .pop_local_frame(JObject::null())
+            .context("Failed to pop local frame")?;
+
+        ret
+    }
 }
 
 #[cfg(test)]
@@ -202,5 +221,17 @@ mod tests {
         let target_dir = get_current_target_dir().unwrap();
 
         assert_eq!(target_dir.parent().unwrap().file_name().unwrap(), "target");
+    }
+
+    #[test]
+    fn test_jvm_with_local_frame() {
+        let jvm = Jvm::boot().unwrap();
+
+        let ret = jvm.with_local_frame(10, || {
+            jvm.env.new_object("java/lang/Object", "()V", &[]).unwrap();
+            Ok(())
+        });
+
+        assert_eq!(ret.unwrap(), ())
     }
 }

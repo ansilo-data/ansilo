@@ -293,6 +293,27 @@ public class JdbcPreparedQueryTest {
         verify(this.innerStatement, times(1)).executeQuery();
     }
 
+    @Test
+    void executeMultiple() throws Exception {
+        this.innerParamTypes.add(new Int32DataType());
+
+        for (var _i : new byte[] {1, 2, 3}) {
+            var buff = this.newByteBuffer(5);
+            buff.put((byte) 1); // not null
+            buff.putInt(123); // val
+            buff.rewind();
+
+            var wrote = this.preparedQuery.write(buff);
+
+            assertEquals(5, wrote);
+
+            this.preparedQuery.execute();
+        }
+
+        verify(this.innerStatement, times(3)).setInt(1, 123);
+        verify(this.innerStatement, times(3)).executeQuery();
+    }
+
     private ByteBuffer newByteBuffer(int capacity) {
         var buff = ByteBuffer.allocate(capacity);
         buff.order(ByteOrder.nativeOrder());

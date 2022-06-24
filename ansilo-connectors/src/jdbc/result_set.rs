@@ -29,89 +29,94 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
     fn get_structure(&self) -> Result<RowStructure> {
         let env = &self.jvm.env;
 
-        let jdbc_structure = env
-            .call_method(
-                self.jdbc_result_set.as_obj(),
-                "getRowStructure",
-                "()Lcom/ansilo/connectors/result/JdbcRowStructure;",
-                &[],
-            )
-            .context("Failed to call JdbcResultSet::getRowStructure")?
-            .l()
-            .context("Failed to convert JdbcRowStructure into object")?;
-
-        let jdbc_cols = env
-            .call_method(jdbc_structure, "getCols", "()Ljava/util/List;", &[])
-            .context("Failed to call JdbcRowStructure::getCols")?
-            .l()
-            .context("Failed to convert List into object")?;
-        let jdbc_cols = JList::from_env(env, jdbc_cols).context("Failed to read list")?;
-
-        let mut structure = RowStructure::new(vec![]);
-
-        for col in jdbc_cols.iter().context("Failed to iterate list")? {
-            let name = env
-                .call_method(col, "getName", "()Ljava/lang/String;", &[])
-                .context("Failed to call JdbcRowColumnInfo::getName")?
+        self.jvm.with_local_frame(32, || {
+            let jdbc_structure = env
+                .call_method(
+                    self.jdbc_result_set.as_obj(),
+                    "getRowStructure",
+                    "()Lcom/ansilo/connectors/result/JdbcRowStructure;",
+                    &[],
+                )
+                .context("Failed to call JdbcResultSet::getRowStructure")?
                 .l()
-                .context("Failed to convert to object")?;
-            let name = env
-                .get_string(JString::from(name))
-                .context("Failed to convert java string")
-                .and_then(|i| {
-                    i.to_str()
-                        .map(|i| i.to_string())
-                        .context("Failed to convert java string")
-                })?;
+                .context("Failed to convert JdbcRowStructure into object")?;
 
-            let data_type_id = env
-                .call_method(col, "getDataTypeId", "()I", &[])
-                .context("Failed to call JdbcRowColumnInfo::getDataTypeId")?
-                .i()
-                .context("Failed to convert to int")?;
+            let jdbc_cols = env
+                .call_method(jdbc_structure, "getCols", "()Ljava/util/List;", &[])
+                .context("Failed to call JdbcRowStructure::getCols")?
+                .l()
+                .context("Failed to convert List into object")?;
+            let jdbc_cols = JList::from_env(env, jdbc_cols).context("Failed to read list")?;
 
-            structure
-                .cols
-                .push((name, JdbcDataType::try_from(data_type_id)?.0));
-        }
+            let mut structure = RowStructure::new(vec![]);
 
-        Ok(structure)
+            for col in jdbc_cols.iter().context("Failed to iterate list")? {
+                let name = env.auto_local(
+                    env.call_method(col, "getName", "()Ljava/lang/String;", &[])
+                        .context("Failed to call JdbcRowColumnInfo::getName")?
+                        .l()
+                        .context("Failed to convert to object")?,
+                );
+                let name = env
+                    .get_string(JString::from(name.as_obj()))
+                    .context("Failed to convert java string")
+                    .and_then(|i| {
+                        i.to_str()
+                            .map(|i| i.to_string())
+                            .context("Failed to convert java string")
+                    })?;
+
+                let data_type_id = env
+                    .call_method(col, "getDataTypeId", "()I", &[])
+                    .context("Failed to call JdbcRowColumnInfo::getDataTypeId")?
+                    .i()
+                    .context("Failed to convert to int")?;
+
+                structure
+                    .cols
+                    .push((name, JdbcDataType::try_from(data_type_id)?.0));
+            }
+
+            Ok(structure)
+        })
     }
 
     fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
         let env = &self.jvm.env;
 
-        if self.read_method_id.is_none() {
-            self.read_method_id = Some(
-                env.get_method_id(
-                    "com/ansilo/connectors/result/JdbcResultSet",
-                    "read",
-                    "(Ljava/nio/ByteBuffer;)I",
+        self.jvm.with_local_frame(32, || {
+            if self.read_method_id.is_none() {
+                self.read_method_id = Some(
+                    env.get_method_id(
+                        "com/ansilo/connectors/result/JdbcResultSet",
+                        "read",
+                        "(Ljava/nio/ByteBuffer;)I",
+                    )
+                    .context("Failed to get method id of JdbcResultSet::read")?,
+                );
+            }
+
+            let jvm_buff = *env
+                .new_direct_byte_buffer(buff)
+                .context("Failed to create java ByteBuffer")?;
+
+            let result = env
+                .call_method_unchecked(
+                    self.jdbc_result_set.as_obj(),
+                    self.read_method_id.unwrap(),
+                    JavaType::Primitive(Primitive::Int),
+                    &[JValue::Object(jvm_buff)],
                 )
-                .context("Failed to get method id of JdbcResultSet::read")?,
-            );
-        }
+                .context("Failed to call JdbcResultSet::read")?
+                .i()
+                .context("Failed to parse return value of JdbcResultSet::read")?;
 
-        let jvm_buff = env
-            .new_direct_byte_buffer(buff)
-            .context("Failed to create java ByteBuffer")?;
+            // TODO: exception handling
 
-        let result = env
-            .call_method_unchecked(
-                self.jdbc_result_set.as_obj(),
-                self.read_method_id.unwrap(),
-                JavaType::Primitive(Primitive::Int),
-                &[JValue::Object(*jvm_buff)],
-            )
-            .context("Failed to call JdbcResultSet::read")?
-            .i()
-            .context("Failed to parse return value of JdbcResultSet::read")?;
-
-        // TODO: exception handling
-
-        result
-            .try_into()
-            .context("Return value of JdbcResuletSet::read cannot be < 0")
+            result
+                .try_into()
+                .context("Return value of JdbcResuletSet::read cannot be < 0")
+        })
     }
 }
 

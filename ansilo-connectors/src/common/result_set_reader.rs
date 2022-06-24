@@ -20,7 +20,7 @@ where
     /// too frequently as it could be expensive
     /// (eg across the JNI bridge)
     inner: BufReader<Reader<'a, T>>,
-    /// The row structure
+    /// The row structure, loaded on first read
     structure: Option<RowStructure>,
     /// The current row index
     row_idx: u64,
@@ -61,9 +61,8 @@ where
         self.inner.into_inner().0
     }
 
-    /// Reads the next data value from the result set
-    /// Returns Ok(None) if there is no more data to read in the result set
-    pub fn read_data_value(&mut self) -> Result<Option<DataValue>> {
+    /// Gets the data type structure of the rows returned in the result set
+    pub fn get_structure(&mut self) -> Result<&RowStructure> {
         if self.structure.is_none() {
             let structure = self.inner.get_ref().0.get_structure()?;
 
@@ -74,6 +73,14 @@ where
 
             self.structure = Some(structure);
         }
+
+        Ok(self.structure.as_ref().unwrap())
+    }
+
+    /// Reads the next data value from the result set
+    /// Returns Ok(None) if there is no more data to read in the result set
+    pub fn read_data_value(&mut self) -> Result<Option<DataValue>> {
+        self.get_structure()?;
 
         let not_null = self.read_byte().context("Failed to read null flag byte")?;
 
@@ -120,7 +127,7 @@ where
         Ok(Some(res))
     }
 
-    /// Reads a stream of data from the internal buffer
+    /// Reads a stream of data from the internal buf reader
     /// Each chunk is framed with the length of data to come
     fn read_stream(&mut self) -> Result<Vec<u8>> {
         let mut data = vec![];
@@ -160,11 +167,11 @@ where
         Ok(if read == 0 { None } else { Some(buf[0]) })
     }
 
-    fn current_data_type(&self) -> DataType {
+    fn current_data_type(&self) -> &DataType {
         let structure = self.structure.as_ref().unwrap();
         let data_type = &structure.cols[self.col_idx].1;
 
-        data_type.clone()
+        data_type
     }
 
     fn num_cols(&self) -> usize {
@@ -186,13 +193,13 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod rs_tests {
 
     use ansilo_core::common::data::{EncodingType, VarcharOptions};
 
     use super::*;
 
-    struct MockResultSet(RowStructure, io::Cursor<Vec<u8>>);
+    pub(crate) struct MockResultSet(RowStructure, io::Cursor<Vec<u8>>);
 
     impl<'a> ResultSet<'a> for MockResultSet {
         fn get_structure(&self) -> Result<RowStructure> {
@@ -208,6 +215,21 @@ mod tests {
         fn new<'a>(s: RowStructure, data: Vec<u8>) -> ResultSetReader<'a, Self> {
             ResultSetReader::new(Self(s, io::Cursor::new(data)))
         }
+    }
+
+    #[test]
+    fn test_result_set_reader_get_structure_no_cols() {
+        let mut res = MockResultSet::new(RowStructure::new(vec![]), vec![]);
+
+        assert!(res.get_structure().is_err());
+    }
+
+    #[test]
+    fn test_result_set_reader_get_structure() {
+        let structure = RowStructure::new(vec![("a".to_string(), DataType::Int8)]);
+        let mut res = MockResultSet::new(structure.clone(), vec![]);
+
+        assert_eq!(res.get_structure().unwrap(), &structure);
     }
 
     #[test]

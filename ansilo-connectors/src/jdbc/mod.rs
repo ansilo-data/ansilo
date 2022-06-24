@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use ansilo_core::common::data::{DataType, DataValue};
-use jni::objects::GlobalRef;
 
 use crate::interface::*;
 
