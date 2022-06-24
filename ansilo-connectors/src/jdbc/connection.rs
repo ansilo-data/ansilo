@@ -213,14 +213,9 @@ mod tests {
     fn test_jdbc_connection_prepare_statement_invalid() {
         let con = init_sqlite_connection();
 
-        let mut query = JdbcQuery::new("INVALID QUERY");
-        query.params.push(DataType::Int32);
-        let statement = con.prepare(query).unwrap();
-
-        assert_eq!(
-            statement.get_structure().unwrap(),
-            QueryInputStructure::new(vec![DataType::Int32])
-        );
+        let query = JdbcQuery::new("INVALID QUERY");
+        let res = con.prepare(query);
+        assert!(res.is_err());
     }
 
     #[test]

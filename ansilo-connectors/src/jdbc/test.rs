@@ -1,3 +1,8 @@
+use std::{
+    path::Path,
+    process::{Command, Stdio},
+};
+
 use jni::objects::{JObject, JValue};
 
 use super::Jvm;
@@ -40,4 +45,19 @@ pub fn create_sqlite_memory_connection<'a>(jvm: &'a Jvm<'a>) -> JObject<'a> {
         .unwrap();
 
     jdbc_con
+}
+
+#[test]
+fn java_module_tests_pass() {
+    let code = Command::new("mvn")
+        .arg("test")
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/jdbc/java"))
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
+    assert!(code.success());
 }
