@@ -84,15 +84,17 @@ public class JdbcPreparedQuery {
                             ByteBuffer.wrap(localBuffer.toByteArray(), 0, fixedType.getFixedSize());
                     fixedType.bindParam(this.preparedStatement, this.paramIndex + 1, tmpBuff);
                     this.resetLocalBuffer();
-                } else {
-                    // Write non-null byte first
-                    if (localBuffer.size() == 0) {
-                        localBuffer.write(new byte[] {1});
+                } else if (buff.remaining() > 0) {
+                    // Consume the not null flag byte
+                    if (this.localBuffer.size() == 0) {
+                        localBuffer.write(new byte[] {buff.get()});
                     }
 
                     // Write the partial data to the local buffer
                     this.saveToBuffer(buff, Math.min(fixedType.getFixedSize(), buff.remaining()));
                     continue;
+                } else {
+                    break;
                 }
 
             } else if (paramType instanceof JdbcStreamDataType) {
@@ -103,19 +105,22 @@ public class JdbcPreparedQuery {
                 if (this.streamChunkLength == null) {
                     // Consume the not null flag byte
                     if (this.localBuffer.size() == 0) {
-                        buff.get();
+                        localBuffer.write(new byte[] {buff.get()});
                     }
 
-                    this.streamChunkLength = (int)buff.get() + 128;
-                }
+                    if (buff.remaining() == 0) {
+                        break;
+                    }
 
-                // Write non-null byte first
-                if (localBuffer.size() == 0) {
-                    localBuffer.write(new byte[] {1});
+                    this.streamChunkLength = Byte.toUnsignedInt(buff.get());
                 }
 
                 // Copy chunk to local buffer
                 if (this.streamChunkLength > 0) {
+                    if (buff.remaining() == 0) {
+                        break;
+                    }
+
                     int chunkLength = Math.min(this.streamChunkLength, buff.remaining());
                     this.saveToBuffer(buff, chunkLength);
                     this.streamChunkLength = this.streamChunkLength - chunkLength;

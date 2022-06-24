@@ -26,7 +26,8 @@ public class VarcharDataType implements JdbcStreamDataType {
             return null;
         }
 
-        return new ByteArrayInputStream(StandardCharsets.UTF_8.encode(string).array());
+        var buff = StandardCharsets.UTF_8.encode(string);
+        return new ByteArrayInputStream(buff.array(), 0, buff.limit());
     }
 
     @Override

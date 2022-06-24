@@ -289,7 +289,41 @@ public class JdbcResultSetTest {
         assertEquals(0, read);
     }
 
+    @Test
+    void readLongVarchar() throws Exception {
+        when(this.innerResultSetMetadata.getColumnCount()).thenReturn(1);
+        when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
+
+        when(this.innerResultSet.next()).thenReturn(true, false);
+        when(this.innerResultSet.getString(1)).thenReturn("a".repeat(600));
+
+        var resultSet = new JdbcResultSet(this.innerResultSet);
+        var buff = ByteBuffer.allocate(1000);
+        int read = resultSet.read(buff);
+        buff.rewind();
+        assertEquals(605, read);
+        assertEquals(1, buff.get());
+        assertEquals(255, this.byteToLength(buff.get()));
+        assertEquals("a".repeat(255), StandardCharsets.UTF_8.decode(this.readBytes(buff, 255)).toString());
+        assertEquals(255, this.byteToLength(buff.get()));
+        assertEquals("a".repeat(255), StandardCharsets.UTF_8.decode(this.readBytes(buff, 255)).toString());
+        assertEquals(90, this.byteToLength(buff.get()));
+        assertEquals("a".repeat(90), StandardCharsets.UTF_8.decode(this.readBytes(buff, 90)).toString());
+        assertEquals(0, this.byteToLength(buff.get()));
+
+        // eof
+        buff.rewind();
+        read = resultSet.read(buff);
+        assertEquals(0, read);
+    }
+
     private Integer byteToLength(byte b) {
-        return (int)b + 128;
+        return Byte.toUnsignedInt(b);
+    }
+
+    private ByteBuffer readBytes(ByteBuffer buff, int len) {
+        var ret = new byte[len];
+        buff.get(ret, 0, len);
+        return ByteBuffer.wrap(ret);
     }
 }

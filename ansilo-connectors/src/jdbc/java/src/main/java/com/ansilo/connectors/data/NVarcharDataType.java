@@ -2,7 +2,6 @@ package com.ansilo.connectors.data;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
@@ -27,7 +26,8 @@ public class NVarcharDataType implements JdbcStreamDataType {
             return null;
         }
 
-        return new ByteArrayInputStream(StandardCharsets.UTF_8.encode(string).array());
+        var buff = StandardCharsets.UTF_8.encode(string);
+        return new ByteArrayInputStream(buff.array(), 0, buff.limit());
     }
 
     @Override

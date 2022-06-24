@@ -129,7 +129,7 @@ where
         loop {
             let length = self
                 .read_exact::<1>()
-                .context("Failed to read stream length")?[0];
+                .context("Failed to read stream chunk length")?[0];
 
             // Check for EOF
             if length <= 0 {

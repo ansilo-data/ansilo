@@ -1,7 +1,6 @@
 package com.ansilo.connectors.data;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
@@ -34,7 +33,7 @@ public class NVarcharDataTypeTest extends DataTypeTest {
         when(this.resultSet.getNString(0)).thenReturn("");
 
         InputStream stream = this.dataType.getStream(this.resultSet, 0);
-        assertArrayEquals(stream.readAllBytes(), new byte[0]);
+        assertArrayEquals(new byte[0], stream.readAllBytes());
     }
 
     @Test
@@ -42,7 +41,9 @@ public class NVarcharDataTypeTest extends DataTypeTest {
         when(this.resultSet.getNString(0)).thenReturn("abc");
 
         InputStream stream = this.dataType.getStream(this.resultSet, 0);
-        assertArrayEquals(stream.readAllBytes(), StandardCharsets.UTF_8.encode("abc").array());
+
+        var expected = this.toByteArray(StandardCharsets.UTF_8.encode("abc"));
+        assertArrayEquals(expected, stream.readAllBytes());
     }
 
     @Test
@@ -50,7 +51,9 @@ public class NVarcharDataTypeTest extends DataTypeTest {
         when(this.resultSet.getNString(0)).thenReturn("🥑🥑🥑");
 
         InputStream stream = this.dataType.getStream(this.resultSet, 0);
-        assertArrayEquals(stream.readAllBytes(), StandardCharsets.UTF_8.encode("🥑🥑🥑").array());
+        
+        var expected = this.toByteArray(StandardCharsets.UTF_8.encode("🥑🥑🥑"));
+        assertArrayEquals(expected, stream.readAllBytes());
     }
 
     @Test
@@ -72,5 +75,11 @@ public class NVarcharDataTypeTest extends DataTypeTest {
         this.dataType.bindParam(this.preparedStatement, 1, buff);
 
         verify(this.preparedStatement, times(1)).setNull(1, Types.NVARCHAR);
+    }
+
+    private byte[] toByteArray(ByteBuffer data) {
+        var buf = new byte[data.limit()];
+        data.get(buf);
+        return buf;
     }
 }

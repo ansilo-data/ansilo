@@ -162,14 +162,14 @@ public class JdbcResultSet {
 
                     if (read <= 0) {
                         // Write 0 read length which signals EOF
-                        buff.put((byte)-128);
+                        buff.put((byte)0);
                         this.currentStream.close();
                         this.currentStream = null;
                         this.columnIndex++;
                         break;
                     } else {
                         // Write the actual read length
-                        buff.put((byte)(read - 128));
+                        buff.put((byte)read);
                         // Copy the read buffer into the
                         buff.put(this.readBuff, 0, read);
 
