@@ -117,7 +117,7 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::common::data::{EncodingType, VarcharOptions, DataType};
+    use ansilo_core::common::data::{DataType, EncodingType, VarcharOptions};
     use jni::objects::{JObject, JValue};
 
     use super::*;
@@ -254,10 +254,10 @@ mod tests {
         assert_eq!(
             buff[..read],
             [
-                vec![1u8],                   // (not null)
-                3i32.to_ne_bytes().to_vec(), // (read length)
-                "abc".as_bytes().to_vec(),   // (data)
-                0i32.to_ne_bytes().to_vec(), // (EOF)
+                vec![1u8],                 // (not null)
+                vec![3u8],                 // (read length)
+                "abc".as_bytes().to_vec(), // (data)
+                vec![0u8],                 // (EOF)
             ]
             .concat()
         );
