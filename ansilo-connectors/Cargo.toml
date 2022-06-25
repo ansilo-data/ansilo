@@ -10,3 +10,4 @@ ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
 jni = { git = "https://github.com/TimeToogo/jni-rs", features = ["invocation"] }
 lazy_static = "1.4.0"
+serde = { version = "1.0", features = ["derive"] }

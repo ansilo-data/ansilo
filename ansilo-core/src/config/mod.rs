@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub use serde_yaml::{
-    Value, Number, Mapping, Sequence
+    Value, Number, Mapping, Sequence, from_value
 };
 
 mod ari;
@@ -16,6 +16,8 @@ mod entities;
 pub use entities::*;
 mod jobs;
 pub use jobs::*;
+mod util;
+pub use util::*;
 
 // TODO: consider ansilo versioning
 

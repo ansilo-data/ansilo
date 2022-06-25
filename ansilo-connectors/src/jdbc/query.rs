@@ -162,7 +162,7 @@ mod tests {
 
     use crate::{
         common::ResultSetReader,
-        jdbc::{test::create_sqlite_memory_connection, JdbcDataType},
+        jdbc::{tests::create_sqlite_memory_connection, JdbcDataType},
     };
 
     use super::*;

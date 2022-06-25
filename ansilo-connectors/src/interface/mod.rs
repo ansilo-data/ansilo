@@ -21,7 +21,7 @@ pub trait Connector<
     TConnection,
     TEntitySearcher,
     TEntityValidator,
-    TSourceConfig,
+    TEntitySourceConfig,
     TQueryPlanner,
     TQuery,
     TQueryHandle,
@@ -29,9 +29,9 @@ pub trait Connector<
 > where
     TConnectionOpener: ConnectionOpener<TConnectionConfig, TConnection>,
     TConnection: Connection<'a, TQuery, TQueryHandle>,
-    TEntitySearcher: EntitySearcher<TConnection, TSourceConfig>,
-    TEntityValidator: EntityValidator<TConnection, TSourceConfig>,
-    TQueryPlanner: QueryPlanner<TConnection, TQuery, TSourceConfig>,
+    TEntitySearcher: EntitySearcher<TConnection, TEntitySourceConfig>,
+    TEntityValidator: EntityValidator<TConnection, TEntitySourceConfig>,
+    TQueryPlanner: QueryPlanner<TConnection, TQuery, TEntitySourceConfig>,
     TQueryHandle: QueryHandle<'a, TResultSet>,
     TResultSet: ResultSet<'a>,
     TConnection: 'a,
@@ -45,7 +45,7 @@ pub trait Connector<
     fn parse_options(options: config::Value) -> Result<TConnectionConfig>;
 
     /// Gets a connection opener instance
-    fn create_connection_opener(options: TConnectionConfig) -> Result<TConnectionOpener>;
+    fn create_connection_opener(options: &TConnectionConfig) -> Result<TConnectionOpener>;
 
     /// Gets the entity searcher for this data source
     fn create_entity_searcher() -> Result<TEntitySearcher>;
@@ -59,14 +59,14 @@ pub trait Connector<
 
 /// Metadata about an entity version
 #[derive(Debug, Clone, PartialEq)]
-pub struct EntityVersionMetadata<TSourceConfig>
+pub struct EntityVersionMetadata<TEntitySourceConfig>
 where
-    TSourceConfig: Sized,
+    TEntitySourceConfig: Sized,
 {
     /// The entity config
     pub conf: EntityVersionConfig,
     /// The entity source config
-    pub source_config: TSourceConfig,
+    pub source_config: TEntitySourceConfig,
 }
 
 /// Opens a connection to the target data source
@@ -82,39 +82,39 @@ pub trait Connection<'a, TQuery, TQueryHandle> {
 }
 
 /// Discovers entity schemas from the data source
-pub trait EntitySearcher<TConnection, TSourceConfig> {
+pub trait EntitySearcher<TConnection, TEntitySourceConfig> {
     /// Retrieves the list of entities from the target data source
     /// Typlically these entities will have their accessibility set to internal
     fn discover(
         &self,
         connection: &TConnection,
-    ) -> Result<Vec<EntityVersionMetadata<TSourceConfig>>>;
+    ) -> Result<Vec<EntityVersionMetadata<TEntitySourceConfig>>>;
 }
 
 /// Validates custom entity config
-pub trait EntityValidator<TConnection, TSourceConfig> {
+pub trait EntityValidator<TConnection, TEntitySourceConfig> {
     /// Validate the supplied entity config
     fn validate(
         &self,
         connection: &TConnection,
         entity_version: EntityVersionConfig,
-    ) -> Result<EntityVersionMetadata<TSourceConfig>>;
+    ) -> Result<EntityVersionMetadata<TEntitySourceConfig>>;
 }
 
 /// The query planner determines if SQLIL queries can be executed remotely
-pub trait QueryPlanner<TConnection, TQuery, TSourceConfig> {
+pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     /// Gets an estimate of the number of rows for the entity
     fn estimate_size(
         &self,
         connection: &TConnection,
-        entity_version: EntityVersionMetadata<TSourceConfig>,
+        entity_version: EntityVersionMetadata<TEntitySourceConfig>,
     ) -> Result<EntitySizeEstimate>;
 
     /// Creates a base query to select all rows from the entity
     fn create_base_select(
         &self,
         connection: &TConnection,
-        entity: EntityVersionMetadata<TSourceConfig>,
+        entity: EntityVersionMetadata<TEntitySourceConfig>,
         select: &mut Select,
     ) -> Result<QueryOperationResult>;
 
@@ -122,7 +122,7 @@ pub trait QueryPlanner<TConnection, TQuery, TSourceConfig> {
     fn add_col_expr(
         &self,
         connection: &TConnection,
-        entity: EntityVersionMetadata<TSourceConfig>,
+        entity: EntityVersionMetadata<TEntitySourceConfig>,
         select: &mut Select,
         expr: Expr,
         alias: String,

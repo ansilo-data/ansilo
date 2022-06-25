@@ -33,7 +33,7 @@ where
                 env.call_method(
                     props,
                     "setProperty",
-                    "(Ljava/lang/String;Ljava/lang/String;)V",
+                    "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;",
                     &[
                         JValue::Object(env.auto_local(env.new_string(key)?).as_obj()),
                         JValue::Object(env.auto_local(env.new_string(val)?).as_obj()),

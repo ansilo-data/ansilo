@@ -121,7 +121,7 @@ mod tests {
     use ansilo_core::common::data::{DataType, EncodingType, VarcharOptions};
     use jni::objects::{JObject, JValue};
 
-    use crate::jdbc::test::create_sqlite_memory_connection;
+    use crate::jdbc::tests::create_sqlite_memory_connection;
 
     use super::*;
 

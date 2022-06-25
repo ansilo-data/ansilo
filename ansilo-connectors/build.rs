@@ -5,12 +5,13 @@ use std::{
 };
 
 fn main() {
-    compile_jdbc_java();
+    build_java_maven_module("src/jdbc/java");
+    build_java_maven_module("src/jdbc_oracle/java");
 }
 
-fn compile_jdbc_java() {
-    println!("cargo:rerun-if-changed=src/jdbc/java/src");
-    println!("cargo:rerun-if-changed=src/jdbc/java/pom.xml");
+fn build_java_maven_module(path: &str) {
+    println!("cargo:rerun-if-changed={}/src", path);
+    println!("cargo:rerun-if-changed={}/pom.xml", path);
 
     println!("Running mvn build...");
 
@@ -21,7 +22,7 @@ fn compile_jdbc_java() {
             "package",
             "dependency:copy-dependencies",
         ])
-        .current_dir("src/jdbc/java")
+        .current_dir(path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -32,7 +33,7 @@ fn compile_jdbc_java() {
     let target_dir = get_target_dir();
 
     println!("Copying jar to target dir {} ...", target_dir.display());
-    for entry in fs::read_dir("src/jdbc/java/target").unwrap() {
+    for entry in fs::read_dir(format!("{path}/target")).unwrap() {
         let jar = match entry {
             Ok(dir) if dir.file_name().to_string_lossy().ends_with(".jar") => dir,
             _ => continue,
