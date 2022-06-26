@@ -7,7 +7,6 @@ import java.nio.ByteOrder;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
-import com.ansilo.connectors.data.JdbcDataType;
 import com.ansilo.connectors.data.JdbcFixedSizeDataType;
 import com.ansilo.connectors.data.JdbcStreamDataType;
 import com.ansilo.connectors.result.JdbcResultSet;
@@ -22,9 +21,19 @@ public class JdbcPreparedQuery {
     private PreparedStatement preparedStatement;
 
     /**
-     * The type of query parameters
+     * The list of all query paramaters
      */
-    private List<JdbcDataType> parameterTypes;
+    private List<JdbcParameter> parameters;
+
+    /**
+     * The list of all constant query paramaters
+     */
+    private List<JdbcParameter> constantParameters;
+
+    /**
+     * The list of all dynamic query parameters
+     */
+    private List<JdbcParameter> dynamicParameters;
 
     /**
      * The index of the current param
@@ -42,20 +51,26 @@ public class JdbcPreparedQuery {
     private Integer streamChunkLength = null;
 
     /**
+     * Whether constant query parameters have been bound.
+     */
+    private boolean boundConstantParams = false;
+
+    /**
      * Creates a new prepared query
      */
-    public JdbcPreparedQuery(PreparedStatement preparedStatement,
-            List<JdbcDataType> parameterTypes) {
+    public JdbcPreparedQuery(PreparedStatement preparedStatement, List<JdbcParameter> parameters) {
         this.preparedStatement = preparedStatement;
-        this.parameterTypes = parameterTypes;
+        this.parameters = parameters;
+        this.dynamicParameters = parameters.stream().filter(i -> !i.isConstant()).toList();
+        this.constantParameters = parameters.stream().filter(i -> i.isConstant()).toList();
     }
 
     public PreparedStatement getPreparedStatement() {
         return preparedStatement;
     }
 
-    public List<JdbcDataType> getParameterTypes() {
-        return parameterTypes;
+    public List<JdbcParameter> getParameters() {
+        return parameters;
     }
 
     /**
@@ -72,16 +87,17 @@ public class JdbcPreparedQuery {
 
         while (this.getLocalBuffer().size() + buff.remaining() > 0) {
 
-            if (this.paramIndex >= this.parameterTypes.size()) {
+            if (this.paramIndex >= this.dynamicParameters.size()) {
                 throw new SQLException("Unexpected data after finished writing query parameters");
             }
 
-            var paramType = this.parameterTypes.get(this.paramIndex);
+            var param = this.dynamicParameters.get(this.paramIndex);
+            var paramType = param.getDataType();
 
             var isNull = localBuffer.size() > 0 ? false : (buff.get(buff.position()) == 0);
 
             if (isNull) {
-                paramType.bindParam(this.preparedStatement, this.paramIndex + 1, buff);
+                paramType.bindParam(this.preparedStatement, param.getIndex(), buff);
                 this.paramIndex++;
                 continue;
             }
@@ -92,13 +108,13 @@ public class JdbcPreparedQuery {
 
                 if (localBuffer.size() == 0 && buff.remaining() >= fixedType.getFixedSize()) {
                     // If no buffered data, read from the buffer directly
-                    fixedType.bindParam(this.preparedStatement, this.paramIndex + 1, buff);
+                    fixedType.bindParam(this.preparedStatement, param.getIndex(), buff);
                 } else if (localBuffer.size() >= fixedType.getFixedSize()) {
                     // If buffer contains full parameter, we read from it directly
                     var tmpBuff =
                             ByteBuffer.wrap(localBuffer.toByteArray(), 0, fixedType.getFixedSize());
                     tmpBuff.order(ByteOrder.nativeOrder());
-                    fixedType.bindParam(this.preparedStatement, this.paramIndex + 1, tmpBuff);
+                    fixedType.bindParam(this.preparedStatement, param.getIndex(), tmpBuff);
                     this.resetLocalBuffer();
                 } else if (buff.remaining() > 0) {
                     // Consume the not null flag byte
@@ -152,7 +168,7 @@ public class JdbcPreparedQuery {
                 // Chunk length == 0 => EOF, we then bind the parameter
                 var streamBuff = ByteBuffer.wrap(localBuffer.toByteArray());
                 streamBuff.order(ByteOrder.nativeOrder());
-                streamType.bindParam(this.preparedStatement, this.paramIndex + 1, streamBuff);
+                streamType.bindParam(this.preparedStatement, param.getIndex(), streamBuff);
                 this.resetLocalBuffer();
                 this.streamChunkLength = null;
             }
@@ -170,9 +186,13 @@ public class JdbcPreparedQuery {
      * @throws SQLException
      */
     public JdbcResultSet execute() throws SQLException {
-        if (this.paramIndex != this.parameterTypes.size()) {
+        if (this.paramIndex != this.dynamicParameters.size()) {
             throw new SQLException(
                     "Cannot execute query until all parameter data has been written");
+        }
+
+        if (!this.boundConstantParams) {
+            this.bindConstantParameters();
         }
 
         var resultSet = new JdbcResultSet(this.preparedStatement.executeQuery());
@@ -181,6 +201,17 @@ public class JdbcPreparedQuery {
         this.paramIndex = 0;
 
         return resultSet;
+    }
+
+    private void bindConstantParameters() throws SQLException {
+        for (var param : this.constantParameters) {
+            var buff = param.getConstantValueBuffer();
+            buff.order(ByteOrder.nativeOrder());
+            buff.rewind();
+            param.getDataType().bindParam(this.preparedStatement, param.getIndex(), buff);
+        }
+
+        this.boundConstantParams = true;
     }
 
     private void resetLocalBuffer() throws IOException {

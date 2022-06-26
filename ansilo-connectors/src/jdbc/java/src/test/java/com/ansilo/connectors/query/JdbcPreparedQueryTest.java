@@ -20,7 +20,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.Int32DataType;
-import com.ansilo.connectors.data.JdbcDataType;
 import com.ansilo.connectors.data.VarcharDataType;
 import com.ansilo.connectors.result.JdbcResultSet;
 
@@ -28,7 +27,7 @@ public class JdbcPreparedQueryTest {
     private PreparedStatement innerStatement;
     private ResultSet mockResultSet;
     private ResultSetMetaData mockResultSetMetadata;
-    private List<JdbcDataType> innerParamTypes;
+    private List<JdbcParameter> innerParams;
     private JdbcPreparedQuery preparedQuery;
 
     @BeforeEach
@@ -36,22 +35,27 @@ public class JdbcPreparedQueryTest {
         this.innerStatement = mock(PreparedStatement.class);
         this.mockResultSet = mock(ResultSet.class);
         this.mockResultSetMetadata = mock(ResultSetMetaData.class);
-        this.innerParamTypes = new ArrayList<>();
-        this.preparedQuery = new JdbcPreparedQuery(this.innerStatement, this.innerParamTypes);
+        this.innerParams = new ArrayList<>();
 
         when(this.innerStatement.executeQuery()).thenReturn(this.mockResultSet);
         when(this.mockResultSet.getMetaData()).thenReturn(this.mockResultSetMetadata);
     }
 
+    private void initPreparedQuery() {
+        this.preparedQuery = new JdbcPreparedQuery(this.innerStatement, this.innerParams);
+    }
+
     @Test
     void writeWithNoParametersThrows() throws Exception {
+        this.initPreparedQuery();
         assertThrows(SQLException.class,
                 () -> this.preparedQuery.write(ByteBuffer.wrap(new byte[] {1})));
     }
 
     @Test
     void writeInt() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(5);
         buff.put((byte) 1); // not null
@@ -66,7 +70,8 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void writeIntNull() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(1);
         buff.put((byte) 0); // null
@@ -80,7 +85,8 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void writeVarchar() throws Exception {
-        this.innerParamTypes.add(new VarcharDataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(6);
         buff.put((byte) 1); // not null
@@ -97,9 +103,10 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void writeMultipleInts() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
-        this.innerParamTypes.add(new Int32DataType());
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(2, new Int32DataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(3, new Int32DataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(15);
         buff.put((byte) 1); // not null
@@ -120,9 +127,10 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void writeMultipleVarchar() throws Exception {
-        this.innerParamTypes.add(new VarcharDataType());
-        this.innerParamTypes.add(new VarcharDataType());
-        this.innerParamTypes.add(new VarcharDataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(2, new VarcharDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(3, new VarcharDataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(18);
         buff.put((byte) 1); // not null
@@ -149,8 +157,9 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void writeIntThenVarchar() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
-        this.innerParamTypes.add(new VarcharDataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(2, new VarcharDataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(11);
         buff.put((byte) 1); // not null
@@ -170,7 +179,8 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void writePartialInt() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(5);
         buff.put((byte) 1); // not null
@@ -187,7 +197,8 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void writePartialVarchar() throws Exception {
-        this.innerParamTypes.add(new VarcharDataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(12);
         buff.put((byte) 1); // not null
@@ -210,10 +221,11 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void writeIntWithVarcharAndMixedNulls() throws Exception {
-        this.innerParamTypes.add(new VarcharDataType());
-        this.innerParamTypes.add(new Int32DataType());
-        this.innerParamTypes.add(new VarcharDataType());
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(2, new Int32DataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(3, new VarcharDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(4, new Int32DataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(13);
         buff.put((byte) 1); // not null
@@ -239,6 +251,7 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void executeWithoutParams() throws Exception {
+        this.initPreparedQuery();
         var resultSet = this.preparedQuery.execute();
         verify(this.innerStatement, times(1)).executeQuery();
         assertInstanceOf(JdbcResultSet.class, resultSet);
@@ -246,7 +259,8 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void executeWithoutWritingParamsThrows() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.initPreparedQuery();
 
         assertThrows(SQLException.class, () -> {
             this.preparedQuery.execute();
@@ -256,8 +270,9 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void executeWithPartialParamThrows() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(2, new Int32DataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(5);
         buff.put((byte) 1); // not null
@@ -277,7 +292,8 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void executeWithFullParamsSucceeds() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.initPreparedQuery();
 
         var buff = this.newByteBuffer(5);
         buff.put((byte) 1); // not null
@@ -295,7 +311,8 @@ public class JdbcPreparedQueryTest {
 
     @Test
     void executeMultiple() throws Exception {
-        this.innerParamTypes.add(new Int32DataType());
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.initPreparedQuery();
 
         for (var _i : new byte[] {1, 2, 3}) {
             var buff = this.newByteBuffer(5);
@@ -312,6 +329,73 @@ public class JdbcPreparedQueryTest {
 
         verify(this.innerStatement, times(3)).setInt(1, 123);
         verify(this.innerStatement, times(3)).executeQuery();
+    }
+
+    @Test
+    void writeConstantParam() throws Exception {
+        var buff = this.newByteBuffer(5);
+        buff.put((byte) 1); // not null
+        buff.putInt(123); // val
+
+        this.innerParams.add(JdbcParameter.createConstant(1, new Int32DataType(), buff));
+        this.initPreparedQuery();
+
+        // should only bind after execute
+        verify(this.innerStatement, times(0)).setInt(1, 123);
+
+        this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).setInt(1, 123);
+
+        // should only bind constants once
+        this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).setInt(1, 123);
+    }
+
+    @Test
+    void writeConstantAndDynamicParams() throws Exception {
+        var buff1 = this.newByteBuffer(5);
+        buff1.put((byte) 1); // not null
+        buff1.putInt(123); // val
+
+        var buff3 = this.newByteBuffer(5);
+        buff3.put((byte) 1); // not null
+        buff3.putInt(789); // val
+
+        this.innerParams.add(JdbcParameter.createConstant(1, new Int32DataType(), buff1));
+        this.innerParams.add(JdbcParameter.createDynamic(2, new Int32DataType()));
+        this.innerParams.add(JdbcParameter.createConstant(3, new Int32DataType(), buff3));
+        this.initPreparedQuery();
+
+        var buff2 = this.newByteBuffer(5);
+        buff2.put((byte) 1); // not null
+        buff2.putInt(456); // val
+        buff2.rewind();
+
+        var wrote = this.preparedQuery.write(buff2);
+
+        assertEquals(5, wrote);
+
+        verify(this.innerStatement, times(1)).setInt(2, 456);
+        // should only bind constants after execute
+        verify(this.innerStatement, times(0)).setInt(1, 123);
+        verify(this.innerStatement, times(0)).setInt(3, 789);
+
+        this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).setInt(1, 123);
+        verify(this.innerStatement, times(1)).setInt(2, 456);
+        verify(this.innerStatement, times(1)).setInt(3, 789);
+
+        // should only bind constants once but dynamic param again
+        buff2 = this.newByteBuffer(5);
+        buff2.put((byte) 1); // not null
+        buff2.putInt(888); // val
+        buff2.rewind();
+        wrote = this.preparedQuery.write(buff2);
+        assertEquals(5, wrote);
+        this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).setInt(1, 123);
+        verify(this.innerStatement, times(1)).setInt(2, 888);
+        verify(this.innerStatement, times(1)).setInt(3, 789);
     }
 
     private ByteBuffer newByteBuffer(int capacity) {

@@ -23,6 +23,7 @@ pub trait Connector<
     TEntityValidator,
     TEntitySourceConfig,
     TQueryPlanner,
+    TQueryCompiler,
     TQuery,
     TQueryHandle,
     TResultSet,
@@ -32,6 +33,7 @@ pub trait Connector<
     TEntitySearcher: EntitySearcher<TConnection, TEntitySourceConfig>,
     TEntityValidator: EntityValidator<TConnection, TEntitySourceConfig>,
     TQueryPlanner: QueryPlanner<TConnection, TQuery, TEntitySourceConfig>,
+    TQueryCompiler: QueryCompiler<TConnection, TQuery>,
     TQueryHandle: QueryHandle<'a, TResultSet>,
     TResultSet: ResultSet<'a>,
     TConnection: 'a,
@@ -55,6 +57,9 @@ pub trait Connector<
 
     /// Gets the query planner for this data source
     fn create_query_planner() -> Result<TQueryPlanner>;
+
+    /// Gets the query compiler for this data source
+    fn create_query_compiler() -> Result<TQueryCompiler>;
 }
 
 /// Metadata about an entity version
@@ -175,9 +180,12 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
         select: &mut Select,
         row_skip: u64,
     ) -> Result<QueryOperationResult>;
+}
 
-    /// Convert the select into a connector-specific query object
-    fn convert(&self, connection: &TConnection, select: &Select) -> Result<TQuery>;
+/// The query compiler compiles SQLIL queries into a format that can be executed by the connector
+pub trait QueryCompiler<TConnection, TQuery> {
+    /// Compiles the select into a connector-specific query object
+    fn compile_select(&self, connection: &TConnection, select: &Select) -> Result<TQuery>;
 }
 
 /// A size estimate of the entity
@@ -225,7 +233,7 @@ impl OperationCost {
 
 /// A query which is executing
 pub trait QueryHandle<'a, TResultSet> {
-    /// Gets the row structure of the result set
+    /// Gets the types of the input expected by the query
     fn get_structure(&self) -> Result<QueryInputStructure>;
 
     /// Writes query parameter data to the underlying query

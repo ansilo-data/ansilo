@@ -1,12 +1,14 @@
-use ansilo_core::{err::Result, sqlil::select::Select};
+use ansilo_core::{err::Result, sqlil::select::Select, common::data::DataType};
 
-use crate::jdbc::{JdbcConnection, JdbcQuery};
+use crate::{jdbc::{JdbcConnection, JdbcQuery}, interface::QueryCompiler};
 
 /// Query compiler for Oracle JDBC driver
 pub struct OracleJdbcQueryCompiler;
 
-impl OracleJdbcQueryCompiler {
-    pub fn compile_select<'a>(con: &JdbcConnection<'a>, select: &Select) -> Result<JdbcQuery> {
+impl<'a> QueryCompiler<JdbcConnection<'a>, JdbcQuery> for OracleJdbcQueryCompiler {
+    fn compile_select(&self, con: &JdbcConnection<'a>, select: &Select) -> Result<JdbcQuery> {
+        /// TODO: implement
+        let params = Vec::<DataType>::new();
         todo!()
     }
 }

@@ -3,10 +3,9 @@ package com.ansilo.connectors;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.query.JdbcParameter;
 import com.ansilo.connectors.query.JdbcPreparedQuery;
 
 /**
@@ -48,17 +47,11 @@ public class JdbcConnection {
      * @param params
      * @return
      */
-    public JdbcPreparedQuery prepare(String query, List<Integer> parameterTypes)
+    public JdbcPreparedQuery prepare(String query, List<JdbcParameter> parameters)
             throws SQLException {
-        var jdbcTypes = new ArrayList<JdbcDataType>();
-
-        for (var typeId : parameterTypes) {
-            jdbcTypes.add(JdbcDataType.createFromTypeId(typeId));
-        }
-
         var statement = this.connection.prepareStatement(query);
 
-        return new JdbcPreparedQuery(statement, jdbcTypes);
+        return new JdbcPreparedQuery(statement, parameters);
     }
 
     /**

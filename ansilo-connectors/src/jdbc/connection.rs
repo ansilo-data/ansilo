@@ -73,14 +73,9 @@ impl<'a> Connection<'a, JdbcQuery, JdbcPreparedQuery<'a>> for JdbcConnection<'a>
                 .context("Failed to create ArrayList")?;
 
             // TODO[minor]: use method id and unchecked call
-            for val in query.params.iter() {
+            for (idx, param) in query.params.iter().enumerate() {
                 let data_type_id = env.auto_local(
-                    env.new_object(
-                        "java/lang/Integer",
-                        "(I)V",
-                        &[JValue::Int(JdbcDataType(val.clone()).try_into()?)],
-                    )
-                    .context("Failed to convert data type id to java int")?,
+                    param.to_java_jdbc_parameter(idx + 1, &self.jvm)?
                 );
 
                 env.call_method(
@@ -142,7 +137,7 @@ mod tests {
 
     use ansilo_core::common::data::DataType;
 
-    use crate::interface::{QueryHandle, QueryInputStructure};
+    use crate::{interface::{QueryHandle, QueryInputStructure}, jdbc::JdbcQueryParam};
 
     use super::*;
 
@@ -200,7 +195,7 @@ mod tests {
         let con = init_sqlite_connection();
 
         let mut query = JdbcQuery::new("SELECT ? as num");
-        query.params.push(DataType::Int32);
+        query.params.push(JdbcQueryParam::Dynamic(DataType::Int32));
         let statement = con.prepare(query).unwrap();
 
         assert_eq!(

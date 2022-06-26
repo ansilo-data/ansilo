@@ -27,11 +27,13 @@ pub trait JdbcConnector<
     TEntityValidator,
     TEntitySourceConfig,
     TQueryPlanner,
+    TQueryCompiler,
 > where
     TConnectionConfig: JdbcConnectionConfig,
     TEntitySearcher: EntitySearcher<JdbcConnection<'a>, TEntitySourceConfig>,
     TEntityValidator: EntityValidator<JdbcConnection<'a>, TEntitySourceConfig>,
     TQueryPlanner: QueryPlanner<JdbcConnection<'a>, JdbcQuery, TEntitySourceConfig>,
+    TQueryCompiler: QueryCompiler<JdbcConnection<'a>, JdbcQuery>,
 {
     /// Gets the type of the connector, usually the name of the target platform, eg 'postgres'
     fn r#type() -> &'static str;
@@ -50,6 +52,9 @@ pub trait JdbcConnector<
 
     /// Gets the query planner for this data source
     fn create_query_planner() -> Result<TQueryPlanner>;
+
+    /// Gets the compiler planner for this data source
+    fn create_query_compiler() -> Result<TQueryCompiler>;
 }
 
 /// Blanket impl for Connector for all impl's JdbcConnector
@@ -60,12 +65,15 @@ impl<
         TEntityValidator,
         TEntitySourceConfig,
         TQueryPlanner,
-        T: JdbcConnector<'a,
+        TQueryCompiler,
+        T: JdbcConnector<
+            'a,
             TConnectionConfig,
             TEntitySearcher,
             TEntityValidator,
             TEntitySourceConfig,
             TQueryPlanner,
+            TQueryCompiler,
         >,
     >
     Connector<
@@ -77,6 +85,7 @@ impl<
         TEntityValidator,
         TEntitySourceConfig,
         TQueryPlanner,
+        TQueryCompiler,
         JdbcQuery,
         JdbcPreparedQuery<'a>,
         JdbcResultSet<'a>,
@@ -86,6 +95,7 @@ where
     TEntitySearcher: EntitySearcher<JdbcConnection<'a>, TEntitySourceConfig>,
     TEntityValidator: EntityValidator<JdbcConnection<'a>, TEntitySourceConfig>,
     TQueryPlanner: QueryPlanner<JdbcConnection<'a>, JdbcQuery, TEntitySourceConfig>,
+    TQueryCompiler: QueryCompiler<JdbcConnection<'a>, JdbcQuery>,
 {
     fn r#type() -> &'static str {
         T::r#type()
@@ -109,6 +119,10 @@ where
 
     fn create_query_planner() -> Result<TQueryPlanner> {
         T::create_query_planner()
+    }
+
+    fn create_query_compiler() -> Result<TQueryCompiler> {
+        T::create_query_compiler()
     }
 }
 

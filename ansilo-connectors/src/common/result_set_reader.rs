@@ -10,6 +10,8 @@ use ansilo_core::{
 
 use crate::interface::{ResultSet, RowStructure};
 
+/// TODO: seperate into more general data_reader
+
 /// Wraps a result set in order to parse and read the data as rust values
 pub struct ResultSetReader<'a, T>
 where

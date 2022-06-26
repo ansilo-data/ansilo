@@ -23,6 +23,7 @@ impl<'a>
         OracleJdbcEntityValidator,
         OracleJdbcEntitySourceConfig,
         OracleJdbcQueryPlanner,
+        OracleJdbcQueryCompiler
     > for OracleJdbcConnector
 {
     fn r#type() -> &'static str {
@@ -49,6 +50,10 @@ impl<'a>
 
     fn create_query_planner() -> Result<OracleJdbcQueryPlanner> {
         Ok(OracleJdbcQueryPlanner {})
+    }
+
+    fn create_query_compiler() -> Result<OracleJdbcQueryCompiler> {
+        Ok(OracleJdbcQueryCompiler {})
     }
 }
 

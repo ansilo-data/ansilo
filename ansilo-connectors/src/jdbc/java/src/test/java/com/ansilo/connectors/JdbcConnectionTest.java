@@ -11,9 +11,8 @@ import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import com.ansilo.connectors.data.Int32DataType;
 import com.ansilo.connectors.data.JdbcDataType;
-import com.ansilo.connectors.data.VarcharDataType;
+import com.ansilo.connectors.query.JdbcParameter;
 
 public class JdbcConnectionTest {
     private Connection innerConnection;
@@ -28,9 +27,9 @@ public class JdbcConnectionTest {
     @Test
     void testPrepareStatement() throws Exception {
         var query = "EXAMPLE QUERY";
-        var params = new ArrayList<Integer>();
-        params.add(JdbcDataType.TYPE_INTEGER);
-        params.add(JdbcDataType.TYPE_VARCHAR);
+        var params = new ArrayList<JdbcParameter>();
+        params.add(JdbcParameter.createDynamic(1, JdbcDataType.TYPE_INTEGER));
+        params.add(JdbcParameter.createDynamic(1, JdbcDataType.TYPE_VARCHAR));
 
         var mockStatement = mock(PreparedStatement.class);
         when(this.innerConnection.prepareStatement(query)).thenReturn(mockStatement);
@@ -38,8 +37,7 @@ public class JdbcConnectionTest {
         var statement = this.connection.prepare(query, params);
 
         verify(this.innerConnection, times(1)).prepareStatement(query);
-        assertArrayEquals(params.toArray(),
-                statement.getParameterTypes().stream().map(i -> i.getTypeId()).toArray());
+        assertArrayEquals(params.toArray(), statement.getParameters().toArray());
         assertEquals(mockStatement, statement.getPreparedStatement());
     }
 

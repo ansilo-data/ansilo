@@ -8,7 +8,7 @@ use crate::{
     jdbc::{JdbcConnection, JdbcQuery},
 };
 
-use super::{OracleJdbcEntitySourceConfig, OracleJdbcQueryCompiler};
+use super::OracleJdbcEntitySourceConfig;
 
 /// Query planner for Oracle JDBC driver
 pub struct OracleJdbcQueryPlanner {}
@@ -96,9 +96,5 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
         row_skip: u64,
     ) -> Result<QueryOperationResult> {
         todo!()
-    }
-
-    fn convert(&self, connection: &JdbcConnection<'a>, select: &Select) -> Result<JdbcQuery> {
-        OracleJdbcQueryCompiler::compile_select(connection, select)
     }
 }
