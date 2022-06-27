@@ -21,6 +21,13 @@ cleanup() {
         echo "Task stopped!"
     fi
 
+    if [[ ! -z "$RDS_INSTANCE" ]];
+    then
+        echo "Stopping RDS $RDS_INSTANCE..."
+        aws rds stop-db-instance --db-instance-identifier $RDS_INSTANCE
+        echo "RDS stopped!"
+    fi
+
     echo "Done!"
 }
 trap cleanup EXIT
@@ -91,7 +98,12 @@ HostName $PUB_IP #devcontainerip
 User vscode
 StrictHostKeyChecking no
 " >> ~/.ssh/config
+fi
 
+if [[ ! -z "$RDS_INSTANCE" ]];
+then
+    echo "Starting RDS $RDS_INSTANCE..."
+    aws rds start-db-instance --db-instance-identifier $RDS_INSTANCE
 fi
 
 echo "Ready to ssh rustdevcontainer! sleeping..."
