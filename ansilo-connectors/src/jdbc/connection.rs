@@ -181,7 +181,7 @@ mod tests {
     fn test_jdbc_connection_prepare_statement() {
         let con = init_sqlite_connection();
 
-        let query = JdbcQuery::new("SELECT 1 as num");
+        let query = JdbcQuery::new("SELECT 1 as num", vec![]);
         let statement = con.prepare(query).unwrap();
 
         assert_eq!(
@@ -194,7 +194,7 @@ mod tests {
     fn test_jdbc_connection_prepare_statement_with_param() {
         let con = init_sqlite_connection();
 
-        let mut query = JdbcQuery::new("SELECT ? as num");
+        let mut query = JdbcQuery::new("SELECT ? as num", vec![]);
         query.params.push(JdbcQueryParam::Dynamic(DataType::Int32));
         let statement = con.prepare(query).unwrap();
 
@@ -208,7 +208,7 @@ mod tests {
     fn test_jdbc_connection_prepare_statement_invalid() {
         let con = init_sqlite_connection();
 
-        let query = JdbcQuery::new("INVALID QUERY");
+        let query = JdbcQuery::new("INVALID QUERY", vec![]);
         let res = con.prepare(query);
         assert!(res.is_err());
     }

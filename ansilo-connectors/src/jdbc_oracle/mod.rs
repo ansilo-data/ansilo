@@ -23,7 +23,7 @@ impl<'a>
         OracleJdbcEntityValidator,
         OracleJdbcEntitySourceConfig,
         OracleJdbcQueryPlanner,
-        OracleJdbcQueryCompiler
+        OracleJdbcQueryCompiler,
     > for OracleJdbcConnector
 {
     fn r#type() -> &'static str {
@@ -84,7 +84,9 @@ mod tests {
             .unwrap()
             .open(config)
             .unwrap();
-        let mut query = con.prepare(JdbcQuery::new("SELECT * FROM DUAL")).unwrap();
+        let mut query = con
+            .prepare(JdbcQuery::new("SELECT * FROM DUAL", vec![]))
+            .unwrap();
         let res = query.execute().unwrap();
         let mut res = ResultSetReader::new(res).unwrap();
 

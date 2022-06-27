@@ -2,10 +2,7 @@ use ansilo_core::{
     common::data::DataType,
     config::{self, EntityVersionConfig},
     err::Result,
-    sqlil::{
-        expr::Expr,
-        select::{Join, Ordering, Select},
-    },
+    sqlil as sql,
 };
 
 /// TODO: transactions
@@ -120,7 +117,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
         &self,
         connection: &TConnection,
         entity: EntityVersionMetadata<TEntitySourceConfig>,
-        select: &mut Select,
+        select: &mut sql::Select,
     ) -> Result<QueryOperationResult>;
 
     /// Adds the supplied expr to the query
@@ -128,8 +125,8 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
         &self,
         connection: &TConnection,
         entity: EntityVersionMetadata<TEntitySourceConfig>,
-        select: &mut Select,
-        expr: Expr,
+        select: &mut sql::Select,
+        expr: sql::Expr,
         alias: String,
     ) -> Result<QueryOperationResult>;
 
@@ -137,39 +134,39 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn add_where_clause(
         &self,
         connection: &TConnection,
-        select: &mut Select,
-        expr: Expr,
+        select: &mut sql::Select,
+        expr: sql::Expr,
     ) -> Result<QueryOperationResult>;
 
     /// Adds the supplied join clause to the query
     fn add_join(
         &self,
         connection: &TConnection,
-        select: &mut Select,
-        join: Join,
+        select: &mut sql::Select,
+        join: sql::Join,
     ) -> Result<QueryOperationResult>;
 
     /// Adds the supplied group by clause to the query
     fn add_group_by(
         &self,
         connection: &TConnection,
-        select: &mut Select,
-        expr: Expr,
+        select: &mut sql::Select,
+        expr: sql::Expr,
     ) -> Result<QueryOperationResult>;
 
     /// Adds the supplied order by clause to the query
     fn add_order_by(
         &self,
         connection: &TConnection,
-        select: &mut Select,
-        ordering: Ordering,
+        select: &mut sql::Select,
+        ordering: sql::Ordering,
     ) -> Result<QueryOperationResult>;
 
     /// Sets the number of rows to return
     fn set_row_limit(
         &self,
         connection: &TConnection,
-        select: &mut Select,
+        select: &mut sql::Select,
         row_limit: u64,
     ) -> Result<QueryOperationResult>;
 
@@ -177,7 +174,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn set_rows_to_skip(
         &self,
         connection: &TConnection,
-        select: &mut Select,
+        select: &mut sql::Select,
         row_skip: u64,
     ) -> Result<QueryOperationResult>;
 }
@@ -185,7 +182,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
 /// The query compiler compiles SQLIL queries into a format that can be executed by the connector
 pub trait QueryCompiler<TConnection, TQuery> {
     /// Compiles the select into a connector-specific query object
-    fn compile_select(&self, connection: &TConnection, select: &Select) -> Result<TQuery>;
+    fn compile_select(&self, connection: &TConnection, select: sql::Select) -> Result<TQuery>;
 }
 
 /// A size estimate of the entity

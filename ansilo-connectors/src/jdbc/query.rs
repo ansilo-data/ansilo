@@ -33,10 +33,10 @@ pub enum JdbcQueryParam {
 }
 
 impl JdbcQuery {
-    pub fn new(query: impl Into<String>) -> Self {
+    pub fn new(query: impl Into<String>, params: Vec<JdbcQueryParam>) -> Self {
         Self {
             query: query.into(),
-            params: vec![],
+            params,
         }
     }
 }

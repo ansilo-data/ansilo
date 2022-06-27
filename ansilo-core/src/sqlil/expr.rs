@@ -6,7 +6,6 @@ pub enum Expr {
     EntityVersion(EntityVersionIdentifier),
     EntityVersionAttribute(EntityVersionAttributeIdentifier),
     Constant(Constant),
-    Null,
     Parameter(Parameter),
     UnaryOp(UnaryOp),
     BinaryOp(BinaryOp),
@@ -28,10 +27,10 @@ pub struct EntityVersionIdentifier {
 }
 
 impl EntityVersionIdentifier {
-    pub fn new(entity_id: String, version_id: String) -> Self {
+    pub fn new(entity_id: impl Into<String>, version_id: impl Into<String>) -> Self {
         Self {
-            entity_id,
-            version_id,
+            entity_id: entity_id.into(),
+            version_id: version_id.into(),
         }
     }
 }
@@ -46,10 +45,10 @@ pub struct EntityVersionAttributeIdentifier {
 }
 
 impl EntityVersionAttributeIdentifier {
-    pub fn new(entity: EntityVersionIdentifier, attribute_id: String) -> Self {
+    pub fn new(entity: EntityVersionIdentifier, attribute_id: impl Into<String>) -> Self {
         Self {
             entity,
-            attribute_id,
+            attribute_id: attribute_id.into(),
         }
     }
 }
@@ -106,6 +105,8 @@ pub enum UnaryOpType {
     Not,
     Negate,
     BitwiseNot,
+    IsNull,
+    IsNotNull,
 }
 
 /// A binary operation over two expressions
@@ -153,8 +154,6 @@ pub enum BinaryOpType {
     GreaterThanOrEqual,
     LessThan,
     LessThanOrEqual,
-    IsNull,
-    IsNotNull,
 }
 
 /// Supported function calls
