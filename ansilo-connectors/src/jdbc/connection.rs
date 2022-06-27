@@ -4,7 +4,7 @@ use jni::objects::{GlobalRef, JValue};
 
 use crate::interface::{Connection, ConnectionOpener};
 
-use super::{JdbcConnectionConfig, JdbcDataType, JdbcPreparedQuery, JdbcQuery, Jvm};
+use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, Jvm};
 
 /// Implementation for opening JDBC connections
 pub struct JdbcConnectionOpener;

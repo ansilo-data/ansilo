@@ -4,8 +4,8 @@ use std::{
 };
 
 use ansilo_core::{
-    common::data::{DataType, DataValue},
-    err::{bail, Context, Error, Result},
+    common::data::DataValue,
+    err::{Error, Result},
 };
 
 use crate::interface::{QueryHandle, QueryInputStructure, ResultSet};
@@ -89,6 +89,8 @@ where
 #[cfg(test)]
 mod tests {
 
+    use ansilo_core::common::data::DataType;
+
     use crate::common::rs_tests::MockResultSet;
 
     use super::*;
@@ -122,7 +124,7 @@ mod tests {
     #[test]
     fn test_query_handle_writer_get_structure() {
         let structure = QueryInputStructure::new(vec![DataType::Int32]);
-        let mut query = MockQueryHandle::new(structure.clone(), 1024);
+        let query = MockQueryHandle::new(structure.clone(), 1024);
 
         assert_eq!(query.get_structure(), &structure);
     }
@@ -133,5 +135,34 @@ mod tests {
         let query = MockQueryHandle::new(structure.clone(), 1024);
 
         query.inner().unwrap();
+    }
+
+    #[test]
+    fn test_query_handle_writer_write_value() {
+        let structure = QueryInputStructure::new(vec![DataType::Int32]);
+        let mut query = MockQueryHandle::new(structure.clone(), 1024);
+
+        query.write_data_value(DataValue::Int32(123)).unwrap();
+
+        let buff = query.inner().unwrap().1.into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                      // not null
+                123_i32.to_ne_bytes().to_vec(), // val
+            ]
+            .concat()
+        );
+    }
+
+    #[test]
+    fn test_query_handle_writer_write_invalid() {
+        let structure = QueryInputStructure::new(vec![DataType::Int32]);
+        let mut query = MockQueryHandle::new(structure.clone(), 1024);
+
+        let res = query.write_data_value(DataValue::Varchar("invalid".as_bytes().to_vec()));
+
+        assert!(res.is_err());
     }
 }

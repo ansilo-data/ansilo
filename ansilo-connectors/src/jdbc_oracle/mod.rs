@@ -86,7 +86,7 @@ mod tests {
             .unwrap();
         let mut query = con.prepare(JdbcQuery::new("SELECT * FROM DUAL")).unwrap();
         let res = query.execute().unwrap();
-        let mut res = ResultSetReader::new(res);
+        let mut res = ResultSetReader::new(res).unwrap();
 
         assert_eq!(
             res.read_data_value().unwrap(),

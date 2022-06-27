@@ -1,5 +1,3 @@
-use std::io::Cursor;
-
 use ansilo_core::{
     common::data::{DataType, DataValue},
     err::{bail, Context, Result},
@@ -181,7 +179,6 @@ impl JdbcQueryParam {
     /// Initialises a new instance of the JdbcParameter class which
     /// copies the current query parameter
     /// @see ansilo-connectors/src/jdbc/java/src/main/java/com/ansilo/connectors/query/JdbcParameter.java
-    /// TODO: Test
     pub(crate) fn to_java_jdbc_parameter<'a>(
         &self,
         index: usize,
@@ -204,12 +201,7 @@ impl JdbcQueryParam {
                 ],
             ),
             JdbcQueryParam::Constant(data_value) => {
-                // TODO: clean up
-                let mut writer = DataWriter::new(Cursor::new(vec![]), None);
-                writer
-                    .write_data_value(data_value.clone())
-                    .context("Failed to write query parameter")?;
-                let mut buff = writer.inner().into_inner();
+                let mut buff = DataWriter::to_vec(data_value.clone())?;
 
                 let byte_buff = env
                     .new_direct_byte_buffer(buff.as_mut_slice())
@@ -300,7 +292,7 @@ mod tests {
         let mut prepared_query = create_prepared_query(&jvm, jdbc_con, "SELECT 1 as num", vec![]);
 
         let rs = prepared_query.execute().unwrap();
-        let mut rs = ResultSetReader::new(rs);
+        let mut rs = ResultSetReader::new(rs).unwrap();
 
         assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(1)));
         assert_eq!(rs.read_data_value().unwrap(), None);
@@ -332,7 +324,7 @@ mod tests {
         assert_eq!(wrote, 5);
 
         let rs = prepared_query.execute().unwrap();
-        let mut rs = ResultSetReader::new(rs);
+        let mut rs = ResultSetReader::new(rs).unwrap();
 
         assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(123)));
         assert_eq!(rs.read_data_value().unwrap(), None);
@@ -368,7 +360,7 @@ mod tests {
         assert_eq!(wrote, 6);
 
         let rs = prepared_query.execute().unwrap();
-        let mut rs = ResultSetReader::new(rs);
+        let mut rs = ResultSetReader::new(rs).unwrap();
 
         assert_eq!(
             rs.read_data_value().unwrap(),
@@ -419,7 +411,7 @@ mod tests {
             assert_eq!(wrote, 5);
 
             let rs = prepared_query.execute().unwrap();
-            let mut rs = ResultSetReader::new(rs);
+            let mut rs = ResultSetReader::new(rs).unwrap();
 
             assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(i)));
             assert_eq!(rs.read_data_value().unwrap(), None);
@@ -439,7 +431,7 @@ mod tests {
         );
 
         let rs = prepared_query.execute().unwrap();
-        let mut rs = ResultSetReader::new(rs);
+        let mut rs = ResultSetReader::new(rs).unwrap();
 
         assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(123)));
         assert_eq!(rs.read_data_value().unwrap(), None);

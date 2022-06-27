@@ -7,7 +7,7 @@ pub struct OracleJdbcQueryCompiler;
 
 impl<'a> QueryCompiler<JdbcConnection<'a>, JdbcQuery> for OracleJdbcQueryCompiler {
     fn compile_select(&self, con: &JdbcConnection<'a>, select: &Select) -> Result<JdbcQuery> {
-        /// TODO: implement
+        // TODO: implement
         let params = Vec::<DataType>::new();
         todo!()
     }

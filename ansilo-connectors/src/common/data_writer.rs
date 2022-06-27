@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{self, Write};
 
 use ansilo_core::{
     common::data::{DataType, DataValue},
@@ -127,6 +127,17 @@ where
 
     fn advance(&mut self) {
         self.param_idx += 1;
+    }
+}
+
+impl DataWriter<io::Cursor<Vec<u8>>> {
+    /// Converts a single DataValue into a buffer
+    pub fn to_vec(data: DataValue) -> Result<Vec<u8>> {
+        let mut writer = DataWriter::new(io::Cursor::new(vec![]), None);
+        writer
+            .write_data_value(data)
+            .context("Failed to write query parameter")?;
+        Ok(writer.inner().into_inner())
     }
 }
 
@@ -315,6 +326,22 @@ mod tests {
                 vec![1u8],                      // not null
                 456_i32.to_ne_bytes().to_vec(), // data
                 vec![0u8],                      // null
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_to_vec() {
+        let buff = DataWriter::to_vec(DataValue::Varchar("abc".as_bytes().to_vec())).unwrap();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                 // not null
+                vec![3u8],                 // chunk length
+                "abc".as_bytes().to_vec(), // data
+                vec![0u8],                 // eof
             ]
             .concat()
         )
