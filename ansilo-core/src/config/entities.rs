@@ -20,6 +20,7 @@ pub struct EntityConfig {
     /// The accessility of the entity
     pub accessibility: EntityAccessiblity,
 }
+
 /// A tag attached to an entity. 
 /// These are key-value pairs use for custom categorisation
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

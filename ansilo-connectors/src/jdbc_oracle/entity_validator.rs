@@ -1,9 +1,9 @@
-use ansilo_core::{config::EntityVersionConfig, err::Result};
-
-use crate::{
-    interface::{EntityValidator, EntityVersionMetadata},
-    jdbc::JdbcConnection,
+use ansilo_core::{
+    config::{EntityVersionConfig, NodeConfig},
+    err::Result,
 };
+
+use crate::{common::entity::EntitySource, interface::EntityValidator, jdbc::JdbcConnection};
 
 use super::OracleJdbcEntitySourceConfig;
 
@@ -16,8 +16,9 @@ impl<'a> EntityValidator<JdbcConnection<'a>, OracleJdbcEntitySourceConfig>
     fn validate(
         &self,
         connection: &JdbcConnection<'a>,
-        entity_version: EntityVersionConfig,
-    ) -> Result<EntityVersionMetadata<OracleJdbcEntitySourceConfig>> {
+        entity_version: &EntityVersionConfig,
+        nc: &NodeConfig,
+    ) -> Result<EntitySource<OracleJdbcEntitySourceConfig>> {
         todo!()
     }
 }

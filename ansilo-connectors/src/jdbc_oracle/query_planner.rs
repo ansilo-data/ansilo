@@ -1,11 +1,21 @@
-use ansilo_core::{err::Result, sqlil as sql};
+use ansilo_core::{
+    common::data::DataValue,
+    err::{bail, Context, Result},
+    sqlil as sql,
+};
 
 use crate::{
-    interface::{EntitySizeEstimate, EntityVersionMetadata, QueryOperationResult, QueryPlanner},
+    common::{data::ResultSetReader, entity::EntitySource},
+    interface::{
+        Connection, EntitySizeEstimate, OperationCost, QueryHandle, QueryOperationResult,
+        QueryPlanner,
+    },
     jdbc::{JdbcConnection, JdbcQuery},
 };
 
-use super::OracleJdbcEntitySourceConfig;
+use super::{
+    OracleJdbcConnectorEntityConfig, OracleJdbcEntitySourceConfig, OracleJdbcQueryCompiler,
+};
 
 /// Query planner for Oracle JDBC driver
 pub struct OracleJdbcQueryPlanner {}
@@ -16,82 +26,138 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     fn estimate_size(
         &self,
         connection: &JdbcConnection<'a>,
-        entity_version: EntityVersionMetadata<OracleJdbcEntitySourceConfig>,
+        entity: &EntitySource<OracleJdbcEntitySourceConfig>,
     ) -> Result<EntitySizeEstimate> {
-        todo!()
+        // TODO: custom query support
+        // TODO: multiple sample options
+        let compiler = OracleJdbcQueryCompiler {};
+
+        let table = compiler.compile_source_identifier(&entity.source_conf)?;
+
+        let mut query = connection.prepare(JdbcQuery::new(
+            format!("SELECT COUNT(*) * 1000 FROM {} SAMPLE(0.1)", table),
+            vec![],
+        ))?;
+
+        let mut result_set = ResultSetReader::new(query.execute()?)?;
+        let value = result_set
+            .read_data_value()?
+            .context("Unexpected empty result set")?;
+
+        let num_rows = match value {
+            DataValue::Int64(i) => i,
+            _ => bail!("Unexpected data value returned: {:?}", value),
+        };
+
+        // TODO: row width
+        Ok(EntitySizeEstimate::new(Some(num_rows as _), None))
     }
 
     fn create_base_select(
         &self,
-        connection: &JdbcConnection<'a>,
-        entity: EntityVersionMetadata<OracleJdbcEntitySourceConfig>,
-        select: &mut sql::Select,
+        _connection: &JdbcConnection<'a>,
+        _conf: &OracleJdbcConnectorEntityConfig,
+        _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
+        _select: &mut sql::Select,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        // TODO: costs
+        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
+            None, None, None,
+        )))
     }
 
     fn add_col_expr(
         &self,
-        connection: &JdbcConnection<'a>,
-        entity: EntityVersionMetadata<OracleJdbcEntitySourceConfig>,
+        _connection: &JdbcConnection<'a>,
+        _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         expr: sql::Expr,
         alias: String,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        select.cols.insert(alias, expr);
+        // TODO: costs
+        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
+            None, None, None,
+        )))
     }
 
     fn add_where_clause(
         &self,
-        connection: &JdbcConnection<'a>,
+        _connection: &JdbcConnection<'a>,
+        _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        select.r#where.push(expr);
+        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
+            None, None, None,
+        )))
     }
 
     fn add_join(
         &self,
-        connection: &JdbcConnection<'a>,
+        _connection: &JdbcConnection<'a>,
+        _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         join: sql::Join,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        select.joins.push(join);
+        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
+            None, None, None,
+        )))
     }
 
     fn add_group_by(
         &self,
-        connection: &JdbcConnection<'a>,
+        _connection: &JdbcConnection<'a>,
+        _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        select.group_bys.push(expr);
+        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
+            None, None, None,
+        )))
     }
 
     fn add_order_by(
         &self,
-        connection: &JdbcConnection<'a>,
+        _connection: &JdbcConnection<'a>,
+        _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        select.order_bys.push(ordering);
+        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
+            None, None, None,
+        )))
     }
 
     fn set_row_limit(
         &self,
-        connection: &JdbcConnection<'a>,
+        _connection: &JdbcConnection<'a>,
+        _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         row_limit: u64,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        select.row_limit = Some(row_limit);
+        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
+            None, None, None,
+        )))
     }
 
     fn set_rows_to_skip(
         &self,
-        connection: &JdbcConnection<'a>,
+        _connection: &JdbcConnection<'a>,
+        _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         row_skip: u64,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        select.row_skip = row_skip;
+        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
+            None, None, None,
+        )))
     }
 }
+
+// TODO: tests

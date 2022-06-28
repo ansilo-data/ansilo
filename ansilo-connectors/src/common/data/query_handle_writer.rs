@@ -91,7 +91,7 @@ mod tests {
 
     use ansilo_core::common::data::DataType;
 
-    use crate::common::rs_tests::MockResultSet;
+    use crate::common::data::rs_tests::MockResultSet;
 
     use super::*;
 

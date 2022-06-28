@@ -33,7 +33,7 @@ pub trait JdbcConnector<
     TEntitySearcher: EntitySearcher<JdbcConnection<'a>, TEntitySourceConfig>,
     TEntityValidator: EntityValidator<JdbcConnection<'a>, TEntitySourceConfig>,
     TQueryPlanner: QueryPlanner<JdbcConnection<'a>, JdbcQuery, TEntitySourceConfig>,
-    TQueryCompiler: QueryCompiler<JdbcConnection<'a>, JdbcQuery>,
+    TQueryCompiler: QueryCompiler<JdbcConnection<'a>, JdbcQuery, TEntitySourceConfig>,
 {
     /// Gets the type of the connector, usually the name of the target platform, eg 'postgres'
     fn r#type() -> &'static str;
@@ -95,7 +95,7 @@ where
     TEntitySearcher: EntitySearcher<JdbcConnection<'a>, TEntitySourceConfig>,
     TEntityValidator: EntityValidator<JdbcConnection<'a>, TEntitySourceConfig>,
     TQueryPlanner: QueryPlanner<JdbcConnection<'a>, JdbcQuery, TEntitySourceConfig>,
-    TQueryCompiler: QueryCompiler<JdbcConnection<'a>, JdbcQuery>,
+    TQueryCompiler: QueryCompiler<JdbcConnection<'a>, JdbcQuery, TEntitySourceConfig>,
 {
     fn r#type() -> &'static str {
         T::r#type()

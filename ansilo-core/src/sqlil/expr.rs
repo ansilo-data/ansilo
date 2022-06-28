@@ -206,3 +206,31 @@ pub enum AggregateCall {
     // String functions
     StringAgg(SubExpr, String),
 }
+
+/// Constructurs a new entity expression
+pub fn entity(entity_id: impl Into<String>, version: impl Into<String>) -> EntityVersionIdentifier {
+    EntityVersionIdentifier::new(entity_id, version)
+}
+
+/// Constructurs a new entity attribute expression
+pub fn attr(
+    entity_id: impl Into<String>,
+    version: impl Into<String>,
+    attr_id: impl Into<String>,
+) -> EntityVersionAttributeIdentifier {
+    EntityVersionAttributeIdentifier::new(entity(entity_id, version), attr_id)
+}
+
+impl Expr {
+    pub fn entity(entity_id: impl Into<String>, version: impl Into<String>) -> Self {
+        Self::EntityVersion(entity(entity_id, version))
+    }
+
+    pub fn attr(
+        entity_id: impl Into<String>,
+        version: impl Into<String>,
+        attr_id: impl Into<String>,
+    ) -> Self {
+        Self::EntityVersionAttribute(attr(entity_id, version, attr_id))
+    }
+}

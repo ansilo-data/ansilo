@@ -61,10 +61,10 @@ impl<'a>
 mod tests {
     use std::collections::HashMap;
 
-    use ansilo_core::common::data::DataValue;
+    use ansilo_core::{common::data::DataValue, config::NodeConfig};
 
     use crate::{
-        common::ResultSetReader,
+        common::data::ResultSetReader,
         interface::{Connection, ConnectionOpener, QueryHandle},
         jdbc::JdbcQuery,
     };
@@ -82,7 +82,7 @@ mod tests {
 
         let con = OracleJdbcConnector::create_connection_opener(&config)
             .unwrap()
-            .open(config)
+            .open(config, &NodeConfig::default())
             .unwrap();
         let mut query = con
             .prepare(JdbcQuery::new("SELECT * FROM DUAL", vec![]))

@@ -8,7 +8,7 @@ use jni::{
 };
 
 use crate::{
-    common::DataWriter,
+    common::data::DataWriter,
     interface::{QueryHandle, QueryInputStructure},
 };
 
@@ -236,7 +236,7 @@ mod tests {
     use ansilo_core::common::data::{DataValue, EncodingType, VarcharOptions};
     use jni::objects::{JObject, JString};
 
-    use crate::{common::ResultSetReader, jdbc::tests::create_sqlite_memory_connection};
+    use crate::{common::data::ResultSetReader, jdbc::tests::create_sqlite_memory_connection};
 
     use super::*;
 

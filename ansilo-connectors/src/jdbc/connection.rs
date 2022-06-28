@@ -1,4 +1,4 @@
-use ansilo_core::err::{Context, Result};
+use ansilo_core::{err::{Context, Result}, config::NodeConfig};
 use ansilo_logging::warn;
 use jni::objects::{GlobalRef, JValue};
 
@@ -20,7 +20,7 @@ impl<'a, TConnectionOptions> ConnectionOpener<TConnectionOptions, JdbcConnection
 where
     TConnectionOptions: JdbcConnectionConfig,
 {
-    fn open(&self, options: TConnectionOptions) -> Result<JdbcConnection<'a>> {
+    fn open(&self, options: TConnectionOptions, _nc: &NodeConfig) -> Result<JdbcConnection<'a>> {
         let jvm = Jvm::boot()?;
 
         let jdbc_con = jvm.with_local_frame(32, |env| {
@@ -135,9 +135,12 @@ impl<'a> Drop for JdbcConnection<'a> {
 mod tests {
     use std::collections::HashMap;
 
-    use ansilo_core::common::data::DataType;
+    use ansilo_core::{common::data::DataType, config::NodeConfig};
 
-    use crate::{interface::{QueryHandle, QueryInputStructure}, jdbc::JdbcQueryParam};
+    use crate::{
+        interface::{QueryHandle, QueryInputStructure},
+        jdbc::JdbcQueryParam,
+    };
 
     use super::*;
 
@@ -155,10 +158,10 @@ mod tests {
 
     fn init_sqlite_connection<'a>() -> JdbcConnection<'a> {
         JdbcConnectionOpener::new()
-            .open(MockJdbcConnectionConfig(
-                "jdbc:sqlite::memory:".to_owned(),
-                HashMap::new(),
-            ))
+            .open(
+                MockJdbcConnectionConfig("jdbc:sqlite::memory:".to_owned(), HashMap::new()),
+                &NodeConfig::default(),
+            )
             .unwrap()
     }
 
@@ -169,10 +172,10 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_init_invalid() {
-        let res = JdbcConnectionOpener::new().open(MockJdbcConnectionConfig(
-            "invalid".to_owned(),
-            HashMap::new(),
-        ));
+        let res = JdbcConnectionOpener::new().open(
+            MockJdbcConnectionConfig("invalid".to_owned(), HashMap::new()),
+            &NodeConfig::default(),
+        );
 
         assert!(res.is_err());
     }

@@ -1,9 +1,11 @@
 use ansilo_core::{
     common::data::DataType,
-    config::{self, EntityVersionConfig},
+    config::{self, EntityVersionConfig, NodeConfig},
     err::Result,
     sqlil as sql,
 };
+
+use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
 /// TODO: transactions
 /// TODO: insert / update
@@ -30,7 +32,7 @@ pub trait Connector<
     TEntitySearcher: EntitySearcher<TConnection, TEntitySourceConfig>,
     TEntityValidator: EntityValidator<TConnection, TEntitySourceConfig>,
     TQueryPlanner: QueryPlanner<TConnection, TQuery, TEntitySourceConfig>,
-    TQueryCompiler: QueryCompiler<TConnection, TQuery>,
+    TQueryCompiler: QueryCompiler<TConnection, TQuery, TEntitySourceConfig>,
     TQueryHandle: QueryHandle<'a, TResultSet>,
     TResultSet: ResultSet<'a>,
     TConnection: 'a,
@@ -59,22 +61,10 @@ pub trait Connector<
     fn create_query_compiler() -> Result<TQueryCompiler>;
 }
 
-/// Metadata about an entity version
-#[derive(Debug, Clone, PartialEq)]
-pub struct EntityVersionMetadata<TEntitySourceConfig>
-where
-    TEntitySourceConfig: Sized,
-{
-    /// The entity config
-    pub conf: EntityVersionConfig,
-    /// The entity source config
-    pub source_config: TEntitySourceConfig,
-}
-
 /// Opens a connection to the target data source
 pub trait ConnectionOpener<TConnectionConfig, TConnection> {
     /// Opens a connection to the target data source using the supplied options
-    fn open(&self, options: TConnectionConfig) -> Result<TConnection>;
+    fn open(&self, options: TConnectionConfig, nc: &NodeConfig) -> Result<TConnection>;
 }
 
 /// An open connection to a data source
@@ -90,7 +80,8 @@ pub trait EntitySearcher<TConnection, TEntitySourceConfig> {
     fn discover(
         &self,
         connection: &TConnection,
-    ) -> Result<Vec<EntityVersionMetadata<TEntitySourceConfig>>>;
+        nc: &NodeConfig,
+    ) -> Result<Vec<EntitySource<TEntitySourceConfig>>>;
 }
 
 /// Validates custom entity config
@@ -99,8 +90,9 @@ pub trait EntityValidator<TConnection, TEntitySourceConfig> {
     fn validate(
         &self,
         connection: &TConnection,
-        entity_version: EntityVersionConfig,
-    ) -> Result<EntityVersionMetadata<TEntitySourceConfig>>;
+        entity_version: &EntityVersionConfig,
+        nc: &NodeConfig,
+    ) -> Result<EntitySource<TEntitySourceConfig>>;
 }
 
 /// The query planner determines if SQLIL queries can be executed remotely
@@ -109,14 +101,15 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn estimate_size(
         &self,
         connection: &TConnection,
-        entity_version: EntityVersionMetadata<TEntitySourceConfig>,
+        entity: &EntitySource<TEntitySourceConfig>,
     ) -> Result<EntitySizeEstimate>;
 
     /// Creates a base query to select all rows from the entity
     fn create_base_select(
         &self,
         connection: &TConnection,
-        entity: EntityVersionMetadata<TEntitySourceConfig>,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
+        entity: &EntitySource<TEntitySourceConfig>,
         select: &mut sql::Select,
     ) -> Result<QueryOperationResult>;
 
@@ -124,7 +117,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn add_col_expr(
         &self,
         connection: &TConnection,
-        entity: EntityVersionMetadata<TEntitySourceConfig>,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
         select: &mut sql::Select,
         expr: sql::Expr,
         alias: String,
@@ -134,6 +127,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn add_where_clause(
         &self,
         connection: &TConnection,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
         select: &mut sql::Select,
         expr: sql::Expr,
     ) -> Result<QueryOperationResult>;
@@ -142,6 +136,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn add_join(
         &self,
         connection: &TConnection,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
         select: &mut sql::Select,
         join: sql::Join,
     ) -> Result<QueryOperationResult>;
@@ -150,6 +145,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn add_group_by(
         &self,
         connection: &TConnection,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
         select: &mut sql::Select,
         expr: sql::Expr,
     ) -> Result<QueryOperationResult>;
@@ -158,6 +154,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn add_order_by(
         &self,
         connection: &TConnection,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
         select: &mut sql::Select,
         ordering: sql::Ordering,
     ) -> Result<QueryOperationResult>;
@@ -166,6 +163,7 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn set_row_limit(
         &self,
         connection: &TConnection,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
         select: &mut sql::Select,
         row_limit: u64,
     ) -> Result<QueryOperationResult>;
@@ -174,15 +172,21 @@ pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
     fn set_rows_to_skip(
         &self,
         connection: &TConnection,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
         select: &mut sql::Select,
         row_skip: u64,
     ) -> Result<QueryOperationResult>;
 }
 
 /// The query compiler compiles SQLIL queries into a format that can be executed by the connector
-pub trait QueryCompiler<TConnection, TQuery> {
+pub trait QueryCompiler<TConnection, TQuery, TEntitySourceConfig> {
     /// Compiles the select into a connector-specific query object
-    fn compile_select(&self, connection: &TConnection, select: sql::Select) -> Result<TQuery>;
+    fn compile_select(
+        &self,
+        connection: &TConnection,
+        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
+        select: sql::Select,
+    ) -> Result<TQuery>;
 }
 
 /// A size estimate of the entity
