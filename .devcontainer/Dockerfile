@@ -49,5 +49,11 @@ RUN sudo curl -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com
     echo 'export $(strings /proc/1/environ | grep -P "(AWS|ECS)")' | tee -a ~/.bashrc ~/.zshrc && \
     ecs-cli configure --cluster dev-cluster --region ap-southeast-2
 
+# Install aws cli
+RUN cd /tmp/ && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    sudo ./aws/install && \
+    rm -rf awscliv2.zip ./aws/
+
 # Add boot.sh file
 COPY ./boot.sh /boot.sh
