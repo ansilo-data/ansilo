@@ -3,8 +3,8 @@ use std::{
     net::{IpAddr, TcpStream},
     path::PathBuf,
     process::{Command, Stdio},
-    time::Duration,
-    thread
+    thread,
+    time::Duration, env,
 };
 
 pub struct ContainerInstances {
@@ -104,7 +104,7 @@ fn parse_service_port(port_mapping: String) -> Option<u16> {
 
 fn get_task_private_ip(cluster: String, task_id: String) -> IpAddr {
     let output = Command::new("bash")
-        .args(&["-c".to_string(), format!("aws ecs describe-tasks --tasks {task_id} --cluster {cluster} --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' --output text")])
+        .args(&["-c".to_string(), format!("aws ecs describe-tasks --tasks {} --cluster {cluster} --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' --output text", task_id.clone())])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -115,6 +115,7 @@ fn get_task_private_ip(cluster: String, task_id: String) -> IpAddr {
     let ip_str = String::from_utf8_lossy(&output.stdout[..])
         .trim()
         .to_string();
+    println!("Private IP from {}: {:?}", task_id, ip_str);
     ip_str.parse().unwrap()
 }
 
@@ -143,4 +144,23 @@ fn stop_containers_ecs(infra_path: PathBuf) {
         .unwrap()
         .wait()
         .unwrap();
+}
+
+pub fn get_current_target_dir() -> PathBuf {
+    env::current_exe()
+        .and_then(|mut p| {
+            while p
+                .parent()
+                .unwrap()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                != "target"
+            {
+                p = p.parent().unwrap().to_path_buf();
+            }
+
+            Ok(p)
+        })
+        .unwrap()
 }

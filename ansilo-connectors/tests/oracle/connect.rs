@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, env};
 
 use ansilo_connectors::{
     common::data::ResultSetReader,
@@ -8,10 +8,12 @@ use ansilo_connectors::{
 };
 use ansilo_core::{common::data::DataValue, config::NodeConfig};
 
-use crate::oracle::start_oracle;
+use crate::{oracle::start_oracle, common::get_current_target_dir};
 
 #[test]
 fn test_oracle_jdbc_open_connection_and_execute_query() {
+    env::set_var("ANSILO_CLASSPATH", get_current_target_dir().to_str().unwrap());
+
     let containers = start_oracle();
 
     let config = OracleJdbcConnectionConfig::new(
