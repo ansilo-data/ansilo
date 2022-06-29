@@ -1,6 +1,11 @@
 # Creates an oracle image which is tuned for fast start up
 FROM oracle-base
 
+ENV ORACLE_SID=ansilo
+ENV ORACLE_PDB=db
+ENV ORACLE_EDITION=enterprise
+ENV ORACLE_CHARACTERSET=AL32UTF8
+
 COPY ./sql/* /opt/oracle/scripts/startup/ 
 USER root
 RUN chown -R oracle:dba /opt/oracle/scripts/startup/
