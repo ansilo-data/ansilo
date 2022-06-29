@@ -35,6 +35,7 @@
   ],
   "family": "rust-devcontainer",
   "executionRoleArn": "arn:aws:iam::059160323628:role/ECSTaskExecutionRoleForPullingECR",
+  "taskRoleArn": "arn:aws:iam::059160323628:role/ECSFullAccess",
   "networkMode": "awsvpc",
   "volumes": [
     {

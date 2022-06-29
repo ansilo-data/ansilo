@@ -72,6 +72,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn test_oracle_jdbc_open_connection_and_execute_query() {
         let config = OracleJdbcConnectionConfig::new("jdbc:oracle:thin:@oracle-database-dev.c52iuycbernx.ap-southeast-2.rds.amazonaws.com:1521/ANSILO".to_string(), {
             let mut props = HashMap::<String, String>::new();
