@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  oracle:
+    image: container-registry.oracle.com/database/enterprise:21.3.0.0
+    environment:
+      - ORACLE_SID=test
+      - ORACLE_PDB=db
+      - ORACLE_PWD=ansilo_test
+      - ORACLE_EDITION=enterprise
+      - ORACLE_CHARACTERSET=AL32UTF8
+    ports:
+      - "1521:1521"
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/ansilo-connectors
+        awslogs-region: ap-southeast-2
+        awslogs-stream-prefix: oracle-jdbc
