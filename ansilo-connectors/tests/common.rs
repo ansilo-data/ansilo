@@ -43,7 +43,7 @@ fn start_containers_ecs(infra_path: PathBuf) -> ContainerInstances {
     let tasks = Command::new("bash")
         .args(&[
             "-c",
-            "ecs-cli compose ps | tail -n +2 | awk '{print $1 \" \" $3}'",
+            "ecs-cli compose ps | grep -E '(PROVISIONING|PENDING|RUNNING)' | awk '{print $1 \" \" $3}'",
         ])
         .current_dir(infra_path.clone())
         .stdout(Stdio::piped())
