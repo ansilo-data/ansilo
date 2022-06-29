@@ -5,6 +5,7 @@ use std::{
 };
 
 fn main() {
+    // TODO: fix so does not run every build
     build_java_maven_module("src/jdbc/java");
     build_java_maven_module("src/jdbc_oracle/java");
 }

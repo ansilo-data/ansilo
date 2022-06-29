@@ -3,12 +3,6 @@ version: '3'
 services:
   oracle:
     image: 635198228996.dkr.ecr.ap-southeast-2.amazonaws.com/oracle:enterprise-21.3.0.0
-    environment:
-      - ORACLE_SID=test
-      - ORACLE_PDB=db
-      - ORACLE_PWD=ansilo_test
-      - ORACLE_EDITION=enterprise
-      - ORACLE_CHARACTERSET=AL32UTF8
     ports:
       - "1521:1521"
     logging:
