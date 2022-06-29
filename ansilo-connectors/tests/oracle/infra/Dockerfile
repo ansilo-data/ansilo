@@ -3,6 +3,7 @@ FROM oracle-base
 
 ENV ORACLE_SID=ansilo
 ENV ORACLE_PDB=db
+ENV ORACLE_PWD=ansilo_admin_pass
 ENV ORACLE_EDITION=enterprise
 ENV ORACLE_CHARACTERSET=AL32UTF8
 
