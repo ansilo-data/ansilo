@@ -12,7 +12,7 @@ run_params:
   network_configuration:
     awsvpc_configuration:
       subnets:
-        - subnet-52bdaa25
+        - subnet-044878cdd1f4b0d3d
       security_groups:
-        - sg-0107f28eb0e25a4c2
-      assign_public_ip: DISABLED
+        - sg-080dc71fb99e4fcb5 # allow local vpc access
+      assign_public_ip: ENABLED

@@ -1,5 +1,7 @@
 #/bin/bash
 
+# Builds and pushs a new version of the dev container
+
 set -e
 
 AWS_PROFILE=${1:-"ansilo"}

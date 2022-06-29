@@ -72,12 +72,11 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore]
     fn test_oracle_jdbc_open_connection_and_execute_query() {
-        let config = OracleJdbcConnectionConfig::new("jdbc:oracle:thin:@oracle-database-dev.c52iuycbernx.ap-southeast-2.rds.amazonaws.com:1521/ANSILO".to_string(), {
+        let config = OracleJdbcConnectionConfig::new("jdbc:oracle:thin:@10.0.0.28:1521/db".to_string(), {
             let mut props = HashMap::<String, String>::new();
-            props.insert("oracle.jdbc.user".to_string(), "admin".to_string());
-            props.insert("oracle.jdbc.password".to_string(), "&Qra8tMwifLV#yWHq74o".to_string());
+            props.insert("oracle.jdbc.user".to_string(), "sys as sysdba".to_string());
+            props.insert("oracle.jdbc.password".to_string(), "ansilo_test".to_string());
             props
         });
 
