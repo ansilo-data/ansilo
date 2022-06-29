@@ -30,6 +30,7 @@ RUN echo "export JAVA_HOME=\"$(dirname $(dirname $(readlink -f $(which java))))\
 RUN echo "export MAVEN_OPTS=\"-Dmaven.repo.local=/workspace/ansilo/.m2\"" | tee -a ~/.bashrc ~/.zshrc 
 RUN echo "export LD_LIBRARY_PATH=\"\$LD_LIBRARY_PATH:\$(dirname \$(find \$JAVA_HOME -name libjvm.so))\"" | tee -a ~/.bashrc ~/.zshrc 
 
+# Maintain shell history between instances
 RUN echo "export HISTFILE=\"/workspace/.sh_history\"" | tee -a ~/.bashrc ~/.zshrc 
 
 # Install mold linker
@@ -45,5 +46,8 @@ RUN cd ~/ && \
 # Install ecs-cli
 RUN sudo curl -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest && \
     sudo chmod +x /usr/local/bin/ecs-cli && \
-    echo 'export $(strings /proc/1/environ | grep -P "(AWS|ECS)")' | tee -a ~/.bashrc ~/.zshrc 
+    echo 'export $(strings /proc/1/environ | grep -P "(AWS|ECS)")' | tee -a ~/.bashrc ~/.zshrc && \
+    ecs-cli configure --cluster dev-cluster --region ap-southeast-2
 
+# Add boot.sh file
+COPY ./boot.sh /boot.sh

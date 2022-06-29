@@ -2,7 +2,7 @@
   "containerDefinitions": [
     {
       "name": "devcontainer",
-      "image": "059160323628.dkr.ecr.ap-southeast-2.amazonaws.com/rust-devcontainer:latest",
+      "image": "635198228996.dkr.ecr.ap-southeast-2.amazonaws.com/devcontainer:latest",
       "cpu": 0,
       "links": [],
       "portMappings": [
@@ -13,8 +13,8 @@
         }
       ],
       "essential": true,
-      "entryPoint": ["/bin/sh"],
-      "command": ["-c", "sudo /usr/sbin/sshd -De"],
+      "entryPoint": ["/bin/bash"],
+      "command": ["/boot.sh", "{{USER}}"],
       "linuxParameters": {
         "capabilities": { "add": ["SYS_PTRACE"] }
       },
@@ -22,7 +22,7 @@
       "mountPoints": [
         {
           "sourceVolume": "dev-volume",
-          "containerPath": "/workspace",
+          "containerPath": "/efs",
           "readOnly": false
         }
       ],
@@ -33,16 +33,16 @@
       "systemControls": []
     }
   ],
-  "family": "rust-devcontainer",
-  "executionRoleArn": "arn:aws:iam::059160323628:role/ECSTaskExecutionRoleForPullingECR",
-  "taskRoleArn": "arn:aws:iam::059160323628:role/ECSFullAccess",
+  "family": "{{USER}}-devcontainer",
+  "executionRoleArn": "arn:aws:iam::635198228996:role/ECSTaskExecutionRoleForPullingECR",
+  "taskRoleArn": "arn:aws:iam::635198228996:role/DevContainerTaskRole",
   "networkMode": "awsvpc",
   "volumes": [
     {
       "name": "dev-volume",
       "efsVolumeConfiguration": {
-        "fileSystemId": "fs-05e01131eb60766df",
-        "rootDirectory": "/ecs-devcontainer",
+        "fileSystemId": "fs-0b56141023f21f062",
+        "rootDirectory": "/",
         "transitEncryption": "DISABLED",
         "authorizationConfig": {
           "iam": "DISABLED"
