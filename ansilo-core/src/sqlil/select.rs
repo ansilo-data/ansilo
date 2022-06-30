@@ -49,6 +49,16 @@ pub struct Join {
     pub conds: Vec<Expr>,
 }
 
+impl Join {
+    pub fn new(r#type: JoinType, target: EntityVersionIdentifier, conds: Vec<Expr>) -> Self {
+        Self {
+            r#type,
+            target,
+            conds,
+        }
+    }
+}
+
 /// Type of the join
 #[derive(Debug, Clone, PartialEq)]
 pub enum JoinType {
@@ -65,6 +75,12 @@ pub struct Ordering {
     pub r#type: OrderingType,
     /// The ordering expression
     pub expr: Expr,
+}
+
+impl Ordering {
+    pub fn new(r#type: OrderingType, expr: Expr) -> Self {
+        Self { r#type, expr }
+    }
 }
 
 /// Type of ordering

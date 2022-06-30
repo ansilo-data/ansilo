@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Boot script will start the oracle database and will self-terminate if not access after period
+# Boot script will start the oracle database and will self-terminate if not accessed after period
 
 set -e
 

@@ -189,7 +189,7 @@ impl OracleJdbcQueryCompiler {
         let mut parts = vec![];
 
         if row_skip > 0 {
-            parts.push(format!("OFFSET {}", row_skip));
+            parts.push(format!("OFFSET {} ROWS", row_skip));
         }
 
         if let Some(lim) = row_limit {
@@ -405,7 +405,7 @@ impl OracleJdbcQueryCompiler {
 #[cfg(test)]
 mod tests {
     use ansilo_core::{
-        common::data::{DataType},
+        common::data::{DataType, DataValue},
         config::{EntityAccessiblity, EntityConfig, EntitySourceConfig, EntityVersionConfig},
     };
 
@@ -422,8 +422,8 @@ mod tests {
         id: &str,
         version: &str,
         source: OracleJdbcEntitySourceConfig,
-    ) -> OracleJdbcConnectorEntityConfig {
-        let entity_conf = EntitySource::new(
+    ) -> EntitySource<OracleJdbcEntitySourceConfig> {
+        EntitySource::new(
             EntityConfig {
                 id: id.to_string(),
                 name: "name".to_string(),
@@ -443,15 +443,13 @@ mod tests {
             version.to_string(),
             source,
         )
-        .unwrap();
-
-        let mut conf = OracleJdbcConnectorEntityConfig::new();
-        conf.add(entity_conf);
-        conf
+        .unwrap()
     }
 
     fn mock_entity_table() -> OracleJdbcConnectorEntityConfig {
-        create_entity_config(
+        let mut conf = OracleJdbcConnectorEntityConfig::new();
+
+        conf.add(create_entity_config(
             "entity",
             "v1",
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions::new(
@@ -459,7 +457,18 @@ mod tests {
                 "table".to_string(),
                 HashMap::from([("attr1".to_string(), "col1".to_string())]),
             )),
-        )
+        ));
+        conf.add(create_entity_config(
+            "other",
+            "v1",
+            OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions::new(
+                None,
+                "other".to_string(),
+                HashMap::from([("otherattr1".to_string(), "othercol1".to_string())]),
+            )),
+        ));
+
+        conf
     }
 
     #[test]
@@ -494,6 +503,177 @@ mod tests {
             JdbcQuery::new(
                 r#"SELECT "table"."col1" AS "COL" FROM "table" WHERE (("table"."col1") = (?))"#,
                 vec![JdbcQueryParam::Dynamic(DataType::Int32)]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_join() {
+        let mut select = sql::Select::new(sql::entity("entity", "v1"));
+        select
+            .cols
+            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+        select.joins.push(sql::Join::new(
+            sql::JoinType::Inner,
+            sql::entity("other", "v1"),
+            vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
+                sql::Expr::attr("entity", "v1", "attr1"),
+                sql::BinaryOpType::Equal,
+                sql::Expr::attr("other", "v1", "otherattr1"),
+            ))],
+        ));
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "table"."col1" AS "COL" FROM "table" INNER JOIN "other" ON (("table"."col1") = ("other"."othercol1"))"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_group_by() {
+        let mut select = sql::Select::new(sql::entity("entity", "v1"));
+        select
+            .cols
+            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+        select
+            .group_bys
+            .push(sql::Expr::attr("entity", "v1", "attr1"));
+        select
+            .group_bys
+            .push(sql::Expr::Constant(sql::Constant::new(DataValue::Int32(1))));
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "table"."col1" AS "COL" FROM "table" GROUP BY "table"."col1", ?"#,
+                vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_order_by() {
+        let mut select = sql::Select::new(sql::entity("entity", "v1"));
+        select
+            .cols
+            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+        select.order_bys.push(sql::Ordering::new(
+            sql::OrderingType::Asc,
+            sql::Expr::attr("entity", "v1", "attr1"),
+        ));
+        select.order_bys.push(sql::Ordering::new(
+            sql::OrderingType::Desc,
+            sql::Expr::Constant(sql::Constant::new(DataValue::Int32(1))),
+        ));
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "table"."col1" AS "COL" FROM "table" ORDER BY "table"."col1" ASC, ? DESC"#,
+                vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_row_skip_and_limit() {
+        let mut select = sql::Select::new(sql::entity("entity", "v1"));
+        select
+            .cols
+            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+        select.row_skip = 10;
+        select.row_limit = Some(20);
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "table"."col1" AS "COL" FROM "table" OFFSET 10 ROWS FETCH FIRST 20 ROWS ONLY"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_row_skip() {
+        let mut select = sql::Select::new(sql::entity("entity", "v1"));
+        select
+            .cols
+            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+        select.row_skip = 10;
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "table"."col1" AS "COL" FROM "table" OFFSET 10 ROWS"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_row_limit() {
+        let mut select = sql::Select::new(sql::entity("entity", "v1"));
+        select
+            .cols
+            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+        select.row_limit = Some(20);
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "table"."col1" AS "COL" FROM "table" FETCH FIRST 20 ROWS ONLY"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_function_call() {
+        let mut select = sql::Select::new(sql::entity("entity", "v1"));
+        select.cols.insert(
+            "COL".to_string(),
+            sql::Expr::FunctionCall(sql::FunctionCall::Length(Box::new(sql::Expr::attr(
+                "entity", "v1", "attr1",
+            )))),
+        );
+        select.row_skip = 10;
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT LENGTH("table"."col1") AS "COL" FROM "table" OFFSET 10 ROWS"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_aggregate_call() {
+        let mut select = sql::Select::new(sql::entity("entity", "v1"));
+        select.cols.insert(
+            "COL".to_string(),
+            sql::Expr::AggregateCall(sql::AggregateCall::Sum(Box::new(sql::Expr::attr(
+                "entity", "v1", "attr1",
+            )))),
+        );
+        select.row_skip = 10;
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT SUM("table"."col1") AS "COL" FROM "table" OFFSET 10 ROWS"#,
+                vec![]
             )
         );
     }
