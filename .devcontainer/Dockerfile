@@ -44,7 +44,8 @@ RUN cd ~/ && \
     cd .. && sudo rm -rf ./mold/
 
 # Install ecs-cli
-RUN sudo curl -Lo /usr/local/bin/ecs-cli https://amazon-ecs-cli.s3.amazonaws.com/ecs-cli-linux-amd64-latest && \
+# TODO: Hopefully https://github.com/aws/amazon-ecs-cli/pull/1150 gets merged and can use mainline
+RUN sudo curl -Lo /usr/local/bin/ecs-cli https://ansilo-dev-tmp.s3.ap-southeast-2.amazonaws.com/ecs-cli && \
     sudo chmod +x /usr/local/bin/ecs-cli && \
     echo 'export $(strings /proc/1/environ | grep -P "(AWS|ECS)")' | tee -a ~/.bashrc ~/.zshrc && \
     ecs-cli configure --cluster dev-cluster --region ap-southeast-2
@@ -54,6 +55,10 @@ RUN cd /tmp/ && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" 
     unzip awscliv2.zip && \
     sudo ./aws/install && \
     rm -rf awscliv2.zip ./aws/
+
+# Install netcat
+RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
+    sudo apt-get -y install netcat
 
 # Add boot.sh file
 COPY ./boot.sh /boot.sh
