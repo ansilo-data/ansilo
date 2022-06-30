@@ -4,7 +4,7 @@
 
 set -e
 
-TIMEOUT_DURATION=5
+TIMEOUT_DURATION=1800
 LISTEN_PORT=1522
 
 function cleanup {
