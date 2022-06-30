@@ -18,3 +18,12 @@ RUN bash -c 'grep -m1 -qe "Instance shutdown complete" <($ORACLE_BASE/$RUN_FILE 
 
 # Remove startup scripts
 RUN rm -rf /opt/oracle/scripts/startup/*
+
+# Install socat/nc
+USER root
+RUN yum install -y socat nc
+USER oracle
+
+# Copy and run boot script
+COPY ./boot.sh /boot.sh
+ENTRYPOINT [ "/bin/bash", "/boot.sh" ]
