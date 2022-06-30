@@ -18,8 +18,8 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
 
     let config = OracleJdbcConnectionConfig::new(
         format!(
-            "jdbc:oracle:thin:@{}:1521/ansilo",
-            containers.services.get("oracle").unwrap()
+            "jdbc:oracle:thin:@{}:1521/db",
+            containers.get("oracle").unwrap().ip
         ),
         {
             let mut props = HashMap::<String, String>::new();

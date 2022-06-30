@@ -1,17 +1,21 @@
-use std::path::Path;
+use std::time::Duration;
 
-use crate::common::{start_containers, ContainerInstances};
+use crate::{
+    common::{start_containers, wait_for_log, ContainerInstances},
+    current_dir,
+};
 
 mod connect;
 
 fn start_oracle() -> ContainerInstances {
-    start_containers(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .join(file!())
-            .parent()
-            .unwrap()
-            .to_owned(),
-    )
+    let services = start_containers(current_dir!(), false, Duration::from_secs(600));
+
+    wait_for_log(
+        current_dir!(),
+        services.get("oracle").unwrap(),
+        "alter pluggable database all open",
+        Duration::from_secs(180),
+    );
+
+    services
 }

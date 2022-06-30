@@ -5,6 +5,8 @@ task_definition:
   task_size:
     cpu_limit: 4096
     mem_limit: 8GB
+  ephemeral_storage:
+    size_in_gib: 40
   services:
     oracle:
       essential: true
@@ -15,4 +17,4 @@ run_params:
         - subnet-044878cdd1f4b0d3d
       security_groups:
         - sg-080dc71fb99e4fcb5 # allow local vpc access
-      assign_public_ip: ENABLED
+      assign_public_ip: ENABLED # needed for pulling image from ECR

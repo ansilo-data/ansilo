@@ -1,30 +1,61 @@
 use std::{
     collections::HashMap,
+    env,
     net::{IpAddr, TcpStream},
     path::PathBuf,
     process::{Command, Stdio},
+    sync::mpsc::channel,
     thread,
-    time::Duration, env,
+    time::{Duration, Instant},
 };
 
 pub struct ContainerInstances {
-    pub services: HashMap<String, IpAddr>,
+    instances: HashMap<String, Instance>,
     infra_path: PathBuf,
+    stop_on_drop: bool,
+}
+
+impl ContainerInstances {
+    pub fn get(&self, service: impl Into<String>) -> Option<&Instance> {
+        self.instances.get(&service.into())
+    }
+}
+
+pub struct Instance {
+    pub id: String,
+    pub ip: IpAddr,
+}
+
+impl Instance {
+    pub fn new(id: String, ip: IpAddr) -> Self {
+        Self { id, ip }
+    }
 }
 
 impl Drop for ContainerInstances {
     fn drop(&mut self) {
-        stop_containers_ecs(self.infra_path.clone())
+        if self.stop_on_drop {
+            stop_containers_ecs(self.infra_path.clone())
+        }
     }
 }
 
 /// Starts the contains described by {infra_path}/docker-compose.yml
 /// Returns a hash map of the service names mapped to their respective ip addresses
-pub fn start_containers(infra_path: PathBuf) -> ContainerInstances {
-    start_containers_ecs(infra_path)
+pub fn start_containers(
+    infra_path: PathBuf,
+    stop_on_drop: bool,
+    timeout: Duration,
+) -> ContainerInstances {
+    let (tx, rx) = channel();
+    let _ = thread::spawn(move || {
+        tx.send(start_containers_ecs(infra_path, stop_on_drop)).unwrap();
+    });
+
+    rx.recv_timeout(timeout).unwrap()
 }
 
-fn start_containers_ecs(infra_path: PathBuf) -> ContainerInstances {
+fn start_containers_ecs(infra_path: PathBuf, stop_on_drop: bool) -> ContainerInstances {
     let status = Command::new("ecs-cli")
         .args(&["compose", "up", "--create-log-groups"])
         .current_dir(infra_path.clone())
@@ -53,7 +84,7 @@ fn start_containers_ecs(infra_path: PathBuf) -> ContainerInstances {
         .wait_with_output()
         .unwrap();
 
-    let services = String::from_utf8_lossy(&tasks.stdout[..])
+    let instances = String::from_utf8_lossy(&tasks.stdout[..])
         .lines()
         .map(|i| i.split(' ').map(|i| i.to_owned()).collect::<Vec<String>>())
         .map(|i| {
@@ -63,18 +94,19 @@ fn start_containers_ecs(infra_path: PathBuf) -> ContainerInstances {
             )
         })
         .map(|((cluster, task_id, service), port)| {
-            let ip_addr = get_task_private_ip(cluster, task_id);
+            let ip_addr = get_task_private_ip(cluster, task_id.clone());
             if let Some(port) = port {
                 println!("Waiting for {service} service to come online");
                 wait_for_port_open(ip_addr, port);
             }
-            (service, ip_addr)
+            (service, Instance::new(task_id, ip_addr))
         })
-        .collect::<HashMap<String, IpAddr>>();
+        .collect::<HashMap<String, Instance>>();
 
     ContainerInstances {
-        services,
+        instances,
         infra_path,
+        stop_on_drop,
     }
 }
 
@@ -146,21 +178,83 @@ fn stop_containers_ecs(infra_path: PathBuf) {
         .unwrap();
 }
 
+/// Waits until a specified logging output is seen for the supplied task
+pub fn wait_for_log(
+    infra_path: PathBuf,
+    instance: &Instance,
+    log_str: &str,
+    timeout: Duration,
+) -> () {
+    let log_str = log_str.to_string();
+    let start_time = std::time::Instant::now();
+    let mut child = wait_log_string_command_ecs(infra_path, instance, log_str.clone())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    loop {
+        println!("Waiting for {} to appear in task output", log_str.clone());
+
+        if Instant::now() - start_time > timeout {
+            panic!("Timedout while waiting for log string {}", log_str.clone());
+        }
+
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                println!("Log string detected!");
+                return;
+            }
+            Ok(None) => {
+                thread::sleep(Duration::from_secs(5));
+            }
+            res @ Err(_) => {
+                res.unwrap();
+            }
+        }
+    }
+}
+
+fn wait_log_string_command_ecs(
+    infra_path: PathBuf,
+    instance: &Instance,
+    log_str: String,
+) -> Command {
+    let mut cmd = Command::new("bash");
+    cmd.args(&[
+        "-c".to_string(),
+        format!(
+            "grep -m1 -qe '{}' <(ecs-cli logs --follow --task-id {})",
+            log_str, instance.id
+        ),
+    ])
+    .current_dir(infra_path.clone());
+
+    cmd
+}
+
+/// Gets the current cargo target directory
 pub fn get_current_target_dir() -> PathBuf {
     env::current_exe()
         .and_then(|mut p| {
-            while p
-                .parent()
-                .unwrap()
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                != "target"
-            {
+            while p.parent().unwrap().file_name().unwrap().to_string_lossy() != "target" {
                 p = p.parent().unwrap().to_path_buf();
             }
 
             Ok(p)
         })
         .unwrap()
+}
+
+#[macro_export]
+macro_rules! current_dir {
+    () => {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join(file!())
+            .parent()
+            .unwrap()
+            .to_owned()
+    };
 }
