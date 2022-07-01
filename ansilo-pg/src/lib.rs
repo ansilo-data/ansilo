@@ -7,6 +7,7 @@
 /// ansilo process over a unix socket.
 
 pub mod conf;
+pub mod proc;
 pub mod initdb;
 pub mod server;
-pub mod proc;
+pub mod connection;

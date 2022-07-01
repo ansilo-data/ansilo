@@ -1,6 +1,11 @@
-use std::{process::{Command, ExitStatus}, time::Duration};
+use std::{
+    fs::{self, Permissions},
+    os::unix::prelude::PermissionsExt,
+    process::{Command, ExitStatus},
+    time::Duration,
+};
 
-use ansilo_core::err::Result;
+use ansilo_core::err::{Context, Result};
 use ansilo_logging::info;
 use nix::sys::signal::Signal;
 
@@ -8,7 +13,7 @@ use crate::{conf::PostgresConf, proc::ChildProc};
 
 /// initdb creates a new postgres data director
 #[derive(Debug)]
-pub struct PostgresInitDb {
+pub(crate) struct PostgresInitDb {
     /// The configuration used to init the database
     pub conf: PostgresConf,
     /// The child postgres process
@@ -17,7 +22,7 @@ pub struct PostgresInitDb {
 
 impl PostgresInitDb {
     /// Runs the initdb process
-    pub fn init(conf: PostgresConf) -> Result<Self> {
+    pub fn run(conf: PostgresConf) -> Result<Self> {
         info!("Running initdb...");
         let mut cmd = Command::new(conf.install_dir.join("bin/initdb"));
         cmd.arg("-D")
@@ -28,27 +33,56 @@ impl PostgresInitDb {
 
         Ok(Self {
             conf: conf.clone(),
-            proc: ChildProc::new("initdb", Signal::SIGINT, Duration::from_secs(1), cmd)?,
+            proc: ChildProc::new("[initdb]", Signal::SIGINT, Duration::from_secs(1), cmd)?,
         })
     }
 
+    /// Clears out the data directory so it can be reset
+    pub fn reset(conf: &PostgresConf) -> Result<()> {
+        if conf.data_dir.exists() {
+            fs::remove_dir_all(conf.data_dir.as_path()).context("Failed to clear directory")?;
+        }
+        fs::create_dir_all(conf.data_dir.as_path()).context("Failed to create directory")?;
+        fs::set_permissions(conf.data_dir.as_path(), Permissions::from_mode(0o700))
+            .context("Failed to set directory permissions")?;
+        Ok(())
+    }
+
     /// Waits for the process to exit and streams any stdout/stderr to the logs
-    pub fn wait(&mut self) -> Result<ExitStatus> {
-        self.proc.wait()
+    /// And overrides the default postgres configuration file with the one supplied
+    pub fn complete(&mut self) -> Result<ExitStatus> {
+        let status = self.proc.wait()?;
+
+        if status.success() {
+            if let Some(conf_path) = self.conf.postgres_conf_path.as_ref() {
+                let dest_path = self.conf.data_dir.join("postgresql.conf");
+                fs::copy(conf_path.as_path(), dest_path.as_path())
+                    .context("Failed to copy the postgres.conf config")?;
+                fs::set_permissions(dest_path.as_path(), Permissions::from_mode(0o600))
+                    .context("Failed to set perms on postgres.conf file")?;
+            }
+        }
+
+        Ok(status)
+    }
+
+    /// Consumes self and returns the config
+    pub fn into_conf(self) -> PostgresConf {
+        self.conf
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{io::Write, path::PathBuf};
 
     use super::*;
 
-    fn test_pg_config() -> PostgresConf {
+    fn test_pg_config(test_name: &'static str) -> PostgresConf {
         PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
-            postgres_conf_path: PathBuf::from("not-used"),
-            data_dir: PathBuf::from("/tmp/ansilo-pg-test-data/"),
+            postgres_conf_path: None,
+            data_dir: PathBuf::from(format!("/tmp/ansilo-tests/initdb-test/{}", test_name)),
             socket_dir_path: PathBuf::from("/tmp/"),
             port: 65432,
             fdw_socket_path: PathBuf::from("not-used"),
@@ -56,15 +90,56 @@ mod tests {
         }
     }
 
-    // #[test]
-    // fn test_initdb() {
-    //         ansilo_logging::init();
-    //         let mut server = PostgresServer::boot(test_pg_config()).unwrap();
+    #[test]
+    fn test_initdb() {
+        ansilo_logging::init_for_tests();
+        let conf = test_pg_config("initdb");
+        PostgresInitDb::reset(&conf).unwrap();
+        let mut initdb = PostgresInitDb::run(conf.clone()).unwrap();
 
-    //         thread::sleep(Duration::from_millis(100));
-    //         // assert still running
-    //         assert_eq!(server.proc.try_wait().unwrap(), None);
-    //         // assert listening on expected socket path
-    //         assert!(server.conf.pg_socket_path().exists());
-    //     }
+        assert!(initdb.complete().unwrap().success());
+
+        assert!(conf.data_dir.join("postgresql.conf").exists());
+        assert!(conf.data_dir.join("PG_VERSION").exists());
+        assert_eq!(
+            conf.data_dir.metadata().unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+
+    #[test]
+    fn test_initdb_with_conf() {
+        ansilo_logging::init_for_tests();
+        let custom_conf_path = PathBuf::from("/tmp/ansilo-tests/postgres-custom.conf");
+        let mut custom_conf = fs::File::create(custom_conf_path.as_path()).unwrap();
+        custom_conf.write_all("custom".as_bytes()).unwrap();
+
+        let mut conf = test_pg_config("initdb_with_conf");
+        conf.postgres_conf_path = Some(custom_conf_path);
+
+        PostgresInitDb::reset(&conf).unwrap();
+        let mut initdb = PostgresInitDb::run(conf.clone()).unwrap();
+
+        assert!(initdb.complete().unwrap().success());
+
+        assert_eq!(
+            String::from_utf8_lossy(
+                fs::read(conf.data_dir.join("postgresql.conf"))
+                    .unwrap()
+                    .as_slice()
+            )
+            .to_string(),
+            "custom".to_string()
+        );
+        assert_eq!(
+            conf.data_dir
+                .join("postgresql.conf")
+                .metadata()
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
 }

@@ -14,7 +14,7 @@ use nix::{
 
 /// Class for dealing with child procs
 #[derive(Debug)]
-pub struct ChildProc {
+pub(crate) struct ChildProc {
     /// Log prefix for stdout/stderr
     log_prefix: &'static str,
     /// Signal used to terminate the process gracefully
@@ -69,12 +69,18 @@ impl ChildProc {
             .wait()
             .with_context(|| format!("{} Error while waiting for process", self.log_prefix))
     }
+
+    /// Gets the pid of the proc
+    pub fn pid(&self) -> u32 {
+        self.proc.id()
+    }
 }
 
 impl Drop for ChildProc {
     fn drop(&mut self) {
         // If already exited
-        if let Ok(Some(_)) = self.proc.try_wait() {
+        if let Ok(Some(status)) = self.proc.try_wait() {
+            info!("{} Exited with code: {}", self.log_prefix, status);
             return;
         }
 
@@ -126,7 +132,7 @@ impl Drop for ChildProc {
                         error!("{} Failed to wait: {}", self.log_prefix, err);
                         return;
                     }
-                } 
+                }
             }
 
             attempts += 1;
@@ -145,6 +151,7 @@ mod tests {
 
     #[test]
     fn test_child_proc_wait() {
+        ansilo_logging::init_for_tests();
         let mut proc = ChildProc::new(
             "cmd",
             Signal::SIGINT,
@@ -158,6 +165,7 @@ mod tests {
 
     #[test]
     fn test_child_proc_wait_error() {
+        ansilo_logging::init_for_tests();
         let mut proc = ChildProc::new(
             "cmd",
             Signal::SIGINT,
@@ -171,6 +179,7 @@ mod tests {
 
     #[test]
     fn test_child_proc_drop_sigints_proc() {
+        ansilo_logging::init_for_tests();
         let mut cmd = Command::new("sleep");
         cmd.arg("10");
         let proc = ChildProc::new("cmd", Signal::SIGINT, Duration::from_millis(100), cmd).unwrap();
@@ -189,6 +198,7 @@ mod tests {
 
     #[test]
     fn test_child_proc_drop_sigkills_proc_after_timeout() {
+        ansilo_logging::init_for_tests();
         let mut cmd = Command::new("sleep");
         cmd.arg("10");
         let proc = ChildProc::new("cmd", Signal::SIGCONT, Duration::from_millis(100), cmd).unwrap();

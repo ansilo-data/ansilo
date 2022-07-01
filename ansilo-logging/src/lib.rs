@@ -8,6 +8,14 @@ pub fn init_logging(_config: &NodeConfig) -> Result<()> {
     Ok(())
 }
 
+/// Logging init function for tests
+pub fn init_for_tests() {
+    let res = env_logger::builder().is_test(true).try_init();
+    if let Err(err) = res {
+        eprintln!("Failed to init logging: {}", err);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ansilo_core::config::NodeConfig;

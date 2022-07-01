@@ -6,7 +6,7 @@ pub struct PostgresConf {
     /// The install directory
     pub install_dir: PathBuf,
     /// The postgres configuration file
-    pub postgres_conf_path: PathBuf,
+    pub postgres_conf_path: Option<PathBuf>,
     /// The postgres data directory
     pub data_dir: PathBuf,
     /// The superuser username
@@ -39,7 +39,7 @@ mod tests {
     fn test_postgres_conf_socket_path() {
         let conf = PostgresConf {
             install_dir: PathBuf::from("/"),
-            postgres_conf_path: PathBuf::from("/"),
+            postgres_conf_path: None,
             data_dir: PathBuf::from("/"),
             socket_dir_path: PathBuf::from("/var/run/pg/"),
             port: 65432,
