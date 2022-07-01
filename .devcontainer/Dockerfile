@@ -60,5 +60,11 @@ RUN cd /tmp/ && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" 
 RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     sudo apt-get -y install netcat
 
+# Install postgres 14 server
+RUN sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' && \
+  wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - && \
+  sudo apt-get update -y && \
+  sudo apt install -y postgresql-14
+
 # Add boot.sh file
 COPY ./boot.sh /boot.sh
