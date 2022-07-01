@@ -39,7 +39,7 @@ echo "Socat started as pid $SOCAT_PID"
 while true;
 do
     echo "Waiting for connections on port $LISTEN_PORT..."
-    timeout $TIMEOUT_DURATION tail -n0 -f ~/access.log | head -n1 > /tmp/access.log || true
+    timeout $TIMEOUT_DURATION head -n1 > /tmp/access.log < <(tail -n0 -f ~/access.log) || true
 
     if [[ ! -z "$(cat /tmp/access.log)" ]];
     then
