@@ -104,3 +104,13 @@ Planning on implementing a simpler subset of the SQL syntax that can be represen
 This means the FDW will translate queries into SQLIL such that it can be passed to the connectors for execution.
 The purpose of this is to give the connectors a common, stable and smaller surface area that they have to support.
 If the relevant postgres syntax cannot be SQLIL then we fallback to fetching all the data from the connector and executing the query on the postgres engine.
+
+Postgres IAM
+============
+
+So there is a clear mismatch between the authorisation models of ephemeral tokens/https and the persistent user/RBAC model used by postgres - so how do we reconcile the two?
+One line of thinking is we just spin up a new postgres instance for every request, however this could be expensive and inefficient.
+Using a persistant postgres instance we could potentially create a user/role per session with the appropriately mapped roles however again this is inefficient and we'd need a connection per request/token.
+I think the best approach is really not to use postgres security but rather do all policy checking on the ansilo side.
+So we'd need an admin user and connection to bootstrap the postgres instance, load the extension, create all the FDW tables etc
+And a standard user which has read/write access to those tables, and (somehow) pass the token from the FDW back to ansilo in order to validate access.

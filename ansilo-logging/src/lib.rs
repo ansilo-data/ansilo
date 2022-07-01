@@ -1,5 +1,6 @@
 use ansilo_core::{config::NodeConfig, err::Result};
 pub use log::*;
+pub use env_logger::{init, init_from_env};
 
 /// Configures the logger for this ansilo node
 /// Currently this is a null-op by may implement different logging settings in future
