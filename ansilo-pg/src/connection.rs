@@ -7,7 +7,10 @@ use r2d2_postgres::{
     PostgresConnectionManager,
 };
 
-use crate::conf::PostgresConf;
+use crate::{conf::PostgresConf, PG_PORT};
+
+/// A connection to the local postgres
+pub type PostgresConnection = PooledConnection<PostgresConnectionManager<NoTls>>;
 
 /// Postgres connection pool
 #[derive(Debug, Clone)]
@@ -28,7 +31,7 @@ impl PostgresConnectionPool {
     ) -> Result<Self> {
         let mut pg_conf = postgres::Config::new();
         pg_conf.host_path(conf.socket_dir_path.as_path());
-        pg_conf.port(conf.port);
+        pg_conf.port(PG_PORT);
         pg_conf.user(user);
         pg_conf.ssl_mode(postgres::config::SslMode::Disable);
         pg_conf.dbname(database);
@@ -47,7 +50,7 @@ impl PostgresConnectionPool {
     }
 
     /// Aquires a connection from the pool
-    pub fn acquire(&mut self) -> Result<PooledConnection<PostgresConnectionManager<NoTls>>> {
+    pub fn acquire(&mut self) -> Result<PostgresConnection> {
         self.pool
             .get()
             .context("Failed to acquire a connection from the connection pool")
@@ -58,7 +61,7 @@ impl PostgresConnectionPool {
 mod tests {
     use std::{path::PathBuf, thread};
 
-    use crate::{initdb::PostgresInitDb, server::PostgresServer};
+    use crate::{initdb::PostgresInitDb, server::PostgresServer, PG_SUPER_USER};
 
     use super::*;
 
@@ -74,9 +77,7 @@ mod tests {
                 "/tmp/ansilo-tests/pg-connection-pool/{}",
                 test_name
             )),
-            port: 65432,
             fdw_socket_path: PathBuf::from("not-used"),
-            superuser: "pgsuper".to_string(),
         }
     }
 
@@ -85,7 +86,7 @@ mod tests {
         let conf = test_pg_config("new");
         let pool = PostgresConnectionPool::new(
             &conf,
-            &conf.superuser,
+            PG_SUPER_USER,
             "postgres",
             0,
             5,
@@ -103,7 +104,7 @@ mod tests {
         let conf = test_pg_config("down");
         PostgresConnectionPool::new(
             &conf,
-            &conf.superuser,
+            PG_SUPER_USER,
             "postgres",
             1,
             5,
@@ -126,7 +127,7 @@ mod tests {
 
         let mut pool = PostgresConnectionPool::new(
             &conf,
-            &conf.superuser,
+            PG_SUPER_USER,
             "postgres",
             1,
             5,

@@ -7,12 +7,10 @@ use ansilo_core::err::{Context, Result};
 use ansilo_logging::info;
 use nix::sys::signal::Signal;
 
-use crate::{conf::PostgresConf, proc::ChildProc};
+use crate::{conf::PostgresConf, proc::ChildProc, PG_PORT};
 
 /// An instance of postgres run as an ephemeral server
 pub(crate) struct PostgresServer {
-    /// The configuration used to start the server
-    pub conf: PostgresConf,
     /// The child postgres process
     pub proc: ChildProc,
 }
@@ -27,7 +25,7 @@ impl PostgresServer {
             .arg("-c")
             .arg("listen_addresses=")
             .arg("-c")
-            .arg(format!("port={}", conf.port))
+            .arg(format!("port={}", PG_PORT))
             .arg("-c")
             .arg(format!(
                 "unix_socket_directories={}",
@@ -41,7 +39,6 @@ impl PostgresServer {
             .context("Failed to start postgres server process")?;
 
         Ok(Self {
-            conf: conf.clone(),
             proc,
         })
     }
@@ -68,9 +65,7 @@ mod tests {
             postgres_conf_path: None,
             data_dir: PathBuf::from("/tmp/ansilo-tests/pg-server"),
             socket_dir_path: PathBuf::from("/tmp/ansilo-tests/pg-server"),
-            port: 65432,
             fdw_socket_path: PathBuf::from("not-used"),
-            superuser: "pgsuper".to_string(),
         }
     }
 
@@ -79,7 +74,10 @@ mod tests {
         ansilo_logging::init_for_tests();
         let conf = test_pg_config();
         PostgresInitDb::reset(&conf).unwrap();
-        PostgresInitDb::run(conf.clone()).unwrap().complete().unwrap();
+        PostgresInitDb::run(conf.clone())
+            .unwrap()
+            .complete()
+            .unwrap();
         let mut server = PostgresServer::boot(conf.clone()).unwrap();
         let pid = server.proc.pid();
 

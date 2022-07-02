@@ -9,7 +9,7 @@ use ansilo_core::err::{Context, Result};
 use ansilo_logging::info;
 use nix::sys::signal::Signal;
 
-use crate::{conf::PostgresConf, proc::ChildProc};
+use crate::{conf::PostgresConf, proc::ChildProc, PG_SUPER_USER};
 
 /// initdb creates a new postgres data director
 #[derive(Debug)]
@@ -29,7 +29,7 @@ impl PostgresInitDb {
             .arg(conf.data_dir.as_os_str())
             .arg("--encoding=UTF8")
             .arg("-U")
-            .arg(conf.superuser.clone());
+            .arg(PG_SUPER_USER);
 
         Ok(Self {
             conf: conf.clone(),
@@ -65,11 +65,6 @@ impl PostgresInitDb {
 
         Ok(status)
     }
-
-    /// Consumes self and returns the config
-    pub fn into_conf(self) -> PostgresConf {
-        self.conf
-    }
 }
 
 #[cfg(test)]
@@ -84,9 +79,7 @@ mod tests {
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/initdb-test/{}", test_name)),
             socket_dir_path: PathBuf::from("/tmp/"),
-            port: 65432,
             fdw_socket_path: PathBuf::from("not-used"),
-            superuser: "pgsuper".to_string(),
         }
     }
 
