@@ -1,4 +1,4 @@
-use ansilo_core::{err::{Context, Result}, config::NodeConfig};
+use ansilo_core::err::{Context, Result};
 use ansilo_logging::warn;
 use jni::objects::{GlobalRef, JValue};
 
@@ -7,29 +7,30 @@ use crate::interface::{Connection, ConnectionOpener};
 use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, Jvm};
 
 /// Implementation for opening JDBC connections
-pub struct JdbcConnectionOpener;
+pub struct JdbcConnectionOpener<TConnectionOptions: JdbcConnectionConfig> {
+    options: TConnectionOptions,
+}
 
-impl JdbcConnectionOpener {
-    pub fn new() -> Self {
-        Self {}
+impl<TConnectionOptions: JdbcConnectionConfig> JdbcConnectionOpener<TConnectionOptions> {
+    pub fn new(options: TConnectionOptions) -> Self {
+        Self { options }
     }
 }
 
-impl<'a, TConnectionOptions> ConnectionOpener<TConnectionOptions, JdbcConnection<'a>>
-    for JdbcConnectionOpener
-where
-    TConnectionOptions: JdbcConnectionConfig,
+impl<'a, TConnectionOptions: JdbcConnectionConfig>
+    ConnectionOpener<JdbcConnection<'a>>
+    for JdbcConnectionOpener<TConnectionOptions>
 {
-    fn open(&self, options: TConnectionOptions, _nc: &NodeConfig) -> Result<JdbcConnection<'a>> {
+    fn open(&mut self) -> Result<JdbcConnection<'a>> {
         let jvm = Jvm::boot()?;
 
         let jdbc_con = jvm.with_local_frame(32, |env| {
-            let url = env.new_string(options.get_jdbc_url())?;
+            let url = env.new_string(self.options.get_jdbc_url())?;
             let props = env
                 .new_object("java/util/Properties", "()V", &[])
                 .context("Failed to create java properties")?;
 
-            for (key, val) in options.get_jdbc_props().into_iter() {
+            for (key, val) in self.options.get_jdbc_props().into_iter() {
                 env.call_method(
                     props,
                     "setProperty",
@@ -157,12 +158,12 @@ mod tests {
     }
 
     fn init_sqlite_connection<'a>() -> JdbcConnection<'a> {
-        JdbcConnectionOpener::new()
-            .open(
-                MockJdbcConnectionConfig("jdbc:sqlite::memory:".to_owned(), HashMap::new()),
-                &NodeConfig::default(),
-            )
-            .unwrap()
+        JdbcConnectionOpener::new(MockJdbcConnectionConfig(
+            "jdbc:sqlite::memory:".to_owned(),
+            HashMap::new(),
+        ))
+        .open()
+        .unwrap()
     }
 
     #[test]
@@ -172,10 +173,11 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_init_invalid() {
-        let res = JdbcConnectionOpener::new().open(
-            MockJdbcConnectionConfig("invalid".to_owned(), HashMap::new()),
-            &NodeConfig::default(),
-        );
+        let res = JdbcConnectionOpener::new(MockJdbcConnectionConfig(
+            "invalid".to_owned(),
+            HashMap::new(),
+        ))
+        .open();
 
         assert!(res.is_err());
     }

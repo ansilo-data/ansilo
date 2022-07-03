@@ -1,7 +1,13 @@
-use crate::{jdbc::{JdbcConnectionOpener, JdbcConnection, JdbcPreparedQuery, JdbcQuery, JdbcResultSet}, interface::Connector};
+use crate::{
+    interface::Connector,
+    jdbc::{JdbcConnection, JdbcConnectionOpener, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
+};
 
 mod conf;
-use ansilo_core::{config, err::Result};
+use ansilo_core::{
+    config::{self, NodeConfig},
+    err::Result,
+};
 pub use conf::*;
 mod entity_searcher;
 pub use entity_searcher::*;
@@ -17,7 +23,7 @@ pub use query_compiler::*;
 pub struct OracleJdbcConnector;
 
 impl<'a> Connector<'a> for OracleJdbcConnector {
-    type TConnectionOpener = JdbcConnectionOpener;
+    type TConnectionOpener = JdbcConnectionOpener<OracleJdbcConnectionConfig>;
     type TConnection = JdbcConnection<'a>;
     type TConnectionConfig = OracleJdbcConnectionConfig;
     type TEntitySearcher = OracleJdbcEntitySearcher;
@@ -33,16 +39,16 @@ impl<'a> Connector<'a> for OracleJdbcConnector {
         "jdbc.oracle"
     }
 
-    fn parse_options(options: config::Value) -> Result<OracleJdbcConnectionConfig> {
+    fn parse_options(options: config::Value) -> Result<Self::TConnectionConfig> {
         OracleJdbcConnectionConfig::parse(options)
     }
 
     fn create_connection_opener(
-        _options: &OracleJdbcConnectionConfig,
-    ) -> Result<JdbcConnectionOpener> {
-        Ok(JdbcConnectionOpener::new())
+        options: OracleJdbcConnectionConfig,
+        nc: &NodeConfig,
+    ) -> Result<Self::TConnectionOpener> {
+        Ok(JdbcConnectionOpener::new(options))
     }
-
 }
 
 #[cfg(test)]

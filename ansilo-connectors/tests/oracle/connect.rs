@@ -32,9 +32,9 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
         },
     );
 
-    let con = OracleJdbcConnector::create_connection_opener(&config)
+    let con = OracleJdbcConnector::create_connection_opener(config.clone(), &NodeConfig::default())
         .unwrap()
-        .open(config, &NodeConfig::default())
+        .open()
         .unwrap();
     let mut query = con
         .prepare(JdbcQuery::new("SELECT * FROM DUAL", vec![]))
