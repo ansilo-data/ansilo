@@ -24,15 +24,13 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     for OracleJdbcQueryPlanner
 {
     fn estimate_size(
-        &self,
         connection: &JdbcConnection<'a>,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
     ) -> Result<EntitySizeEstimate> {
         // TODO: custom query support
         // TODO: multiple sample options
-        let compiler = OracleJdbcQueryCompiler {};
 
-        let table = compiler.compile_source_identifier(&entity.source_conf)?;
+        let table = OracleJdbcQueryCompiler::compile_source_identifier(&entity.source_conf)?;
 
         let mut query = connection.prepare(JdbcQuery::new(
             format!("SELECT COUNT(*) * 1000 FROM {} SAMPLE(0.1)", table),
@@ -54,7 +52,6 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     }
 
     fn create_base_select(
-        &self,
         _connection: &JdbcConnection<'a>,
         _conf: &OracleJdbcConnectorEntityConfig,
         _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
@@ -67,7 +64,6 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     }
 
     fn add_col_expr(
-        &self,
         _connection: &JdbcConnection<'a>,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
@@ -82,7 +78,6 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     }
 
     fn add_where_clause(
-        &self,
         _connection: &JdbcConnection<'a>,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
@@ -95,7 +90,6 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     }
 
     fn add_join(
-        &self,
         _connection: &JdbcConnection<'a>,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
@@ -108,7 +102,6 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     }
 
     fn add_group_by(
-        &self,
         _connection: &JdbcConnection<'a>,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
@@ -121,7 +114,6 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     }
 
     fn add_order_by(
-        &self,
         _connection: &JdbcConnection<'a>,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
@@ -134,7 +126,6 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     }
 
     fn set_row_limit(
-        &self,
         _connection: &JdbcConnection<'a>,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
@@ -147,7 +138,6 @@ impl<'a> QueryPlanner<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfi
     }
 
     fn set_rows_to_skip(
-        &self,
         _connection: &JdbcConnection<'a>,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,

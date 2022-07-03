@@ -11,7 +11,6 @@ impl<'a> EntitySearcher<JdbcConnection<'a>, OracleJdbcEntitySourceConfig>
     for OracleJdbcEntitySearcher
 {
     fn discover(
-        &self,
         connection: &JdbcConnection<'a>,
         nc: &NodeConfig,
     ) -> Result<Vec<EntitySource<OracleJdbcEntitySourceConfig>>> {

@@ -1,4 +1,4 @@
-use crate::jdbc::{JdbcConnectionOpener, JdbcConnector};
+use crate::{jdbc::{JdbcConnectionOpener, JdbcConnection, JdbcPreparedQuery, JdbcQuery, JdbcResultSet}, interface::Connector};
 
 mod conf;
 use ansilo_core::{config, err::Result};
@@ -13,19 +13,22 @@ mod query_compiler;
 pub use query_compiler::*;
 
 /// The connector for Oracle, built on their JDBC driver
+#[derive(Default)]
 pub struct OracleJdbcConnector;
 
-impl<'a>
-    JdbcConnector<
-        'a,
-        OracleJdbcConnectionConfig,
-        OracleJdbcEntitySearcher,
-        OracleJdbcEntityValidator,
-        OracleJdbcEntitySourceConfig,
-        OracleJdbcQueryPlanner,
-        OracleJdbcQueryCompiler,
-    > for OracleJdbcConnector
-{
+impl<'a> Connector<'a> for OracleJdbcConnector {
+    type TConnectionOpener = JdbcConnectionOpener;
+    type TConnection = JdbcConnection<'a>;
+    type TConnectionConfig = OracleJdbcConnectionConfig;
+    type TEntitySearcher = OracleJdbcEntitySearcher;
+    type TEntityValidator = OracleJdbcEntityValidator;
+    type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
+    type TQueryPlanner = OracleJdbcQueryPlanner;
+    type TQueryCompiler = OracleJdbcQueryCompiler;
+    type TQueryHandle = JdbcPreparedQuery<'a>;
+    type TQuery = JdbcQuery;
+    type TResultSet = JdbcResultSet<'a>;
+
     fn r#type() -> &'static str {
         "jdbc.oracle"
     }
@@ -40,23 +43,7 @@ impl<'a>
         Ok(JdbcConnectionOpener::new())
     }
 
-    fn create_entity_searcher() -> Result<OracleJdbcEntitySearcher> {
-        Ok(OracleJdbcEntitySearcher {})
-    }
-
-    fn create_entity_validator() -> Result<OracleJdbcEntityValidator> {
-        Ok(OracleJdbcEntityValidator {})
-    }
-
-    fn create_query_planner() -> Result<OracleJdbcQueryPlanner> {
-        Ok(OracleJdbcQueryPlanner {})
-    }
-
-    fn create_query_compiler() -> Result<OracleJdbcQueryCompiler> {
-        Ok(OracleJdbcQueryCompiler {})
-    }
 }
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}

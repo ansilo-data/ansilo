@@ -21,18 +21,16 @@ impl<'a> QueryCompiler<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConf
     for OracleJdbcQueryCompiler
 {
     fn compile_select(
-        &self,
         _con: &JdbcConnection<'a>,
         conf: &OracleJdbcConnectorEntityConfig,
         select: sql::Select,
     ) -> Result<JdbcQuery> {
-        self.compile_select_query(conf, select)
+        Self::compile_select_query(conf, select)
     }
 }
 
 impl OracleJdbcQueryCompiler {
     fn compile_select_query(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         select: sql::Select,
     ) -> Result<JdbcQuery> {
@@ -40,16 +38,16 @@ impl OracleJdbcQueryCompiler {
 
         let query = [
             "SELECT".to_string(),
-            self.compile_select_cols(conf, select.cols, &mut params)?,
+            Self::compile_select_cols(conf, select.cols, &mut params)?,
             format!(
                 "FROM {}",
-                self.compile_entity_identifier(conf, select.from)?
+                Self::compile_entity_identifier(conf, select.from)?
             ),
-            self.compile_select_joins(conf, select.joins, &mut params)?,
-            self.compile_select_where(conf, select.r#where, &mut params)?,
-            self.compile_select_group_by(conf, select.group_bys, &mut params)?,
-            self.compile_select_order_by(conf, select.order_bys, &mut params)?,
-            self.compile_offet_limit(select.row_skip, select.row_limit)?,
+            Self::compile_select_joins(conf, select.joins, &mut params)?,
+            Self::compile_select_where(conf, select.r#where, &mut params)?,
+            Self::compile_select_group_by(conf, select.group_bys, &mut params)?,
+            Self::compile_select_order_by(conf, select.order_bys, &mut params)?,
+            Self::compile_offet_limit(select.row_skip, select.row_limit)?,
         ]
         .into_iter()
         .filter(|i| !i.is_empty())
@@ -60,7 +58,6 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_cols(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         cols: HashMap<String, sql::Expr>,
         params: &mut Vec<JdbcQueryParam>,
@@ -70,8 +67,8 @@ impl OracleJdbcQueryCompiler {
             .map(|i| {
                 Ok(format!(
                     "{} AS {}",
-                    self.compile_expr(conf, i.1, params)?,
-                    self.compile_identifier(i.0)?
+                    Self::compile_expr(conf, i.1, params)?,
+                    Self::compile_identifier(i.0)?
                 ))
             })
             .collect::<Result<Vec<String>>>()?
@@ -79,25 +76,23 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_joins(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         joins: Vec<sql::Join>,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
         Ok(joins
             .into_iter()
-            .map(|j| Ok(self.compile_select_join(conf, j, params)?))
+            .map(|j| Ok(Self::compile_select_join(conf, j, params)?))
             .collect::<Result<Vec<String>>>()?
             .join(", "))
     }
 
     fn compile_select_join(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         join: sql::Join,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
-        let target = self.compile_entity_identifier(conf, join.target)?;
+        let target = Self::compile_entity_identifier(conf, join.target)?;
         let cond = if join.conds.is_empty() {
             "1=1".to_string()
         } else {
@@ -105,7 +100,7 @@ impl OracleJdbcQueryCompiler {
                 "({})",
                 join.conds
                     .into_iter()
-                    .map(|e| Ok(self.compile_expr(conf, e, params)?))
+                    .map(|e| Ok(Self::compile_expr(conf, e, params)?))
                     .collect::<Result<Vec<String>>>()?
                     .join(") AND (")
             )
@@ -120,7 +115,6 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_where(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         r#where: Vec<sql::Expr>,
         params: &mut Vec<JdbcQueryParam>,
@@ -131,7 +125,7 @@ impl OracleJdbcQueryCompiler {
 
         let clauses = r#where
             .into_iter()
-            .map(|e| Ok(self.compile_expr(conf, e, params)?))
+            .map(|e| Ok(Self::compile_expr(conf, e, params)?))
             .collect::<Result<Vec<String>>>()?
             .join(") AND (");
 
@@ -139,7 +133,6 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_group_by(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         group_bys: Vec<sql::Expr>,
         params: &mut Vec<JdbcQueryParam>,
@@ -150,7 +143,7 @@ impl OracleJdbcQueryCompiler {
 
         let clauses = group_bys
             .into_iter()
-            .map(|e| Ok(self.compile_expr(conf, e, params)?))
+            .map(|e| Ok(Self::compile_expr(conf, e, params)?))
             .collect::<Result<Vec<String>>>()?
             .join(", ");
 
@@ -158,7 +151,6 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_order_by(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         order_bys: Vec<sql::Ordering>,
         params: &mut Vec<JdbcQueryParam>,
@@ -172,7 +164,7 @@ impl OracleJdbcQueryCompiler {
             .map(|i| {
                 Ok(format!(
                     "{} {}",
-                    self.compile_expr(conf, i.expr, params)?,
+                    Self::compile_expr(conf, i.expr, params)?,
                     match i.r#type {
                         sql::OrderingType::Asc => "ASC",
                         sql::OrderingType::Desc => "DESC",
@@ -185,7 +177,7 @@ impl OracleJdbcQueryCompiler {
         Ok(format!("ORDER BY {}", clauses))
     }
 
-    fn compile_offet_limit(&self, row_skip: u64, row_limit: Option<u64>) -> Result<String> {
+    fn compile_offet_limit(row_skip: u64, row_limit: Option<u64>) -> Result<String> {
         let mut parts = vec![];
 
         if row_skip > 0 {
@@ -200,28 +192,27 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_expr(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         expr: sql::Expr,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
         let sql = match expr {
-            sql::Expr::EntityVersion(evi) => self.compile_entity_identifier(conf, evi)?,
+            sql::Expr::EntityVersion(evi) => Self::compile_entity_identifier(conf, evi)?,
             sql::Expr::EntityVersionAttribute(eva) => {
-                self.compile_attribute_identifier(conf, eva)?
+                Self::compile_attribute_identifier(conf, eva)?
             }
-            sql::Expr::Constant(c) => self.compile_constant(c, params)?,
-            sql::Expr::Parameter(p) => self.compile_param(p, params)?,
-            sql::Expr::UnaryOp(o) => self.compile_unary_op(conf, o, params)?,
-            sql::Expr::BinaryOp(b) => self.compile_binary_op(conf, b, params)?,
-            sql::Expr::FunctionCall(f) => self.compile_function_call(conf, f, params)?,
-            sql::Expr::AggregateCall(a) => self.compile_aggregate_call(conf, a, params)?,
+            sql::Expr::Constant(c) => Self::compile_constant(c, params)?,
+            sql::Expr::Parameter(p) => Self::compile_param(p, params)?,
+            sql::Expr::UnaryOp(o) => Self::compile_unary_op(conf, o, params)?,
+            sql::Expr::BinaryOp(b) => Self::compile_binary_op(conf, b, params)?,
+            sql::Expr::FunctionCall(f) => Self::compile_function_call(conf, f, params)?,
+            sql::Expr::AggregateCall(a) => Self::compile_aggregate_call(conf, a, params)?,
         };
 
         Ok(sql)
     }
 
-    pub fn compile_identifier(&self, id: String) -> Result<String> {
+    pub fn compile_identifier(id: String) -> Result<String> {
         // @see https://docs.oracle.com/cd/B19306_01/server.102/b14200/sql_elements008.htm
         if id.contains('"') || id.contains("\0") {
             bail!("Invalid identifier: \"{id}\", cannot contain '\"' or '\\0' chars");
@@ -231,7 +222,6 @@ impl OracleJdbcQueryCompiler {
     }
 
     pub fn compile_entity_identifier(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         evi: sql::EntityVersionIdentifier,
     ) -> Result<String> {
@@ -239,11 +229,10 @@ impl OracleJdbcQueryCompiler {
             .find(&evi)
             .with_context(|| format!("Failed to find entity {:?}", evi.clone()))?;
 
-        self.compile_source_identifier(&entity.source_conf)
+        Self::compile_source_identifier(&entity.source_conf)
     }
 
     pub fn compile_source_identifier(
-        &self,
         source: &OracleJdbcEntitySourceConfig,
     ) -> Result<String> {
         // TODO: custom query
@@ -254,20 +243,19 @@ impl OracleJdbcQueryCompiler {
                 ..
             }) => format!(
                 "{}.{}",
-                self.compile_identifier(db.clone())?,
-                self.compile_identifier(table.clone())?
+                Self::compile_identifier(db.clone())?,
+                Self::compile_identifier(table.clone())?
             ),
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
                 database_name: None,
                 table_name: table,
                 ..
-            }) => self.compile_identifier(table.clone())?,
+            }) => Self::compile_identifier(table.clone())?,
             OracleJdbcEntitySourceConfig::CustomQueries(_) => todo!(),
         })
     }
 
     fn compile_attribute_identifier(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         eva: sql::EntityVersionAttributeIdentifier,
     ) -> Result<String> {
@@ -290,14 +278,13 @@ impl OracleJdbcQueryCompiler {
         })?;
 
         Ok(vec![
-            self.compile_entity_identifier(conf, eva.entity)?,
-            self.compile_identifier(column.clone())?,
+            Self::compile_entity_identifier(conf, eva.entity)?,
+            Self::compile_identifier(column.clone())?,
         ]
         .join("."))
     }
 
     fn compile_constant(
-        &self,
         c: sql::Constant,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
@@ -305,19 +292,18 @@ impl OracleJdbcQueryCompiler {
         Ok("?".to_string())
     }
 
-    fn compile_param(&self, p: sql::Parameter, params: &mut Vec<JdbcQueryParam>) -> Result<String> {
+    fn compile_param(p: sql::Parameter, params: &mut Vec<JdbcQueryParam>) -> Result<String> {
         params.push(JdbcQueryParam::Dynamic(p.r#type));
         Ok("?".to_string())
     }
 
     fn compile_unary_op(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
 
         op: sql::UnaryOp,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
-        let inner = self.compile_expr(conf, *op.expr, params)?;
+        let inner = Self::compile_expr(conf, *op.expr, params)?;
 
         Ok(match op.r#type {
             sql::UnaryOpType::Not => format!("!({})", inner),
@@ -329,13 +315,12 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_binary_op(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         op: sql::BinaryOp,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
-        let l = self.compile_expr(conf, *op.left, params)?;
-        let r = self.compile_expr(conf, *op.right, params)?;
+        let l = Self::compile_expr(conf, *op.left, params)?;
+        let r = Self::compile_expr(conf, *op.right, params)?;
 
         // TODO
         Ok(match op.r#type {
@@ -364,14 +349,13 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_function_call(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         func: sql::FunctionCall,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
         Ok(match func {
             sql::FunctionCall::Length(arg) => {
-                format!("LENGTH({})", self.compile_expr(conf, *arg, params)?)
+                format!("LENGTH({})", Self::compile_expr(conf, *arg, params)?)
             }
             sql::FunctionCall::Abs(_) => todo!(),
             sql::FunctionCall::Uppercase(_) => todo!(),
@@ -384,14 +368,13 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_aggregate_call(
-        &self,
         conf: &OracleJdbcConnectorEntityConfig,
         agg: sql::AggregateCall,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
         Ok(match agg {
             sql::AggregateCall::Sum(arg) => {
-                format!("SUM({})", self.compile_expr(conf, *arg, params)?)
+                format!("SUM({})", Self::compile_expr(conf, *arg, params)?)
             }
             sql::AggregateCall::Count => todo!(),
             sql::AggregateCall::CountDistinct(_) => todo!(),
@@ -414,8 +397,7 @@ mod tests {
     use super::*;
 
     fn compile_select(select: sql::Select, conf: OracleJdbcConnectorEntityConfig) -> JdbcQuery {
-        let compiler = OracleJdbcQueryCompiler {};
-        compiler.compile_select_query(&conf, select).unwrap()
+        OracleJdbcQueryCompiler::compile_select_query(&conf, select).unwrap()
     }
 
     fn create_entity_config(

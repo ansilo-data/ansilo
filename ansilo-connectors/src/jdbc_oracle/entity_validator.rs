@@ -14,7 +14,6 @@ impl<'a> EntityValidator<JdbcConnection<'a>, OracleJdbcEntitySourceConfig>
     for OracleJdbcEntityValidator
 {
     fn validate(
-        &self,
         connection: &JdbcConnection<'a>,
         entity_version: &EntityVersionConfig,
         nc: &NodeConfig,
