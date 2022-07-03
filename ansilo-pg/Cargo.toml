@@ -6,8 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ansilo-connectors = { version = "0.1.0", path = "../ansilo-connectors" }
 ansilo-core = { version = "0.1.0", path = "../ansilo-core" }
 ansilo-logging = { version = "0.1.0", path = "../ansilo-logging" }
-nix = "0.24.1"
+nix = "0.24"
 postgres = "0.19"
 r2d2_postgres = "0.18"
+serde = { version = "1.0", features = ["derive"] }

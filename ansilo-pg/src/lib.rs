@@ -8,8 +8,7 @@ use initdb::PostgresInitDb;
 use manager::PostgresServerManager;
 
 /// This module orchestrates our postgres instance and provides an api
-/// to execute queries against it. Postgres is run as a child process in
-/// a dedicated uid/gid to limit the attack surface it poses.
+/// to execute queries against it. Postgres is run as a child process.
 ///
 /// In order for postgres to retrieve data from our sources, the ansilo-pgx
 /// extension is installed which creates a FDW which connects back to our
@@ -24,6 +23,7 @@ pub mod server;
 mod configure;
 #[cfg(test)]
 mod test;
+pub mod fdw;
 
 /// Use the default database created by initdb
 pub(crate) const PG_DATABASE: &str = "postgres";

@@ -1,7 +1,9 @@
+use serde::{Serialize, Deserialize};
+
 use crate::common::data::{DataType, DataValue};
 
 /// A SQLIL expression node
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Expr {
     EntityVersion(EntityVersionIdentifier),
     EntityVersionAttribute(EntityVersionAttributeIdentifier),
@@ -18,7 +20,7 @@ pub enum Expr {
 type SubExpr = Box<Expr>;
 
 /// A reference to an entity version
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EntityVersionIdentifier {
     /// The ID of the referenced entity
     pub entity_id: String,
@@ -36,7 +38,7 @@ impl EntityVersionIdentifier {
 }
 
 /// A reference to an attribute from an entity version
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EntityVersionAttributeIdentifier {
     /// The referenced entity version
     pub entity: EntityVersionIdentifier,
@@ -54,7 +56,7 @@ impl EntityVersionAttributeIdentifier {
 }
 
 /// A constant embedded in the query
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Constant {
     /// The value of the constant
     pub value: DataValue,
@@ -67,7 +69,7 @@ impl Constant {
 }
 
 /// A parameter embedded in the query
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Parameter {
     /// The data type of the constant
     pub r#type: DataType,
@@ -82,7 +84,7 @@ impl Parameter {
 }
 
 /// A unary operation over one expression
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UnaryOp {
     /// The data type of the constant
     pub r#type: UnaryOpType,
@@ -100,7 +102,7 @@ impl UnaryOp {
 }
 
 /// Supported unary operators
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UnaryOpType {
     Not,
     Negate,
@@ -110,7 +112,7 @@ pub enum UnaryOpType {
 }
 
 /// A binary operation over two expressions
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BinaryOp {
     /// The LHS of the expression
     pub left: SubExpr,
@@ -131,7 +133,7 @@ impl BinaryOp {
 }
 
 /// Supported binary operators
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BinaryOpType {
     Add,
     Subtract,
@@ -157,7 +159,7 @@ pub enum BinaryOpType {
 }
 
 /// Supported function calls
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FunctionCall {
     // Math functions
     Abs(SubExpr),
@@ -174,7 +176,7 @@ pub enum FunctionCall {
 }
 
 /// Substring function call
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SubstringCall {
     /// The string to operator on
     pub string: SubExpr,
@@ -195,7 +197,7 @@ impl SubstringCall {
 }
 
 /// Aggregate function calls
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AggregateCall {
     // Math functions
     Sum(SubExpr),
