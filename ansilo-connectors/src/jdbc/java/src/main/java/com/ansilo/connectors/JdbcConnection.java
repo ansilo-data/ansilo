@@ -55,6 +55,24 @@ public class JdbcConnection {
     }
 
     /**
+     * Checks if the connection is valid
+     * 
+     * @throws SQLException
+     */
+    public boolean isValid(int timeoutSeconds) throws SQLException {
+        return this.connection.isValid(timeoutSeconds);
+    }
+
+    /**
+     * Checks if the connection is closed
+     * 
+     * @throws SQLException
+     */
+    public boolean isClosed() throws SQLException {
+        return this.connection.isClosed();
+    }
+
+    /**
      * Closes the connection
      * 
      * @throws SQLException

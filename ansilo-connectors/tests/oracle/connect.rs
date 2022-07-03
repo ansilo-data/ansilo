@@ -2,7 +2,7 @@ use std::{collections::HashMap, env};
 
 use ansilo_connectors::{
     common::data::ResultSetReader,
-    interface::{Connection, ConnectionOpener, Connector, QueryHandle},
+    interface::{Connection, ConnectionPool, Connector, QueryHandle},
     jdbc::JdbcQuery,
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector},
 };
@@ -30,11 +30,12 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
             );
             props
         },
+        None
     );
 
-    let con = OracleJdbcConnector::create_connection_opener(config.clone(), &NodeConfig::default())
+    let con = OracleJdbcConnector::create_connection_pool(config.clone(), &NodeConfig::default())
         .unwrap()
-        .open()
+        .acquire()
         .unwrap();
     let mut query = con
         .prepare(JdbcQuery::new("SELECT * FROM DUAL", vec![]))

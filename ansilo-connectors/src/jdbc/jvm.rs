@@ -2,7 +2,7 @@ use std::{env, fs, path::PathBuf};
 
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{debug, warn};
-use jni::{AttachGuard, InitArgsBuilder, JNIVersion, JavaVM, objects::JObject};
+use jni::{objects::JObject, AttachGuard, InitArgsBuilder, JNIVersion, JavaVM};
 
 // Global JVM instance
 // According to the docs JavaVM is thread-safe and Sync so once instance
@@ -12,6 +12,8 @@ lazy_static::lazy_static! {
         let jars = find_jars(None).map_err(|e| warn!("Failed to find jars: {:?}", e)).unwrap_or(vec![])
             .iter().map(|i| i.to_string_lossy().to_string()).collect::<Vec<_>>();
 
+        // TODO: very occasionally tests will fail with NoClassDef, need to root cause and fix
+        // possibly we are not waiting for class path jars to init?
         let jvm_args = InitArgsBuilder::new()
             .version(JNIVersion::V8)
             .option(format!("-Djava.class.path={}", jars.join(":")).as_str())

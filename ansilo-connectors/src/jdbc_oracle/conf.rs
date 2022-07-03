@@ -6,7 +6,10 @@ use ansilo_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{common::entity::ConnectorEntityConfig, jdbc::JdbcConnectionConfig};
+use crate::{
+    common::entity::ConnectorEntityConfig,
+    jdbc::{JdbcConnectionConfig, JdbcConnectionPoolConfig},
+};
 
 /// The connection config for the Oracle JDBC driver
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -14,6 +17,7 @@ pub struct OracleJdbcConnectionConfig {
     pub jdbc_url: String,
     /// @see https://docs.oracle.com/en/database/oracle/oracle-database/21/jajdb/oracle/jdbc/OracleConnection.html
     pub properties: HashMap<String, String>,
+    pub pool: Option<JdbcConnectionPoolConfig>,
 }
 
 impl JdbcConnectionConfig for OracleJdbcConnectionConfig {
@@ -24,13 +28,22 @@ impl JdbcConnectionConfig for OracleJdbcConnectionConfig {
     fn get_jdbc_props(&self) -> HashMap<String, String> {
         self.properties.clone()
     }
+
+    fn get_pool_config(&self) -> Option<JdbcConnectionPoolConfig> {
+        self.pool.clone()
+    }
 }
 
 impl OracleJdbcConnectionConfig {
-    pub fn new(jdbc_url: String, properties: HashMap<String, String>) -> Self {
+    pub fn new(
+        jdbc_url: String,
+        properties: HashMap<String, String>,
+        pool: Option<JdbcConnectionPoolConfig>,
+    ) -> Self {
         Self {
             jdbc_url,
             properties,
+            pool,
         }
     }
 
@@ -157,7 +170,8 @@ properties:
                     let mut map = HashMap::new();
                     map.insert("TEST_PROP".to_string(), "TEST_PROP_VAL".to_string());
                     map
-                }
+                },
+                pool: None
             }
         );
     }

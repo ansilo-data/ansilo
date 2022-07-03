@@ -16,7 +16,7 @@ use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 pub trait Connector<'a> {
     type TConnectionConfig;
     type TEntitySourceConfig;
-    type TConnectionOpener: ConnectionOpener<Self::TConnection>;
+    type TConnectionPool: ConnectionPool<Self::TConnection>;
     type TConnection: Connection<'a, Self::TQuery, Self::TQueryHandle>;
     type TEntitySearcher: EntitySearcher<Self::TConnection, Self::TEntitySourceConfig>;
     type TEntityValidator: EntityValidator<Self::TConnection, Self::TEntitySourceConfig>;
@@ -32,14 +32,14 @@ pub trait Connector<'a> {
     /// Parses the supplied configuration yaml into the strongly typed Options
     fn parse_options(options: config::Value) -> Result<Self::TConnectionConfig>;
 
-    /// Gets a connection opener instance
-    fn create_connection_opener(options: Self::TConnectionConfig, nc: &NodeConfig) -> Result<Self::TConnectionOpener>;
+    /// Gets a connection pool instance
+    fn create_connection_pool(options: Self::TConnectionConfig, nc: &NodeConfig) -> Result<Self::TConnectionPool>;
 }
 
 /// Opens a connection to the target data source
-pub trait ConnectionOpener<TConnection> {
-    /// Opens a connection to the target data source using the supplied options
-    fn open(&mut self) -> Result<TConnection>;
+pub trait ConnectionPool<TConnection> {
+    /// Acquires a connection to the target data source
+    fn acquire(&mut self) -> Result<TConnection>;
 }
 
 /// An open connection to a data source

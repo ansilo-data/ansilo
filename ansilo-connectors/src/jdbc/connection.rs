@@ -2,26 +2,30 @@ use ansilo_core::err::{Context, Result};
 use ansilo_logging::warn;
 use jni::objects::{GlobalRef, JValue};
 
-use crate::interface::{Connection, ConnectionOpener};
+use crate::interface::{Connection, ConnectionPool};
 
 use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, Jvm};
 
 /// Implementation for opening JDBC connections
-pub struct JdbcConnectionOpener<TConnectionOptions: JdbcConnectionConfig> {
+pub struct JdbcConnectionPool<TConnectionOptions: JdbcConnectionConfig> {
     options: TConnectionOptions,
 }
 
-impl<TConnectionOptions: JdbcConnectionConfig> JdbcConnectionOpener<TConnectionOptions> {
-    pub fn new(options: TConnectionOptions) -> Self {
-        Self { options }
+impl<TConnectionOptions: JdbcConnectionConfig> JdbcConnectionPool<TConnectionOptions> {
+    pub fn new(options: TConnectionOptions) -> Result<Self> {
+        let pool = Self { options };
+
+        if let Some(_conf) = pool.options.get_pool_config().as_ref() {
+            // TODO: Implement connection pool
+            todo!();
+        }
+
+        Ok(pool)
     }
 }
 
-impl<'a, TConnectionOptions: JdbcConnectionConfig>
-    ConnectionOpener<JdbcConnection<'a>>
-    for JdbcConnectionOpener<TConnectionOptions>
-{
-    fn open(&mut self) -> Result<JdbcConnection<'a>> {
+impl<'a, TConnectionOptions: JdbcConnectionConfig> JdbcConnectionPool<TConnectionOptions> {
+    fn create_connection(&mut self) -> Result<JdbcConnection<'a>> {
         let jvm = Jvm::boot()?;
 
         let jdbc_con = jvm.with_local_frame(32, |env| {
@@ -57,6 +61,14 @@ impl<'a, TConnectionOptions: JdbcConnectionConfig>
         })?;
 
         Ok(JdbcConnection { jvm, jdbc_con })
+    }
+}
+
+impl<'a, TConnectionOptions: JdbcConnectionConfig> ConnectionPool<JdbcConnection<'a>>
+    for JdbcConnectionPool<TConnectionOptions>
+{
+    fn acquire(&mut self) -> Result<JdbcConnection<'a>> {
+        self.create_connection()
     }
 }
 
@@ -115,6 +127,38 @@ impl<'a> Connection<'a, JdbcQuery, JdbcPreparedQuery<'a>> for JdbcConnection<'a>
 }
 
 impl<'a> JdbcConnection<'a> {
+    /// Checks whether the connection is valid
+    pub fn is_valid(&'a self) -> Result<bool> {
+        let env = &self.jvm.env;
+        let timeout_sec = 30; // TODO: make configurable
+
+        let res = env
+            .call_method(
+                self.jdbc_con.as_obj(),
+                "isValid",
+                "(I)Z",
+                &[JValue::Int(timeout_sec)],
+            )
+            .context("Failed to invoke JdbcConnection::isValid")?
+            .z()
+            .context("Failed to convert JdbcConnection::isValid return value")?;
+        Ok(res)
+    }
+
+    /// Checks whether the connection is closed
+    pub fn is_closed(&'a self) -> Result<bool> {
+        let env = &self.jvm.env;
+
+        let res = env
+            .call_method(self.jdbc_con.as_obj(), "isClosed", "()Z", &[])
+            .context("Failed to invoke JdbcConnection::isClosed")?
+            .z()
+            .context("Failed to convert JdbcConnection::isClosed return value")?;
+        Ok(res)
+    }
+}
+
+impl<'a> JdbcConnection<'a> {
     fn close(&mut self) -> Result<()> {
         self.jvm
             .env
@@ -140,7 +184,7 @@ mod tests {
 
     use crate::{
         interface::{QueryHandle, QueryInputStructure},
-        jdbc::JdbcQueryParam,
+        jdbc::{JdbcConnectionPoolConfig, JdbcQueryParam},
     };
 
     use super::*;
@@ -155,14 +199,19 @@ mod tests {
         fn get_jdbc_props(&self) -> HashMap<String, String> {
             self.1.clone()
         }
+
+        fn get_pool_config(&self) -> Option<JdbcConnectionPoolConfig> {
+            None
+        }
     }
 
     fn init_sqlite_connection<'a>() -> JdbcConnection<'a> {
-        JdbcConnectionOpener::new(MockJdbcConnectionConfig(
+        JdbcConnectionPool::new(MockJdbcConnectionConfig(
             "jdbc:sqlite::memory:".to_owned(),
             HashMap::new(),
         ))
-        .open()
+        .unwrap()
+        .acquire()
         .unwrap()
     }
 
@@ -173,11 +222,12 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_init_invalid() {
-        let res = JdbcConnectionOpener::new(MockJdbcConnectionConfig(
+        let res = JdbcConnectionPool::new(MockJdbcConnectionConfig(
             "invalid".to_owned(),
             HashMap::new(),
         ))
-        .open();
+        .unwrap()
+        .acquire();
 
         assert!(res.is_err());
     }
@@ -223,5 +273,27 @@ mod tests {
         let mut con = init_sqlite_connection();
 
         con.close().unwrap();
+    }
+
+    #[test]
+    fn test_jdbc_connection_is_valid() {
+        let mut con = init_sqlite_connection();
+
+        assert_eq!(con.is_valid().unwrap(), true);
+
+        con.close().unwrap();
+
+        assert_eq!(con.is_valid().unwrap(), false);
+    }
+
+    #[test]
+    fn test_jdbc_connection_is_closed() {
+        let mut con = init_sqlite_connection();
+
+        assert_eq!(con.is_closed().unwrap(), false);
+
+        con.close().unwrap();
+
+        assert_eq!(con.is_closed().unwrap(), true);
     }
 }

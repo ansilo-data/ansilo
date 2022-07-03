@@ -1,6 +1,6 @@
 use crate::{
     interface::Connector,
-    jdbc::{JdbcConnection, JdbcConnectionOpener, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
+    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
 };
 
 mod conf;
@@ -23,7 +23,7 @@ pub use query_compiler::*;
 pub struct OracleJdbcConnector;
 
 impl<'a> Connector<'a> for OracleJdbcConnector {
-    type TConnectionOpener = JdbcConnectionOpener<OracleJdbcConnectionConfig>;
+    type TConnectionPool = JdbcConnectionPool<OracleJdbcConnectionConfig>;
     type TConnection = JdbcConnection<'a>;
     type TConnectionConfig = OracleJdbcConnectionConfig;
     type TEntitySearcher = OracleJdbcEntitySearcher;
@@ -43,11 +43,11 @@ impl<'a> Connector<'a> for OracleJdbcConnector {
         OracleJdbcConnectionConfig::parse(options)
     }
 
-    fn create_connection_opener(
+    fn create_connection_pool(
         options: OracleJdbcConnectionConfig,
         nc: &NodeConfig,
-    ) -> Result<Self::TConnectionOpener> {
-        Ok(JdbcConnectionOpener::new(options))
+    ) -> Result<Self::TConnectionPool> {
+        JdbcConnectionPool::new(options)
     }
 }
 

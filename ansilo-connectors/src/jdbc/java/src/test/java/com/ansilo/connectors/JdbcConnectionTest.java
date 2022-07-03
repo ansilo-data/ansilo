@@ -42,6 +42,24 @@ public class JdbcConnectionTest {
     }
 
     @Test
+    void testIsValid() throws Exception {
+        when(this.connection.isValid(10)).thenReturn(true);
+
+        assertEquals(true, this.connection.isValid(10));
+
+        verify(this.innerConnection, times(1)).isValid(10);
+    }
+
+    @Test
+    void testIsClosed() throws Exception {
+        when(this.connection.isClosed()).thenReturn(true);
+
+        assertEquals(true, this.connection.isClosed());
+
+        verify(this.innerConnection, times(1)).isClosed();
+    }
+
+    @Test
     void testClose() throws Exception {
         this.connection.close();
 

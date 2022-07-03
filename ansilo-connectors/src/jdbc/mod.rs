@@ -2,7 +2,7 @@
 // the target data source
 // We bridge into a JVM running within the process to start the JDBC driver
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 mod connection;
 pub use connection::*;
@@ -14,6 +14,7 @@ mod query;
 pub use query::*;
 mod jvm;
 pub use jvm::*;
+use serde::{Serialize, Deserialize};
 
 #[cfg(test)]
 mod tests;
@@ -25,4 +26,20 @@ pub trait JdbcConnectionConfig {
 
     /// Gets the connection props
     fn get_jdbc_props(&self) -> HashMap<String, String>;
+
+    /// Gets the connection pool config
+    fn get_pool_config(&self) -> Option<JdbcConnectionPoolConfig>;
+}
+
+/// Options for pooling the JDBC connections
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct JdbcConnectionPoolConfig {
+    /// Minimum number of connections
+    min_cons: u32,
+    /// Maximum number of connections
+    max_cons: u32,
+    /// Maximum connection lifetime
+    max_lifetime: Option<Duration>,
+    /// How long a connection can remain idle before closing
+    idle_timeout: Option<Duration>,
 }
