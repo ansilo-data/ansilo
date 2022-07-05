@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ansilo_core::{
     common::data::{DataType, DataValue},
     err::{bail, Context, Result},
@@ -5,6 +7,7 @@ use ansilo_core::{
 use jni::{
     objects::{GlobalRef, JMethodID, JObject, JValue},
     signature::{JavaType, Primitive},
+    sys::jmethodID,
 };
 
 use crate::{
@@ -42,17 +45,17 @@ impl JdbcQuery {
 }
 
 /// JDBC prepared query
-pub struct JdbcPreparedQuery<'a> {
-    pub jvm: &'a Jvm<'a>,
+pub struct JdbcPreparedQuery {
+    pub jvm: Arc<Jvm>,
     pub jdbc_prepared_statement: GlobalRef,
     pub params: Vec<JdbcQueryParam>,
-    write_method_id: Option<JMethodID<'a>>,
-    as_read_only_buffer_method_id: Option<JMethodID<'a>>,
+    write_method_id: Option<jmethodID>,
+    as_read_only_buffer_method_id: Option<jmethodID>,
 }
 
-impl<'a> JdbcPreparedQuery<'a> {
+impl JdbcPreparedQuery {
     pub fn new(
-        jvm: &'a Jvm<'a>,
+        jvm: Arc<Jvm>,
         jdbc_prepared_statement: GlobalRef,
         params: Vec<JdbcQueryParam>,
     ) -> Self {
@@ -66,7 +69,7 @@ impl<'a> JdbcPreparedQuery<'a> {
     }
 
     fn init_method_ids(&mut self) -> Result<()> {
-        let env = &self.jvm.env;
+        let env = self.jvm.env()?;
 
         if self.write_method_id.is_none() {
             self.write_method_id = Some(
@@ -75,7 +78,8 @@ impl<'a> JdbcPreparedQuery<'a> {
                     "write",
                     "(Ljava/nio/ByteBuffer;)I",
                 )
-                .context("Failed to find JdbcPreparedQuery::write method")?,
+                .context("Failed to find JdbcPreparedQuery::write method")?
+                .into_inner(),
             );
         }
 
@@ -86,7 +90,8 @@ impl<'a> JdbcPreparedQuery<'a> {
                     "asReadOnlyBuffer",
                     "()Ljava/nio/ByteBuffer;",
                 )
-                .context("Failed to find ByteBuffer::asReadOnlyBuffer method")?,
+                .context("Failed to find ByteBuffer::asReadOnlyBuffer method")?
+                .into_inner(),
             );
         }
 
@@ -94,7 +99,7 @@ impl<'a> JdbcPreparedQuery<'a> {
     }
 }
 
-impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
+impl QueryHandle<JdbcResultSet> for JdbcPreparedQuery {
     fn get_structure(&self) -> Result<QueryInputStructure> {
         Ok(QueryInputStructure::new(
             self.params
@@ -122,7 +127,7 @@ impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
                 let byte_buff = env
                     .call_method_unchecked(
                         *byte_buff,
-                        self.as_read_only_buffer_method_id.unwrap(),
+                        JMethodID::from(self.as_read_only_buffer_method_id.unwrap()),
                         JavaType::Object("java/nio/ByteBuffer".to_owned()),
                         &[],
                     )
@@ -136,7 +141,7 @@ impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
             let written = env
                 .call_method_unchecked(
                     self.jdbc_prepared_statement.as_obj(),
-                    self.write_method_id.unwrap(),
+                    JMethodID::from(self.write_method_id.unwrap()),
                     JavaType::Primitive(Primitive::Int),
                     &[JValue::Object(byte_buff)],
                 )
@@ -153,7 +158,7 @@ impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
         })
     }
 
-    fn execute(&mut self) -> Result<JdbcResultSet<'a>> {
+    fn execute(&mut self) -> Result<JdbcResultSet> {
         self.jvm.with_local_frame(32, |env| {
             let jdbc_result_set = env
                 .call_method(
@@ -170,7 +175,7 @@ impl<'a> QueryHandle<'a, JdbcResultSet<'a>> for JdbcPreparedQuery<'a> {
 
             let jdbc_result_set = env.new_global_ref(jdbc_result_set)?;
 
-            Ok(JdbcResultSet::new(&self.jvm, jdbc_result_set))
+            Ok(JdbcResultSet::new(Arc::clone(&self.jvm), jdbc_result_set))
         })
     }
 }
@@ -182,9 +187,9 @@ impl JdbcQueryParam {
     pub(crate) fn to_java_jdbc_parameter<'a>(
         &self,
         index: usize,
-        jvm: &'a Jvm<'a>,
+        jvm: &'a Jvm,
     ) -> Result<JObject<'a>> {
-        let env = &jvm.env;
+        let env = jvm.env()?;
 
         let result = match self {
             JdbcQueryParam::Dynamic(data_type) => env.call_static_method(
@@ -240,13 +245,13 @@ mod tests {
 
     use super::*;
 
-    fn create_prepared_query<'a>(
-        jvm: &'a Jvm<'a>,
-        jdbc_con: JObject<'a>,
+    fn create_prepared_query(
+        jvm: &Arc<Jvm>,
+        jdbc_con: JObject,
         query: &str,
         params: Vec<JdbcQueryParam>,
-    ) -> JdbcPreparedQuery<'a> {
-        let env = &jvm.env;
+    ) -> JdbcPreparedQuery {
+        let env = &jvm.env().unwrap();
 
         let prepared_statement = env
             .call_method(
@@ -281,12 +286,12 @@ mod tests {
 
         let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query).unwrap();
 
-        JdbcPreparedQuery::new(jvm, jdbc_prepared_query, params)
+        JdbcPreparedQuery::new(Arc::clone(&jvm), jdbc_prepared_query, params)
     }
 
     #[test]
     fn test_prepared_query_no_params() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(&jvm, jdbc_con, "SELECT 1 as num", vec![]);
@@ -300,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_with_int_param() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -332,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_with_varchar_param() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -371,7 +376,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_with_missing_param() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -386,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_multiple_execute() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -420,7 +425,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_with_constant_int_param() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -439,16 +444,18 @@ mod tests {
 
     #[test]
     fn test_jdbc_query_param_into_java_dynamic() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
         let param = JdbcQueryParam::Dynamic(DataType::Int32);
 
         let java_obj = param.to_java_jdbc_parameter(1, &jvm).unwrap();
-        let class = jvm.env.get_object_class(java_obj).unwrap();
+        let class = jvm.env().unwrap().get_object_class(java_obj).unwrap();
 
         assert_eq!(
-            jvm.env
+            jvm.env()
+                .unwrap()
                 .get_string(JString::from(
-                    jvm.env
+                    jvm.env()
+                        .unwrap()
                         .call_method(*class, "getName", "()Ljava/lang/String;", &[])
                         .unwrap()
                         .l()
@@ -460,7 +467,8 @@ mod tests {
             "com.ansilo.connectors.query.JdbcParameter"
         );
         assert_eq!(
-            jvm.env
+            jvm.env()
+                .unwrap()
                 .call_method(java_obj, "isConstant", "()Z", &[])
                 .unwrap()
                 .z()
@@ -475,12 +483,14 @@ mod tests {
         let param = JdbcQueryParam::Constant(DataValue::Int32(1123));
 
         let java_obj = param.to_java_jdbc_parameter(1, &jvm).unwrap();
-        let class = jvm.env.get_object_class(java_obj).unwrap();
+        let class = jvm.env().unwrap().get_object_class(java_obj).unwrap();
 
         assert_eq!(
-            jvm.env
+            jvm.env()
+                .unwrap()
                 .get_string(JString::from(
-                    jvm.env
+                    jvm.env()
+                        .unwrap()
                         .call_method(*class, "getName", "()Ljava/lang/String;", &[])
                         .unwrap()
                         .l()
@@ -492,7 +502,8 @@ mod tests {
             "com.ansilo.connectors.query.JdbcParameter"
         );
         assert_eq!(
-            jvm.env
+            jvm.env()
+                .unwrap()
                 .call_method(java_obj, "isConstant", "()Z", &[])
                 .unwrap()
                 .z()

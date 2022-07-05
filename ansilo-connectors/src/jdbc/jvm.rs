@@ -2,18 +2,14 @@ use std::{env, fs, path::PathBuf};
 
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{debug, warn};
-use jni::{objects::JObject, AttachGuard, InitArgsBuilder, JNIVersion, JavaVM};
+use jni::{objects::JObject, InitArgsBuilder, JNIEnv, JNIVersion, JavaVM};
 
 // Global JVM instance
-// According to the docs JavaVM is thread-safe and Sync so once instance
-// should be fine to be shared across threads
 lazy_static::lazy_static! {
     static ref JVM: Result<JavaVM> = {
         let jars = find_jars(None).map_err(|e| warn!("Failed to find jars: {:?}", e)).unwrap_or(vec![])
             .iter().map(|i| i.to_string_lossy().to_string()).collect::<Vec<_>>();
 
-        // TODO: very occasionally tests will fail with NoClassDef, need to root cause and fix
-        // possibly we are not waiting for class path jars to init?
         let jvm_args = InitArgsBuilder::new()
             .version(JNIVersion::V8)
             .option(format!("-Djava.class.path={}", jars.join(":")).as_str())
@@ -113,36 +109,37 @@ fn get_current_target_dir() -> Result<PathBuf> {
 }
 
 /// Wrapper for booting and interaction with the JVM
-
-pub struct Jvm<'a> {
-    pub env: AttachGuard<'a>,
+pub struct Jvm {
+    jvm: &'static JavaVM,
 }
 
-impl<'a> Jvm<'a> {
+impl Jvm {
     /// Boots a jvm on the current thread
     pub fn boot() -> Result<Self> {
         let jvm = JVM.as_ref().unwrap();
 
-        let env = jvm
-            .attach_current_thread()
-            .context("Failed to attach current thread to JVM")?;
+        Ok(Self { jvm })
+    }
 
-        Ok(Self { env })
+    /// Boots a jvm on the current thread
+    pub fn env(&self) -> Result<JNIEnv> {
+        self.jvm
+            .attach_current_thread_permanently()
+            .context("Failed to attach current thread to JVM")
     }
 
     /// Executes the supplied function in a local frame
     pub fn with_local_frame<F, R>(&self, local_ref_capacity: i32, cb: F) -> Result<R>
     where
-        F: FnOnce(&AttachGuard<'a>) -> Result<R>,
+        F: FnOnce(&JNIEnv) -> Result<R>,
     {
-        self.env
-            .push_local_frame(local_ref_capacity)
+        let env = self.env()?;
+        env.push_local_frame(local_ref_capacity)
             .context("Failed to push local frame")?;
 
-        let ret = cb(&self.env);
+        let ret = cb(&env);
 
-        self.env
-            .pop_local_frame(JObject::null())
+        env.pop_local_frame(JObject::null())
             .context("Failed to pop local frame")?;
 
         ret
@@ -161,7 +158,8 @@ mod tests {
 
         let x = JValue::from(-10i32);
         let val: jint = jvm
-            .env
+            .env()
+            .unwrap()
             .call_static_method("java/lang/Math", "abs", "(I)I", &[x])
             .unwrap()
             .i()

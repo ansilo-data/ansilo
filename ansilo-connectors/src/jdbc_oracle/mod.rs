@@ -22,18 +22,18 @@ pub use query_compiler::*;
 #[derive(Default)]
 pub struct OracleJdbcConnector;
 
-impl<'a> Connector<'a> for OracleJdbcConnector {
-    type TConnectionPool = JdbcConnectionPool<OracleJdbcConnectionConfig>;
-    type TConnection = JdbcConnection<'a>;
+impl Connector for OracleJdbcConnector {
+    type TConnectionPool = JdbcConnectionPool;
+    type TConnection = JdbcConnection;
     type TConnectionConfig = OracleJdbcConnectionConfig;
     type TEntitySearcher = OracleJdbcEntitySearcher;
     type TEntityValidator = OracleJdbcEntityValidator;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
     type TQueryPlanner = OracleJdbcQueryPlanner;
     type TQueryCompiler = OracleJdbcQueryCompiler;
-    type TQueryHandle = JdbcPreparedQuery<'a>;
+    type TQueryHandle = JdbcPreparedQuery;
     type TQuery = JdbcQuery;
-    type TResultSet = JdbcResultSet<'a>;
+    type TResultSet = JdbcResultSet;
 
     fn r#type() -> &'static str {
         "jdbc.oracle"

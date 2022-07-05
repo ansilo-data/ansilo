@@ -14,30 +14,30 @@ use super::DataWriter;
 
 /// Wraps a query handle in order to provide a higher level interface to write data
 /// to the query
-pub struct QueryHandleWriter<'a, T, R>
+pub struct QueryHandleWriter<T, R>
 where
-    T: QueryHandle<'a, R>,
-    R: ResultSet<'a>,
+    T: QueryHandle<R>,
+    R: ResultSet,
 {
     /// The inner query handle
     /// We use a buf writer to ensure we dont call the underlying write impl
     /// too frequently as it could be expensive
     /// (eg across the JNI bridge)
-    inner: DataWriter<BufWriter<Writer<'a, T, R>>>,
+    inner: DataWriter<BufWriter<Writer<T, R>>>,
     /// The query input structure
     structure: QueryInputStructure,
 }
 
 /// Wrapper to implement io::Read for the ResultSet trait
-struct Writer<'a, T, R>(pub T, PhantomData<&'a R>)
+struct Writer<T, R>(pub T, PhantomData<R>)
 where
-    T: QueryHandle<'a, R>,
-    R: ResultSet<'a>;
+    T: QueryHandle<R>,
+    R: ResultSet;
 
-impl<'a, T, R> Write for Writer<'a, T, R>
+impl<T, R> Write for Writer<T, R>
 where
-    T: QueryHandle<'a, R>,
-    R: ResultSet<'a>,
+    T: QueryHandle<R>,
+    R: ResultSet,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0
@@ -50,10 +50,10 @@ where
     }
 }
 
-impl<'a, T, R> QueryHandleWriter<'a, T, R>
+impl<T, R> QueryHandleWriter<T, R>
 where
-    T: QueryHandle<'a, R>,
-    R: ResultSet<'a>,
+    T: QueryHandle<R>,
+    R: ResultSet,
 {
     pub fn new(inner: T) -> Result<Self> {
         let structure = inner.get_structure()?;
@@ -97,7 +97,7 @@ mod tests {
 
     pub(super) struct MockQueryHandle(QueryInputStructure, io::Cursor<Vec<u8>>);
 
-    impl<'a> QueryHandle<'a, MockResultSet> for MockQueryHandle {
+    impl QueryHandle<MockResultSet> for MockQueryHandle {
         fn get_structure(&self) -> Result<QueryInputStructure> {
             Ok(self.0.clone())
         }
@@ -112,10 +112,10 @@ mod tests {
     }
 
     impl MockQueryHandle {
-        fn new<'a>(
+        fn new(
             s: QueryInputStructure,
             capacity: usize,
-        ) -> QueryHandleWriter<'a, Self, MockResultSet> {
+        ) -> QueryHandleWriter<Self, MockResultSet> {
             QueryHandleWriter::new(Self(s, io::Cursor::new(Vec::<u8>::with_capacity(capacity))))
                 .unwrap()
         }

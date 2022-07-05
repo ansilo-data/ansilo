@@ -1,7 +1,4 @@
-use std::{
-    io::{self, BufReader, Read},
-    marker::PhantomData,
-};
+use std::io::{self, BufReader, Read};
 
 use ansilo_core::{common::data::DataValue, err::Result};
 
@@ -12,27 +9,27 @@ use super::DataReader;
 /// TODO: seperate into more general data_reader
 
 /// Wraps a result set in order to parse and read the data as rust values
-pub struct ResultSetReader<'a, T>
+pub struct ResultSetReader<T>
 where
-    T: ResultSet<'a>,
+    T: ResultSet,
 {
     /// The inner result set
     /// We use a buf reader to ensure we dont call the underlying read impl
     /// too frequently as it could be expensive
     /// (eg across the JNI bridge)
-    inner: DataReader<BufReader<Reader<'a, T>>>,
+    inner: DataReader<BufReader<Reader<T>>>,
     /// The row structure
     structure: RowStructure,
 }
 
 /// Wrapper to implement io::Read for the ResultSet trait
-struct Reader<'a, T>(pub T, PhantomData<&'a T>)
+struct Reader<T>(pub T)
 where
-    T: ResultSet<'a>;
+    T: ResultSet;
 
-impl<'a, T> Read for Reader<'a, T>
+impl<T> Read for Reader<T>
 where
-    T: ResultSet<'a>,
+    T: ResultSet,
 {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.0
@@ -41,16 +38,16 @@ where
     }
 }
 
-impl<'a, T> ResultSetReader<'a, T>
+impl<T> ResultSetReader<T>
 where
-    T: ResultSet<'a>,
+    T: ResultSet,
 {
     pub fn new(inner: T) -> Result<Self> {
         let structure = inner.get_structure()?;
 
         Ok(Self {
             inner: DataReader::new(
-                BufReader::with_capacity(1024, Reader(inner, PhantomData)),
+                BufReader::with_capacity(1024, Reader(inner)),
                 structure.cols.iter().map(|i| i.1.clone()).collect(),
             ),
             structure,
@@ -76,13 +73,13 @@ where
 #[cfg(test)]
 pub(super) mod rs_tests {
 
-    use ansilo_core::{err::Context, common::data::DataType};
+    use ansilo_core::{common::data::DataType, err::Context};
 
     use super::*;
 
     pub(crate) struct MockResultSet(RowStructure, io::Cursor<Vec<u8>>);
 
-    impl<'a> ResultSet<'a> for MockResultSet {
+    impl ResultSet for MockResultSet {
         fn get_structure(&self) -> Result<RowStructure> {
             Ok(self.0.clone())
         }
@@ -93,7 +90,7 @@ pub(super) mod rs_tests {
     }
 
     impl MockResultSet {
-        fn new<'a>(s: RowStructure, data: Vec<u8>) -> ResultSetReader<'a, Self> {
+        fn new(s: RowStructure, data: Vec<u8>) -> ResultSetReader<Self> {
             ResultSetReader::new(Self(s, io::Cursor::new(data))).unwrap()
         }
     }

@@ -1,5 +1,3 @@
-// pub mod boxed;
-
 use ansilo_core::{
     common::data::DataType,
     config::{self, EntityVersionConfig, NodeConfig},
@@ -16,18 +14,20 @@ use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
 /// An ansilo connector
 /// A common abstraction over a data sources
-pub trait Connector {
+pub struct BoxedConnector {
+    
+
     type TConnectionConfig;
     type TEntitySourceConfig;
     type TConnectionPool: ConnectionPool<Self::TConnection>;
-    type TConnection: Connection<Self::TQuery, Self::TQueryHandle>;
+    type TConnection: Connection<'a, Self::TQuery, Self::TQueryHandle>;
     type TEntitySearcher: EntitySearcher<Self::TConnection, Self::TEntitySourceConfig>;
     type TEntityValidator: EntityValidator<Self::TConnection, Self::TEntitySourceConfig>;
     type TQueryPlanner: QueryPlanner<Self::TConnection, Self::TQuery, Self::TEntitySourceConfig>;
     type TQueryCompiler: QueryCompiler<Self::TConnection, Self::TQuery, Self::TEntitySourceConfig>;
-    type TQueryHandle: QueryHandle<Self::TResultSet>;
-    type TQuery;
-    type TResultSet: ResultSet;
+    type TQueryHandle: QueryHandle<'a, Self::TResultSet>;
+    type TQuery: 'a;
+    type TResultSet: ResultSet<'a>;
 
     /// Gets the type of the connector, usually the name of the target platform, eg 'postgres'
     fn r#type() -> &'static str;
@@ -46,9 +46,9 @@ pub trait ConnectionPool<TConnection> {
 }
 
 /// An open connection to a data source
-pub trait Connection<TQuery, TQueryHandle> {
+pub trait Connection<'a, TQuery, TQueryHandle> {
     /// Prepares the supplied query
-    fn prepare(&self, query: TQuery) -> Result<TQueryHandle>;
+    fn prepare(&'a self, query: TQuery) -> Result<TQueryHandle>;
 }
 
 /// Discovers entity schemas from the data source
@@ -199,7 +199,7 @@ impl OperationCost {
 }
 
 /// A query which is executing
-pub trait QueryHandle<TResultSet> {
+pub trait QueryHandle<'a, TResultSet> {
     /// Gets the types of the input expected by the query
     fn get_structure(&self) -> Result<QueryInputStructure>;
 
@@ -225,7 +225,7 @@ impl QueryInputStructure {
 }
 
 /// A result set from an executed query
-pub trait ResultSet {
+pub trait ResultSet<'a> {
     /// Gets the row structure of the result set
     fn get_structure(&self) -> Result<RowStructure>;
 

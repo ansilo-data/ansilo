@@ -7,11 +7,11 @@ use super::OracleJdbcEntitySourceConfig;
 /// The entity searcher for Oracle JDBC
 pub struct OracleJdbcEntitySearcher {}
 
-impl<'a> EntitySearcher<JdbcConnection<'a>, OracleJdbcEntitySourceConfig>
+impl<'a> EntitySearcher<JdbcConnection, OracleJdbcEntitySourceConfig>
     for OracleJdbcEntitySearcher
 {
     fn discover(
-        connection: &JdbcConnection<'a>,
+        connection: &JdbcConnection,
         nc: &NodeConfig,
     ) -> Result<Vec<EntitySource<OracleJdbcEntitySourceConfig>>> {
         todo!()

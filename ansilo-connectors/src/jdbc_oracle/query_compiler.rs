@@ -17,11 +17,11 @@ use super::{
 /// Query compiler for Oracle JDBC driver
 pub struct OracleJdbcQueryCompiler;
 
-impl<'a> QueryCompiler<JdbcConnection<'a>, JdbcQuery, OracleJdbcEntitySourceConfig>
+impl QueryCompiler<JdbcConnection, JdbcQuery, OracleJdbcEntitySourceConfig>
     for OracleJdbcQueryCompiler
 {
     fn compile_select(
-        _con: &JdbcConnection<'a>,
+        _con: &JdbcConnection,
         conf: &OracleJdbcConnectorEntityConfig,
         select: sql::Select,
     ) -> Result<JdbcQuery> {

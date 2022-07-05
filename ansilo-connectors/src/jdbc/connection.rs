@@ -1,86 +1,160 @@
-use ansilo_core::err::{Context, Result};
+use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
+
+use ansilo_core::err::{bail, Context, Result};
 use ansilo_logging::warn;
 use jni::objects::{GlobalRef, JValue};
+use r2d2::{ManageConnection, PooledConnection};
 
 use crate::interface::{Connection, ConnectionPool};
 
 use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, Jvm};
 
 /// Implementation for opening JDBC connections
-pub struct JdbcConnectionPool<TConnectionOptions: JdbcConnectionConfig> {
-    options: TConnectionOptions,
+pub struct JdbcConnectionPool {
+    pool: r2d2::Pool<Manager>,
 }
 
-impl<TConnectionOptions: JdbcConnectionConfig> JdbcConnectionPool<TConnectionOptions> {
-    pub fn new(options: TConnectionOptions) -> Result<Self> {
-        let pool = Self { options };
-
-        if let Some(_conf) = pool.options.get_pool_config().as_ref() {
-            // TODO: Implement connection pool
-            todo!();
-        }
-
-        Ok(pool)
-    }
+struct Manager {
+    jvm: Arc<Jvm>,
+    jdbc_url: String,
+    jdbc_props: HashMap<String, String>,
 }
 
-impl<'a, TConnectionOptions: JdbcConnectionConfig> JdbcConnectionPool<TConnectionOptions> {
-    fn create_connection(&mut self) -> Result<JdbcConnection<'a>> {
+impl JdbcConnectionPool {
+    pub fn new<TConnectionOptions: JdbcConnectionConfig>(
+        options: TConnectionOptions,
+    ) -> Result<Self> {
         let jvm = Jvm::boot()?;
+        let manager = Manager {
+            jvm: Arc::new(jvm),
+            jdbc_url: options.get_jdbc_url(),
+            jdbc_props: options.get_jdbc_props(),
+        };
 
-        let jdbc_con = jvm.with_local_frame(32, |env| {
-            let url = env.new_string(self.options.get_jdbc_url())?;
-            let props = env
-                .new_object("java/util/Properties", "()V", &[])
-                .context("Failed to create java properties")?;
+        let pool = if let Some(conf) = options.get_pool_config().as_ref() {
+            r2d2::Builder::new()
+                .min_idle(Some(conf.min_cons))
+                .max_size(conf.max_cons)
+                .max_lifetime(conf.max_lifetime)
+                .idle_timeout(conf.idle_timeout)
+                .connection_timeout(conf.connect_timeout.unwrap_or(Duration::from_secs(30)))
+                .build(manager)
+                .context("Failed to build connection pool")?
+        } else {
+            r2d2::Builder::new()
+                .min_idle(Some(0))
+                .max_size(1000) // TODO: fix constant max for unpooled connections
+                .max_lifetime(Some(Duration::from_micros(1))) // TODO: fix constant values
+                .connection_timeout(Duration::from_secs(1))
+                .build(manager)
+                .context("Failed to build connection pool")?
+        };
 
-            for (key, val) in self.options.get_jdbc_props().into_iter() {
-                env.call_method(
-                    props,
-                    "setProperty",
-                    "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;",
-                    &[
-                        JValue::Object(env.auto_local(env.new_string(key)?).as_obj()),
-                        JValue::Object(env.auto_local(env.new_string(val)?).as_obj()),
-                    ],
-                )
-                .context("Failed to set property")?;
-            }
-
-            let jdbc_con = env
-                .new_object(
-                    "com/ansilo/connectors/JdbcConnection",
-                    "(Ljava/lang/String;Ljava/util/Properties;)V",
-                    &[JValue::Object(*url), JValue::Object(props)],
-                )
-                .context("Failed to initialise JDBC connection")?;
-
-            let jdbc_con = env.new_global_ref(jdbc_con)?;
-
-            Ok(jdbc_con)
-        })?;
-
-        Ok(JdbcConnection { jvm, jdbc_con })
+        Ok(Self { pool })
     }
 }
 
-impl<'a, TConnectionOptions: JdbcConnectionConfig> ConnectionPool<JdbcConnection<'a>>
-    for JdbcConnectionPool<TConnectionOptions>
-{
-    fn acquire(&mut self) -> Result<JdbcConnection<'a>> {
-        self.create_connection()
+#[derive(Debug)]
+struct PoolError(ansilo_core::err::Error);
+
+impl Display for PoolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
+
+impl std::error::Error for PoolError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
+
+    fn description(&self) -> &str {
+        "deprecated"
+    }
+
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.0.source()
+    }
+}
+
+impl ManageConnection for Manager {
+    type Connection = JdbcConnectionState;
+    type Error = PoolError;
+
+    fn connect(&self) -> Result<Self::Connection, Self::Error> {
+        let jdbc_con = self
+            .jvm
+            .with_local_frame(32, |env| {
+                let url = env.new_string(self.jdbc_url.clone())?;
+                let props = env
+                    .new_object("java/util/Properties", "()V", &[])
+                    .context("Failed to create java properties")?;
+
+                for (key, val) in self.jdbc_props.iter() {
+                    env.call_method(
+                        props,
+                        "setProperty",
+                        "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;",
+                        &[
+                            JValue::Object(env.auto_local(env.new_string(key)?).as_obj()),
+                            JValue::Object(env.auto_local(env.new_string(val)?).as_obj()),
+                        ],
+                    )
+                    .context("Failed to set property")?;
+                }
+
+                let jdbc_con = env
+                    .new_object(
+                        "com/ansilo/connectors/JdbcConnection",
+                        "(Ljava/lang/String;Ljava/util/Properties;)V",
+                        &[JValue::Object(*url), JValue::Object(props)],
+                    )
+                    .context("Failed to initialise JDBC connection")?;
+
+                let jdbc_con = env.new_global_ref(jdbc_con)?;
+
+                Ok(jdbc_con)
+            })
+            .map_err(|e| PoolError(e))?;
+
+        Ok(JdbcConnectionState {
+            jvm: Arc::clone(&self.jvm),
+            jdbc_con,
+        })
+    }
+
+    fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
+        conn.is_valid().map_err(|e| PoolError(e))
+    }
+
+    fn has_broken(&self, conn: &mut Self::Connection) -> bool {
+        conn.is_closed().unwrap_or(true)
+    }
+}
+
+impl ConnectionPool<JdbcConnection> for JdbcConnectionPool {
+    fn acquire(&mut self) -> Result<JdbcConnection> {
+        Ok(JdbcConnection(
+            self.pool
+                .get()
+                .context("Failed to get connection from pool")?,
+        ))
+    }
+}
+
+/// Wrapper of of the JDBC connection
+pub struct JdbcConnection(PooledConnection<Manager>);
 
 /// Implementation of the JDBC connection
-pub struct JdbcConnection<'a> {
-    jvm: Jvm<'a>,
+struct JdbcConnectionState {
+    jvm: Arc<Jvm>,
     jdbc_con: GlobalRef,
 }
 
-impl<'a> Connection<'a, JdbcQuery, JdbcPreparedQuery<'a>> for JdbcConnection<'a> {
-    fn prepare(&'a self, query: JdbcQuery) -> Result<JdbcPreparedQuery<'a>> {
-        let jdbc_prepared_query = self.jvm.with_local_frame(32, |env| {
+impl Connection<JdbcQuery, JdbcPreparedQuery> for JdbcConnection {
+    fn prepare(&self, query: JdbcQuery) -> Result<JdbcPreparedQuery> {
+        let state = &*self.0;
+        let jdbc_prepared_query = state.jvm.with_local_frame(32, |env| {
             let param_types = env
                 .new_object("java/util/ArrayList", "()V", &[])
                 .context("Failed to create ArrayList")?;
@@ -88,7 +162,7 @@ impl<'a> Connection<'a, JdbcQuery, JdbcPreparedQuery<'a>> for JdbcConnection<'a>
             // TODO[minor]: use method id and unchecked call
             for (idx, param) in query.params.iter().enumerate() {
                 let data_type_id = env.auto_local(
-                    param.to_java_jdbc_parameter(idx + 1, &self.jvm)?
+                    param.to_java_jdbc_parameter(idx + 1, &state.jvm)?
                 );
 
                 env.call_method(
@@ -102,7 +176,7 @@ impl<'a> Connection<'a, JdbcQuery, JdbcPreparedQuery<'a>> for JdbcConnection<'a>
 
             let jdbc_prepared_query = env
                 .call_method(
-                    self.jdbc_con.as_obj(),
+                    state.jdbc_con.as_obj(),
                     "prepare",
                     "(Ljava/lang/String;Ljava/util/List;)Lcom/ansilo/connectors/query/JdbcPreparedQuery;",
                     &[JValue::Object(*env.new_string(query.query)?), JValue::Object(param_types)],
@@ -119,17 +193,17 @@ impl<'a> Connection<'a, JdbcQuery, JdbcPreparedQuery<'a>> for JdbcConnection<'a>
         })?;
 
         Ok(JdbcPreparedQuery::new(
-            &self.jvm,
+            Arc::clone(&state.jvm),
             jdbc_prepared_query,
             query.params,
         ))
     }
 }
 
-impl<'a> JdbcConnection<'a> {
+impl JdbcConnectionState {
     /// Checks whether the connection is valid
-    pub fn is_valid(&'a self) -> Result<bool> {
-        let env = &self.jvm.env;
+    pub fn is_valid(&self) -> Result<()> {
+        let env = self.jvm.env()?;
         let timeout_sec = 30; // TODO: make configurable
 
         let res = env
@@ -142,13 +216,17 @@ impl<'a> JdbcConnection<'a> {
             .context("Failed to invoke JdbcConnection::isValid")?
             .z()
             .context("Failed to convert JdbcConnection::isValid return value")?;
-        Ok(res)
+
+        if !res {
+            bail!("Connection is not valid")
+        }
+
+        Ok(())
     }
 
     /// Checks whether the connection is closed
-    pub fn is_closed(&'a self) -> Result<bool> {
-        let env = &self.jvm.env;
-
+    pub fn is_closed(&self) -> Result<bool> {
+        let env = self.jvm.env()?;
         let res = env
             .call_method(self.jdbc_con.as_obj(), "isClosed", "()Z", &[])
             .context("Failed to invoke JdbcConnection::isClosed")?
@@ -158,17 +236,17 @@ impl<'a> JdbcConnection<'a> {
     }
 }
 
-impl<'a> JdbcConnection<'a> {
+impl JdbcConnectionState {
     fn close(&mut self) -> Result<()> {
         self.jvm
-            .env
+            .env()?
             .call_method(self.jdbc_con.as_obj(), "close", "()V", &[])
             .context("Failed to call JdbcConnection::close")?;
         Ok(())
     }
 }
 
-impl<'a> Drop for JdbcConnection<'a> {
+impl Drop for JdbcConnectionState {
     fn drop(&mut self) {
         if let Err(err) = self.close() {
             warn!("Failed to close JDBC connection: {:?}", err);
@@ -180,7 +258,7 @@ impl<'a> Drop for JdbcConnection<'a> {
 mod tests {
     use std::collections::HashMap;
 
-    use ansilo_core::{common::data::DataType, config::NodeConfig};
+    use ansilo_core::common::data::DataType;
 
     use crate::{
         interface::{QueryHandle, QueryInputStructure},
@@ -205,7 +283,7 @@ mod tests {
         }
     }
 
-    fn init_sqlite_connection<'a>() -> JdbcConnection<'a> {
+    fn init_sqlite_connection() -> JdbcConnection {
         JdbcConnectionPool::new(MockJdbcConnectionConfig(
             "jdbc:sqlite::memory:".to_owned(),
             HashMap::new(),
@@ -271,6 +349,7 @@ mod tests {
     #[test]
     fn test_jdbc_connection_close() {
         let mut con = init_sqlite_connection();
+        let con = &mut *con.0;
 
         con.close().unwrap();
     }
@@ -278,17 +357,19 @@ mod tests {
     #[test]
     fn test_jdbc_connection_is_valid() {
         let mut con = init_sqlite_connection();
+        let con = &mut *con.0;
 
-        assert_eq!(con.is_valid().unwrap(), true);
+        con.is_valid().unwrap();
 
         con.close().unwrap();
 
-        assert_eq!(con.is_valid().unwrap(), false);
+        con.is_valid().unwrap_err();
     }
 
     #[test]
     fn test_jdbc_connection_is_closed() {
         let mut con = init_sqlite_connection();
+        let con = &mut *con.0;
 
         assert_eq!(con.is_closed().unwrap(), false);
 

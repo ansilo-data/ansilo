@@ -7,7 +7,7 @@ use jni::objects::{JObject, JValue};
 
 use super::Jvm;
 
-pub fn create_sqlite_memory_connection<'a>(jvm: &'a Jvm<'a>) -> JObject<'a> {
+pub fn create_sqlite_memory_connection(jvm: &Jvm) -> JObject {
     // in theory we should be able to invoke DriverManager.getConnection
     // directly through JNI using the following code:
     // let jdbc_con = env
@@ -25,7 +25,7 @@ pub fn create_sqlite_memory_connection<'a>(jvm: &'a Jvm<'a>) -> JObject<'a> {
     // However this code complains it cannot find the driver
     // I have not worked out why this fails but calling our wrapper succeeds...
 
-    let env = &jvm.env;
+    let env = &jvm.env().unwrap();
     let url = env.auto_local(env.new_string("jdbc:sqlite::memory:").unwrap());
     let props = env.auto_local(env.new_object("java/util/Properties", "()V", &[]).unwrap());
 

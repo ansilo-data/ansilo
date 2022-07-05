@@ -1,7 +1,9 @@
+use std::{sync::Arc};
+
 use ansilo_core::err::{Context, Result};
 use jni::{
-    objects::{GlobalRef, JList, JMethodID, JString, JValue},
-    signature::{JavaType, Primitive},
+    objects::{GlobalRef, JList, JString, JValue, JMethodID},
+    signature::{JavaType, Primitive}, sys::jmethodID,
 };
 
 use crate::interface::{ResultSet, RowStructure};
@@ -9,14 +11,14 @@ use crate::interface::{ResultSet, RowStructure};
 use super::{JdbcDataType, Jvm};
 
 /// Implementation of the JDBC result set
-pub struct JdbcResultSet<'a> {
-    pub jvm: &'a Jvm<'a>,
+pub struct JdbcResultSet {
+    pub jvm: Arc<Jvm>,
     pub jdbc_result_set: GlobalRef,
-    pub read_method_id: Option<JMethodID<'a>>,
+    pub read_method_id: Option<jmethodID>,
 }
 
-impl<'a> JdbcResultSet<'a> {
-    pub fn new(jvm: &'a Jvm<'a>, jdbc_result_set: GlobalRef) -> Self {
+impl JdbcResultSet {
+    pub fn new(jvm: Arc<Jvm>, jdbc_result_set: GlobalRef) -> Self {
         Self {
             jvm,
             jdbc_result_set,
@@ -25,7 +27,7 @@ impl<'a> JdbcResultSet<'a> {
     }
 }
 
-impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
+impl ResultSet for JdbcResultSet {
     fn get_structure(&self) -> Result<RowStructure> {
         self.jvm.with_local_frame(32, |env| {
             let jdbc_structure = env
@@ -88,7 +90,8 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
                         "read",
                         "(Ljava/nio/ByteBuffer;)I",
                     )
-                    .context("Failed to get method id of JdbcResultSet::read")?,
+                    .context("Failed to get method id of JdbcResultSet::read")?
+                    .into_inner(),
                 );
             }
 
@@ -99,7 +102,7 @@ impl<'a> ResultSet<'a> for JdbcResultSet<'a> {
             let result = env
                 .call_method_unchecked(
                     self.jdbc_result_set.as_obj(),
-                    self.read_method_id.unwrap(),
+                    JMethodID::from(self.read_method_id.unwrap()),
                     JavaType::Primitive(Primitive::Int),
                     &[JValue::Object(jvm_buff)],
                 )
@@ -125,12 +128,12 @@ mod tests {
 
     use super::*;
 
-    fn execute_query<'a>(
-        jvm: &'a Jvm<'a>,
-        jdbc_con: JObject<'a>,
+    fn execute_query(
+        jvm: &Arc<Jvm>,
+        jdbc_con: JObject,
         query: &str,
-    ) -> JdbcResultSet<'a> {
-        let env = &jvm.env;
+    ) -> JdbcResultSet {
+        let env = &jvm.env().unwrap();
 
         // create statement
         let jdbc_statement = env
@@ -161,12 +164,12 @@ mod tests {
 
         let jdbc_result_set = env.new_global_ref(jdbc_result_set).unwrap();
 
-        JdbcResultSet::new(&jvm, jdbc_result_set)
+        JdbcResultSet::new(Arc::clone(jvm), jdbc_result_set)
     }
 
     #[test]
     fn test_get_row_structure() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
 
         let jdbc_con = create_sqlite_memory_connection(&jvm);
         let result_set = execute_query(&jvm, jdbc_con, "SELECT 1 as num, \"abc\" as str");
@@ -187,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_result_set_read_int() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
 
         let jdbc_con = create_sqlite_memory_connection(&jvm);
         let mut result_set = execute_query(&jvm, jdbc_con, "SELECT 1 as num");
@@ -207,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_result_set_read_string() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Arc::new(Jvm::boot().unwrap());
 
         let jdbc_con = create_sqlite_memory_connection(&jvm);
         let mut result_set = execute_query(&jvm, jdbc_con, "SELECT \"abc\" as str");

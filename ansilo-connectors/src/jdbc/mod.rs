@@ -20,7 +20,7 @@ use serde::{Serialize, Deserialize};
 mod tests;
 
 /// JDBC connection config
-pub trait JdbcConnectionConfig {
+pub trait JdbcConnectionConfig: Send + Sync {
     /// Gets the JDBC connection URL
     fn get_jdbc_url(&self) -> String;
 
@@ -42,4 +42,6 @@ pub struct JdbcConnectionPoolConfig {
     max_lifetime: Option<Duration>,
     /// How long a connection can remain idle before closing
     idle_timeout: Option<Duration>,
+    /// Maximum connection timeout
+    connect_timeout: Option<Duration>,
 }
