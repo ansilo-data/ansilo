@@ -54,12 +54,22 @@ impl OracleJdbcConnectionConfig {
 }
 
 /// Entity source config for Oracle JDBC driver
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum OracleJdbcEntitySourceConfig {
     Table(OracleJdbcTableOptions),
     CustomQueries(OracleJdbcCustomQueryOptions),
 }
 
+impl OracleJdbcEntitySourceConfig {
+    pub fn parse(options: config::Value) -> Result<Self> {
+        config::from_value::<Self>(options)
+            .context("Failed to parse entity source configuration options")
+    }
+}
+
 /// Entity source configuration for mapping an entity to a table
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcTableOptions {
     /// The database name
     pub database_name: Option<String>,
@@ -84,6 +94,7 @@ impl OracleJdbcTableOptions {
 }
 
 /// Entity source configuration for mapping an entity to custom queries
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcCustomQueryOptions {
     /// The select query used to read entities, none if select is not supported
     pub select_query: Option<OracleJdbcSelectQueryOptions>,
@@ -111,6 +122,7 @@ impl OracleJdbcCustomQueryOptions {
     }
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcSelectQueryOptions {
     /// The select SQL query
     pub query: String,
@@ -127,6 +139,7 @@ impl OracleJdbcSelectQueryOptions {
     }
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcModifyQueryOptions {
     /// The insert/update/delete SQL query
     pub query: String,
@@ -173,6 +186,37 @@ properties:
                 },
                 pool: None
             }
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_parse_entity_table_options() {
+        let conf = config::parse_config(
+            r#"
+type: "Table"
+database_name: "db"
+table_name: "table"
+attribute_column_name_map:
+  a: b
+  d: c
+"#,
+        )
+        .unwrap();
+
+        let parsed = OracleJdbcEntitySourceConfig::parse(conf).unwrap();
+
+        assert_eq!(
+            parsed,
+            OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
+                database_name: Some("db".to_string()),
+                table_name: "table".to_string(),
+                attribute_column_name_map: [
+                    ("a".to_string(), "b".to_string()),
+                    ("d".to_string(), "c".to_string()),
+                ]
+                .into_iter()
+                .collect()
+            })
         );
     }
 }

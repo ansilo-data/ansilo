@@ -99,7 +99,9 @@ impl JdbcPreparedQuery {
     }
 }
 
-impl QueryHandle<JdbcResultSet> for JdbcPreparedQuery {
+impl QueryHandle for JdbcPreparedQuery {
+    type TResultSet = JdbcResultSet;
+    
     fn get_structure(&self) -> Result<QueryInputStructure> {
         Ok(QueryInputStructure::new(
             self.params

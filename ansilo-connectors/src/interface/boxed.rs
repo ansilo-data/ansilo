@@ -1,12 +1,18 @@
+// pub mod boxed;
+
+use std::any::Any;
+
 use ansilo_core::{
     common::data::DataType,
     config::{self, EntityVersionConfig, NodeConfig},
-    err::Result,
+    err::{Error, Result},
     sqlil as sql,
 };
-use serde::{Serialize, Deserialize};
 
-use crate::common::entity::{ConnectorEntityConfig, EntitySource};
+use super::{
+    Connection, ConnectionPool, Connector, EntitySearcher, QueryHandle, QueryOperationResult,
+    ResultSet,
+};
 
 /// TODO: transactions
 /// TODO: insert / update
@@ -14,235 +20,148 @@ use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
 /// An ansilo connector
 /// A common abstraction over a data sources
-pub struct BoxedConnector {
-    
+// pub trait BoxedConnector {
+//     type BoxedConnectionConfig = BoxedConnectionConfig;
+//     type BoxedEntitySourceConfig = BoxedEntitySourceConfig;
+//     type BoxedConnectionPool = BoxedConnectionPool;
+//     type BoxedConnection: BoxedConnection;
+//     type TEntitySearcher: BoxedEntitySearcher;
+//     type TEntityValidator: BoxedEntityValidator;
+//     type TQueryPlanner: BoxedQueryPlanner;
+//     type TQueryCompiler: BoxedQueryCompiler;
+//     type TQueryHandle: BoxedQueryHandle;
+//     type TQuery = BoxedQuery;
+//     type TResultSet: BoxedResultSet;
 
-    type TConnectionConfig;
-    type TEntitySourceConfig;
-    type TConnectionPool: ConnectionPool<Self::TConnection>;
-    type TConnection: Connection<'a, Self::TQuery, Self::TQueryHandle>;
-    type TEntitySearcher: EntitySearcher<Self::TConnection, Self::TEntitySourceConfig>;
-    type TEntityValidator: EntityValidator<Self::TConnection, Self::TEntitySourceConfig>;
-    type TQueryPlanner: QueryPlanner<Self::TConnection, Self::TQuery, Self::TEntitySourceConfig>;
-    type TQueryCompiler: QueryCompiler<Self::TConnection, Self::TQuery, Self::TEntitySourceConfig>;
-    type TQueryHandle: QueryHandle<'a, Self::TResultSet>;
-    type TQuery: 'a;
-    type TResultSet: ResultSet<'a>;
+//     /// Gets the type of the connector, usually the name of the target platform, eg 'postgres'
+//     fn r#type(&self) -> &'static str;
 
-    /// Gets the type of the connector, usually the name of the target platform, eg 'postgres'
-    fn r#type() -> &'static str;
+//     /// Parses the supplied configuration yaml into the strongly typed Options
+//     fn parse_options(&self, options: config::Value) -> Result<Self::BoxedConnectionConfig>;
 
-    /// Parses the supplied configuration yaml into the strongly typed Options
-    fn parse_options(options: config::Value) -> Result<Self::TConnectionConfig>;
+//     /// Gets a connection pool instance
+//     fn create_connection_pool(
+//         &self,
+//         options: Self::BoxedConnectionConfig,
+//         nc: &NodeConfig,
+//     ) -> Result<Self::BoxedConnectionPool>;
 
-    /// Gets a connection pool instance
-    fn create_connection_pool(options: Self::TConnectionConfig, nc: &NodeConfig) -> Result<Self::TConnectionPool>;
-}
+//     fn create_entity_searcher(&self) -> BoxedEntitySearcher;
+//     fn create_entity_validator(&self) -> BoxedEntityValidator;
+//     fn create_query_planner(&self) -> BoxedQueryPlanner;
+//     fn create_query_compiler(&self) -> BoxedQueryCompiler;
+// }
 
-/// Opens a connection to the target data source
-pub trait ConnectionPool<TConnection> {
-    /// Acquires a connection to the target data source
-    fn acquire(&mut self) -> Result<TConnection>;
-}
+pub struct BoxedConnectionConfig(Box<dyn Any>);
+pub struct BoxedEntitySourceConfig(Box<dyn Any>);
+pub struct BoxedQuery(Box<dyn Any>);
+pub struct BoxedQueryHandle(Box<dyn QueryHandle<TResultSet = BoxedResultSet>>);
+pub struct BoxedResultSet(Box<dyn ResultSet>);
+pub struct BoxedConnection(
+    Box<dyn Connection<TQuery = BoxedQuery, TQueryHandle = BoxedQueryHandle>>,
+);
+pub struct BoxedConnectionPool(Box<dyn ConnectionPool<TConnection = BoxedConnection>>);
 
-/// An open connection to a data source
-pub trait Connection<'a, TQuery, TQueryHandle> {
-    /// Prepares the supplied query
-    fn prepare(&'a self, query: TQuery) -> Result<TQueryHandle>;
-}
+pub struct Boxing<T>(T);
 
-/// Discovers entity schemas from the data source
-pub trait EntitySearcher<TConnection, TEntitySourceConfig> {
-    /// Retrieves the list of entities from the target data source
-    /// Typlically these entities will have their accessibility set to internal
-    fn discover(
-        connection: &TConnection,
-        nc: &NodeConfig,
-    ) -> Result<Vec<EntitySource<TEntitySourceConfig>>>;
-}
+/// Delegates to the underlying boxed connection pool
+impl ConnectionPool for BoxedConnectionPool {
+    type TConnection = BoxedConnection;
 
-/// Validates custom entity config
-pub trait EntityValidator<TConnection, TEntitySourceConfig> {
-    /// Validate the supplied entity config
-    fn validate(
-        connection: &TConnection,
-        entity_version: &EntityVersionConfig,
-        nc: &NodeConfig,
-    ) -> Result<EntitySource<TEntitySourceConfig>>;
-}
-
-/// The query planner determines if SQLIL queries can be executed remotely
-pub trait QueryPlanner<TConnection, TQuery, TEntitySourceConfig> {
-    /// Gets an estimate of the number of rows for the entity
-    fn estimate_size(
-        connection: &TConnection,
-        entity: &EntitySource<TEntitySourceConfig>,
-    ) -> Result<EntitySizeEstimate>;
-
-    /// Creates a base query to select all rows from the entity
-    fn create_base_select(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        entity: &EntitySource<TEntitySourceConfig>,
-        select: &mut sql::Select,
-    ) -> Result<QueryOperationResult>;
-
-    /// Adds the supplied expr to the query
-    fn add_col_expr(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        select: &mut sql::Select,
-        expr: sql::Expr,
-        alias: String,
-    ) -> Result<QueryOperationResult>;
-
-    /// Adds the supplied where clause
-    fn add_where_clause(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        select: &mut sql::Select,
-        expr: sql::Expr,
-    ) -> Result<QueryOperationResult>;
-
-    /// Adds the supplied join clause to the query
-    fn add_join(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        select: &mut sql::Select,
-        join: sql::Join,
-    ) -> Result<QueryOperationResult>;
-
-    /// Adds the supplied group by clause to the query
-    fn add_group_by(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        select: &mut sql::Select,
-        expr: sql::Expr,
-    ) -> Result<QueryOperationResult>;
-
-    /// Adds the supplied order by clause to the query
-    fn add_order_by(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        select: &mut sql::Select,
-        ordering: sql::Ordering,
-    ) -> Result<QueryOperationResult>;
-
-    /// Sets the number of rows to return
-    fn set_row_limit(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        select: &mut sql::Select,
-        row_limit: u64,
-    ) -> Result<QueryOperationResult>;
-
-    /// Sets the number of rows to skip
-    fn set_rows_to_skip(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        select: &mut sql::Select,
-        row_skip: u64,
-    ) -> Result<QueryOperationResult>;
-}
-
-/// The query compiler compiles SQLIL queries into a format that can be executed by the connector
-pub trait QueryCompiler<TConnection, TQuery, TEntitySourceConfig> {
-    /// Compiles the select into a connector-specific query object
-    fn compile_select(
-        connection: &TConnection,
-        conf: &ConnectorEntityConfig<TEntitySourceConfig>,
-        select: sql::Select,
-    ) -> Result<TQuery>;
-}
-
-/// A size estimate of the entity
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct EntitySizeEstimate {
-    /// The estimated number of rows
-    pub rows: Option<u64>,
-    /// The estimated average width of each row in bytes
-    pub row_width: Option<u32>,
-}
-
-impl EntitySizeEstimate {
-    pub fn new(rows: Option<u64>, row_width: Option<u32>) -> Self {
-        Self { rows, row_width }
+    fn acquire(&mut self) -> Result<Self::TConnection> {
+        self.0.acquire()
     }
 }
 
-/// A cost estimate for a query operation
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum QueryOperationResult {
-    PerformedRemotely(OperationCost),
-    PerformedLocally,
-}
+/// Blanket impl which adapts existing connection pools to the boxed types
+impl<T: ConnectionPool> ConnectionPool for Boxing<T>
+where
+    T::TConnection: 'static,
+{
+    type TConnection = BoxedConnection;
 
-/// A cost estimate for a query operation
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OperationCost {
-    /// The estimated number of rows
-    pub rows: Option<u32>,
-    /// The relative cost factor of opening the connection for this operation
-    pub connection_cost: Option<u32>,
-    /// The relative cost factor of performing the operation
-    pub total_cost: Option<u32>,
-}
+    fn acquire(&mut self) -> Result<Self::TConnection> {
+        let con = self.0.acquire()?;
+        let con = Boxing(con);
 
-impl OperationCost {
-    pub fn new(rows: Option<u32>, connection_cost: Option<u32>, total_cost: Option<u32>) -> Self {
-        Self {
-            rows,
-            connection_cost,
-            total_cost,
-        }
+        Ok(BoxedConnection(Box::new(con)))
     }
 }
 
-/// A query which is executing
-pub trait QueryHandle<'a, TResultSet> {
-    /// Gets the types of the input expected by the query
-    fn get_structure(&self) -> Result<QueryInputStructure>;
+/// Delegates to the underlying boxed connection
+impl Connection for BoxedConnection {
+    type TQuery = BoxedQuery;
+    type TQueryHandle = BoxedQueryHandle;
 
-    /// Writes query parameter data to the underlying query
-    /// Returns the number of bytes written
-    fn write(&mut self, buff: &[u8]) -> Result<usize>;
-
-    /// Executes the supplied query
-    fn execute(&mut self) -> Result<TResultSet>;
-}
-
-/// The structure of data expected by a query
-#[derive(Debug, Clone, PartialEq)]
-pub struct QueryInputStructure {
-    /// The data type of each query parameter
-    pub params: Vec<DataType>,
-}
-
-impl QueryInputStructure {
-    pub fn new(params: Vec<DataType>) -> Self {
-        Self { params }
+    fn prepare(&self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
+        self.0.prepare(query)
     }
 }
 
-/// A result set from an executed query
-pub trait ResultSet<'a> {
-    /// Gets the row structure of the result set
-    fn get_structure(&self) -> Result<RowStructure>;
+/// Blanket impl which adapts existing Connection types the boxed types
+impl<T: Connection> Connection for Boxing<T>
+where
+    T::TQuery: 'static,
+    T::TQueryHandle: 'static,
+{
+    type TQuery = BoxedQuery;
+    type TQueryHandle = BoxedQueryHandle;
 
-    /// Reads row data from the result set into the supplied slice
-    /// Returns the number of bytes read of 0 if no bytes are left to read
-    fn read(&mut self, buff: &mut [u8]) -> Result<usize>;
+    fn prepare(&self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
+        let query = query
+            .0
+            .downcast::<T::TQuery>()
+            .map_err(|_| Error::msg("Failed to downcast query"))?;
+        let rs = Boxing(self.0.prepare(*query)?);
+
+        Ok(BoxedQueryHandle(Box::new(rs)))
+    }
 }
 
-/// The structure of a row
-#[derive(Debug, Clone, PartialEq)]
-pub struct RowStructure {
-    /// The list of named columns in the row with their corrosponding data types
-    pub cols: Vec<(String, DataType)>,
+/// Delegates to the underlying boxed query handle
+impl QueryHandle for BoxedQueryHandle {
+    type TResultSet = BoxedResultSet;
+
+    fn get_structure(&self) -> Result<super::QueryInputStructure> {
+        self.0.get_structure()
+    }
+
+    fn write(&mut self, buff: &[u8]) -> Result<usize> {
+        self.0.write(buff)
+    }
+
+    fn execute(&mut self) -> Result<Self::TResultSet> {
+        self.0.execute()
+    }
 }
 
-impl RowStructure {
-    pub fn new(cols: Vec<(String, DataType)>) -> Self {
-        Self { cols }
+/// Blanket impl which adapts existing QueryHandle types the boxed types
+impl<T: QueryHandle> QueryHandle for Boxing<T>
+where
+    T::TResultSet: 'static,
+{
+    type TResultSet = BoxedResultSet;
+
+    fn get_structure(&self) -> Result<super::QueryInputStructure> {
+        self.0.get_structure()
+    }
+
+    fn write(&mut self, buff: &[u8]) -> Result<usize> {
+        self.0.write(buff)
+    }
+
+    fn execute(&mut self) -> Result<Self::TResultSet> {
+        Ok(BoxedResultSet(Box::new(self.0.execute()?)))
+    }
+}
+
+/// Delegates to the underlying boxed result set
+impl ResultSet for BoxedResultSet {
+    fn get_structure(&self) -> Result<super::RowStructure> {
+        self.0.get_structure()
+    }
+
+    fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
+        self.0.read(buff)
     }
 }

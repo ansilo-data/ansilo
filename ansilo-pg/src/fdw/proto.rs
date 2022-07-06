@@ -1,6 +1,6 @@
-use ansilo_connectors::interface::QueryOperationResult;
-use ansilo_core::{sqlil::{EntityVersionIdentifier, self}};
-use serde::{Serialize, Deserialize};
+use ansilo_connectors::interface::{QueryOperationResult, SelectQueryOperation};
+use ansilo_core::sqlil::EntityVersionIdentifier;
+use serde::{Deserialize, Serialize};
 
 /// Protocol messages sent by postgres
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,13 +15,13 @@ pub enum ClientMessage {
     Prepare,
     /// Write params to query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
-    WriteParams(Vec<u8>),
+    WriteParams(#[serde(with = "serde_bytes")] Vec<u8>),
     /// Execute the current query with the supplied params
     Execute,
     /// Read up to the supplied number of bytes from the query
     Read(u32),
     /// Error occurred with message
-    GenericError(String)
+    GenericError(String),
 }
 
 /// Operations for a SELECT query sent from postgres
@@ -30,19 +30,9 @@ pub enum ClientSelectMessage {
     /// Creates a select query for the supplied entity
     Create(EntityVersionIdentifier),
     /// Add a column to the select query
-    AddColumn((String, sqlil::Expr)),
-    /// Add Join
-    AddJoin(sqlil::Join),
-    /// Add group by
-    AddGroupBy(sqlil::Expr),
-    /// Add order by
-    AddOrderBy(sqlil::Ordering),
-    /// Set row limit
-    SetRowLimit(u64),
-    /// Set rows to skip
-    SetRowSkip(u64),
+    Apply(SelectQueryOperation),
     /// Only perform the estimation and dont change the query
-    EstimateOnly(Box<ClientSelectMessage>)
+    Estimate(SelectQueryOperation),
 }
 
 /// Protocol messages sent by ansilo
@@ -62,14 +52,14 @@ pub enum ServerMessage {
     QueryExecuted,
     /// Rows returned by the query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
-    QueryData(Vec<u8>),
+    ResultData(#[serde(with = "serde_bytes")] Vec<u8>),
     /// Error occurred with message
-    GenericError(String)
+    GenericError(String),
 }
 
 /// Results for operations on SELECT queries from ansilo
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerSelectMessage {
     /// The result of the query operation
-    Result(QueryOperationResult)
+    Result(QueryOperationResult),
 }

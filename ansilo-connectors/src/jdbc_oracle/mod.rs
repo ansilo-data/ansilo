@@ -35,17 +35,19 @@ impl Connector for OracleJdbcConnector {
     type TQuery = JdbcQuery;
     type TResultSet = JdbcResultSet;
 
-    fn r#type() -> &'static str {
-        "jdbc.oracle"
-    }
+    const TYPE: &'static str = "jdbc.oracle";
 
     fn parse_options(options: config::Value) -> Result<Self::TConnectionConfig> {
         OracleJdbcConnectionConfig::parse(options)
     }
 
+    fn parse_entity_source_options(options: config::Value) -> Result<Self::TEntitySourceConfig> {
+        OracleJdbcEntitySourceConfig::parse(options)
+    }
+
     fn create_connection_pool(
         options: OracleJdbcConnectionConfig,
-        nc: &NodeConfig,
+        _nc: &NodeConfig,
     ) -> Result<Self::TConnectionPool> {
         JdbcConnectionPool::new(options)
     }

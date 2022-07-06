@@ -10,9 +10,10 @@ use super::OracleJdbcEntitySourceConfig;
 /// The entity validator for Oracle JDBC
 pub struct OracleJdbcEntityValidator {}
 
-impl EntityValidator<JdbcConnection, OracleJdbcEntitySourceConfig>
-    for OracleJdbcEntityValidator
-{
+impl EntityValidator for OracleJdbcEntityValidator {
+    type TConnection = JdbcConnection;
+    type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
+
     fn validate(
         connection: &JdbcConnection,
         entity_version: &EntityVersionConfig,

@@ -1,6 +1,5 @@
 use std::{
     io::{self, BufWriter, Write},
-    marker::PhantomData,
 };
 
 use ansilo_core::{
@@ -14,30 +13,27 @@ use super::DataWriter;
 
 /// Wraps a query handle in order to provide a higher level interface to write data
 /// to the query
-pub struct QueryHandleWriter<T, R>
+pub struct QueryHandleWriter<T>
 where
-    T: QueryHandle<R>,
-    R: ResultSet,
+    T: QueryHandle,
 {
     /// The inner query handle
     /// We use a buf writer to ensure we dont call the underlying write impl
     /// too frequently as it could be expensive
     /// (eg across the JNI bridge)
-    inner: DataWriter<BufWriter<Writer<T, R>>>,
+    inner: DataWriter<BufWriter<QueryHandleWrite<T>>>,
     /// The query input structure
     structure: QueryInputStructure,
 }
 
 /// Wrapper to implement io::Read for the ResultSet trait
-struct Writer<T, R>(pub T, PhantomData<R>)
+pub struct QueryHandleWrite<T>(pub T)
 where
-    T: QueryHandle<R>,
-    R: ResultSet;
+    T: QueryHandle;
 
-impl<T, R> Write for Writer<T, R>
+impl<T> Write for QueryHandleWrite<T>
 where
-    T: QueryHandle<R>,
-    R: ResultSet,
+    T: QueryHandle,
 {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0
@@ -50,16 +46,15 @@ where
     }
 }
 
-impl<T, R> QueryHandleWriter<T, R>
+impl<T> QueryHandleWriter<T>
 where
-    T: QueryHandle<R>,
-    R: ResultSet,
+    T: QueryHandle,
 {
     pub fn new(inner: T) -> Result<Self> {
         let structure = inner.get_structure()?;
         Ok(Self {
             inner: DataWriter::new(
-                BufWriter::with_capacity(1024, Writer(inner, PhantomData)),
+                BufWriter::with_capacity(1024, QueryHandleWrite(inner)),
                 Some(structure.params.clone()),
             ),
             structure,
@@ -97,7 +92,9 @@ mod tests {
 
     pub(super) struct MockQueryHandle(QueryInputStructure, io::Cursor<Vec<u8>>);
 
-    impl QueryHandle<MockResultSet> for MockQueryHandle {
+    impl QueryHandle for MockQueryHandle {
+        type TResultSet = MockResultSet;
+
         fn get_structure(&self) -> Result<QueryInputStructure> {
             Ok(self.0.clone())
         }
@@ -112,10 +109,7 @@ mod tests {
     }
 
     impl MockQueryHandle {
-        fn new(
-            s: QueryInputStructure,
-            capacity: usize,
-        ) -> QueryHandleWriter<Self, MockResultSet> {
+        fn new(s: QueryInputStructure, capacity: usize) -> QueryHandleWriter<Self> {
             QueryHandleWriter::new(Self(s, io::Cursor::new(Vec::<u8>::with_capacity(capacity))))
                 .unwrap()
         }

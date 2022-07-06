@@ -17,17 +17,17 @@ where
     /// We use a buf reader to ensure we dont call the underlying read impl
     /// too frequently as it could be expensive
     /// (eg across the JNI bridge)
-    inner: DataReader<BufReader<Reader<T>>>,
+    inner: DataReader<BufReader<ResultSetRead<T>>>,
     /// The row structure
     structure: RowStructure,
 }
 
 /// Wrapper to implement io::Read for the ResultSet trait
-struct Reader<T>(pub T)
+pub struct ResultSetRead<T>(pub T)
 where
     T: ResultSet;
 
-impl<T> Read for Reader<T>
+impl<T> Read for ResultSetRead<T>
 where
     T: ResultSet,
 {
@@ -47,7 +47,7 @@ where
 
         Ok(Self {
             inner: DataReader::new(
-                BufReader::with_capacity(1024, Reader(inner)),
+                BufReader::with_capacity(1024, ResultSetRead(inner)),
                 structure.cols.iter().map(|i| i.1.clone()).collect(),
             ),
             structure,

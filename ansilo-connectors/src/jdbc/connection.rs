@@ -54,6 +54,7 @@ impl JdbcConnectionPool {
     }
 }
 
+// TODO: Clean up
 #[derive(Debug)]
 struct PoolError(ansilo_core::err::Error);
 
@@ -132,7 +133,9 @@ impl ManageConnection for Manager {
     }
 }
 
-impl ConnectionPool<JdbcConnection> for JdbcConnectionPool {
+impl ConnectionPool for JdbcConnectionPool {
+    type TConnection = JdbcConnection;
+    
     fn acquire(&mut self) -> Result<JdbcConnection> {
         Ok(JdbcConnection(
             self.pool
@@ -151,7 +154,10 @@ struct JdbcConnectionState {
     jdbc_con: GlobalRef,
 }
 
-impl Connection<JdbcQuery, JdbcPreparedQuery> for JdbcConnection {
+impl Connection for JdbcConnection {
+    type TQuery = JdbcQuery;
+    type TQueryHandle = JdbcPreparedQuery;
+
     fn prepare(&self, query: JdbcQuery) -> Result<JdbcPreparedQuery> {
         let state = &*self.0;
         let jdbc_prepared_query = state.jvm.with_local_frame(32, |env| {
@@ -198,6 +204,7 @@ impl Connection<JdbcQuery, JdbcPreparedQuery> for JdbcConnection {
             query.params,
         ))
     }
+
 }
 
 impl JdbcConnectionState {

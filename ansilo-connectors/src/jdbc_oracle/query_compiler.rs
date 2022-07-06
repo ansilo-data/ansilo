@@ -17,9 +17,11 @@ use super::{
 /// Query compiler for Oracle JDBC driver
 pub struct OracleJdbcQueryCompiler;
 
-impl QueryCompiler<JdbcConnection, JdbcQuery, OracleJdbcEntitySourceConfig>
-    for OracleJdbcQueryCompiler
-{
+impl QueryCompiler for OracleJdbcQueryCompiler {
+    type TConnection = JdbcConnection;
+    type TQuery = JdbcQuery;
+    type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
+
     fn compile_select(
         _con: &JdbcConnection,
         conf: &OracleJdbcConnectorEntityConfig,
@@ -232,9 +234,7 @@ impl OracleJdbcQueryCompiler {
         Self::compile_source_identifier(&entity.source_conf)
     }
 
-    pub fn compile_source_identifier(
-        source: &OracleJdbcEntitySourceConfig,
-    ) -> Result<String> {
+    pub fn compile_source_identifier(source: &OracleJdbcEntitySourceConfig) -> Result<String> {
         // TODO: custom query
         Ok(match &source {
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
@@ -284,10 +284,7 @@ impl OracleJdbcQueryCompiler {
         .join("."))
     }
 
-    fn compile_constant(
-        c: sql::Constant,
-        params: &mut Vec<JdbcQueryParam>,
-    ) -> Result<String> {
+    fn compile_constant(c: sql::Constant, params: &mut Vec<JdbcQueryParam>) -> Result<String> {
         params.push(JdbcQueryParam::Constant(c.value));
         Ok("?".to_string())
     }
