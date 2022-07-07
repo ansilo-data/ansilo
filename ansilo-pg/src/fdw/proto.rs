@@ -5,7 +5,7 @@ use ansilo_core::sqlil::EntityVersionIdentifier;
 use bincode::{Decode, Encode};
 
 /// Protocol messages sent by postgres
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ClientMessage {
     /// Send authentication token
     AuthDataSource(String),
@@ -29,7 +29,7 @@ pub enum ClientMessage {
 }
 
 /// Operations for a SELECT query sent from postgres
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ClientSelectMessage {
     /// Creates a select query for the supplied entity
     Create(EntityVersionIdentifier),
@@ -40,7 +40,7 @@ pub enum ClientSelectMessage {
 }
 
 /// Protocol messages sent by ansilo
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ServerMessage {
     /// Token was accepted
     AuthAccepted,
@@ -62,7 +62,7 @@ pub enum ServerMessage {
 }
 
 /// Results for operations on SELECT queries from ansilo
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ServerSelectMessage {
     /// The result of the query operation
     Result(QueryOperationResult),

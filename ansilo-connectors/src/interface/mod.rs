@@ -105,7 +105,7 @@ pub trait EntityValidator {
 }
 
 /// Select planning operations
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum SelectQueryOperation{
     AddColumn((String, sql::Expr)),
     AddWhere(sql::Expr),
