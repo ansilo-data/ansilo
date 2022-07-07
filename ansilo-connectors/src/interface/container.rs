@@ -9,6 +9,7 @@ use ansilo_core::{
 };
 
 use crate::{
+    common::entity::{ConnectorEntityConfig, EntitySource},
     jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector, OracleJdbcEntitySourceConfig},
 };
@@ -30,8 +31,12 @@ pub enum EntitySourceConfigs {
     OracleJdbc(OracleJdbcEntitySourceConfig),
 }
 
+#[derive(Clone)]
 pub enum ConnectionPools {
-    Jdbc(JdbcConnectionPool),
+    OracleJdbc(
+        JdbcConnectionPool,
+        ConnectorEntityConfig<OracleJdbcEntitySourceConfig>,
+    ),
 }
 
 pub enum Connections {
@@ -78,12 +83,16 @@ impl Connectors {
 
     pub fn create_connection_pool(
         &self,
-        options: ConnectionConfigs,
         nc: &NodeConfig,
+        data_source_id: &str,
+        options: ConnectionConfigs,
     ) -> Result<ConnectionPools> {
         Ok(match (self, options) {
             (Connectors::OracleJdbc, ConnectionConfigs::OracleJdbc(options)) => {
-                ConnectionPools::Jdbc(OracleJdbcConnector::create_connection_pool(options, nc)?)
+                ConnectionPools::OracleJdbc(
+                    OracleJdbcConnector::create_connection_pool(options, nc)?,
+                    Self::get_entity_config::<OracleJdbcConnector>(nc, data_source_id)?,
+                )
             }
             (this, options) => bail!(
                 "Type mismatch between connector {:?} and config {:?}",
@@ -91,6 +100,32 @@ impl Connectors {
                 options
             ),
         })
+    }
+
+    fn get_entity_config<TConnector: Connector>(
+        nc: &NodeConfig,
+        data_source_id: &str,
+    ) -> Result<ConnectorEntityConfig<TConnector::TEntitySourceConfig>> {
+        let mut conf = ConnectorEntityConfig::new();
+
+        for entity in nc.entities.iter() {
+            for version in entity
+                .versions
+                .iter()
+                .filter(|i| i.source.data_source_id == data_source_id)
+            {
+                let source =
+                    TConnector::parse_entity_source_options(version.source.options.clone())?;
+
+                conf.add(EntitySource::<TConnector::TEntitySourceConfig>::new(
+                    entity.clone(),
+                    version.version.clone(),
+                    source,
+                )?);
+            }
+        }
+
+        Ok(conf)
     }
 }
 
@@ -110,7 +145,7 @@ impl ConnectionPool for ConnectionPools {
 
     fn acquire(&mut self) -> Result<Self::TConnection> {
         Ok(match self {
-            ConnectionPools::Jdbc(p) => Connections::Jdbc(p.acquire()?),
+            ConnectionPools::OracleJdbc(p, _) => Connections::Jdbc(p.acquire()?),
         })
     }
 }

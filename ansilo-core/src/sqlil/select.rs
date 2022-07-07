@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use serde::{Serialize, Deserialize};
+use bincode::{Encode, Decode};
 
 use super::expr::{EntityVersionIdentifier, Expr};
 
 /// A SQLIL select query
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct Select {
     /// The list of column expressions indexed by their aliases
     pub cols: HashMap<String, Expr>,
@@ -41,7 +41,7 @@ impl Select {
 }
 
 /// A join clause
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct Join {
     /// Join type
     pub r#type: JoinType,
@@ -62,7 +62,7 @@ impl Join {
 }
 
 /// Type of the join
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub enum JoinType {
     Inner,
     Left,
@@ -71,7 +71,7 @@ pub enum JoinType {
 }
 
 /// An ordering expression
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct Ordering {
     /// The type of ordering
     pub r#type: OrderingType,
@@ -86,7 +86,7 @@ impl Ordering {
 }
 
 /// Type of ordering
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub enum OrderingType {
     Asc,
     Desc,

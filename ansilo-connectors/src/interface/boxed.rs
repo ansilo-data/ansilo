@@ -1,25 +1,18 @@
 // pub mod boxed;
 
-use std::any::Any;
+// use std::any::Any;
 
-use ansilo_core::{
-    common::data::DataType,
-    config::{self, EntityVersionConfig, NodeConfig},
-    err::{Error, Result},
-    sqlil as sql,
-};
+// use ansilo_core::{
+//     common::data::DataType,
+//     config::{self, EntityVersionConfig, NodeConfig},
+//     err::{Error, Result},
+//     sqlil as sql,
+// };
 
-use super::{
-    Connection, ConnectionPool, Connector, EntitySearcher, QueryHandle, QueryOperationResult,
-    ResultSet,
-};
-
-/// TODO: transactions
-/// TODO: insert / update
-/// TODO: custom entity config
-
-/// An ansilo connector
-/// A common abstraction over a data sources
+// use super::{
+//     Connection, ConnectionPool, Connector, EntitySearcher, QueryHandle, QueryOperationResult,
+//     ResultSet,
+// };
 // pub trait BoxedConnector {
 //     type BoxedConnectionConfig = BoxedConnectionConfig;
 //     type BoxedEntitySourceConfig = BoxedEntitySourceConfig;
@@ -52,116 +45,124 @@ use super::{
 //     fn create_query_compiler(&self) -> BoxedQueryCompiler;
 // }
 
-pub struct BoxedConnectionConfig(Box<dyn Any>);
-pub struct BoxedEntitySourceConfig(Box<dyn Any>);
-pub struct BoxedQuery(Box<dyn Any>);
-pub struct BoxedQueryHandle(Box<dyn QueryHandle<TResultSet = BoxedResultSet>>);
-pub struct BoxedResultSet(Box<dyn ResultSet>);
-pub struct BoxedConnection(
-    Box<dyn Connection<TQuery = BoxedQuery, TQueryHandle = BoxedQueryHandle>>,
-);
-pub struct BoxedConnectionPool(Box<dyn ConnectionPool<TConnection = BoxedConnection>>);
+// pub struct BoxedConnectionConfig(Box<dyn Any>);
+// pub struct BoxedEntitySourceConfig(Box<dyn Any>);
+// pub struct BoxedQuery(Box<dyn Any>);
+// pub struct BoxedQueryHandle(Box<dyn QueryHandle<TResultSet = BoxedResultSet>>);
+// pub struct BoxedResultSet(Box<dyn ResultSet>);
+// pub struct BoxedConnection(
+//     Box<dyn Connection<TQuery = BoxedQuery, TQueryHandle = BoxedQueryHandle>>,
+// );
+// pub struct BoxedConnectionPool(Box<dyn ConnectionPool<TConnection = BoxedConnection>>);
 
-pub struct Boxing<T>(T);
+// pub struct Boxing<T>(T);
+// #[derive(Clone)]
+// pub struct BoxingClonable<T: Clone>(T);
 
-/// Delegates to the underlying boxed connection pool
-impl ConnectionPool for BoxedConnectionPool {
-    type TConnection = BoxedConnection;
+// /// Delegates to the underlying boxed connection pool
+// impl ConnectionPool for BoxedConnectionPool {
+//     type TConnection = BoxedConnection;
 
-    fn acquire(&mut self) -> Result<Self::TConnection> {
-        self.0.acquire()
-    }
-}
+//     fn acquire(&mut self) -> Result<Self::TConnection> {
+//         self.0.acquire()
+//     }
+// }
 
-/// Blanket impl which adapts existing connection pools to the boxed types
-impl<T: ConnectionPool> ConnectionPool for Boxing<T>
-where
-    T::TConnection: 'static,
-{
-    type TConnection = BoxedConnection;
+// impl Clone for BoxedConnectionPool {
+//     fn clone(&self) -> Self {
+//         Self(Box::new((*self.0).clone()))
+//     }
+// }
 
-    fn acquire(&mut self) -> Result<Self::TConnection> {
-        let con = self.0.acquire()?;
-        let con = Boxing(con);
+// /// Blanket impl which adapts existing connection pools to the boxed types
+// impl<T: ConnectionPool> ConnectionPool for BoxingClonable<T>
+// where
+//     T::TConnection: 'static,
+// {
+//     type TConnection = BoxedConnection;
 
-        Ok(BoxedConnection(Box::new(con)))
-    }
-}
+//     fn acquire(&mut self) -> Result<Self::TConnection> {
+//         let con = self.0.acquire()?;
+//         let con = Boxing(con);
 
-/// Delegates to the underlying boxed connection
-impl Connection for BoxedConnection {
-    type TQuery = BoxedQuery;
-    type TQueryHandle = BoxedQueryHandle;
+//         Ok(BoxedConnection(Box::new(con)))
+//     }
+// }
 
-    fn prepare(&self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
-        self.0.prepare(query)
-    }
-}
+// /// Delegates to the underlying boxed connection
+// impl Connection for BoxedConnection {
+//     type TQuery = BoxedQuery;
+//     type TQueryHandle = BoxedQueryHandle;
 
-/// Blanket impl which adapts existing Connection types the boxed types
-impl<T: Connection> Connection for Boxing<T>
-where
-    T::TQuery: 'static,
-    T::TQueryHandle: 'static,
-{
-    type TQuery = BoxedQuery;
-    type TQueryHandle = BoxedQueryHandle;
+//     fn prepare(&self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
+//         self.0.prepare(query)
+//     }
+// }
 
-    fn prepare(&self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
-        let query = query
-            .0
-            .downcast::<T::TQuery>()
-            .map_err(|_| Error::msg("Failed to downcast query"))?;
-        let rs = Boxing(self.0.prepare(*query)?);
+// /// Blanket impl which adapts existing Connection types the boxed types
+// impl<T: Connection> Connection for Boxing<T>
+// where
+//     T::TQuery: 'static,
+//     T::TQueryHandle: 'static,
+// {
+//     type TQuery = BoxedQuery;
+//     type TQueryHandle = BoxedQueryHandle;
 
-        Ok(BoxedQueryHandle(Box::new(rs)))
-    }
-}
+//     fn prepare(&self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
+//         let query = query
+//             .0
+//             .downcast::<T::TQuery>()
+//             .map_err(|_| Error::msg("Failed to downcast query"))?;
+//         let rs = Boxing(self.0.prepare(*query)?);
 
-/// Delegates to the underlying boxed query handle
-impl QueryHandle for BoxedQueryHandle {
-    type TResultSet = BoxedResultSet;
+//         Ok(BoxedQueryHandle(Box::new(rs)))
+//     }
+// }
 
-    fn get_structure(&self) -> Result<super::QueryInputStructure> {
-        self.0.get_structure()
-    }
+// /// Delegates to the underlying boxed query handle
+// impl QueryHandle for BoxedQueryHandle {
+//     type TResultSet = BoxedResultSet;
 
-    fn write(&mut self, buff: &[u8]) -> Result<usize> {
-        self.0.write(buff)
-    }
+//     fn get_structure(&self) -> Result<super::QueryInputStructure> {
+//         self.0.get_structure()
+//     }
 
-    fn execute(&mut self) -> Result<Self::TResultSet> {
-        self.0.execute()
-    }
-}
+//     fn write(&mut self, buff: &[u8]) -> Result<usize> {
+//         self.0.write(buff)
+//     }
 
-/// Blanket impl which adapts existing QueryHandle types the boxed types
-impl<T: QueryHandle> QueryHandle for Boxing<T>
-where
-    T::TResultSet: 'static,
-{
-    type TResultSet = BoxedResultSet;
+//     fn execute(&mut self) -> Result<Self::TResultSet> {
+//         self.0.execute()
+//     }
+// }
 
-    fn get_structure(&self) -> Result<super::QueryInputStructure> {
-        self.0.get_structure()
-    }
+// /// Blanket impl which adapts existing QueryHandle types the boxed types
+// impl<T: QueryHandle> QueryHandle for Boxing<T>
+// where
+//     T::TResultSet: 'static,
+// {
+//     type TResultSet = BoxedResultSet;
 
-    fn write(&mut self, buff: &[u8]) -> Result<usize> {
-        self.0.write(buff)
-    }
+//     fn get_structure(&self) -> Result<super::QueryInputStructure> {
+//         self.0.get_structure()
+//     }
 
-    fn execute(&mut self) -> Result<Self::TResultSet> {
-        Ok(BoxedResultSet(Box::new(self.0.execute()?)))
-    }
-}
+//     fn write(&mut self, buff: &[u8]) -> Result<usize> {
+//         self.0.write(buff)
+//     }
 
-/// Delegates to the underlying boxed result set
-impl ResultSet for BoxedResultSet {
-    fn get_structure(&self) -> Result<super::RowStructure> {
-        self.0.get_structure()
-    }
+//     fn execute(&mut self) -> Result<Self::TResultSet> {
+//         Ok(BoxedResultSet(Box::new(self.0.execute()?)))
+//     }
+// }
 
-    fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
-        self.0.read(buff)
-    }
-}
+// /// Delegates to the underlying boxed result set
+// impl ResultSet for BoxedResultSet {
+//     fn get_structure(&self) -> Result<super::RowStructure> {
+//         self.0.get_structure()
+//     }
+
+//     fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
+//         self.0.read(buff)
+//     }
+// }

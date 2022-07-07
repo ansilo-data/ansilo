@@ -1,3 +1,4 @@
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 pub use chrono;
@@ -6,7 +7,7 @@ pub use rust_decimal;
 pub use uuid;
 
 /// Data type of values
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub enum DataType {
     Varchar(VarcharOptions),
     Binary,
@@ -62,7 +63,9 @@ impl From<DataValue> for DataType {
     fn from(v: DataValue) -> Self {
         match v {
             DataValue::Null => DataType::Null,
-            DataValue::Varchar(_) => DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
+            DataValue::Varchar(_) => {
+                DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+            }
             DataValue::Binary(_) => DataType::Binary,
             DataValue::Boolean(_) => DataType::Boolean,
             DataValue::Int8(_) => DataType::Int8,
@@ -87,7 +90,7 @@ impl From<DataValue> for DataType {
 }
 
 /// Options for the VARCHAR data type
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct VarcharOptions {
     /// Maximum length of the varchar data in bytes
     pub length: Option<u32>,
@@ -102,7 +105,7 @@ impl VarcharOptions {
 }
 
 /// Types of encoding of textual data
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub enum EncodingType {
     Ascii,
     Utf8,
@@ -112,7 +115,7 @@ pub enum EncodingType {
 }
 
 /// Decimal options
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode, Default)]
 pub struct DecimalOptions {
     /// The capacity of number of digits for the type
     pub precision: Option<u16>,

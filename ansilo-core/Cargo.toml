@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0", features = ["backtrace"] }
+bincode = { version = "2.0.0-rc.1", features = ["serde"] }
 chrono = { version = "0.4", features = ["std", "clock", "time", "libc", "serde"] }
 chrono-tz = { version = "0.6", features = ["serde"] }
 rust_decimal = { version = "1.25", features = ["serde", "std"] }

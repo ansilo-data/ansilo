@@ -10,7 +10,7 @@ use ansilo_core::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConnectorEntityConfig<TEntitySourceConfig>
 where
-    TEntitySourceConfig: Sized,
+    TEntitySourceConfig: Clone + Sized,
 {
     /// The configuration of all the entities attached to this connector
     /// Keyed by the tuple of (entity id, version id)
@@ -62,7 +62,7 @@ where
 
 impl<T> ConnectorEntityConfig<T>
 where
-    T: Sized,
+    T: Clone + Sized,
 {
     pub fn new() -> Self {
         Self {

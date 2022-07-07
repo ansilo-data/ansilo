@@ -7,7 +7,7 @@ use ansilo_core::{
     err::Result,
     sqlil as sql,
 };
-use serde::{Deserialize, Serialize};
+use bincode::{Encode, Decode};
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
@@ -18,8 +18,8 @@ use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 /// An ansilo connector
 /// A common abstraction over a data sources
 pub trait Connector {
-    type TConnectionConfig;
-    type TEntitySourceConfig;
+    type TConnectionConfig: Clone + Send + 'static;
+    type TEntitySourceConfig: Clone + Send + 'static;
     type TConnectionPool: ConnectionPool<TConnection = Self::TConnection>;
     type TConnection: Connection<TQuery = Self::TQuery, TQueryHandle = Self::TQueryHandle>;
     type TEntitySearcher: EntitySearcher<
@@ -62,7 +62,7 @@ pub trait Connector {
 }
 
 /// Opens a connection to the target data source
-pub trait ConnectionPool {
+pub trait ConnectionPool: Clone + Sized + Send + Sync + 'static {
     type TConnection: Connection;
 
     /// Acquires a connection to the target data source
@@ -105,7 +105,7 @@ pub trait EntityValidator {
 }
 
 /// Select planning operations
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub enum SelectQueryOperation{
     AddColumn((String, sql::Expr)),
     AddWhere(sql::Expr),
@@ -120,7 +120,7 @@ pub enum SelectQueryOperation{
 pub trait QueryPlanner {
     type TConnection: Connection;
     type TQuery;
-    type TEntitySourceConfig;
+    type TEntitySourceConfig: Clone;
 
     /// Gets an estimate of the number of rows for the entity
     fn estimate_size(
@@ -148,7 +148,7 @@ pub trait QueryPlanner {
 pub trait QueryCompiler {
     type TConnection: Connection;
     type TQuery;
-    type TEntitySourceConfig;
+    type TEntitySourceConfig: Clone;
 
     /// Compiles the select into a connector-specific query object
     fn compile_select(
@@ -159,7 +159,7 @@ pub trait QueryCompiler {
 }
 
 /// A size estimate of the entity
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Encode, Decode)]
 pub struct EntitySizeEstimate {
     /// The estimated number of rows
     pub rows: Option<u64>,
@@ -174,14 +174,14 @@ impl EntitySizeEstimate {
 }
 
 /// A cost estimate for a query operation
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub enum QueryOperationResult {
     PerformedRemotely(OperationCost),
     PerformedLocally,
 }
 
 /// A cost estimate for a query operation
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct OperationCost {
     /// The estimated number of rows
     pub rows: Option<u32>,

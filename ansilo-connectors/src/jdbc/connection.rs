@@ -10,6 +10,7 @@ use crate::interface::{Connection, ConnectionPool};
 use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, Jvm};
 
 /// Implementation for opening JDBC connections
+#[derive(Clone)]
 pub struct JdbcConnectionPool {
     pool: r2d2::Pool<Manager>,
 }

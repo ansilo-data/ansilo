@@ -1,12 +1,14 @@
-use ansilo_connectors::interface::{QueryOperationResult, SelectQueryOperation};
+use ansilo_connectors::interface::{
+    EntitySizeEstimate, QueryOperationResult, SelectQueryOperation,
+};
 use ansilo_core::sqlil::EntityVersionIdentifier;
-use serde::{Deserialize, Serialize};
+use bincode::{Decode, Encode};
 
 /// Protocol messages sent by postgres
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub enum ClientMessage {
-    /// Send authentication token and the data source id
-    AuthDataSource(String, String),
+    /// Send authentication token
+    AuthDataSource(String),
     /// Estimates the number of entities from the source
     EstimateSize(EntityVersionIdentifier),
     /// Operations for a SELECT query
@@ -15,17 +17,19 @@ pub enum ClientMessage {
     Prepare,
     /// Write params to query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
-    WriteParams(#[serde(with = "serde_bytes")] Vec<u8>),
+    WriteParams(Vec<u8>),
     /// Execute the current query with the supplied params
     Execute,
     /// Read up to the supplied number of bytes from the query
     Read(u32),
+    /// Instruct the server to close the connection
+    Close,
     /// Error occurred with message
     GenericError(String),
 }
 
 /// Operations for a SELECT query sent from postgres
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub enum ClientSelectMessage {
     /// Creates a select query for the supplied entity
     Create(EntityVersionIdentifier),
@@ -36,13 +40,13 @@ pub enum ClientSelectMessage {
 }
 
 /// Protocol messages sent by ansilo
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub enum ServerMessage {
     /// Token was accepted
     AuthAccepted,
-    /// Token was rejected and error message
-    TokenRejected(String),
-    /// Select was created
+    /// Estimated size result
+    EstimatedSizeResult(EntitySizeEstimate),
+    /// Select query specific message
     Select(ServerSelectMessage),
     /// Query params written
     QueryParamsWritten,
@@ -52,13 +56,13 @@ pub enum ServerMessage {
     QueryExecuted,
     /// Rows returned by the query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
-    ResultData(#[serde(with = "serde_bytes")] Vec<u8>),
+    ResultData(Vec<u8>),
     /// Error occurred with message
     GenericError(String),
 }
 
 /// Results for operations on SELECT queries from ansilo
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub enum ServerSelectMessage {
     /// The result of the query operation
     Result(QueryOperationResult),

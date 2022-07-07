@@ -54,7 +54,7 @@ impl OracleJdbcConnectionConfig {
 }
 
 /// Entity source config for Oracle JDBC driver
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum OracleJdbcEntitySourceConfig {
     Table(OracleJdbcTableOptions),
@@ -69,7 +69,7 @@ impl OracleJdbcEntitySourceConfig {
 }
 
 /// Entity source configuration for mapping an entity to a table
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcTableOptions {
     /// The database name
     pub database_name: Option<String>,
@@ -94,7 +94,7 @@ impl OracleJdbcTableOptions {
 }
 
 /// Entity source configuration for mapping an entity to custom queries
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcCustomQueryOptions {
     /// The select query used to read entities, none if select is not supported
     pub select_query: Option<OracleJdbcSelectQueryOptions>,
@@ -122,7 +122,7 @@ impl OracleJdbcCustomQueryOptions {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcSelectQueryOptions {
     /// The select SQL query
     pub query: String,
@@ -139,7 +139,7 @@ impl OracleJdbcSelectQueryOptions {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcModifyQueryOptions {
     /// The insert/update/delete SQL query
     pub query: String,
