@@ -21,36 +21,36 @@ use ansilo_logging::error;
 
 use super::{channel::IpcServerChannel, connection::FdwConnection};
 
-/// TODO: organise
-pub struct AppState {
-    /// The ansilo app config
-    conf: &'static NodeConfig,
-    /// The instance connection pools
-    pools: HashMap<String, ConnectionPools>,
-}
+// /// TODO: organise
+// pub struct AppState {
+//     /// The ansilo app config
+//     conf: &'static NodeConfig,
+//     /// The instance connection pools
+//     pools: HashMap<String, ConnectionPools>,
+// }
 
-impl AppState {
-    fn connection(&mut self, data_source_id: &str) -> Result<Connections> {
-        if !self.pools.contains_key(data_source_id) {
-            let source_conf = self
-                .conf
-                .sources
-                .iter()
-                .find(|i| i.id == data_source_id)
-                .unwrap();
+// impl AppState {
+//     fn connection(&mut self, data_source_id: &str) -> Result<Connections> {
+//         if !self.pools.contains_key(data_source_id) {
+//             let source_conf = self
+//                 .conf
+//                 .sources
+//                 .iter()
+//                 .find(|i| i.id == data_source_id)
+//                 .unwrap();
 
-            let connector = source_conf.r#type.parse::<Connectors>()?;
-            let config = connector.parse_options(source_conf.options.clone())?;
-            let pool = connector.create_connection_pool(self.conf, data_source_id, config)?;
+//             let connector = source_conf.r#type.parse::<Connectors>()?;
+//             let config = connector.parse_options(source_conf.options.clone())?;
+//             let pool = connector.create_connection_pool(self.conf, data_source_id, config)?;
 
-            self.pools.insert(data_source_id.to_string(), pool);
-        }
+//             self.pools.insert(data_source_id.to_string(), pool);
+//         }
 
-        let pool = self.pools.get_mut(data_source_id).unwrap();
+//         let pool = self.pools.get_mut(data_source_id).unwrap();
 
-        pool.acquire()
-    }
-}
+//         pool.acquire()
+//     }
+// }
 
 /// Handles connections back from postgres
 pub struct FdwServer {
@@ -62,18 +62,11 @@ pub struct FdwServer {
 
 impl FdwServer {
     /// Starts a new server instance listening at the specified path
-    pub fn start(
-        conf: &'static NodeConfig,
-        path: PathBuf,
-        pools: HashMap<String, ConnectionPools>,
-    ) -> Result<Self> {
+    pub fn start(path: PathBuf, pools: HashMap<String, ConnectionPools>) -> Result<Self> {
         let paths = Self::create_paths(path.as_path(), &pools);
-        let threads = Self::start_threads(conf, &paths, &pools)?;
+        let threads = Self::start_threads(&paths, &pools)?;
 
-        Ok(Self {
-            paths,
-            threads,
-        })
+        Ok(Self { paths, threads })
     }
 
     /// Gets the mapping of data source ids to their paths
@@ -83,6 +76,7 @@ impl FdwServer {
 
     /// Waits for all listener threads complete
     pub fn wait(self) -> Result<()> {
+        // TODO: Use mpsc channels to receive early terminations
         for thread in self.threads.into_iter() {
             if let Err(_) = thread.join() {
                 bail!("Error occurred while waiting for thread")
@@ -103,7 +97,6 @@ impl FdwServer {
     }
 
     fn start_threads(
-        conf: &'static NodeConfig,
         paths: &HashMap<String, PathBuf>,
         pools: &HashMap<String, ConnectionPools>,
     ) -> Result<Vec<JoinHandle<()>>> {
@@ -117,7 +110,7 @@ impl FdwServer {
             let path = path.clone();
 
             threads.push(thread::spawn(move || {
-                let res = FdwServer::listen(conf, &path, pool);
+                let res = FdwServer::listen(&path, pool);
 
                 if let Err(err) = res {
                     error!("FDW Listener error: {}", err);
@@ -128,10 +121,10 @@ impl FdwServer {
         Ok(threads)
     }
 
-    fn listen(conf: &'static NodeConfig, path: &PathBuf, pool: ConnectionPools) -> Result<()> {
+    fn listen(path: &PathBuf, pool: ConnectionPools) -> Result<()> {
         match pool {
             ConnectionPools::OracleJdbc(pool, entities) => {
-                FdwListener::<OracleJdbcConnector>::bind(conf, path, pool, entities)?.listen()?
+                FdwListener::<OracleJdbcConnector>::bind(path, pool, entities)?.listen()?
             }
         };
 
@@ -141,8 +134,6 @@ impl FdwServer {
 
 /// Handles connections from postgres, serving data from a connector
 pub struct FdwListener<TConnector: Connector> {
-    /// The ansilo app config
-    conf: &'static NodeConfig,
     /// The unix socket the server listens on
     listener: UnixListener,
     /// The instance connection pool attached to this server
@@ -154,7 +145,6 @@ pub struct FdwListener<TConnector: Connector> {
 impl<TConnector: Connector> FdwListener<TConnector> {
     /// Starts a server which listens
     pub fn bind(
-        conf: &'static NodeConfig,
         path: &Path,
         pool: TConnector::TConnectionPool,
         entities: ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
@@ -162,7 +152,6 @@ impl<TConnector: Connector> FdwListener<TConnector> {
         let listener = UnixListener::bind(path).context("Failed to bind socket")?;
 
         Ok(Self {
-            conf,
             listener,
             pool,
             entities,

@@ -7,3 +7,6 @@ pub mod channel;
 pub mod server;
 pub mod bincode;
 pub mod connection;
+
+#[cfg(test)]
+mod test;

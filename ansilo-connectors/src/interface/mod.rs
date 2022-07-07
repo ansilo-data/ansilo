@@ -47,7 +47,6 @@ pub trait Connector {
     /// The type of the connector, usually the name of the target platform, eg 'postgres'
     const TYPE: &'static str;
 
-
     /// Parses the supplied configuration yaml into the strongly typed Options
     fn parse_options(options: config::Value) -> Result<Self::TConnectionConfig>;
 
@@ -58,6 +57,7 @@ pub trait Connector {
     fn create_connection_pool(
         options: Self::TConnectionConfig,
         nc: &NodeConfig,
+        entities: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
     ) -> Result<Self::TConnectionPool>;
 }
 

@@ -104,27 +104,13 @@ impl IpcServerChannel {
 mod tests {
     use std::{fs, os::unix::net::UnixListener, thread};
 
+    use crate::fdw::test::create_tmp_ipc_channel;
+
     use super::*;
-
-    fn create_tmp_channel(name: &'static str) -> (IpcClientChannel, IpcServerChannel) {
-        let path = format!("/tmp/ansilo-ipc-{name}.sock");
-        let _ = fs::remove_file(path.clone());
-        let listener = UnixListener::bind(path.clone()).unwrap();
-
-        let listen_thread = thread::spawn(move || listener.accept().unwrap().0);
-
-        let client_stream = UnixStream::connect(path).unwrap();
-        let server_stream = listen_thread.join().unwrap();
-
-        (
-            IpcClientChannel::new(client_stream),
-            IpcServerChannel::new(server_stream),
-        )
-    }
 
     #[test]
     fn test_ipc_channel_send_recv() {
-        let (mut client, mut server) = create_tmp_channel("send_recv");
+        let (mut client, mut server) = create_tmp_ipc_channel("send_recv");
 
         let server_thread = thread::spawn(move || {
             server
@@ -145,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_ipc_channel_send_recv_multiple() {
-        let (mut client, mut server) = create_tmp_channel("send_recv_multiple");
+        let (mut client, mut server) = create_tmp_ipc_channel("send_recv_multiple");
 
         let server_thread = thread::spawn(move || {
             for _ in 1..100 {
@@ -168,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_ipc_channel_send_recv_large() {
-        let (mut client, mut server) = create_tmp_channel("send_recv_large");
+        let (mut client, mut server) = create_tmp_ipc_channel("send_recv_large");
         let param_buff = [8u8; 10240];
         let result_buff = [16u8; 10240];
 
@@ -195,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_ipc_channel_client_unexpected_close() {
-        let (client, mut server) = create_tmp_channel("client_unexpected_close");
+        let (client, mut server) = create_tmp_ipc_channel("client_unexpected_close");
 
         let server_thread = thread::spawn(move || {
             server.recv(|req| unreachable!()).unwrap_err();
@@ -207,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_ipc_channel_server_unexpected_close() {
-        let (mut client, server) = create_tmp_channel("server_unexpected_close");
+        let (mut client, server) = create_tmp_ipc_channel("server_unexpected_close");
 
         drop(server);
 
@@ -216,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_ipc_channel_graceful_close() {
-        let (mut client, mut server) = create_tmp_channel("graceful_close");
+        let (mut client, mut server) = create_tmp_ipc_channel("graceful_close");
         let param_buff = [8u8; 10240];
         let result_buff = [16u8; 10240];
 

@@ -1,15 +1,12 @@
-// pub mod boxed;
-
 use std::str::FromStr;
 
 use ansilo_core::{
     config::{self, NodeConfig},
-    err::{bail, Error, Result},
-    sqlil as sql,
+    err::{bail, Result},
 };
 
 use crate::{
-    common::entity::{ConnectorEntityConfig, EntitySource},
+    common::entity::ConnectorEntityConfig,
     jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector, OracleJdbcEntitySourceConfig},
 };
@@ -89,9 +86,10 @@ impl Connectors {
     ) -> Result<ConnectionPools> {
         Ok(match (self, options) {
             (Connectors::OracleJdbc, ConnectionConfigs::OracleJdbc(options)) => {
+                let entities = Self::get_entity_config::<OracleJdbcConnector>(nc, data_source_id)?;
                 ConnectionPools::OracleJdbc(
-                    OracleJdbcConnector::create_connection_pool(options, nc)?,
-                    Self::get_entity_config::<OracleJdbcConnector>(nc, data_source_id)?,
+                    OracleJdbcConnector::create_connection_pool(options, nc, &entities)?,
+                    entities,
                 )
             }
             (this, options) => bail!(
@@ -106,26 +104,10 @@ impl Connectors {
         nc: &NodeConfig,
         data_source_id: &str,
     ) -> Result<ConnectorEntityConfig<TConnector::TEntitySourceConfig>> {
-        let mut conf = ConnectorEntityConfig::new();
-
-        for entity in nc.entities.iter() {
-            for version in entity
-                .versions
-                .iter()
-                .filter(|i| i.source.data_source_id == data_source_id)
-            {
-                let source =
-                    TConnector::parse_entity_source_options(version.source.options.clone())?;
-
-                conf.add(EntitySource::<TConnector::TEntitySourceConfig>::new(
-                    entity.clone(),
-                    version.version.clone(),
-                    source,
-                )?);
-            }
-        }
-
-        Ok(conf)
+        ConnectorEntityConfig::<TConnector::TEntitySourceConfig>::from::<TConnector>(
+            nc,
+            data_source_id,
+        )
     }
 }
 

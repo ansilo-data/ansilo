@@ -1,10 +1,12 @@
 use std::collections::{hash_map::Values, HashMap};
 
 use ansilo_core::{
-    config::{EntityConfig, EntityVersionConfig},
+    config::{EntityConfig, EntityVersionConfig, NodeConfig},
     err::{bail, Result},
     sqlil::EntityVersionIdentifier,
 };
+
+use crate::interface::Connector;
 
 /// Configuration of all entities attached to a connector
 #[derive(Debug, Clone, PartialEq)]
@@ -51,7 +53,7 @@ where
         })
     }
 
-    pub fn entity_version_config(&self) -> &EntityVersionConfig {
+    pub fn version(&self) -> &EntityVersionConfig {
         self.conf
             .versions
             .iter()
@@ -68,6 +70,32 @@ where
         Self {
             entities: HashMap::new(),
         }
+    }
+
+    pub fn from<TConnector: Connector>(
+        nc: &NodeConfig,
+        data_source_id: &str,
+    ) -> Result<ConnectorEntityConfig<TConnector::TEntitySourceConfig>> {
+        let mut conf = ConnectorEntityConfig::<TConnector::TEntitySourceConfig>::new();
+
+        for entity in nc.entities.iter() {
+            for version in entity
+                .versions
+                .iter()
+                .filter(|i| i.source.data_source_id == data_source_id)
+            {
+                let source =
+                    TConnector::parse_entity_source_options(version.source.options.clone())?;
+
+                conf.add(EntitySource::<TConnector::TEntitySourceConfig>::new(
+                    entity.clone(),
+                    version.version.clone(),
+                    source,
+                )?);
+            }
+        }
+
+        Ok(conf)
     }
 
     pub fn add(&mut self, entity: EntitySource<T>) {

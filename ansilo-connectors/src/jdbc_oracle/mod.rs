@@ -1,6 +1,6 @@
 use crate::{
     interface::Connector,
-    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
+    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet}, common::entity::ConnectorEntityConfig,
 };
 
 mod conf;
@@ -48,6 +48,7 @@ impl Connector for OracleJdbcConnector {
     fn create_connection_pool(
         options: OracleJdbcConnectionConfig,
         _nc: &NodeConfig,
+        _entities: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
     ) -> Result<Self::TConnectionPool> {
         JdbcConnectionPool::new(options)
     }
