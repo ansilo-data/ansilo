@@ -4,8 +4,8 @@ target/
 *.iml
 **/*.rs.bk
 Cargo.lock
-!.cargo/config
-.cargo
+.cargo/
+!.devcontainer/.cargo/
 .m2/
 .vscode-server/
 

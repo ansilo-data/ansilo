@@ -42,6 +42,7 @@ RUN cd ~/ && \
     make -j$(nproc) CXX=clang++ && \
     sudo make install && \
     cd .. && sudo rm -rf ./mold/
+COPY .cargo /.cargo
 
 # Install ecs-cli
 # TODO: Hopefully https://github.com/aws/amazon-ecs-cli/pull/1150 gets merged and can use mainline
