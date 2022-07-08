@@ -1,6 +1,7 @@
 use std::{io::Write, os::unix::net::UnixStream};
 
 use ansilo_core::err::{Context, Result};
+use ansilo_logging::error;
 
 use super::{
     bincode::bincode_conf,
@@ -13,6 +14,8 @@ pub(crate) struct IpcClientChannel {
     sock: UnixStream,
     /// The binconde config used for serialisation
     conf: bincode::config::Configuration,
+    /// Whether the connection has been closed
+    closed: bool,
 }
 
 /// A request-response channel used for IPC between postgres and ansilo
@@ -28,6 +31,7 @@ impl IpcClientChannel {
         Self {
             sock,
             conf: bincode_conf(),
+            closed: false,
         }
     }
 
@@ -51,6 +55,10 @@ impl IpcClientChannel {
 
     /// Sends the a close message to the server
     pub fn close(&mut self) -> Result<()> {
+        if self.closed {
+            return Ok(());
+        }
+
         bincode::encode_into_std_write::<ClientMessage, _, _>(
             ClientMessage::Close,
             &mut self.sock,
@@ -59,7 +67,16 @@ impl IpcClientChannel {
         .context("Failed to send message")?;
 
         self.sock.flush().context("Failed to flush sock")?;
+        self.closed = true;
         Ok(())
+    }
+}
+
+impl Drop for IpcClientChannel {
+    fn drop(&mut self) {
+        if let Err(err) = self.close() {
+            error!("Failed to close ipc channel: {}", err);
+        }
     }
 }
 
@@ -102,7 +119,9 @@ impl IpcServerChannel {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, os::unix::net::UnixListener, thread};
+    use std::{os::unix::prelude::AsRawFd, thread};
+
+    use nix::libc::close;
 
     use crate::fdw::test::create_tmp_ipc_channel;
 
@@ -184,10 +203,14 @@ mod tests {
         let (client, mut server) = create_tmp_ipc_channel("client_unexpected_close");
 
         let server_thread = thread::spawn(move || {
-            server.recv(|req| unreachable!()).unwrap_err();
+            server.recv(|_req| unreachable!()).unwrap_err();
         });
 
-        drop(client);
+        unsafe {
+            let fd = client.sock.as_raw_fd();
+            close(fd);
+            std::mem::forget(client);
+        }
         server_thread.join().unwrap();
     }
 
@@ -203,8 +226,6 @@ mod tests {
     #[test]
     fn test_ipc_channel_graceful_close() {
         let (mut client, mut server) = create_tmp_ipc_channel("graceful_close");
-        let param_buff = [8u8; 10240];
-        let result_buff = [16u8; 10240];
 
         let server_thread = thread::spawn(move || {
             server
@@ -216,6 +237,24 @@ mod tests {
         });
 
         client.close().unwrap();
+
+        server_thread.join().unwrap();
+    }
+
+    #[test]
+    fn test_ipc_channel_graceful_close_via_drop() {
+        let (client, mut server) = create_tmp_ipc_channel("graceful_close_drop");
+
+        let server_thread = thread::spawn(move || {
+            server
+                .recv(|req| {
+                    assert_eq!(req, ClientMessage::Close);
+                    Ok(None)
+                })
+                .unwrap();
+        });
+
+        drop(client);
 
         server_thread.join().unwrap();
     }

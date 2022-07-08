@@ -31,12 +31,12 @@ impl QueryPlanner for MemoryQueryPlanner {
                     .ok_or(Error::msg("Could not find entity"))?
                     .len() as _,
             ),
-            Some(entity.version().attributes.len() as _),
+            None
         ))
     }
 
     fn create_base_select(
-        _connection: &MemoryConnection,
+        connection: &MemoryConnection,
         _conf: &ConnectorEntityConfig<()>,
         entity: &EntitySource<()>,
     ) -> Result<(OperationCost, sql::Select)> {
@@ -44,7 +44,8 @@ impl QueryPlanner for MemoryQueryPlanner {
             entity.conf.id.as_str(),
             entity.version_id.as_str(),
         ));
-        let costs = OperationCost::new(None, None, None);
+        let cost = Self::estimate_size(connection, entity).unwrap();
+        let costs = OperationCost::new(cost.rows, None, None);
         Ok((costs, select))
     }
 

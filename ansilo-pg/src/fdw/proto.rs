@@ -1,5 +1,5 @@
 use ansilo_connectors::interface::{
-    EntitySizeEstimate, QueryOperationResult, SelectQueryOperation,
+    EntitySizeEstimate, QueryOperationResult, SelectQueryOperation, RowStructure,
 };
 use ansilo_core::sqlil::EntityVersionIdentifier;
 use bincode::{Decode, Encode};
@@ -53,7 +53,7 @@ pub enum ServerMessage {
     /// The query was prepared
     QueryPrepared,
     /// The query was executed
-    QueryExecuted,
+    QueryExecuted(RowStructure),
     /// Rows returned by the query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
     ResultData(Vec<u8>),

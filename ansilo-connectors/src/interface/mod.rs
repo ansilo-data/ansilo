@@ -7,7 +7,7 @@ use ansilo_core::{
     err::Result,
     sqlil as sql,
 };
-use bincode::{Encode, Decode};
+use bincode::{Decode, Encode};
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
@@ -106,7 +106,7 @@ pub trait EntityValidator {
 
 /// Select planning operations
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
-pub enum SelectQueryOperation{
+pub enum SelectQueryOperation {
     AddColumn((String, sql::Expr)),
     AddWhere(sql::Expr),
     AddJoin(sql::Join),
@@ -140,7 +140,7 @@ pub trait QueryPlanner {
         connection: &Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         select: &mut sql::Select,
-        op: SelectQueryOperation
+        op: SelectQueryOperation,
     ) -> Result<QueryOperationResult>;
 }
 
@@ -184,15 +184,15 @@ pub enum QueryOperationResult {
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct OperationCost {
     /// The estimated number of rows
-    pub rows: Option<u32>,
+    pub rows: Option<u64>,
     /// The relative cost factor of opening the connection for this operation
-    pub connection_cost: Option<u32>,
+    pub connection_cost: Option<u64>,
     /// The relative cost factor of performing the operation
-    pub total_cost: Option<u32>,
+    pub total_cost: Option<u64>,
 }
 
 impl OperationCost {
-    pub fn new(rows: Option<u32>, connection_cost: Option<u32>, total_cost: Option<u32>) -> Self {
+    pub fn new(rows: Option<u64>, connection_cost: Option<u64>, total_cost: Option<u64>) -> Self {
         Self {
             rows,
             connection_cost,
@@ -240,7 +240,7 @@ pub trait ResultSet {
 }
 
 /// The structure of a row
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct RowStructure {
     /// The list of named columns in the row with their corrosponding data types
     pub cols: Vec<(String, DataType)>,
@@ -249,5 +249,9 @@ pub struct RowStructure {
 impl RowStructure {
     pub fn new(cols: Vec<(String, DataType)>) -> Self {
         Self { cols }
+    }
+
+    pub fn types(&self) -> Vec<DataType> {
+        self.cols.iter().map(|i| i.1.clone()).collect()
     }
 }

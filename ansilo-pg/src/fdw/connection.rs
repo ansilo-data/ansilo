@@ -103,10 +103,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
                 self.write_params(data)?;
                 ServerMessage::QueryParamsWritten
             }
-            ClientMessage::Execute => {
-                self.execute()?;
-                ServerMessage::QueryExecuted
-            }
+            ClientMessage::Execute => ServerMessage::QueryExecuted(self.execute()?),
             ClientMessage::Read(len) => {
                 // TODO: remove copy
                 let mut buff = vec![0u8; len as usize];
@@ -217,13 +214,14 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(())
     }
 
-    fn execute(&mut self) -> Result<()> {
+    fn execute(&mut self) -> Result<RowStructure> {
         let handle = self.query.query_handle()?;
 
         let result_set = handle.0.execute()?;
+        let row_structure = result_set.get_structure()?;
 
         self.query = FdwQueryState::Executed(ResultSetRead(result_set));
-        Ok(())
+        Ok(row_structure)
     }
 
     fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
@@ -266,5 +264,231 @@ impl<TConnector: Connector> FdwConnectionState<TConnector> {
             FdwConnectionState::Connected(c) => c,
             _ => bail!("Unexpected connection state"),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io,
+        thread::{self, JoinHandle},
+    };
+
+    use ansilo_connectors::{
+        common::{data::DataReader, entity::EntitySource},
+        memory::{MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector},
+    };
+    use ansilo_core::{
+        common::data::{DataType, DataValue},
+        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+    };
+
+    use crate::fdw::{channel::IpcClientChannel, test::create_tmp_ipc_channel};
+
+    use super::*;
+
+    fn create_memory_connection_pool() -> (ConnectorEntityConfig<()>, MemoryConnectionPool) {
+        let mut conf = MemoryConnectionConfig::new();
+        let mut entities = ConnectorEntityConfig::new();
+
+        entities.add(EntitySource::minimal(
+            "people",
+            EntityVersionConfig::minimal(
+                "1.0",
+                vec![
+                    EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
+                    EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
+                ],
+                EntitySourceConfig::minimal(""),
+            ),
+            (),
+        ));
+
+        conf.set_data(
+            "people",
+            "1.0",
+            vec![
+                vec![DataValue::from("Mary"), DataValue::from("Jane")],
+                vec![DataValue::from("John"), DataValue::from("Smith")],
+                vec![DataValue::from("Gary"), DataValue::from("Gregson")],
+            ],
+        );
+
+        let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
+            .unwrap();
+
+        (entities, pool)
+    }
+
+    fn create_mock_connection(name: &'static str) -> (JoinHandle<Result<()>>, IpcClientChannel) {
+        let (entities, pool) = create_memory_connection_pool();
+
+        let (client_chan, server_chan) = create_tmp_ipc_channel(name);
+
+        let thread = thread::spawn(move || {
+            let mut fdw = FdwConnection::<MemoryConnector>::new(server_chan, entities, pool);
+
+            fdw.process()
+        });
+
+        (thread, client_chan)
+    }
+
+    fn send_auth_token(client: &mut IpcClientChannel) {
+        let res = client
+            .send(ClientMessage::AuthDataSource("TOKEN".to_string()))
+            .unwrap();
+        assert_eq!(res, ServerMessage::AuthAccepted);
+    }
+
+    #[test]
+    fn test_fdw_connection_estimate_size() {
+        let (thread, mut client) = create_mock_connection("connection_estimate_size");
+
+        send_auth_token(&mut client);
+
+        let res = client
+            .send(ClientMessage::EstimateSize(sqlil::entity("people", "1.0")))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::EstimatedSizeResult(EntitySizeEstimate::new(Some(3), None))
+        );
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_auth_estimate_size_without_auth() {
+        let (thread, mut client) = create_mock_connection("connection_estimate_size_no_auth");
+
+        let res = client
+            .send(ClientMessage::EstimateSize(sqlil::entity("people", "1.0")))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::GenericError("Unexpected connection state".to_string())
+        );
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_estimate_size_unknown_entity() {
+        let (thread, mut client) =
+            create_mock_connection("connection_estimate_size_unknown_entity");
+
+        send_auth_token(&mut client);
+
+        let res = client
+            .send(ClientMessage::EstimateSize(sqlil::entity("unknown", "1.0")))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::GenericError("Failed to find entity with id".to_string())
+        );
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_auth_select() {
+        let (thread, mut client) = create_mock_connection("connection_select");
+
+        send_auth_token(&mut client);
+
+        let res = client
+            .send(ClientMessage::Select(ClientSelectMessage::Create(
+                sqlil::entity("people", "1.0"),
+            )))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Select(ServerSelectMessage::Result(
+                QueryOperationResult::PerformedRemotely(OperationCost::new(Some(3), None, None))
+            ))
+        );
+
+        let res = client
+            .send(ClientMessage::Select(ClientSelectMessage::Apply(
+                SelectQueryOperation::AddColumn((
+                    "first_name".into(),
+                    sqlil::Expr::attr("people", "1.0", "first_name"),
+                )),
+            )))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Select(ServerSelectMessage::Result(
+                QueryOperationResult::PerformedRemotely(OperationCost::new(None, None, None))
+            ))
+        );
+
+        let res = client
+            .send(ClientMessage::Select(ClientSelectMessage::Estimate(
+                SelectQueryOperation::SetRowOffset(5),
+            )))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Select(ServerSelectMessage::Result(
+                QueryOperationResult::PerformedRemotely(OperationCost::new(None, None, None))
+            ))
+        );
+
+        let res = client.send(ClientMessage::Prepare).unwrap();
+        assert_eq!(res, ServerMessage::QueryPrepared);
+
+        let res = client.send(ClientMessage::Execute).unwrap();
+        let row_structure = RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
+        assert_eq!(res, ServerMessage::QueryExecuted(row_structure.clone()));
+
+        let res = client.send(ClientMessage::Read(1024)).unwrap();
+        let data = match res {
+            ServerMessage::ResultData(data) => data,
+            _ => unreachable!("Unexpected response {:?}", res),
+        };
+
+        let mut result_data = DataReader::new(io::Cursor::new(data), row_structure.types());
+
+        assert_eq!(
+            result_data.read_data_value().unwrap(),
+            Some(DataValue::from("Mary"))
+        );
+        assert_eq!(
+            result_data.read_data_value().unwrap(),
+            Some(DataValue::from("John"))
+        );
+        assert_eq!(
+            result_data.read_data_value().unwrap(),
+            Some(DataValue::from("Gary"))
+        );
+        assert_eq!(result_data.read_data_value().unwrap(), None);
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_auth_execute_without_auth() {
+        let (thread, mut client) = create_mock_connection("connection_execute_without_auth");
+
+        send_auth_token(&mut client);
+
+        let res = client.send(ClientMessage::Execute).unwrap();
+
+        assert_eq!(res, ServerMessage::GenericError("Unexpected query state".into()));
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
     }
 }
