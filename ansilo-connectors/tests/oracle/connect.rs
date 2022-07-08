@@ -1,18 +1,21 @@
 use std::{collections::HashMap, env};
 
 use ansilo_connectors::{
-    common::data::ResultSetReader,
+    common::{data::ResultSetReader, entity::ConnectorEntityConfig},
     interface::{Connection, ConnectionPool, Connector, QueryHandle},
     jdbc::JdbcQuery,
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector},
 };
 use ansilo_core::{common::data::DataValue, config::NodeConfig};
 
-use crate::{oracle::start_oracle, common::get_current_target_dir};
+use crate::{common::get_current_target_dir, oracle::start_oracle};
 
 #[test]
 fn test_oracle_jdbc_open_connection_and_execute_query() {
-    env::set_var("ANSILO_CLASSPATH", get_current_target_dir().to_str().unwrap());
+    env::set_var(
+        "ANSILO_CLASSPATH",
+        get_current_target_dir().to_str().unwrap(),
+    );
 
     let containers = start_oracle();
 
@@ -30,13 +33,17 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
             );
             props
         },
-        None
+        None,
     );
 
-    let con = OracleJdbcConnector::create_connection_pool(config.clone(), &NodeConfig::default())
-        .unwrap()
-        .acquire()
-        .unwrap();
+    let con = OracleJdbcConnector::create_connection_pool(
+        config.clone(),
+        &NodeConfig::default(),
+        &ConnectorEntityConfig::new(),
+    )
+    .unwrap()
+    .acquire()
+    .unwrap();
     let mut query = con
         .prepare(JdbcQuery::new("SELECT * FROM DUAL", vec![]))
         .unwrap();

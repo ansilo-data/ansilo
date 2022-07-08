@@ -7,7 +7,7 @@ use ansilo_core::{
     err::{Error, Result},
 };
 
-use crate::interface::{QueryHandle, QueryInputStructure, ResultSet};
+use crate::interface::{QueryHandle, QueryInputStructure};
 
 use super::DataWriter;
 

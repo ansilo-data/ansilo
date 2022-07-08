@@ -53,6 +53,18 @@ where
         })
     }
 
+    pub fn minimal(
+        entity_id: impl Into<String>,
+        version: EntityVersionConfig,
+        source_conf: TEntitySourceConfig,
+    ) -> Self {
+        Self {
+            conf: EntityConfig::minimal(entity_id, vec![version.clone()]),
+            version_id: version.version,
+            source_conf,
+        }
+    }
+
     pub fn version(&self) -> &EntityVersionConfig {
         self.conf
             .versions
@@ -115,7 +127,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::config::{EntityAccessiblity, EntitySourceConfig, EntityVersionConfig};
+    use ansilo_core::config::{EntitySourceConfig, EntityVersionConfig};
 
     use super::*;
 
@@ -129,27 +141,11 @@ mod tests {
     #[test]
     fn test_connector_entity_config_add_and_find() {
         let mut conf = ConnectorEntityConfig::<()>::new();
-        let entity_source = EntitySource::new(
-            EntityConfig {
-                id: "entity_id".to_string(),
-                name: "name".to_string(),
-                description: "".to_string(),
-                tags: vec![],
-                versions: vec![EntityVersionConfig {
-                    version: "version_id".to_string(),
-                    attributes: vec![],
-                    constraints: vec![],
-                    source: EntitySourceConfig {
-                        data_source_id: "".to_string(),
-                        options: ansilo_core::config::Value::Null,
-                    },
-                }],
-                accessibility: EntityAccessiblity::Public,
-            },
-            "version_id".to_string(),
+        let entity_source = EntitySource::minimal(
+            "entity_id",
+            EntityVersionConfig::minimal("version_id", vec![], EntitySourceConfig::minimal("")),
             (),
-        )
-        .unwrap();
+        );
 
         conf.add(entity_source.clone());
 

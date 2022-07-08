@@ -3,7 +3,7 @@ use ansilo_core::{
     err::Result,
 };
 
-use crate::{common::entity::EntitySource, interface::EntityValidator, jdbc::JdbcConnection};
+use crate::{common::entity::EntitySource, interface::EntityValidator};
 
 use super::MemoryConnection;
 

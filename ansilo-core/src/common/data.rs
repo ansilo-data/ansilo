@@ -32,6 +32,12 @@ pub enum DataType {
     Null,
 }
 
+impl DataType {
+    pub fn rust_string() -> Self {
+        Self::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+    }
+}
+
 /// Data container for respective types
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum DataValue {
@@ -86,6 +92,12 @@ impl From<DataValue> for DataType {
             DataValue::DateTimeWithTZ(_) => DataType::DateTimeWithTZ,
             DataValue::Uuid(_) => DataType::Uuid,
         }
+    }
+}
+
+impl From<&str> for DataValue {
+    fn from(str: &str) -> Self {
+        DataValue::Varchar(str.as_bytes().to_vec())
     }
 }
 

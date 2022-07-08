@@ -50,8 +50,3 @@ impl Connection for MemoryConnection {
         ))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-}

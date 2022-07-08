@@ -96,7 +96,7 @@ impl OracleJdbcQueryPlanner {
         expr: sql::Expr,
         alias: String,
     ) -> Result<QueryOperationResult> {
-        select.cols.insert(alias, expr);
+        select.cols.push((alias, expr));
         // TODO: costs
         Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
             None, None, None,

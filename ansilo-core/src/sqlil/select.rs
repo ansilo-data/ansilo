@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use bincode::{Encode, Decode};
 
 use super::expr::{EntityVersionIdentifier, Expr};
@@ -8,7 +6,7 @@ use super::expr::{EntityVersionIdentifier, Expr};
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct Select {
     /// The list of column expressions indexed by their aliases
-    pub cols: HashMap<String, Expr>,
+    pub cols: Vec<(String, Expr)>,
     /// The source FROM expression
     pub from: EntityVersionIdentifier,
     /// The join clauses
@@ -28,7 +26,7 @@ pub struct Select {
 impl Select {
     pub fn new(from: EntityVersionIdentifier) -> Self {
         Self {
-            cols: HashMap::new(),
+            cols: vec![],
             from,
             joins: vec![],
             r#where: vec![],

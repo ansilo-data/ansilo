@@ -76,19 +76,19 @@ pub struct OracleJdbcTableOptions {
     /// The table name
     pub table_name: String,
     /// Mapping of attributes to their respective column names
-    pub attribute_column_name_map: HashMap<String, String>,
+    pub attribute_column_map: HashMap<String, String>,
 }
 
 impl OracleJdbcTableOptions {
     pub fn new(
         database_name: Option<String>,
         table_name: String,
-        attribute_column_name_map: HashMap<String, String>,
+        attribute_column_map: HashMap<String, String>,
     ) -> Self {
         Self {
             database_name,
             table_name,
-            attribute_column_name_map,
+            attribute_column_map,
         }
     }
 }
@@ -127,14 +127,14 @@ pub struct OracleJdbcSelectQueryOptions {
     /// The select SQL query
     pub query: String,
     /// Mapping of attributes to their respective column names
-    pub attribute_column_name_map: HashMap<String, String>,
+    pub attribute_column_map: HashMap<String, String>,
 }
 
 impl OracleJdbcSelectQueryOptions {
-    pub fn new(query: String, attribute_column_name_map: HashMap<String, String>) -> Self {
+    pub fn new(query: String, attribute_column_map: HashMap<String, String>) -> Self {
         Self {
             query,
-            attribute_column_name_map,
+            attribute_column_map,
         }
     }
 }
@@ -196,7 +196,7 @@ properties:
 type: "Table"
 database_name: "db"
 table_name: "table"
-attribute_column_name_map:
+attribute_column_map:
   a: b
   d: c
 "#,
@@ -210,7 +210,7 @@ attribute_column_name_map:
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
                 database_name: Some("db".to_string()),
                 table_name: "table".to_string(),
-                attribute_column_name_map: [
+                attribute_column_map: [
                     ("a".to_string(), "b".to_string()),
                     ("d".to_string(), "c".to_string()),
                 ]

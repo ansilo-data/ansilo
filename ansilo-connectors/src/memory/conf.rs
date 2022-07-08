@@ -47,3 +47,22 @@ impl MemoryConnectionConfig {
         self.get_data(&entity.entity_id, &entity.version_id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ansilo_core::sqlil;
+
+    use super::*;
+
+    #[test]
+    fn test_memory_connector_connection_config() {
+        let mut conf = MemoryConnectionConfig::new();
+
+        conf.set_data("a", "1.0", vec![vec![DataValue::Null]]);
+        
+        assert_eq!(conf.get_data("a", "1.0"), Some(&vec![vec![DataValue::Null]]));
+        assert_eq!(conf.get_entity_id_data(&sqlil::entity("a", "1.0")), Some(&vec![vec![DataValue::Null]]));
+        assert_eq!(conf.get_data("a", "2.0"), None);
+        assert_eq!(conf.get_data("b", "1.0"), None);
+    }
+}

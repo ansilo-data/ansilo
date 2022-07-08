@@ -1,14 +1,10 @@
 use ansilo_core::{
-    common::data::DataValue,
-    err::{bail, Context, Error, Result},
+    err::{Error, Result},
     sqlil as sql,
 };
 
 use crate::{
-    common::{
-        data::ResultSetReader,
-        entity::{ConnectorEntityConfig, EntitySource},
-    },
+    common::entity::{ConnectorEntityConfig, EntitySource},
     interface::{
         EntitySizeEstimate, OperationCost, QueryOperationResult, QueryPlanner, SelectQueryOperation,
     },
@@ -78,7 +74,7 @@ impl MemoryQueryPlanner {
         expr: sql::Expr,
         alias: String,
     ) -> Result<QueryOperationResult> {
-        select.cols.insert(alias, expr);
+        select.cols.push((alias, expr));
         Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
             None, None, None,
         )))
@@ -91,17 +87,17 @@ impl MemoryQueryPlanner {
         )))
     }
 
-    fn add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
+    fn add_join(_select: &mut sql::Select, _join: sql::Join) -> Result<QueryOperationResult> {
         Ok(QueryOperationResult::PerformedLocally)
     }
 
-    fn add_group_by(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
+    fn add_group_by(_select: &mut sql::Select, _expr: sql::Expr) -> Result<QueryOperationResult> {
         Ok(QueryOperationResult::PerformedLocally)
     }
 
     fn add_order_by(
-        select: &mut sql::Select,
-        ordering: sql::Ordering,
+        _select: &mut sql::Select,
+        _ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
         Ok(QueryOperationResult::PerformedLocally)
     }

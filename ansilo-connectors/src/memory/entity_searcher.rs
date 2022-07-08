@@ -1,6 +1,6 @@
 use ansilo_core::{config::NodeConfig, err::Result};
 
-use crate::{common::entity::EntitySource, interface::EntitySearcher, jdbc::JdbcConnection};
+use crate::{common::entity::EntitySource, interface::EntitySearcher};
 
 use super::MemoryConnection;
 

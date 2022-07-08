@@ -1,0 +1,86 @@
+use ansilo_connectors::{
+    common::entity::{ConnectorEntityConfig, EntitySource},
+    interface::{Connection, ConnectionPool, Connector, QueryHandle},
+    memory::{MemoryConnectionConfig, MemoryConnector, MemoryQuery, MemoryResultSet},
+};
+use ansilo_core::{
+    common::data::{DataType, DataValue},
+    config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+    sqlil,
+};
+
+fn mock_data() -> (ConnectorEntityConfig<()>, MemoryConnectionConfig) {
+    let mut conf = MemoryConnectionConfig::new();
+    let mut entities = ConnectorEntityConfig::new();
+
+    entities.add(EntitySource::minimal(
+        "people",
+        EntityVersionConfig::minimal(
+            "1.0",
+            vec![
+                EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
+                EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
+            ],
+            EntitySourceConfig::minimal(""),
+        ),
+        (),
+    ));
+
+    conf.set_data(
+        "people",
+        "1.0",
+        vec![
+            vec![DataValue::from("Mary"), DataValue::from("Jane")],
+            vec![DataValue::from("John"), DataValue::from("Smith")],
+            vec![DataValue::from("Gary"), DataValue::from("Gregson")],
+        ],
+    );
+
+    (entities, conf)
+}
+
+#[test]
+fn test_memory_select_query_execution() {
+    let (entities, data) = mock_data();
+
+    let mut pool =
+        MemoryConnector::create_connection_pool(data, &NodeConfig::default(), &entities).unwrap();
+
+    let connection = pool.acquire().unwrap();
+
+    let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+    select.cols.push((
+        "first_name".to_string(),
+        sqlil::Expr::attr("people", "1.0", "first_name"),
+    ));
+    select.cols.push((
+        "last_name".to_string(),
+        sqlil::Expr::attr("people", "1.0", "last_name"),
+    ));
+
+    select
+        .r#where
+        .push(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::BinaryOpType::Equal,
+            sqlil::Expr::Constant(sqlil::Constant::new(DataValue::from("Gary"))),
+        )));
+
+    let mut query = connection
+        .prepare(MemoryQuery::new(select, vec![]))
+        .unwrap();
+
+    let res = query.execute().unwrap();
+
+    assert_eq!(
+        res,
+        MemoryResultSet::new(
+            vec![
+                ("first_name".to_string(), DataType::rust_string()),
+                ("last_name".to_string(), DataType::rust_string())
+            ],
+            vec![vec![DataValue::from("Gary"), DataValue::from("Gregson")]]
+        )
+        .unwrap()
+    )
+}

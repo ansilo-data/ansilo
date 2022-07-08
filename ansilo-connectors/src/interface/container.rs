@@ -92,6 +92,7 @@ impl Connectors {
                     entities,
                 )
             }
+            #[allow(unreachable_patterns)]
             (this, options) => bail!(
                 "Type mismatch between connector {:?} and config {:?}",
                 this,

@@ -1,13 +1,9 @@
-use std::{io, sync::Arc};
+use std::sync::Arc;
 
-use ansilo_core::{
-    common::data::{DataType, DataValue},
-    err::Result,
-    sqlil,
-};
+use ansilo_core::{common::data::DataType, err::Result, sqlil};
 
 use crate::{
-    common::{data::DataReader, entity::ConnectorEntityConfig},
+    common::entity::ConnectorEntityConfig,
     interface::{QueryHandle, QueryInputStructure},
 };
 
@@ -29,8 +25,6 @@ pub struct MemoryQueryHandle {
     query: MemoryQuery,
     data: Arc<MemoryConnectionConfig>,
     entities: ConnectorEntityConfig<()>,
-    param_buff: Vec<u8>,
-    params: Vec<DataValue>,
 }
 
 impl MemoryQueryHandle {
@@ -43,8 +37,6 @@ impl MemoryQueryHandle {
             query,
             data,
             entities,
-            param_buff: vec![],
-            params: vec![],
         }
     }
 }
@@ -56,23 +48,8 @@ impl QueryHandle for MemoryQueryHandle {
         Ok(QueryInputStructure::new(self.query.params.clone()))
     }
 
-    fn write(&mut self, buff: &[u8]) -> Result<usize> {
-        self.param_buff.extend_from_slice(buff);
-
-        let mut reader = DataReader::new(
-            io::Cursor::new(self.param_buff.as_slice()),
-            self.query.params.clone(),
-        );
-
-        for param in reader.read_data_value()? {
-            self.params.push(param);
-        }
-
-        let cursor = reader.inner();
-        let read = cursor.position() as usize;
-        self.param_buff.drain(..read);
-
-        Ok(read)
+    fn write(&mut self, _buff: &[u8]) -> Result<usize> {
+        unimplemented!()
     }
 
     fn execute(&mut self) -> Result<MemoryResultSet> {
@@ -80,7 +57,7 @@ impl QueryHandle for MemoryQueryHandle {
             Arc::clone(&self.data),
             self.entities.clone(),
             self.query.select.clone(),
-            self.params.clone(),
+            vec![],
         );
 
         executor.run()

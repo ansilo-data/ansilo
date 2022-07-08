@@ -13,7 +13,7 @@ impl QueryCompiler for MemoryQueryCompiler {
 
     fn compile_select(
         _con: &MemoryConnection,
-        conf: &ConnectorEntityConfig<()>,
+        _conf: &ConnectorEntityConfig<()>,
         select: sql::Select,
     ) -> Result<MemoryQuery> {
         // TODO[low]: param support

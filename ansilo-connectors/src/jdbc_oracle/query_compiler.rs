@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ansilo_core::{
     err::{bail, Context, Result},
     sqlil as sql,
@@ -61,7 +59,7 @@ impl OracleJdbcQueryCompiler {
 
     fn compile_select_cols(
         conf: &OracleJdbcConnectorEntityConfig,
-        cols: HashMap<String, sql::Expr>,
+        cols: Vec<(String, sql::Expr)>,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
         Ok(cols
@@ -265,7 +263,7 @@ impl OracleJdbcQueryCompiler {
 
         // TODO: custom query
         let attr_col_map = match &entity.source_conf {
-            OracleJdbcEntitySourceConfig::Table(table) => &table.attribute_column_name_map,
+            OracleJdbcEntitySourceConfig::Table(table) => &table.attribute_column_map,
             OracleJdbcEntitySourceConfig::CustomQueries(_) => todo!(),
         };
 
@@ -384,9 +382,11 @@ impl OracleJdbcQueryCompiler {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use ansilo_core::{
         common::data::{DataType, DataValue},
-        config::{EntityAccessiblity, EntityConfig, EntitySourceConfig, EntityVersionConfig},
+        config::{EntitySourceConfig, EntityVersionConfig},
     };
 
     use crate::common::entity::EntitySource;
@@ -402,27 +402,15 @@ mod tests {
         version: &str,
         source: OracleJdbcEntitySourceConfig,
     ) -> EntitySource<OracleJdbcEntitySourceConfig> {
-        EntitySource::new(
-            EntityConfig {
-                id: id.to_string(),
-                name: "name".to_string(),
-                description: "".to_string(),
-                tags: vec![],
-                versions: vec![EntityVersionConfig {
-                    version: version.to_string(),
-                    attributes: vec![],
-                    constraints: vec![],
-                    source: EntitySourceConfig {
-                        data_source_id: "".to_string(),
-                        options: ansilo_core::config::Value::Null,
-                    },
-                }],
-                accessibility: EntityAccessiblity::Public,
-            },
-            version.to_string(),
+        EntitySource::minimal(
+            id,
+            EntityVersionConfig::minimal(
+                version.to_string(),
+                vec![],
+                EntitySourceConfig::minimal(""),
+            ),
             source,
         )
-        .unwrap()
     }
 
     fn mock_entity_table() -> OracleJdbcConnectorEntityConfig {
@@ -455,7 +443,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select
             .cols
-            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+            .push(("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1")));
         let compiled = compile_select(select, mock_entity_table());
 
         assert_eq!(
@@ -469,7 +457,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select
             .cols
-            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+            .push(("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1")));
         select.r#where.push(sql::Expr::BinaryOp(sql::BinaryOp::new(
             sql::Expr::attr("entity", "v1", "attr1"),
             sql::BinaryOpType::Equal,
@@ -491,7 +479,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select
             .cols
-            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+            .push(("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1")));
         select.joins.push(sql::Join::new(
             sql::JoinType::Inner,
             sql::entity("other", "v1"),
@@ -517,7 +505,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select
             .cols
-            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+            .push(("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1")));
         select
             .group_bys
             .push(sql::Expr::attr("entity", "v1", "attr1"));
@@ -540,7 +528,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select
             .cols
-            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+            .push(("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1")));
         select.order_bys.push(sql::Ordering::new(
             sql::OrderingType::Asc,
             sql::Expr::attr("entity", "v1", "attr1"),
@@ -565,7 +553,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select
             .cols
-            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+            .push(("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1")));
         select.row_skip = 10;
         select.row_limit = Some(20);
         let compiled = compile_select(select, mock_entity_table());
@@ -584,7 +572,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select
             .cols
-            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+            .push(("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1")));
         select.row_skip = 10;
         let compiled = compile_select(select, mock_entity_table());
 
@@ -602,7 +590,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select
             .cols
-            .insert("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1"));
+            .push(("COL".to_string(), sql::Expr::attr("entity", "v1", "attr1")));
         select.row_limit = Some(20);
         let compiled = compile_select(select, mock_entity_table());
 
@@ -618,12 +606,12 @@ mod tests {
     #[test]
     fn test_oracle_jdbc_compile_select_function_call() {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
-        select.cols.insert(
+        select.cols.push((
             "COL".to_string(),
             sql::Expr::FunctionCall(sql::FunctionCall::Length(Box::new(sql::Expr::attr(
                 "entity", "v1", "attr1",
             )))),
-        );
+        ));
         select.row_skip = 10;
         let compiled = compile_select(select, mock_entity_table());
 
@@ -639,12 +627,12 @@ mod tests {
     #[test]
     fn test_oracle_jdbc_compile_select_aggregate_call() {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
-        select.cols.insert(
+        select.cols.push((
             "COL".to_string(),
-            sql::Expr::AggregateCall(sql::AggregateCall::Sum(Box::new(sql::Expr::attr(
+            sql::Expr::FunctionCall(sql::FunctionCall::Length(Box::new(sql::Expr::attr(
                 "entity", "v1", "attr1",
             )))),
-        );
+        ));
         select.row_skip = 10;
         let compiled = compile_select(select, mock_entity_table());
 

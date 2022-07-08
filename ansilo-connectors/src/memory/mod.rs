@@ -42,17 +42,17 @@ impl Connector for MemoryConnector {
 
     const TYPE: &'static str = "test.memory";
 
-    fn parse_options(options: config::Value) -> Result<Self::TConnectionConfig> {
+    fn parse_options(_options: config::Value) -> Result<Self::TConnectionConfig> {
         Ok(MemoryConnectionConfig::new())
     }
 
-    fn parse_entity_source_options(options: config::Value) -> Result<Self::TEntitySourceConfig> {
+    fn parse_entity_source_options(_options: config::Value) -> Result<Self::TEntitySourceConfig> {
         Ok(())
     }
 
     fn create_connection_pool(
         conf: MemoryConnectionConfig,
-        nc: &NodeConfig,
+        _nc: &NodeConfig,
         entities: &ConnectorEntityConfig<()>,
     ) -> Result<Self::TConnectionPool> {
         MemoryConnectionPool::new(conf, entities.clone())

@@ -1,7 +1,4 @@
-use std::{
-    io::{Cursor, Read},
-    sync::Arc,
-};
+use std::io::{Cursor, Read, Seek};
 
 use ansilo_core::{
     common::data::{DataType, DataValue},
@@ -13,18 +10,16 @@ use crate::{
     interface::{ResultSet, RowStructure},
 };
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct MemoryResultSet {
     pub cols: Vec<(String, DataType)>,
     pub data: Vec<Vec<DataValue>>,
-    pub data_buff: Cursor<Vec<u8>>,
+    pub buff: Cursor<Vec<u8>>,
 }
 
 impl MemoryResultSet {
     pub fn new(cols: Vec<(String, DataType)>, data: Vec<Vec<DataValue>>) -> Result<Self> {
-        let mut writer = DataWriter::new(
-            Cursor::new(Vec::<u8>::new()),
-            Some(cols.iter().map(|i| i.1.clone()).collect()),
-        );
+        let mut writer = DataWriter::new(Cursor::new(Vec::<u8>::new()), None);
 
         for row in data.iter() {
             for cell in row.iter() {
@@ -32,11 +27,10 @@ impl MemoryResultSet {
             }
         }
 
-        Ok(Self {
-            cols,
-            data,
-            data_buff: writer.inner(),
-        })
+        let mut buff = writer.inner();
+        buff.rewind().context("Failed to rewind cursor")?;
+
+        Ok(Self { cols, data, buff })
     }
 }
 
@@ -46,9 +40,34 @@ impl ResultSet for MemoryResultSet {
     }
 
     fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
-        self.data_buff.read(buff).context("Failed to read")
+        self.buff.read(buff).context("Failed to read")
     }
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::common::data::ResultSetReader;
+
+    use super::*;
+
+    #[test]
+    fn test_memory_connector_result_set() {
+        let result_set = MemoryResultSet::new(
+            vec![("col".to_string(), DataType::UInt32)],
+            vec![vec![DataValue::UInt32(123)]],
+        )
+        .unwrap();
+
+        assert_eq!(
+            result_set.get_structure().unwrap(),
+            RowStructure::new(vec![("col".to_string(), DataType::UInt32)])
+        );
+
+        let mut reader = ResultSetReader::new(result_set).unwrap();
+        assert_eq!(
+            reader.read_data_value().unwrap(),
+            Some(DataValue::UInt32(123))
+        );
+        assert_eq!(reader.read_data_value().unwrap(), None);
+    }
+}
