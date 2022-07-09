@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fs,
     os::unix::net::{UnixListener, UnixStream},
     path::{Path, PathBuf},
     thread::{self, JoinHandle},
@@ -7,16 +8,11 @@ use std::{
 
 use ansilo_connectors::{
     common::entity::ConnectorEntityConfig,
-    interface::{
-        container::{ConnectionPools, Connections, Connectors},
-        *,
-    },
+    interface::{container::ConnectionPools, *},
     jdbc_oracle::OracleJdbcConnector,
+    memory::MemoryConnector,
 };
-use ansilo_core::{
-    config::NodeConfig,
-    err::{bail, Context, Result},
-};
+use ansilo_core::err::{bail, Context, Result};
 use ansilo_logging::error;
 
 use super::{channel::IpcServerChannel, connection::FdwConnection};
@@ -92,7 +88,7 @@ impl FdwServer {
     ) -> HashMap<String, PathBuf> {
         pools
             .iter()
-            .map(|(id, _)| (id.to_owned(), path.join(id).join(".sock")))
+            .map(|(id, _)| (id.to_owned(), path.join(format!("{id}.sock"))))
             .collect()
     }
 
@@ -107,10 +103,13 @@ impl FdwServer {
                 .get(id)
                 .context("Failed to find connection pool with id")?
                 .clone();
-            let path = path.clone();
+
+            let _ = fs::remove_file(&path);
+            let listener = UnixListener::bind(path)
+                .with_context(|| format!("Failed to bind socket at {}", path.display()))?;
 
             threads.push(thread::spawn(move || {
-                let res = FdwServer::listen(&path, pool);
+                let res = FdwServer::listen(listener, pool);
 
                 if let Err(err) = res {
                     error!("FDW Listener error: {}", err);
@@ -121,10 +120,13 @@ impl FdwServer {
         Ok(threads)
     }
 
-    fn listen(path: &PathBuf, pool: ConnectionPools) -> Result<()> {
+    fn listen(listener: UnixListener, pool: ConnectionPools) -> Result<()> {
         match pool {
             ConnectionPools::OracleJdbc(pool, entities) => {
-                FdwListener::<OracleJdbcConnector>::bind(path, pool, entities)?.listen()?
+                FdwListener::<OracleJdbcConnector>::bind(listener, pool, entities).listen()?
+            }
+            ConnectionPools::Memory(pool, entities) => {
+                FdwListener::<MemoryConnector>::bind(listener, pool, entities).listen()?
             }
         };
 
@@ -145,17 +147,15 @@ pub struct FdwListener<TConnector: Connector> {
 impl<TConnector: Connector> FdwListener<TConnector> {
     /// Starts a server which listens
     pub fn bind(
-        path: &Path,
+        listener: UnixListener,
         pool: TConnector::TConnectionPool,
         entities: ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
-    ) -> Result<Self> {
-        let listener = UnixListener::bind(path).context("Failed to bind socket")?;
-
-        Ok(Self {
+    ) -> Self {
+        Self {
             listener,
             pool,
             entities,
-        })
+        }
     }
 
     /// Starts processing incoming connections
@@ -182,5 +182,105 @@ impl<TConnector: Connector> FdwListener<TConnector> {
         });
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{fs, time::Duration};
+
+    use ansilo_connectors::{
+        common::entity::EntitySource,
+        memory::{MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector},
+    };
+    use ansilo_core::{
+        common::data::{DataType, DataValue},
+        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        sqlil,
+    };
+
+    use crate::fdw::{
+        channel::IpcClientChannel,
+        proto::{ClientMessage, ServerMessage},
+    };
+
+    use super::*;
+
+    fn create_memory_connection_pool() -> (ConnectorEntityConfig<()>, MemoryConnectionPool) {
+        let mut conf = MemoryConnectionConfig::new();
+        let mut entities = ConnectorEntityConfig::new();
+
+        entities.add(EntitySource::minimal(
+            "people",
+            EntityVersionConfig::minimal(
+                "1.0",
+                vec![
+                    EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
+                    EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
+                ],
+                EntitySourceConfig::minimal(""),
+            ),
+            (),
+        ));
+
+        conf.set_data(
+            "people",
+            "1.0",
+            vec![
+                vec![DataValue::from("Mary"), DataValue::from("Jane")],
+                vec![DataValue::from("John"), DataValue::from("Smith")],
+                vec![DataValue::from("Gary"), DataValue::from("Gregson")],
+            ],
+        );
+
+        let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
+            .unwrap();
+
+        (entities, pool)
+    }
+
+    fn create_server(test_name: &'static str) -> FdwServer {
+        let (entities, pool) = create_memory_connection_pool();
+        let pool = ConnectionPools::Memory(pool, entities);
+        let path = PathBuf::from(format!("/tmp/ansilo/fdw_server/{test_name}"));
+        fs::create_dir_all(path.clone()).unwrap();
+
+        let server =
+            FdwServer::start(path, [("memory".to_string(), pool)].into_iter().collect()).unwrap();
+        thread::sleep(Duration::from_millis(10));
+
+        server
+    }
+
+    fn create_client_ipc_channel(server: &FdwServer) -> IpcClientChannel {
+        let path = server.paths().get("memory").unwrap();
+
+        IpcClientChannel::new(UnixStream::connect(path).unwrap())
+    }
+
+    fn send_auth_token(client: &mut IpcClientChannel) {
+        let res = client
+            .send(ClientMessage::AuthDataSource("TOKEN".to_string()))
+            .unwrap();
+        assert_eq!(res, ServerMessage::AuthAccepted);
+    }
+
+    #[test]
+    fn test_fdw_server_connect_and_estimate_size() {
+        let server = create_server("estimate_size");
+        let mut client = create_client_ipc_channel(&server);
+
+        send_auth_token(&mut client);
+
+        let res = client
+            .send(ClientMessage::EstimateSize(sqlil::entity("people", "1.0")))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::EstimatedSizeResult(EntitySizeEstimate::new(Some(3), None))
+        );
+
+        client.close().unwrap();
     }
 }
