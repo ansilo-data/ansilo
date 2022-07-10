@@ -1,6 +1,6 @@
 [package]
 name = "ansilo-pgx"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 
 [lib]
@@ -12,10 +12,12 @@ pg14 = ["pgx/pg14", "pgx-tests/pg14" ]
 pg_test = []
 
 [dependencies]
-pgx = "=0.4.5"
+ansilo-core = { version = "*", path = "../ansilo-core" }
+ansilo-pg = { version = "*", path = "../ansilo-pg" }
+pgx = "=0.5.0-beta.0"
 
 [dev-dependencies]
-pgx-tests = "=0.4.5"
+pgx-tests = "=0.5.0-beta.0"
 
 # [profile.dev]
 # panic = "unwind"

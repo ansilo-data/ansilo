@@ -9,7 +9,7 @@ use super::{
 };
 
 /// A request-response channel used for IPC between postgres and ansilo
-pub(crate) struct IpcClientChannel {
+pub struct IpcClientChannel {
     /// The underlying unix socket
     sock: UnixStream,
     /// The binconde config used for serialisation

@@ -19,11 +19,11 @@ pub mod initdb;
 pub mod manager;
 pub mod proc;
 pub mod server;
+pub mod fdw;
 
 mod configure;
 #[cfg(test)]
 mod test;
-pub mod fdw;
 
 /// Use the default database created by initdb
 pub(crate) const PG_DATABASE: &str = "postgres";
