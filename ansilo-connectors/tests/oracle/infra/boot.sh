@@ -30,23 +30,9 @@ echo "Starting oracle..."
 ORACLE_PID=$$
 echo "Oracle started as pid $ORACLE_PID"
 
-echo "Starting socat proxy..."
-touch ~/access.log
-socat -d -d TCP-LISTEN:$LISTEN_PORT,reuseaddr,fork,bind=0.0.0.0 TCP:localhost:1521 2>&1 | tee ~/access.log 2>&1 &
-SOCAT_PID=$$
-echo "Socat started as pid $SOCAT_PID"
+echo "Running lazyprox"
+lazyprox \
+    --listen 0.0.0.0:$LISTEN_PORT \
+    --dest localhost:1521 \
+    --idle-timeout-secs $TIMEOUT_DURATION
 
-while true;
-do
-    echo "Waiting for connections on port $LISTEN_PORT..."
-    timeout $TIMEOUT_DURATION head -n1 > /tmp/access.log < <(tail -n0 -f ~/access.log) || true
-
-    if [[ ! -z "$(cat /tmp/access.log)" ]];
-    then
-        echo "Detected access, restarting timeout..."
-        sleep 1
-    else
-        echo "Timed out, exiting..."
-        exit 0
-    fi
-done

@@ -24,6 +24,13 @@ USER root
 RUN yum install -y socat nc
 USER oracle
 
+# Install https://github.com/TimeToogo/lazyprox
+USER root
+RUN curl --fail https://lazyprox.elliotlevin.dev/lazyprox-x86_64-unknown-linux-musl -o ~/lazyprox && \
+    chmod +x ~/lazyprox && \
+    mv ~/lazyprox /usr/local/bin/lazyprox
+USER oracle
+
 # Copy and run boot script
 COPY ./boot.sh /boot.sh
 ENTRYPOINT [ "/bin/bash", "/boot.sh" ]
