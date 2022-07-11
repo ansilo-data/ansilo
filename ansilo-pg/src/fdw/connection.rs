@@ -11,6 +11,7 @@ use ansilo_core::{
     err::{bail, Context, Result},
     sqlil::{self, EntityVersionIdentifier},
 };
+use ansilo_logging::warn;
 
 use super::{
     channel::IpcServerChannel,
@@ -84,11 +85,6 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
     fn handle_message(&mut self, message: ClientMessage) -> Result<Option<ServerMessage>> {
         Ok(Some(match message {
-            ClientMessage::AuthDataSource(_) => {
-                // TODO: implement auth
-                self.connect()?;
-                ServerMessage::AuthAccepted
-            }
             ClientMessage::EstimateSize(entity) => {
                 ServerMessage::EstimatedSizeResult(self.estimate_size(&entity)?)
             }
@@ -112,6 +108,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             }
             ClientMessage::Close => return Ok(None),
             ClientMessage::GenericError(err) => bail!("Error received from client: {}", err),
+            _ => {
+                warn!("Received unexpected message from client: {:?}", message);
+                ServerMessage::GenericError("Invalid message received".to_string())
+            }
         }))
     }
 
@@ -123,6 +123,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
     }
 
     fn estimate_size(&mut self, entity: &EntityVersionIdentifier) -> Result<EntitySizeEstimate> {
+        self.connect()?;
         Ok(TConnector::TQueryPlanner::estimate_size(
             self.connection.get()?,
             self.entities
@@ -149,6 +150,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
     }
 
     fn create_select(&mut self, entity: &EntityVersionIdentifier) -> Result<QueryOperationResult> {
+        self.connect()?;
         let (cost, select) = TConnector::TQueryPlanner::create_base_select(
             self.connection.get()?,
             &self.entities,
@@ -283,7 +285,9 @@ mod tests {
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
     };
 
-    use crate::fdw::{channel::IpcClientChannel, test::create_tmp_ipc_channel};
+    use crate::fdw::{
+        channel::IpcClientChannel, proto::AuthDataSource, test::create_tmp_ipc_channel,
+    };
 
     use super::*;
 
@@ -334,18 +338,9 @@ mod tests {
         (thread, client_chan)
     }
 
-    fn send_auth_token(client: &mut IpcClientChannel) {
-        let res = client
-            .send(ClientMessage::AuthDataSource("TOKEN".to_string()))
-            .unwrap();
-        assert_eq!(res, ServerMessage::AuthAccepted);
-    }
-
     #[test]
     fn test_fdw_connection_estimate_size() {
         let (thread, mut client) = create_mock_connection("connection_estimate_size");
-
-        send_auth_token(&mut client);
 
         let res = client
             .send(ClientMessage::EstimateSize(sqlil::entity("people", "1.0")))
@@ -361,28 +356,9 @@ mod tests {
     }
 
     #[test]
-    fn test_fdw_connection_auth_estimate_size_without_auth() {
-        let (thread, mut client) = create_mock_connection("connection_estimate_size_no_auth");
-
-        let res = client
-            .send(ClientMessage::EstimateSize(sqlil::entity("people", "1.0")))
-            .unwrap();
-
-        assert_eq!(
-            res,
-            ServerMessage::GenericError("Unexpected connection state".to_string())
-        );
-
-        client.close().unwrap();
-        thread.join().unwrap().unwrap();
-    }
-
-    #[test]
     fn test_fdw_connection_estimate_size_unknown_entity() {
         let (thread, mut client) =
             create_mock_connection("connection_estimate_size_unknown_entity");
-
-        send_auth_token(&mut client);
 
         let res = client
             .send(ClientMessage::EstimateSize(sqlil::entity("unknown", "1.0")))
@@ -398,10 +374,8 @@ mod tests {
     }
 
     #[test]
-    fn test_fdw_connection_auth_select() {
+    fn test_fdw_connection_select() {
         let (thread, mut client) = create_mock_connection("connection_select");
-
-        send_auth_token(&mut client);
 
         let res = client
             .send(ClientMessage::Select(ClientSelectMessage::Create(
@@ -479,14 +453,35 @@ mod tests {
     }
 
     #[test]
-    fn test_fdw_connection_auth_execute_without_auth() {
+    fn test_fdw_connection_execute_without_query() {
         let (thread, mut client) = create_mock_connection("connection_execute_without_auth");
-
-        send_auth_token(&mut client);
 
         let res = client.send(ClientMessage::Execute).unwrap();
 
-        assert_eq!(res, ServerMessage::GenericError("Unexpected query state".into()));
+        assert_eq!(
+            res,
+            ServerMessage::GenericError("Unexpected query state".into())
+        );
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_unexpected_message() {
+        let (thread, mut client) = create_mock_connection("unexpected_message");
+
+        let res = client
+            .send(ClientMessage::AuthDataSource(AuthDataSource::new(
+                "TOKEN",
+                "DATA_SOURCE",
+            )))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::GenericError("Invalid message received".into())
+        );
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();

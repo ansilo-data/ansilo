@@ -93,19 +93,31 @@ impl IpcServerChannel {
     where
         F: FnOnce(ClientMessage) -> Result<Option<ServerMessage>>,
     {
+        self.recv_with_return(move |msg| {
+            let res = cb(msg)?;
+
+            Ok((res.clone(), res))
+        })
+    }
+
+    /// Receives the next message from the client, passing it to the supplied closure
+    pub fn recv_with_return<F, R>(&mut self, cb: F) -> Result<R>
+    where
+        F: FnOnce(ClientMessage) -> Result<(Option<ServerMessage>, R)>,
+    {
         let req =
             bincode::decode_from_std_read::<ClientMessage, _, _>(&mut self.sock, self.conf.clone())
                 .context("Failed to receive message")?;
 
-        let res = cb(req)?;
+        let (res, ret) = cb(req)?;
 
         if res.is_none() {
-            return Ok(None);
+            return Ok(ret);
         }
 
         let res = res.unwrap();
         bincode::encode_into_std_write::<ServerMessage, _, _>(
-            res.clone(),
+            res,
             &mut self.sock,
             self.conf.clone(),
         )
@@ -113,7 +125,7 @@ impl IpcServerChannel {
 
         self.sock.flush().context("Failed to flush sock")?;
 
-        Ok(Some(res))
+        Ok(ret)
     }
 }
 
@@ -123,7 +135,7 @@ mod tests {
 
     use nix::libc::close;
 
-    use crate::fdw::test::create_tmp_ipc_channel;
+    use crate::fdw::{proto::AuthDataSource, test::create_tmp_ipc_channel};
 
     use super::*;
 
@@ -134,14 +146,20 @@ mod tests {
         let server_thread = thread::spawn(move || {
             server
                 .recv(|req| {
-                    assert_eq!(req, ClientMessage::AuthDataSource("AUTH".to_string()));
+                    assert_eq!(
+                        req,
+                        ClientMessage::AuthDataSource(AuthDataSource::new("AUTH", "DATA_SOURCE"))
+                    );
                     Ok(Some(ServerMessage::AuthAccepted))
                 })
                 .unwrap();
         });
 
         let res = client
-            .send(ClientMessage::AuthDataSource("AUTH".to_string()))
+            .send(ClientMessage::AuthDataSource(AuthDataSource::new(
+                "AUTH",
+                "DATA_SOURCE",
+            )))
             .unwrap();
 
         assert_eq!(res, ServerMessage::AuthAccepted);

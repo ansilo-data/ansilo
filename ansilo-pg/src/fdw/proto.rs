@@ -1,5 +1,5 @@
 use ansilo_connectors::interface::{
-    EntitySizeEstimate, QueryOperationResult, SelectQueryOperation, RowStructure,
+    EntitySizeEstimate, QueryOperationResult, RowStructure, SelectQueryOperation,
 };
 use ansilo_core::sqlil::EntityVersionIdentifier;
 use bincode::{Decode, Encode};
@@ -8,7 +8,7 @@ use bincode::{Decode, Encode};
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ClientMessage {
     /// Send authentication token
-    AuthDataSource(String),
+    AuthDataSource(AuthDataSource),
     /// Estimates the number of entities from the source
     EstimateSize(EntityVersionIdentifier),
     /// Operations for a SELECT query
@@ -26,6 +26,24 @@ pub enum ClientMessage {
     Close,
     /// Error occurred with message
     GenericError(String),
+}
+
+/// Message sent by the client to initialise the connection
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub struct AuthDataSource {
+    /// The authentication token
+    pub token: String,
+    /// The data source id
+    pub data_source_id: String,
+}
+
+impl AuthDataSource {
+    pub fn new(token: impl Into<String>, data_source_id: impl Into<String>) -> Self {
+        Self {
+            token: token.into(),
+            data_source_id: data_source_id.into()
+        }
+    }
 }
 
 /// Operations for a SELECT query sent from postgres
