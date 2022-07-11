@@ -1,6 +1,7 @@
-use ansilo_connectors::interface::{
+pub use ansilo_connectors::interface::{
     EntitySizeEstimate, QueryOperationResult, RowStructure, SelectQueryOperation,
 };
+
 use ansilo_core::sqlil::EntityVersionIdentifier;
 use bincode::{Decode, Encode};
 

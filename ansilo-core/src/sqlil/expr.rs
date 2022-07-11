@@ -170,7 +170,6 @@ pub enum FunctionCall {
     Lowercase(SubExpr),
     Substring(SubstringCall),
     // Date/time functions
-    Now,
     // Other functions
     Uuid,
     Coalesce(Vec<SubExpr>),

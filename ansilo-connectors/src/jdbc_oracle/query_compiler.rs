@@ -356,7 +356,6 @@ impl OracleJdbcQueryCompiler {
             sql::FunctionCall::Uppercase(_) => todo!(),
             sql::FunctionCall::Lowercase(_) => todo!(),
             sql::FunctionCall::Substring(_) => todo!(),
-            sql::FunctionCall::Now => todo!(),
             sql::FunctionCall::Uuid => todo!(),
             sql::FunctionCall::Coalesce(_) => todo!(),
         })

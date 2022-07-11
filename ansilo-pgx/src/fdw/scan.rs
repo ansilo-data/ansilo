@@ -1,11 +1,46 @@
-use pgx::pg_sys::*;
+use ansilo_pg::fdw::proto::{ClientMessage, ServerMessage};
+use pgx::{
+    pg_sys::{
+        ForeignPath, ForeignScan, ForeignScanState, List, Oid, Plan, shm_toc, ParallelContext, PlannerInfo,
+        RangeTblEntry, RelOptInfo, TupleTableSlot, UpperRelationKind, JoinType, JoinPathExtraData, Size, Node
+    },
+    *,
+};
 
+use super::{common, ctx::FdwQuery};
+
+/// Estimate # of rows and width of the result of the scan
+///
+/// We should consider the effect of all baserestrictinfo clauses here, but
+/// not any join clauses.
 pub unsafe extern "C" fn get_foreign_rel_size(
     root: *mut PlannerInfo,
     baserel: *mut RelOptInfo,
     foreigntableid: Oid,
 ) {
-    unimplemented!()
+    let mut ctx = common::connect(foreigntableid, FdwQuery::select());
+    (*baserel).fdw_private = ctx.as_ptr() as _;
+
+    let query = ctx.query.as_select().unwrap();
+
+    let baserel_conds = PgList::<Node>::from_pg((*baserel).baserestrictinfo);
+
+    let entity = common::parse_entity_version_id(foreigntableid);
+
+    /// If empty we can use the cheap path
+    if baserel_conds.is_empty() {
+        let res = ctx.send(ClientMessage::EstimateSize(entity)).unwrap();
+
+        let estimate = match res {
+            ServerMessage::EstimatedSizeResult(e) => e,
+            _ => error!("Unexpected response from server: {:?}", res)
+        };
+
+        baserel.rows
+    } else {
+        // We have to evaluate the possibility and costs of pushing down the restriction clauses
+        todo!()
+    }
 }
 
 pub unsafe extern "C" fn get_foreign_paths(
@@ -28,7 +63,10 @@ pub unsafe extern "C" fn get_foreign_plan(
     unimplemented!()
 }
 
-pub unsafe extern "C" fn begin_foreign_scan(node: *mut ForeignScanState, eflags: ::std::os::raw::c_int) {
+pub unsafe extern "C" fn begin_foreign_scan(
+    node: *mut ForeignScanState,
+    eflags: ::std::os::raw::c_int,
+) {
     unimplemented!()
 }
 
@@ -68,10 +106,6 @@ pub unsafe extern "C" fn get_foreign_upper_paths(
     output_rel: *mut RelOptInfo,
     extra: *mut ::std::os::raw::c_void,
 ) {
-    unimplemented!()
-}
-
-pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *mut ExplainState) {
     unimplemented!()
 }
 
