@@ -1,23 +1,24 @@
-use std::{any::TypeId, mem, str::FromStr};
+use std::{any::TypeId, str::FromStr};
 
 use ansilo_core::{
     common::data::{
-        chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Weekday},
+        chrono::{NaiveDate, NaiveDateTime, NaiveTime, Weekday},
         chrono_tz::Tz,
-        rust_decimal::{Decimal, prelude::FromPrimitive},
+        rust_decimal::{prelude::FromPrimitive, Decimal},
         uuid::Uuid,
         DataValue,
     },
-    err::{bail, Error, Result},
+    err::{bail, Context, Error, Result},
 };
 use pgx::{
-    pg_sys::{self, Node, Oid},
+    pg_schema,
+    pg_sys::{self, Oid},
     FromDatum,
 };
 
-use crate::util::string::parse_to_owned_utf8_string;
-
 /// Attempt to convert a postgres datum union type to ansilo's DataValue
+///
+/// NOTE: This cannot be called with a NULL value, doing so will result in Bad Things (tm)
 ///
 /// This is a hot code path. We need to take good care in optimising this.
 pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValue> {
@@ -75,26 +76,46 @@ impl<T: FromDatum + 'static> ParseDatum<T> for T {
         })
     }
 }
-
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct NumericVar {
+    ndigits: isize,
+    weight: isize,   /* weight of first digit */
+    sign: isize,     /* weight of first digit */
+    dscale: isize,   /* weight of first digit */
+    buf: *mut i8,    /* start of palloc'd space for digits[] */
+    digits: *mut i8, /* base-NBASE digits */
+}
 /// TODO: implement faster conversion using bit manipulation to translate across formats
 unsafe fn from_numeric(datum: pg_sys::Datum) -> DataValue {
     // @see https://doxygen.postgresql.org/numeric_8h_source.html#l00059
-    let datum = pg_sys::pg_detoast_datum(datum.to_void() as *mut _);
-    let datum = datum as pg_sys::Numeric;
-    let num_str = parse_to_owned_utf8_string(pg_sys::numeric_normalize(datum)).unwrap();
+    {
+        let datum = datum.ptr_cast::<NumericVar>();
+        pgx::log!("from_numeric ptr: {:?}", datum);
+        pgx::log!("from_numeric data: {:?}", *datum);
+    }
+    //
+    let numeric = pgx::Numeric::from_datum(datum, false).unwrap();
+    let num_str = numeric.0;
 
     // Convert +/-Infinity and NaN's to null
     if num_str.starts_with("I") || num_str.starts_with("-I") || num_str.starts_with("N") {
         return DataValue::Null;
     }
 
-    let dec = Decimal::from_str(&num_str).unwrap();
+    let dec = Decimal::from_str(&num_str)
+        .with_context(|| format!("Failed to parse '{}' as decimal", num_str))
+        .unwrap();
     DataValue::Decimal(dec)
 }
 
 fn to_date(datum: pgx::Date) -> NaiveDate {
     let (y, m, d) = datum.to_iso_week_date();
-    NaiveDate::from_isoywd(y as _, m as _, Weekday::from_u8(d.number_days_from_monday()).unwrap())
+    NaiveDate::from_isoywd(
+        y as _,
+        m as _,
+        Weekday::from_u8(d.number_days_from_monday()).unwrap(),
+    )
 }
 
 fn to_time(datum: pgx::Time) -> NaiveTime {
@@ -118,4 +139,210 @@ fn to_date_time_tz(datum: pgx::TimestampWithTimeZone) -> (NaiveDateTime, Tz) {
 
 fn to_uuid(datum: pgx::Uuid) -> Uuid {
     Uuid::from_slice(datum.as_bytes()).unwrap()
+}
+
+#[cfg(any(test, feature = "pg_test"))]
+#[pg_schema]
+mod tests {
+    use pgx::*;
+
+    use super::*;
+
+    fn datum_from_query<T: FromDatum + IntoDatum>(query: &'static str) -> Datum {
+        let res = Spi::connect(|client| {
+            let data = Box::new(client.select(query, None, None).next().unwrap());
+            let datum = data.by_ordinal(1).unwrap().value::<T>().unwrap();
+
+            Ok(Some(datum))
+        })
+        .unwrap();
+
+        res.into_datum().unwrap()
+    }
+
+    #[pg_test]
+    fn test_from_datum_i16() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::INT2OID, pgx::Datum::from(123i16)).unwrap(),
+                DataValue::Int16(123)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_i16_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::INT2OID,
+                    datum_from_query::<i16>("SELECT 234::smallint")
+                )
+                .unwrap(),
+                DataValue::Int16(234)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_i32() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::INT4OID, pgx::Datum::from(123i32)).unwrap(),
+                DataValue::Int32(123)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_i32_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::INT4OID,
+                    datum_from_query::<i32>("SELECT 2147483647::integer")
+                )
+                .unwrap(),
+                DataValue::Int32(2147483647)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_i64() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::INT8OID, pgx::Datum::from(123i64)).unwrap(),
+                DataValue::Int64(123)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_i64_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::INT8OID,
+                    datum_from_query::<i64>("SELECT 9223372036854775807::bigint")
+                )
+                .unwrap(),
+                DataValue::Int64(9223372036854775807)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_f32() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::FLOAT4OID, 123.456f32.into_datum().unwrap()).unwrap(),
+                DataValue::FloatSingle(123.456)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_f32_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::FLOAT4OID,
+                    datum_from_query::<f32>("SELECT 987.654::real")
+                )
+                .unwrap(),
+                DataValue::FloatSingle(987.654)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_f64() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::FLOAT8OID, 123.456f64.into_datum().unwrap()).unwrap(),
+                DataValue::FloatDouble(123.456)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_f64_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::FLOAT8OID,
+                    datum_from_query::<f64>("SELECT 987.654::double precision")
+                )
+                .unwrap(),
+                DataValue::FloatDouble(987.654)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_numeric() {
+        fn make_numeric(num: impl Into<String>) -> Datum {
+            let num = pgx::Numeric(num.into());
+            let res = num.into_datum().unwrap();
+            res
+        }
+
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::NUMERICOID, make_numeric("123.456")).unwrap(),
+                DataValue::Decimal(Decimal::from_f64(123.456).unwrap())
+            );
+            assert_eq!(
+                from_datum(pg_sys::NUMERICOID, make_numeric("Infinity")).unwrap(),
+                DataValue::Null
+            );
+            assert_eq!(
+                from_datum(pg_sys::NUMERICOID, make_numeric("-Infinity")).unwrap(),
+                DataValue::Null
+            );
+            assert_eq!(
+                from_datum(pg_sys::NUMERICOID, make_numeric("NaN")).unwrap(),
+                DataValue::Null
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_numeric_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::NUMERICOID,
+                    datum_from_query::<Numeric>("SELECT 987.654::numeric")
+                )
+                .unwrap(),
+                DataValue::Decimal(Decimal::from_f64(987.654).unwrap())
+            );
+            assert_eq!(
+                from_datum(
+                    pg_sys::NUMERICOID,
+                    datum_from_query::<Numeric>("SELECT 'Infinity'::numeric")
+                )
+                .unwrap(),
+                DataValue::Null
+            );
+            assert_eq!(
+                from_datum(
+                    pg_sys::NUMERICOID,
+                    datum_from_query::<Numeric>("SELECT '-Infinity'::numeric")
+                )
+                .unwrap(),
+                DataValue::Null
+            );
+            assert_eq!(
+                from_datum(
+                    pg_sys::NUMERICOID,
+                    datum_from_query::<Numeric>("SELECT 'NaN'::numeric")
+                )
+                .unwrap(),
+                DataValue::Null
+            );
+        }
+    }
 }

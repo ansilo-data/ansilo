@@ -34,6 +34,7 @@ fn hello_ansilo() -> &'static str {
 }
 
 #[cfg(any(test, feature = "pg_test"))]
+#[pg_schema]
 mod tests {
     use pgx::*;
 

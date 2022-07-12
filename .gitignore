@@ -8,4 +8,4 @@ Cargo.lock
 !.devcontainer/.cargo/
 .m2/
 .vscode-server/
-
+*.log
