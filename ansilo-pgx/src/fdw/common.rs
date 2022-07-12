@@ -1,12 +1,17 @@
-use ansilo_core::err::{bail, Context, Result};
+use ansilo_core::{
+    err::{bail, Context, Result},
+    sqlil,
+};
 use ansilo_pg::fdw::proto::AuthDataSource;
 use cstr::cstr;
-use std::{ffi::CStr, path::PathBuf};
+use std::path::PathBuf;
 
 use pgx::{
-    pg_sys::{defGetString, strcmp, DefElem, GetForeignServer, GetForeignTable, Oid},
+    pg_sys::{defGetString, get_rel_name, strcmp, DefElem, GetForeignServer, GetForeignTable, Oid},
     PgList, *,
 };
+
+use crate::util::string::parse_to_owned_utf8_string;
 
 use super::ctx::{FdwContext, FdwQuery};
 
@@ -69,15 +74,48 @@ unsafe fn def_get_owned_utf8_string(opt: *mut DefElem) -> Result<String> {
 
     let ptr = defGetString(opt);
 
-    CStr::from_ptr(ptr)
-        .to_str()
-        .map(|s| s.to_string())
-        .context("Failed to parse option as valid UTF-8 string")
+    parse_to_owned_utf8_string(ptr)
 }
 
 fn current_auth_token() -> String {
     // TODO: implement
     "TOKEN".to_string()
+}
+
+pub(crate) unsafe fn parse_entity_version_id_from_foreign_table(
+    foreign_table_oid: Oid,
+) -> Result<sqlil::EntityVersionIdentifier> {
+    let table_name = {
+        let foreign_table = GetForeignTable(foreign_table_oid);
+        let name = get_rel_name((*foreign_table).relid);
+        parse_to_owned_utf8_string(name).context("Failed to get table name")?
+    };
+
+    parse_entity_version_id(table_name)
+}
+
+pub(crate) fn parse_entity_version_id(
+    table_name: impl Into<String>,
+) -> Result<sqlil::EntityVersionIdentifier> {
+    let table_name: String = table_name.into();
+    let mut parts = table_name.split(':');
+    let entity_id = parts.next().context("Table name cannot be empty")?;
+    let version_id = parts.next().with_context(|| {
+        format!(
+            "Table name \"{}\" must have format \"{{entity_id}}:{{version_id}}\"",
+            table_name
+        )
+    })?;
+
+    if entity_id.is_empty() {
+        bail!("Entity id cannot be empty string");
+    }
+
+    if version_id.is_empty() {
+        bail!("Entity id cannot be empty string");
+    }
+
+    Ok(sqlil::entity(entity_id, version_id))
 }
 
 #[cfg(any(test, feature = "pg_test"))]
@@ -144,5 +182,60 @@ mod tests {
 
             ServerOptions::parse(opts).unwrap_err();
         }
+    }
+
+    #[pg_test]
+    fn test_fdw_common_parse_entity_id_from_foreign_table() {
+        let oid = Spi::connect(|mut client| {
+            client.update(
+                r#"CREATE SERVER IF NOT EXISTS test_srv FOREIGN DATA WRAPPER ansilo_fdw"#,
+                None,
+                None,
+            );
+            client.update(
+                r#"CREATE FOREIGN TABLE IF NOT EXISTS "example_entity:1.0.0" (col INTEGER) SERVER test_srv"#,
+                None,
+                None,
+            );
+
+            let oid = client
+                .select(
+                    r#"SELECT '"example_entity:1.0.0"'::regclass::oid"#,
+                    None,
+                    None,
+                )
+                .next()
+                .unwrap()
+                .by_ordinal(1)
+                .unwrap()
+                .value::<Oid>()
+                .unwrap();
+
+            Ok(Some(oid))
+        })
+        .unwrap();
+
+        unsafe {
+            let entity = parse_entity_version_id_from_foreign_table(oid).unwrap();
+
+            assert_eq!(entity, sqlil::entity("example_entity", "1.0.0"));
+        }
+    }
+}
+
+#[cfg(test)]
+mod pg_tests {
+    use super::*;
+
+    #[test]
+    fn test_fdw_common_parse_entity_id() {
+        assert_eq!(
+            parse_entity_version_id("entity:version").unwrap(),
+            sqlil::entity("entity", "version")
+        );
+        parse_entity_version_id(":").unwrap_err();
+        parse_entity_version_id("entity").unwrap_err();
+        parse_entity_version_id("entity:").unwrap_err();
+        parse_entity_version_id(":version").unwrap_err();
     }
 }

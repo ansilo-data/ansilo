@@ -1,3 +1,8 @@
 /// Functions for converting postgres query tree exprs to SQLIL
 
-pub mod expr;
+mod expr;
+mod ctx;
+mod datum;
+
+pub use expr::*;
+pub use ctx::*;

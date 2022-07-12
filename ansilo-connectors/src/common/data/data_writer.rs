@@ -81,7 +81,7 @@ where
                 (None | Some(DataType::JSON), DataValue::JSON(val)) => todo!(),
                 (None | Some(DataType::Date), DataValue::Date(val)) => todo!(),
                 (None | Some(DataType::Time), DataValue::Time(val)) => todo!(),
-                (None | Some(DataType::Timestamp), DataValue::Timestamp(val)) => todo!(),
+                (None | Some(DataType::Timestamp), DataValue::DateTime(val)) => todo!(),
                 (None | Some(DataType::DateTimeWithTZ), DataValue::DateTimeWithTZ(val)) => todo!(),
                 (None | Some(DataType::Uuid), DataValue::Uuid(val)) => todo!(),
                 (r#type, data) => bail!(

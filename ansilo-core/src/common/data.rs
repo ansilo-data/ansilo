@@ -59,7 +59,7 @@ pub enum DataValue {
     JSON(String),
     Date(chrono::NaiveDate),
     Time(chrono::NaiveTime),
-    Timestamp(u64),
+    DateTime(chrono::NaiveDateTime),
     DateTimeWithTZ((chrono::NaiveDateTime, chrono_tz::Tz)),
     Uuid(uuid::Uuid),
 }
@@ -88,7 +88,7 @@ impl From<DataValue> for DataType {
             DataValue::JSON(_) => DataType::JSON,
             DataValue::Date(_) => DataType::Date,
             DataValue::Time(_) => DataType::Time,
-            DataValue::Timestamp(_) => DataType::Timestamp,
+            DataValue::DateTime(_) => DataType::Timestamp,
             DataValue::DateTimeWithTZ(_) => DataType::DateTimeWithTZ,
             DataValue::Uuid(_) => DataType::Uuid,
         }

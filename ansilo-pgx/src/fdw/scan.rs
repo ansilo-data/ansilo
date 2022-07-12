@@ -1,13 +1,25 @@
-use ansilo_pg::fdw::proto::{ClientMessage, ServerMessage};
+use ansilo_pg::fdw::proto::{
+    ClientMessage, ClientSelectMessage, QueryOperationResult, SelectQueryOperation, ServerMessage,
+    ServerSelectMessage,
+};
 use pgx::{
     pg_sys::{
-        ForeignPath, ForeignScan, ForeignScanState, List, Oid, Plan, shm_toc, ParallelContext, PlannerInfo,
-        RangeTblEntry, RelOptInfo, TupleTableSlot, UpperRelationKind, JoinType, JoinPathExtraData, Size, Node
+        shm_toc, ForeignPath, ForeignScan, ForeignScanState, JoinPathExtraData, JoinType, List,
+        Node, Oid, ParallelContext, Plan, PlannerInfo, RangeTblEntry, RelOptInfo, Size,
+        TupleTableSlot, UpperRelationKind,
     },
     *,
 };
 
+use crate::sqlil::{convert, SqlilContext};
+
 use super::{common, ctx::FdwQuery};
+
+macro_rules! unexpected_response {
+    ($res:expr) => {
+        error!("Unexpected response from server: {:?}", $res)
+    };
+}
 
 /// Estimate # of rows and width of the result of the scan
 ///
@@ -20,26 +32,72 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 ) {
     let mut ctx = common::connect(foreigntableid, FdwQuery::select());
     (*baserel).fdw_private = ctx.as_ptr() as _;
+    let sql = SqlilContext::new(root, baserel, (*baserel).relids);
 
     let query = ctx.query.as_select().unwrap();
 
     let baserel_conds = PgList::<Node>::from_pg((*baserel).baserestrictinfo);
 
-    let entity = common::parse_entity_version_id(foreigntableid);
+    let entity = common::parse_entity_version_id_from_foreign_table(foreigntableid).unwrap();
 
-    /// If empty we can use the cheap path
     if baserel_conds.is_empty() {
+    // If no conditions we can use the cheap path
         let res = ctx.send(ClientMessage::EstimateSize(entity)).unwrap();
 
         let estimate = match res {
             ServerMessage::EstimatedSizeResult(e) => e,
-            _ => error!("Unexpected response from server: {:?}", res)
+            _ => unexpected_response!(res),
         };
 
-        baserel.rows
+        if let Some(rows) = estimate.rows {
+            (*baserel).rows = rows as _;
+        }
+
+        if let Some(row_width) = estimate.row_width {
+            (*(*baserel).reltarget).width = row_width as _;
+        }
     } else {
         // We have to evaluate the possibility and costs of pushing down the restriction clauses
-        todo!()
+        let res = ctx
+            .send(ClientMessage::Select(ClientSelectMessage::Create(entity)))
+            .unwrap();
+
+        let mut cost = match res {
+            ServerMessage::Select(ServerSelectMessage::Result(
+                QueryOperationResult::PerformedRemotely(cost),
+            )) => cost,
+            _ => unexpected_response!(res),
+        };
+
+        let conds = PgList::<Node>::from_pg((*baserel).baserestrictinfo);
+        let conds = conds
+            .iter_ptr()
+            .filter_map(|i| convert(i, &sql, &ctx).ok())
+            .collect::<Vec<_>>();
+
+        for cond in conds.into_iter() {
+            let res = ctx
+                .send(ClientMessage::Select(ClientSelectMessage::Apply(
+                    SelectQueryOperation::AddWhere(cond),
+                )))
+                .unwrap();
+
+            cost = match res {
+                ServerMessage::Select(ServerSelectMessage::Result(
+                    QueryOperationResult::PerformedRemotely(cost),
+                )) => cost,
+                ServerMessage::Select(ServerSelectMessage::Result(
+                    QueryOperationResult::PerformedLocally,
+                )) => continue,
+                _ => unexpected_response!(res),
+            };
+        }
+
+        if let Some(rows) = cost.rows {
+            (*baserel).rows = rows as _;
+        }
+
+        // TODO: calc row width on this path?
     }
 }
 

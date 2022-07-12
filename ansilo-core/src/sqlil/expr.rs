@@ -1,4 +1,4 @@
-use bincode::{Encode, Decode};
+use bincode::{Decode, Encode};
 
 use crate::common::data::{DataType, DataValue};
 
@@ -234,5 +234,9 @@ impl Expr {
         attr_id: impl Into<String>,
     ) -> Self {
         Self::EntityVersionAttribute(attr(entity_id, version, attr_id))
+    }
+
+    pub fn constant(val: DataValue) -> Self {
+        Self::Constant(Constant::new(val))
     }
 }

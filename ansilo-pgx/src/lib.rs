@@ -1,5 +1,6 @@
 mod fdw;
 pub mod sqlil;
+pub mod util;
 
 use pgx::{
     pg_sys::{self},
@@ -33,7 +34,6 @@ fn hello_ansilo() -> &'static str {
 }
 
 #[cfg(any(test, feature = "pg_test"))]
-#[pg_schema]
 mod tests {
     use pgx::*;
 

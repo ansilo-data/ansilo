@@ -158,6 +158,7 @@ pub struct FdwSelectQuery {
     /// The conditions which are able to be pushed down to the remote
     pub remote_ops: Vec<SelectQueryOperation>,
 }
+
 impl FdwQueryType {
     fn pushdown_safe(&self) -> bool {
         match self {
