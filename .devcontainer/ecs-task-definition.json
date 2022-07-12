@@ -5,6 +5,15 @@
       "image": "635198228996.dkr.ecr.ap-southeast-2.amazonaws.com/devcontainer:latest",
       "cpu": 0,
       "links": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "devcontainers",
+          "awslogs-region": "ap-southeast-2",
+          "awslogs-create-group": "true",
+          "awslogs-stream-prefix": "{{USER}}"
+        }
+      },
       "portMappings": [
         {
           "containerPort": 22,
