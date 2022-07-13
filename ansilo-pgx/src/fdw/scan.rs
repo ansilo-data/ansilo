@@ -11,7 +11,7 @@ use pgx::{
     *,
 };
 
-use crate::sqlil::{convert, SqlilContext};
+use crate::sqlil::{convert, ConversionContext, PlannerContext};
 
 use super::{common, ctx::FdwQuery};
 
@@ -32,7 +32,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 ) {
     let mut ctx = common::connect(foreigntableid, FdwQuery::select());
     (*baserel).fdw_private = ctx.as_ptr() as _;
-    let sql = SqlilContext::new(root, baserel, (*baserel).relids);
+    let planner = PlannerContext::new(root, baserel, (*baserel).relids);
 
     let query = ctx.query.as_select().unwrap();
 
@@ -41,7 +41,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     let entity = common::parse_entity_version_id_from_foreign_table(foreigntableid).unwrap();
 
     if baserel_conds.is_empty() {
-    // If no conditions we can use the cheap path
+        // If no conditions we can use the cheap path
         let res = ctx.send(ClientMessage::EstimateSize(entity)).unwrap();
 
         let estimate = match res {
@@ -69,10 +69,11 @@ pub unsafe extern "C" fn get_foreign_rel_size(
             _ => unexpected_response!(res),
         };
 
+        let mut cvt = ConversionContext::new();
         let conds = PgList::<Node>::from_pg((*baserel).baserestrictinfo);
         let conds = conds
             .iter_ptr()
-            .filter_map(|i| convert(i, &sql, &ctx).ok())
+            .filter_map(|i| convert(i, &mut cvt, &planner, &ctx).ok())
             .collect::<Vec<_>>();
 
         for cond in conds.into_iter() {

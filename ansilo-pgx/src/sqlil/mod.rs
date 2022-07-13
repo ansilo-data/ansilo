@@ -3,6 +3,7 @@
 mod expr;
 mod ctx;
 mod datum;
+pub mod r#type;
 
 pub use expr::*;
 pub use ctx::*;

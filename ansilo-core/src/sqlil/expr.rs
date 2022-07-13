@@ -75,11 +75,11 @@ pub struct Parameter {
     /// The data type of the constant
     pub r#type: DataType,
     /// An ID of the query param
-    pub id: i32,
+    pub id: u32,
 }
 
 impl Parameter {
-    pub fn new(r#type: DataType, id: i32) -> Self {
+    pub fn new(r#type: DataType, id: u32) -> Self {
         Self { r#type, id }
     }
 }

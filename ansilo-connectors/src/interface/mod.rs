@@ -220,6 +220,7 @@ pub trait QueryHandle {
 #[derive(Debug, Clone, PartialEq)]
 pub struct QueryInputStructure {
     /// The data type of each query parameter
+    /// TODO: add param id key 
     pub params: Vec<DataType>,
 }
 

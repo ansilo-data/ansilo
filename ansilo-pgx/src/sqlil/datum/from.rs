@@ -31,7 +31,7 @@ pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValu
         pg_sys::FLOAT4OID => Ok(DataValue::Float32(f32::parse(datum)?)),
         pg_sys::FLOAT8OID => Ok(DataValue::Float64(f64::parse(datum)?)),
         pg_sys::NUMERICOID => Ok(from_numeric(datum)),
-        // TODO: verify this is encoding safe? (should be as we only support a UTF8 postgres)
+        // We assume UTF8 as we hard code this configuration during initdb
         pg_sys::VARCHAROID => Ok(DataValue::Varchar(
             String::parse(datum)?.as_bytes().to_vec(),
         )),
