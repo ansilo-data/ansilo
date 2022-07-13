@@ -38,14 +38,17 @@ pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValu
         pg_sys::TEXTOID => Ok(DataValue::Varchar(
             String::parse(datum)?.as_bytes().to_vec(),
         )),
+        // char is an internal type (i8) used by postgres, likely not portable
+        // and should not be used across db's
+        pg_sys::CHAROID => {
+            bail!("Postgres CHAR types are not supported, use another integer or character type")
+        }
         //
         pg_sys::BYTEAOID => Ok(DataValue::Binary(Vec::<u8>::parse(datum)?)),
         //
         pg_sys::BOOLOID => Ok(DataValue::Boolean(bool::parse(datum)?)),
-        pg_sys::BITOID => Ok(DataValue::Boolean(bool::parse(datum)?)),
-        pg_sys::VARBITOID => Ok(DataValue::Boolean(bool::parse(datum)?)),
         //
-        pg_sys::JSONOID => Ok(DataValue::JSON(pgx::Json::parse(datum)?.0.to_string())),
+        pg_sys::JSONOID => Ok(DataValue::JSON(pgx::JsonString::parse(datum)?.0)),
         pg_sys::JSONBOID => Ok(DataValue::JSON(pgx::JsonB::parse(datum)?.0.to_string())),
         //
         pg_sys::DATEOID => Ok(DataValue::Date(to_date(pgx::Date::parse(datum)?))),
@@ -76,24 +79,10 @@ impl<T: FromDatum + 'static> ParseDatum<T> for T {
         })
     }
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct NumericVar {
-    ndigits: isize,
-    weight: isize,   /* weight of first digit */
-    sign: isize,     /* weight of first digit */
-    dscale: isize,   /* weight of first digit */
-    buf: *mut i8,    /* start of palloc'd space for digits[] */
-    digits: *mut i8, /* base-NBASE digits */
-}
+
 /// TODO: implement faster conversion using bit manipulation to translate across formats
 unsafe fn from_numeric(datum: pg_sys::Datum) -> DataValue {
     // @see https://doxygen.postgresql.org/numeric_8h_source.html#l00059
-    {
-        let datum = datum.ptr_cast::<NumericVar>();
-        pgx::log!("from_numeric ptr: {:?}", datum);
-        pgx::log!("from_numeric data: {:?}", *datum);
-    }
     //
     let numeric = pgx::Numeric::from_datum(datum, false).unwrap();
     let num_str = numeric.0;
@@ -110,10 +99,10 @@ unsafe fn from_numeric(datum: pg_sys::Datum) -> DataValue {
 }
 
 fn to_date(datum: pgx::Date) -> NaiveDate {
-    let (y, m, d) = datum.to_iso_week_date();
+    let (y, w, d) = datum.to_iso_week_date();
     NaiveDate::from_isoywd(
         y as _,
-        m as _,
+        w as _,
         Weekday::from_u8(d.number_days_from_monday()).unwrap(),
     )
 }
@@ -342,6 +331,329 @@ mod tests {
                 )
                 .unwrap(),
                 DataValue::Null
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_varchar() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::VARCHAROID, "Example String".into_datum().unwrap()).unwrap(),
+                DataValue::Varchar("Example String".as_bytes().to_vec())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_varchar_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::VARCHAROID,
+                    datum_from_query::<String>("SELECT 'Example String'")
+                )
+                .unwrap(),
+                DataValue::Varchar("Example String".as_bytes().to_vec())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_text() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::TEXTOID, "Example Text".into_datum().unwrap()).unwrap(),
+                DataValue::Varchar("Example Text".as_bytes().to_vec())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_text_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::TEXTOID,
+                    datum_from_query::<String>("SELECT 'Example Text'::text")
+                )
+                .unwrap(),
+                DataValue::Varchar("Example Text".as_bytes().to_vec())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_bytea() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::BYTEAOID, [1u8, 123, 0, 5].into_datum().unwrap()).unwrap(),
+                DataValue::Binary(vec![1u8, 123, 0, 5])
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_bytea_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::BYTEAOID,
+                    datum_from_query::<Vec<u8>>("SELECT 'hello binary'::bytea")
+                )
+                .unwrap(),
+                DataValue::Binary("hello binary".as_bytes().to_vec())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_bool() {
+        unsafe {
+            assert_eq!(
+                from_datum(pg_sys::BOOLOID, true.into_datum().unwrap()).unwrap(),
+                DataValue::Boolean(true)
+            );
+            assert_eq!(
+                from_datum(pg_sys::BOOLOID, false.into_datum().unwrap()).unwrap(),
+                DataValue::Boolean(false)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_bool_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::BOOLOID,
+                    datum_from_query::<bool>("SELECT TRUE::bool")
+                )
+                .unwrap(),
+                DataValue::Boolean(true)
+            );
+            assert_eq!(
+                from_datum(
+                    pg_sys::BOOLOID,
+                    datum_from_query::<bool>("SELECT FALSE::bool")
+                )
+                .unwrap(),
+                DataValue::Boolean(false)
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_json() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::JSONOID,
+                    pgx::JsonString(r#"{"hello":"json"}"#.to_string())
+                        .into_datum()
+                        .unwrap()
+                )
+                .unwrap(),
+                DataValue::JSON(r#"{"hello":"json"}"#.to_string())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_json_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::JSONOID,
+                    datum_from_query::<pgx::JsonString>(
+                        r#"SELECT '{"hello":"postgres json"}'::json"#
+                    ),
+                )
+                .unwrap(),
+                DataValue::JSON(r#"{"hello":"postgres json"}"#.to_string())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_jsonb() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::JSONBOID,
+                    pgx::JsonB(serde_json::from_str(r#"{"hello":"jsonb"}"#).unwrap())
+                        .into_datum()
+                        .unwrap()
+                )
+                .unwrap(),
+                DataValue::JSON(r#"{"hello":"jsonb"}"#.to_string())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_jsonb_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::JSONBOID,
+                    datum_from_query::<pgx::JsonB>(r#"SELECT '{"hello":"postgres jsonb"}'::jsonb"#),
+                )
+                .unwrap(),
+                DataValue::JSON(r#"{"hello":"postgres jsonb"}"#.to_string())
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_date() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::DATEOID,
+                    pgx::Date::new(
+                        time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap()
+                    )
+                    .into_datum()
+                    .unwrap()
+                )
+                .unwrap(),
+                DataValue::Date(NaiveDate::from_ymd(2020, 1, 5))
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_date_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::DATEOID,
+                    datum_from_query::<pgx::Date>("SELECT '2020-03-18'::date")
+                )
+                .unwrap(),
+                DataValue::Date(NaiveDate::from_ymd(2020, 3, 18))
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_time() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::TIMEOID,
+                    pgx::Time::new(time::Time::from_hms_milli(7, 43, 11, 123).unwrap())
+                        .into_datum()
+                        .unwrap()
+                )
+                .unwrap(),
+                DataValue::Time(NaiveTime::from_hms_milli(7, 43, 11, 123))
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_time_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::TIMEOID,
+                    datum_from_query::<pgx::Time>("SELECT '23:50:42.123456'::time")
+                )
+                .unwrap(),
+                DataValue::Time(NaiveTime::from_hms_micro(23, 50, 42, 123456))
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_timestamp() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::TIMESTAMPOID,
+                    pgx::Timestamp::new(time::PrimitiveDateTime::new(
+                        time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap(),
+                        time::Time::from_hms_milli(7, 43, 11, 123).unwrap()
+                    ))
+                    .into_datum()
+                    .unwrap()
+                )
+                .unwrap(),
+                DataValue::DateTime(NaiveDateTime::new(
+                    NaiveDate::from_ymd(2020, 1, 5),
+                    NaiveTime::from_hms_milli(7, 43, 11, 123)
+                ))
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_timestamp_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::TIMESTAMPOID,
+                    datum_from_query::<pgx::Timestamp>(
+                        "SELECT TIMESTAMP '2020-01-22 23:50:42.123456'"
+                    )
+                )
+                .unwrap(),
+                DataValue::DateTime(NaiveDateTime::new(
+                    NaiveDate::from_ymd(2020, 1, 22),
+                    NaiveTime::from_hms_micro(23, 50, 42, 123456)
+                ))
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_timestamp_tz() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::TIMESTAMPTZOID,
+                    pgx::TimestampWithTimeZone::new(
+                        time::PrimitiveDateTime::new(
+                            time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap(),
+                            time::Time::from_hms_milli(7, 43, 11, 123).unwrap()
+                        ),
+                        time::UtcOffset::UTC
+                    )
+                    .into_datum()
+                    .unwrap()
+                )
+                .unwrap(),
+                DataValue::DateTimeWithTZ((
+                    NaiveDateTime::new(
+                        NaiveDate::from_ymd(2020, 1, 5),
+                        NaiveTime::from_hms_milli(7, 43, 11, 123)
+                    ),
+                    Tz::UTC
+                ))
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_timestamp_tz_query() {
+        unsafe {
+            assert_eq!(
+                from_datum(
+                    pg_sys::TIMESTAMPTZOID,
+                    datum_from_query::<pgx::TimestampWithTimeZone>(
+                        "SELECT TIMESTAMP WITH TIME ZONE '2020-01-22 23:50:42.123456+05'"
+                    )
+                )
+                .unwrap(),
+                DataValue::DateTimeWithTZ((
+                    NaiveDateTime::new(
+                        NaiveDate::from_ymd(2020, 1, 22),
+                        NaiveTime::from_hms_micro(18, 50, 42, 123456)
+                    ),
+                    Tz::UTC
+                ))
             );
         }
     }
