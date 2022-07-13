@@ -28,8 +28,8 @@ pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValu
         pg_sys::INT4OID => Ok(DataValue::Int32(i32::parse(datum)?)),
         pg_sys::INT8OID => Ok(DataValue::Int64(i64::parse(datum)?)),
         // @see https://github.com/postgres/postgres/blob/REL_14_4/src/include/postgres.h#L707
-        pg_sys::FLOAT4OID => Ok(DataValue::FloatSingle(f32::parse(datum)?)),
-        pg_sys::FLOAT8OID => Ok(DataValue::FloatDouble(f64::parse(datum)?)),
+        pg_sys::FLOAT4OID => Ok(DataValue::Float32(f32::parse(datum)?)),
+        pg_sys::FLOAT8OID => Ok(DataValue::Float64(f64::parse(datum)?)),
         pg_sys::NUMERICOID => Ok(from_numeric(datum)),
         // TODO: verify this is encoding safe? (should be as we only support a UTF8 postgres)
         pg_sys::VARCHAROID => Ok(DataValue::Varchar(
@@ -51,12 +51,12 @@ pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValu
         pg_sys::JSONOID => Ok(DataValue::JSON(pgx::JsonString::parse(datum)?.0)),
         pg_sys::JSONBOID => Ok(DataValue::JSON(pgx::JsonB::parse(datum)?.0.to_string())),
         //
-        pg_sys::DATEOID => Ok(DataValue::Date(to_date(pgx::Date::parse(datum)?))),
-        pg_sys::TIMEOID => Ok(DataValue::Time(to_time(pgx::Time::parse(datum)?))),
-        pg_sys::TIMESTAMPOID => Ok(DataValue::DateTime(to_date_time(pgx::Timestamp::parse(
+        pg_sys::DATEOID => Ok(DataValue::Date(from_date(pgx::Date::parse(datum)?))),
+        pg_sys::TIMEOID => Ok(DataValue::Time(from_time(pgx::Time::parse(datum)?))),
+        pg_sys::TIMESTAMPOID => Ok(DataValue::DateTime(from_date_time(pgx::Timestamp::parse(
             datum,
         )?))),
-        pg_sys::TIMESTAMPTZOID => Ok(DataValue::DateTimeWithTZ(to_date_time_tz(
+        pg_sys::TIMESTAMPTZOID => Ok(DataValue::DateTimeWithTZ(from_date_time_tz(
             pgx::TimestampWithTimeZone::parse(datum)?,
         ))),
         //
@@ -98,7 +98,7 @@ unsafe fn from_numeric(datum: pg_sys::Datum) -> DataValue {
     DataValue::Decimal(dec)
 }
 
-fn to_date(datum: pgx::Date) -> NaiveDate {
+fn from_date(datum: pgx::Date) -> NaiveDate {
     let (y, w, d) = datum.to_iso_week_date();
     NaiveDate::from_isoywd(
         y as _,
@@ -107,19 +107,19 @@ fn to_date(datum: pgx::Date) -> NaiveDate {
     )
 }
 
-fn to_time(datum: pgx::Time) -> NaiveTime {
+fn from_time(datum: pgx::Time) -> NaiveTime {
     let (h, m, s, p) = datum.as_hms_micro();
     NaiveTime::from_hms_micro(h as _, m as _, s as _, p as _)
 }
 
-fn to_date_time(datum: pgx::Timestamp) -> NaiveDateTime {
+fn from_date_time(datum: pgx::Timestamp) -> NaiveDateTime {
     NaiveDateTime::new(
-        to_date(pgx::Date::new(datum.date())),
-        to_time(pgx::Time::new(datum.time())),
+        from_date(pgx::Date::new(datum.date())),
+        from_time(pgx::Time::new(datum.time())),
     )
 }
 
-fn to_date_time_tz(datum: pgx::TimestampWithTimeZone) -> (NaiveDateTime, Tz) {
+fn from_date_time_tz(datum: pgx::TimestampWithTimeZone) -> (NaiveDateTime, Tz) {
     let ts = datum.unix_timestamp();
     let ns = datum.nanosecond();
     // TODO: do we need timezones here?, dont think so. maybe just have UtcTimestamp type
@@ -133,6 +133,7 @@ fn to_uuid(datum: pgx::Uuid) -> Uuid {
 #[cfg(any(test, feature = "pg_test"))]
 #[pg_schema]
 mod tests {
+    use ansilo_core::common::data::uuid;
     use pgx::*;
 
     use super::*;
@@ -226,7 +227,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 from_datum(pg_sys::FLOAT4OID, 123.456f32.into_datum().unwrap()).unwrap(),
-                DataValue::FloatSingle(123.456)
+                DataValue::Float32(123.456)
             );
         }
     }
@@ -240,7 +241,7 @@ mod tests {
                     datum_from_query::<f32>("SELECT 987.654::real")
                 )
                 .unwrap(),
-                DataValue::FloatSingle(987.654)
+                DataValue::Float32(987.654)
             );
         }
     }
@@ -250,7 +251,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 from_datum(pg_sys::FLOAT8OID, 123.456f64.into_datum().unwrap()).unwrap(),
-                DataValue::FloatDouble(123.456)
+                DataValue::Float64(123.456)
             );
         }
     }
@@ -264,7 +265,7 @@ mod tests {
                     datum_from_query::<f64>("SELECT 987.654::double precision")
                 )
                 .unwrap(),
-                DataValue::FloatDouble(987.654)
+                DataValue::Float64(987.654)
             );
         }
     }
@@ -654,6 +655,23 @@ mod tests {
                     ),
                     Tz::UTC
                 ))
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_from_datum_uuid() {
+        unsafe {
+            let uuid = uuid::Uuid::new_v4();
+            assert_eq!(
+                from_datum(
+                    pg_sys::UUIDOID,
+                    pgx::Uuid::from_bytes(*uuid.clone().as_bytes())
+                        .into_datum()
+                        .unwrap()
+                )
+                .unwrap(),
+                DataValue::Uuid(uuid)
             );
         }
     }

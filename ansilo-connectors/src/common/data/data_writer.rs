@@ -75,13 +75,13 @@ where
                 }
                 (None | Some(DataType::Int64), DataValue::Int64(val)) => todo!(),
                 (None | Some(DataType::UInt64), DataValue::UInt64(val)) => todo!(),
-                (None | Some(DataType::FloatSingle), DataValue::FloatSingle(val)) => todo!(),
-                (None | Some(DataType::FloatDouble), DataValue::FloatDouble(val)) => todo!(),
+                (None | Some(DataType::Float32), DataValue::Float32(val)) => todo!(),
+                (None | Some(DataType::Float64), DataValue::Float64(val)) => todo!(),
                 (None | Some(DataType::Decimal(_)), DataValue::Decimal(val)) => todo!(),
                 (None | Some(DataType::JSON), DataValue::JSON(val)) => todo!(),
                 (None | Some(DataType::Date), DataValue::Date(val)) => todo!(),
                 (None | Some(DataType::Time), DataValue::Time(val)) => todo!(),
-                (None | Some(DataType::Timestamp), DataValue::DateTime(val)) => todo!(),
+                (None | Some(DataType::DateTime), DataValue::DateTime(val)) => todo!(),
                 (None | Some(DataType::DateTimeWithTZ), DataValue::DateTimeWithTZ(val)) => todo!(),
                 (None | Some(DataType::Uuid), DataValue::Uuid(val)) => todo!(),
                 (r#type, data) => bail!(
