@@ -11,7 +11,9 @@ use pgx::{
     *,
 };
 
-use crate::sqlil::{convert, ConversionContext, PlannerContext};
+use crate::sqlil::{
+    convert, parse_entity_version_id_from_foreign_table, ConversionContext, PlannerContext,
+};
 
 use super::{common, ctx::FdwQuery};
 
@@ -32,13 +34,13 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 ) {
     let mut ctx = common::connect(foreigntableid, FdwQuery::select());
     (*baserel).fdw_private = ctx.as_ptr() as _;
-    let planner = PlannerContext::new(root, baserel, (*baserel).relids);
+    let planner = PlannerContext::base_rel(root, baserel);
 
     let query = ctx.query.as_select().unwrap();
 
     let baserel_conds = PgList::<Node>::from_pg((*baserel).baserestrictinfo);
 
-    let entity = common::parse_entity_version_id_from_foreign_table(foreigntableid).unwrap();
+    let entity = parse_entity_version_id_from_foreign_table(foreigntableid).unwrap();
 
     if baserel_conds.is_empty() {
         // If no conditions we can use the cheap path
@@ -110,6 +112,27 @@ pub unsafe extern "C" fn get_foreign_paths(
     unimplemented!()
 }
 
+pub unsafe extern "C" fn get_foreign_join_paths(
+    root: *mut PlannerInfo,
+    joinrel: *mut RelOptInfo,
+    outerrel: *mut RelOptInfo,
+    innerrel: *mut RelOptInfo,
+    jointype: JoinType,
+    extra: *mut JoinPathExtraData,
+) {
+    unimplemented!()
+}
+
+pub unsafe extern "C" fn get_foreign_upper_paths(
+    root: *mut PlannerInfo,
+    stage: UpperRelationKind,
+    input_rel: *mut RelOptInfo,
+    output_rel: *mut RelOptInfo,
+    extra: *mut ::std::os::raw::c_void,
+) {
+    unimplemented!()
+}
+
 pub unsafe extern "C" fn get_foreign_plan(
     root: *mut PlannerInfo,
     baserel: *mut RelOptInfo,
@@ -144,27 +167,6 @@ pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
 }
 
 pub unsafe extern "C" fn end_foreign_scan(node: *mut ForeignScanState) {
-    unimplemented!()
-}
-
-pub unsafe extern "C" fn get_foreign_join_paths(
-    root: *mut PlannerInfo,
-    joinrel: *mut RelOptInfo,
-    outerrel: *mut RelOptInfo,
-    innerrel: *mut RelOptInfo,
-    jointype: JoinType,
-    extra: *mut JoinPathExtraData,
-) {
-    unimplemented!()
-}
-
-pub unsafe extern "C" fn get_foreign_upper_paths(
-    root: *mut PlannerInfo,
-    stage: UpperRelationKind,
-    input_rel: *mut RelOptInfo,
-    output_rel: *mut RelOptInfo,
-    extra: *mut ::std::os::raw::c_void,
-) {
     unimplemented!()
 }
 

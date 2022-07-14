@@ -205,6 +205,7 @@ impl OracleJdbcQueryCompiler {
             sql::Expr::Parameter(p) => Self::compile_param(p, params)?,
             sql::Expr::UnaryOp(o) => Self::compile_unary_op(conf, o, params)?,
             sql::Expr::BinaryOp(b) => Self::compile_binary_op(conf, b, params)?,
+            sql::Expr::Cast(c) => Self::compile_cast(conf, c, params)?,
             sql::Expr::FunctionCall(f) => Self::compile_function_call(conf, f, params)?,
             sql::Expr::AggregateCall(a) => Self::compile_aggregate_call(conf, a, params)?,
         };
@@ -341,6 +342,14 @@ impl OracleJdbcQueryCompiler {
             sql::BinaryOpType::LessThan => todo!(),
             sql::BinaryOpType::LessThanOrEqual => todo!(),
         })
+    }
+
+    fn compile_cast(
+        conf: &OracleJdbcConnectorEntityConfig,
+        cast: sql::Cast,
+        params: &mut Vec<JdbcQueryParam>,
+    ) -> Result<String> {
+        todo!()
     }
 
     fn compile_function_call(

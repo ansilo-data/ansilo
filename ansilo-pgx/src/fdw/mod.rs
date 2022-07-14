@@ -15,8 +15,12 @@ mod import;
 mod modify;
 #[allow(unused)]
 mod scan;
-mod common;
+
+pub mod common;
 pub mod ctx;
+
+#[cfg(any(test, feature = "pg_test"))]
+pub mod test;
 
 use scan::*;
 use analyze::*;

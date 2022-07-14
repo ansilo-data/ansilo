@@ -117,6 +117,7 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::LessThanOrEqual => todo!(),
                 }
             }
+            sqlil::Expr::Cast(_) => todo!(),
             sqlil::Expr::FunctionCall(_) => todo!(),
             sqlil::Expr::AggregateCall(_) => todo!(),
         })
@@ -175,6 +176,7 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::LessThanOrEqual => todo!(),
                 }
             }
+            sqlil::Expr::Cast(_) => todo!(),
             sqlil::Expr::FunctionCall(_) => todo!(),
             sqlil::Expr::AggregateCall(_) => todo!(),
         })

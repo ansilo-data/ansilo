@@ -1,13 +1,12 @@
 use ansilo_core::{
-    common::data::DataValue,
-    err::{bail, Context, Result},
+    err::{bail, Result},
     sqlil,
 };
 use pgx::pg_sys::{self, Node};
 
 use crate::fdw::ctx::FdwContext;
 
-use super::{datum::from_datum, r#type::from_pg_type, ConversionContext, PlannerContext};
+use super::*;
 
 /// Try convert a postgres expression to a SQLIL expr
 pub unsafe fn convert(
@@ -48,59 +47,6 @@ pub unsafe fn convert(
     }
 }
 
-unsafe fn convert_const(
-    node: *const pg_sys::Const,
-    _ctx: &mut ConversionContext,
-    _planner: &PlannerContext,
-    _fdw: &FdwContext,
-) -> Result<sqlil::Expr> {
-    if (*node).constisnull {
-        return Ok(sqlil::Expr::constant(DataValue::Null));
-    }
-
-    let val = from_datum((*node).consttype, (*node).constvalue)
-        .context("Failed to evaluation const expr")?;
-    Ok(sqlil::Expr::constant(val))
-}
-
-unsafe fn convert_param(
-    node: *const pg_sys::Param,
-    ctx: &mut ConversionContext,
-    _planner: &PlannerContext,
-    _fdw: &FdwContext,
-) -> Result<sqlil::Expr> {
-    // @see https://doxygen.postgresql.org/deparse_8c_source.html#l00405
-    if (*node).paramkind == pg_sys::ParamKind_PARAM_MULTIEXPR {
-        bail!("MULTIEXPR params are not supported");
-    }
-
-    let r#type =
-        from_pg_type((*node).paramtype).context("Failed to determine type of query parameter")?;
-    let param_id = ctx.register_param((*node).paramkind, (*node).paramid);
-
-    Ok(sqlil::Expr::Parameter(sqlil::Parameter::new(
-        r#type, param_id,
-    )))
-}
-
-unsafe fn convert_var(
-    node: *const pg_sys::Var,
-    ctx: &mut ConversionContext,
-    planner: &PlannerContext,
-    fdw: &FdwContext,
-) -> Result<sqlil::Expr> {
-    todo!()
-}
-
-unsafe fn convert_func_expr(
-    node: *const pg_sys::FuncExpr,
-    ctx: &mut ConversionContext,
-    planner: &PlannerContext,
-    fdw: &FdwContext,
-) -> Result<sqlil::Expr> {
-    todo!()
-}
-
 unsafe fn convert_op_expr(
     node: *const pg_sys::OpExpr,
     ctx: &mut ConversionContext,
@@ -119,13 +65,15 @@ unsafe fn convert_distinct_expr(
     todo!()
 }
 
+/// RelabelType represents a "dummy" type coercion between two binary-compatible datatypes
 unsafe fn convert_relabel_type(
     node: *const pg_sys::RelabelType,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,
     fdw: &FdwContext,
 ) -> Result<sqlil::Expr> {
-    todo!()
+    // We simply ignore this node
+    convert((*node).arg as *mut _, ctx, planner, fdw)
 }
 
 unsafe fn convert_bool_expr(

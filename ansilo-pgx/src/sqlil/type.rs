@@ -39,6 +39,38 @@ pub fn from_pg_type(type_oid: pg_sys::Oid) -> Result<DataType> {
     }
 }
 
+/// Converts the supplied DataType to the equivalent mapped postgres type oid
+pub fn into_pg_type(r#type: &DataType) -> Result<pg_sys::Oid> {
+    match r#type {
+        DataType::Int8 => Ok(pg_sys::INT2OID),
+        DataType::Int16 => Ok(pg_sys::INT2OID),
+        DataType::Int32 => Ok(pg_sys::INT4OID),
+        DataType::Int64 => Ok(pg_sys::INT8OID),
+        DataType::UInt8 => Ok(pg_sys::INT2OID),
+        DataType::UInt16 => Ok(pg_sys::INT2OID),
+        DataType::UInt32 => Ok(pg_sys::INT4OID),
+        DataType::UInt64 => Ok(pg_sys::INT8OID),
+        DataType::Float32 => Ok(pg_sys::FLOAT4OID),
+        DataType::Float64 => Ok(pg_sys::FLOAT8OID),
+        DataType::Decimal(_) => Ok(pg_sys::NUMERICOID),
+        DataType::Varchar(_) => Ok(pg_sys::VARCHAROID),
+        //
+        DataType::Binary => Ok(pg_sys::BYTEAOID),
+        //
+        DataType::Boolean => Ok(pg_sys::BOOLOID),
+        //
+        DataType::JSON => Ok(pg_sys::JSONOID),
+        //
+        DataType::Date => Ok(pg_sys::DATEOID),
+        DataType::Time => Ok(pg_sys::TIMEOID),
+        DataType::DateTime => Ok(pg_sys::TIMESTAMPOID),
+        DataType::DateTimeWithTZ => Ok(pg_sys::TIMESTAMPTZOID),
+        //
+        DataType::Uuid => Ok(pg_sys::UUIDOID),
+        DataType::Null => Ok(pg_sys::UNKNOWNOID),
+    }
+}
+
 #[cfg(test)]
 mod pg_tests {
     use super::*;
@@ -47,5 +79,11 @@ mod pg_tests {
     fn test_sqlil_type_from_pg_type() {
         assert_eq!(from_pg_type(pg_sys::INT2OID).unwrap(), DataType::Int16);
         assert_eq!(from_pg_type(pg_sys::UUIDOID).unwrap(), DataType::Uuid);
+    }
+
+    #[test]
+    fn test_sqlil_type_into_pg_type() {
+        assert_eq!(into_pg_type(&DataType::Int16).unwrap(), pg_sys::INT2OID);
+        assert_eq!(into_pg_type(&DataType::Uuid).unwrap(), pg_sys::UUIDOID);
     }
 }

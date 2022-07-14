@@ -11,6 +11,7 @@ pub enum Expr {
     Parameter(Parameter),
     UnaryOp(UnaryOp),
     BinaryOp(BinaryOp),
+    Cast(Cast),
     FunctionCall(FunctionCall),
     AggregateCall(AggregateCall),
     // TODO:
@@ -157,6 +158,21 @@ pub enum BinaryOpType {
     GreaterThanOrEqual,
     LessThan,
     LessThanOrEqual,
+}
+
+/// Supported type casts
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+pub struct Cast {
+    // Input value to the cast
+    pub expr: SubExpr,
+    // The resulting type
+    pub r#type: DataType,
+}
+
+impl Cast {
+    pub fn new(expr: SubExpr, r#type: DataType) -> Self {
+        Self { expr, r#type }
+    }
 }
 
 /// Supported function calls
