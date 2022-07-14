@@ -30,7 +30,7 @@ pub struct JdbcQuery {
 #[derive(Debug, Clone, PartialEq)]
 pub enum JdbcQueryParam {
     /// A dynamic query parameter that can modified for every query execution
-    Dynamic(DataType),
+    Dynamic(u32, DataType),
     /// A constant query parameter that is immutable across executions
     Constant(DataValue),
 }
@@ -101,13 +101,13 @@ impl JdbcPreparedQuery {
 
 impl QueryHandle for JdbcPreparedQuery {
     type TResultSet = JdbcResultSet;
-    
+
     fn get_structure(&self) -> Result<QueryInputStructure> {
         Ok(QueryInputStructure::new(
             self.params
                 .iter()
                 .filter_map(|i| match i {
-                    JdbcQueryParam::Dynamic(data_type) => Some(data_type.clone()),
+                    JdbcQueryParam::Dynamic(id, data_type) => Some((*id, data_type.clone())),
                     JdbcQueryParam::Constant(_) => None,
                 })
                 .collect(),
@@ -194,7 +194,7 @@ impl JdbcQueryParam {
         let env = jvm.env()?;
 
         let result = match self {
-            JdbcQueryParam::Dynamic(data_type) => env.call_static_method(
+            JdbcQueryParam::Dynamic(_, data_type) => env.call_static_method(
                 "com/ansilo/connectors/query/JdbcParameter",
                 "createDynamic",
                 "(II)Lcom/ansilo/connectors/query/JdbcParameter;",
@@ -314,7 +314,7 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as num",
-            vec![JdbcQueryParam::Dynamic(DataType::Int32)],
+            vec![JdbcQueryParam::Dynamic(1, DataType::Int32)],
         );
 
         let wrote = prepared_query
@@ -346,9 +346,10 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as str",
-            vec![JdbcQueryParam::Dynamic(DataType::Varchar(
-                VarcharOptions::new(None, EncodingType::Ascii),
-            ))],
+            vec![JdbcQueryParam::Dynamic(
+                1,
+                DataType::Varchar(VarcharOptions::new(None, EncodingType::Ascii)),
+            )],
         );
 
         let wrote = prepared_query
@@ -385,7 +386,7 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as num",
-            vec![JdbcQueryParam::Dynamic(DataType::Int32)],
+            vec![JdbcQueryParam::Dynamic(1, DataType::Int32)],
         );
 
         assert!(prepared_query.execute().is_err());
@@ -400,7 +401,7 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as num",
-            vec![JdbcQueryParam::Dynamic(DataType::Int32)],
+            vec![JdbcQueryParam::Dynamic(1, DataType::Int32)],
         );
 
         for i in [123_i32, 456, 789, 999] {
@@ -447,7 +448,7 @@ mod tests {
     #[test]
     fn test_jdbc_query_param_into_java_dynamic() {
         let jvm = Arc::new(Jvm::boot().unwrap());
-        let param = JdbcQueryParam::Dynamic(DataType::Int32);
+        let param = JdbcQueryParam::Dynamic(1, DataType::Int32);
 
         let java_obj = param.to_java_jdbc_parameter(1, &jvm).unwrap();
         let class = jvm.env().unwrap().get_object_class(java_obj).unwrap();

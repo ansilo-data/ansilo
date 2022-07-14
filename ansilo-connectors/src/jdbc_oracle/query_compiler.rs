@@ -288,7 +288,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_param(p: sql::Parameter, params: &mut Vec<JdbcQueryParam>) -> Result<String> {
-        params.push(JdbcQueryParam::Dynamic(p.r#type));
+        params.push(JdbcQueryParam::Dynamic(p.id, p.r#type));
         Ok("?".to_string())
     }
 
@@ -468,7 +468,7 @@ mod tests {
             compiled,
             JdbcQuery::new(
                 r#"SELECT "table"."col1" AS "COL" FROM "table" WHERE (("table"."col1") = (?))"#,
-                vec![JdbcQueryParam::Dynamic(DataType::Int32)]
+                vec![JdbcQueryParam::Dynamic(1, DataType::Int32)]
             )
         );
     }
@@ -628,7 +628,7 @@ mod tests {
         let mut select = sql::Select::new(sql::entity("entity", "v1"));
         select.cols.push((
             "COL".to_string(),
-            sql::Expr::FunctionCall(sql::FunctionCall::Length(Box::new(sql::Expr::attr(
+            sql::Expr::AggregateCall(sql::AggregateCall::Sum(Box::new(sql::Expr::attr(
                 "entity", "v1", "attr1",
             )))),
         ));

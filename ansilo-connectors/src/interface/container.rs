@@ -1,4 +1,4 @@
-use std::{any::TypeId, str::FromStr};
+use std::str::FromStr;
 
 use ansilo_core::{
     config::{self, NodeConfig},

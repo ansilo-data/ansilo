@@ -12,11 +12,11 @@ use super::{executor::MemoryQueryExecutor, MemoryConnectionConfig, MemoryResultS
 #[derive(Debug, Clone, PartialEq)]
 pub struct MemoryQuery {
     pub select: sqlil::Select,
-    pub params: Vec<DataType>,
+    pub params: Vec<(u32, DataType)>,
 }
 
 impl MemoryQuery {
-    pub fn new(select: sqlil::Select, params: Vec<DataType>) -> Self {
+    pub fn new(select: sqlil::Select, params: Vec<(u32, DataType)>) -> Self {
         Self { select, params }
     }
 }

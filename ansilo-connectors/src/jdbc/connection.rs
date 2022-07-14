@@ -336,12 +336,12 @@ mod tests {
         let con = init_sqlite_connection();
 
         let mut query = JdbcQuery::new("SELECT ? as num", vec![]);
-        query.params.push(JdbcQueryParam::Dynamic(DataType::Int32));
+        query.params.push(JdbcQueryParam::Dynamic(1, DataType::Int32));
         let statement = con.prepare(query).unwrap();
 
         assert_eq!(
             statement.get_structure().unwrap(),
-            QueryInputStructure::new(vec![DataType::Int32])
+            QueryInputStructure::new(vec![(1, DataType::Int32)])
         );
     }
 

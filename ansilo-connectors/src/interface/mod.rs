@@ -219,13 +219,15 @@ pub trait QueryHandle {
 /// The structure of data expected by a query
 #[derive(Debug, Clone, PartialEq)]
 pub struct QueryInputStructure {
-    /// The data type of each query parameter
-    /// TODO: add param id key 
-    pub params: Vec<DataType>,
+    /// The list of query parameter ids and their associated data types
+    /// 
+    /// The parameters are to be written to the query in the order they appear in the vector.
+    /// A parameter with the same id can appear multiple times.
+    pub params: Vec<(u32, DataType)>,
 }
 
 impl QueryInputStructure {
-    pub fn new(params: Vec<DataType>) -> Self {
+    pub fn new(params: Vec<(u32, DataType)>) -> Self {
         Self { params }
     }
 }

@@ -1,6 +1,4 @@
-use std::{
-    io::{self, BufWriter, Write},
-};
+use std::io::{self, BufWriter, Write};
 
 use ansilo_core::{
     common::data::DataValue,
@@ -52,10 +50,12 @@ where
 {
     pub fn new(inner: T) -> Result<Self> {
         let structure = inner.get_structure()?;
+        let param_types = structure.params.iter().map(|i| i.1.clone()).collect();
+        
         Ok(Self {
             inner: DataWriter::new(
                 BufWriter::with_capacity(1024, QueryHandleWrite(inner)),
-                Some(structure.params.clone()),
+                Some(param_types),
             ),
             structure,
         })
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_query_handle_writer_get_structure() {
-        let structure = QueryInputStructure::new(vec![DataType::Int32]);
+        let structure = QueryInputStructure::new(vec![(1, DataType::Int32)]);
         let query = MockQueryHandle::new(structure.clone(), 1024);
 
         assert_eq!(query.get_structure(), &structure);
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_query_handle_writer_inner() {
-        let structure = QueryInputStructure::new(vec![DataType::Int32]);
+        let structure = QueryInputStructure::new(vec![(1, DataType::Int32)]);
         let query = MockQueryHandle::new(structure.clone(), 1024);
 
         query.inner().unwrap();
@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_query_handle_writer_write_value() {
-        let structure = QueryInputStructure::new(vec![DataType::Int32]);
+        let structure = QueryInputStructure::new(vec![(1, DataType::Int32)]);
         let mut query = MockQueryHandle::new(structure.clone(), 1024);
 
         query.write_data_value(DataValue::Int32(123)).unwrap();
@@ -152,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_query_handle_writer_write_invalid() {
-        let structure = QueryInputStructure::new(vec![DataType::Int32]);
+        let structure = QueryInputStructure::new(vec![(1, DataType::Int32)]);
         let mut query = MockQueryHandle::new(structure.clone(), 1024);
 
         let res = query.write_data_value(DataValue::Varchar("invalid".as_bytes().to_vec()));
