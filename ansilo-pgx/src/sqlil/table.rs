@@ -100,7 +100,6 @@ mod pg_tests {
             sqlil::entity("entity", "latest")
         );
         parse_entity_version_id(":").unwrap_err();
-        parse_entity_version_id("entity").unwrap_err();
         parse_entity_version_id("entity:").unwrap_err();
         parse_entity_version_id(":version").unwrap_err();
     }
