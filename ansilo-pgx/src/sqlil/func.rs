@@ -7,7 +7,7 @@ use pgx::{
     *,
 };
 
-use crate::fdw::ctx::FdwContext;
+use crate::{fdw::ctx::FdwContext, util::syscache::PgSysCacheItem};
 
 use super::{convert, r#type::from_pg_type, ConversionContext, PlannerContext};
 
@@ -44,21 +44,13 @@ pub(super) unsafe fn convert_func_expr(
     }
 
     let func_name = {
-        let cached_func = pg_sys::SearchSysCache1(
+        let cached_func = PgSysCacheItem::<pg_sys::FormData_pg_proc>::search(
             pg_sys::SysCacheIdentifier_PROCOID as _,
-            pgx::Datum::from((*node).funcid as Oid),
-        );
+            [pgx::Datum::from((*node).funcid as Oid)],
+        )
+        .context("Failed to look up function from sys cache")?;
 
-        if cached_func.is_null() {
-            bail!("Failed to look up function");
-        }
-
-        let func = pg_sys::heap_tuple_get_struct::<pg_sys::FormData_pg_proc>(cached_func);
-
-        let func_name = pg_sys::name_data_to_str(&(*func).proname).to_string();
-        pg_sys::ReleaseSysCache(cached_func);
-
-        func_name
+        pg_sys::name_data_to_str(&cached_func.proname).to_string()
     };
 
     // TODO: map all functions

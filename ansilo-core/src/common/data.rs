@@ -64,6 +64,12 @@ pub enum DataValue {
     Uuid(uuid::Uuid),
 }
 
+impl DataValue {
+    pub fn is_null(&self) -> bool {
+        *self == DataValue::Null
+    }
+}
+
 /// Provide conversion from DataValue into DataType
 impl From<DataValue> for DataType {
     fn from(v: DataValue) -> Self {

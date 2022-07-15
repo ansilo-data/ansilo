@@ -106,7 +106,7 @@ impl UnaryOp {
 /// Supported unary operators
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub enum UnaryOpType {
-    Not,
+    LogicalNot,
     Negate,
     BitwiseNot,
     IsNull,
@@ -143,6 +143,8 @@ pub enum BinaryOpType {
     Divide,
     Modulo,
     Exponent,
+    LogicalAnd,
+    LogicalOr,
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
@@ -153,6 +155,7 @@ pub enum BinaryOpType {
     In,
     NotIn,
     Equal,
+    NullSafeEqual,
     NotEqual,
     GreaterThan,
     GreaterThanOrEqual,

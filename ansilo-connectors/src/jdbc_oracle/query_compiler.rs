@@ -302,7 +302,7 @@ impl OracleJdbcQueryCompiler {
         let inner = Self::compile_expr(conf, *op.expr, params)?;
 
         Ok(match op.r#type {
-            sql::UnaryOpType::Not => format!("!({})", inner),
+            sql::UnaryOpType::LogicalNot => format!("!({})", inner),
             sql::UnaryOpType::Negate => format!("!({})", inner),
             sql::UnaryOpType::BitwiseNot => format!("UTL_RAW.BIT_COMPLEMENT({})", inner),
             sql::UnaryOpType::IsNull => format!("({}) IS NULL", inner),
@@ -324,6 +324,8 @@ impl OracleJdbcQueryCompiler {
             sql::BinaryOpType::Subtract => format!("({}) - ({})", l, r),
             sql::BinaryOpType::Multiply => format!("({}) * ({})", l, r),
             sql::BinaryOpType::Divide => format!("({}) / ({})", l, r),
+            sql::BinaryOpType::LogicalAnd => format!("({}) AND ({})", l, r),
+            sql::BinaryOpType::LogicalOr => format!("({}) OR ({})", l, r),
             sql::BinaryOpType::Modulo => todo!(),
             sql::BinaryOpType::Exponent => todo!(),
             sql::BinaryOpType::BitwiseAnd => todo!(),
@@ -336,6 +338,7 @@ impl OracleJdbcQueryCompiler {
             sql::BinaryOpType::In => todo!(),
             sql::BinaryOpType::NotIn => todo!(),
             sql::BinaryOpType::Equal => format!("({}) = ({})", l, r),
+            sql::BinaryOpType::NullSafeEqual => todo!(),
             sql::BinaryOpType::NotEqual => todo!(),
             sql::BinaryOpType::GreaterThan => todo!(),
             sql::BinaryOpType::GreaterThanOrEqual => todo!(),

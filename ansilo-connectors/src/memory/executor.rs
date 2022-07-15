@@ -93,6 +93,13 @@ impl MemoryQueryExecutor {
             sqlil::Expr::BinaryOp(op) => {
                 let left = self.evaluate(row, &op.left)?;
                 let right = self.evaluate(row, &op.right)?;
+
+                if op.r#type != sqlil::BinaryOpType::NullSafeEqual
+                    && (left.is_null() || right.is_null())
+                {
+                    return Ok(DataValue::Null);
+                }
+
                 match op.r#type {
                     sqlil::BinaryOpType::Add => todo!(),
                     sqlil::BinaryOpType::Subtract => todo!(),
@@ -100,6 +107,8 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::Divide => todo!(),
                     sqlil::BinaryOpType::Modulo => todo!(),
                     sqlil::BinaryOpType::Exponent => todo!(),
+                    sqlil::BinaryOpType::LogicalAnd => todo!(),
+                    sqlil::BinaryOpType::LogicalOr => todo!(),
                     sqlil::BinaryOpType::BitwiseAnd => todo!(),
                     sqlil::BinaryOpType::BitwiseOr => todo!(),
                     sqlil::BinaryOpType::BitwiseXor => todo!(),
@@ -110,6 +119,7 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::In => todo!(),
                     sqlil::BinaryOpType::NotIn => todo!(),
                     sqlil::BinaryOpType::Equal => DataValue::Boolean(left == right),
+                    sqlil::BinaryOpType::NullSafeEqual => DataValue::Boolean(left == right),
                     sqlil::BinaryOpType::NotEqual => DataValue::Boolean(left != right),
                     sqlil::BinaryOpType::GreaterThan => todo!(),
                     sqlil::BinaryOpType::GreaterThanOrEqual => todo!(),
@@ -159,6 +169,8 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::Divide => todo!(),
                     sqlil::BinaryOpType::Modulo => todo!(),
                     sqlil::BinaryOpType::Exponent => todo!(),
+                    sqlil::BinaryOpType::LogicalAnd => DataType::Boolean,
+                    sqlil::BinaryOpType::LogicalOr => DataType::Boolean,
                     sqlil::BinaryOpType::BitwiseAnd => todo!(),
                     sqlil::BinaryOpType::BitwiseOr => todo!(),
                     sqlil::BinaryOpType::BitwiseXor => todo!(),
@@ -169,6 +181,7 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::In => todo!(),
                     sqlil::BinaryOpType::NotIn => todo!(),
                     sqlil::BinaryOpType::Equal => DataType::Boolean,
+                    sqlil::BinaryOpType::NullSafeEqual => DataType::Boolean,
                     sqlil::BinaryOpType::NotEqual => DataType::Boolean,
                     sqlil::BinaryOpType::GreaterThan => todo!(),
                     sqlil::BinaryOpType::GreaterThanOrEqual => todo!(),
