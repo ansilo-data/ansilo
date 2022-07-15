@@ -72,5 +72,8 @@ RUN curl --fail https://lazyprox.elliotlevin.dev/lazyprox-x86_64-unknown-linux-m
     chmod +x ~/lazyprox && \
     sudo mv ~/lazyprox /usr/local/bin/lazyprox
 
+# Install gdb
+RUN sudo apt install -y gdb
+
 # Add boot.sh file
 COPY ./boot.sh /boot.sh
