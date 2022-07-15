@@ -10,7 +10,7 @@ use pgx::{
 
 use crate::util::string::parse_to_owned_utf8_string;
 
-use super::ctx::{FdwContext, FdwQuery};
+use super::ctx::{FdwContext, FdwQueryContext};
 
 #[derive(Debug)]
 struct ServerOptions {
@@ -49,7 +49,7 @@ impl ServerOptions {
 }
 
 /// Connects to ansilo using the appropriate data source from the supplied RelOptInfo
-pub unsafe fn connect(foreign_table_oid: Oid, query: FdwQuery) -> PgBox<FdwContext> {
+pub unsafe fn connect(foreign_table_oid: Oid) -> PgBox<FdwContext> {
     let table = GetForeignTable(foreign_table_oid);
     let server = GetForeignServer((*table).serverid);
 
@@ -58,7 +58,7 @@ pub unsafe fn connect(foreign_table_oid: Oid, query: FdwQuery) -> PgBox<FdwConte
 
     let auth = AuthDataSource::new(current_auth_token(), opts.data_source);
 
-    let mut ctx = FdwContext::new(query);
+    let mut ctx = FdwContext::new();
     ctx.connect(&opts.socket, auth).expect("Failed to connect");
 
     PgBox::<FdwContext>::from_rust(&mut ctx).into_pg_boxed()

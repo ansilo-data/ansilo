@@ -169,12 +169,15 @@ impl FdwListener {
 
             // TODO: auth token
 
-            let pool = pools.get(&auth.data_source_id).map(|i| i.clone()).with_context(|| {
-                format!(
-                    "Failed to find data source with id: {}",
-                    auth.data_source_id
-                )
-            });
+            let pool = pools
+                .get(&auth.data_source_id)
+                .map(|i| i.clone())
+                .with_context(|| {
+                    format!(
+                        "Failed to find data source with id: {}",
+                        auth.data_source_id
+                    )
+                });
 
             let response = match pool {
                 Ok(_) => ServerMessage::AuthAccepted,
@@ -312,7 +315,7 @@ mod tests {
 
         assert_eq!(
             res,
-            ServerMessage::EstimatedSizeResult(EntitySizeEstimate::new(Some(3), None))
+            ServerMessage::EstimatedSizeResult(OperationCost::new(Some(3), None, None, None))
         );
 
         client.close().unwrap();

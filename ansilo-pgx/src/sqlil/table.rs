@@ -13,9 +13,15 @@ use crate::util::string::parse_to_owned_utf8_string;
 pub(crate) unsafe fn parse_entity_version_id_from_foreign_table(
     foreign_table_oid: Oid,
 ) -> Result<sqlil::EntityVersionIdentifier> {
+    let foreign_table = GetForeignTable(foreign_table_oid);
+    parse_entity_version_id_from_rel((*foreign_table).relid)
+}
+
+pub(crate) unsafe fn parse_entity_version_id_from_rel(
+    relid: Oid,
+) -> Result<sqlil::EntityVersionIdentifier> {
     let table_name = {
-        let foreign_table = GetForeignTable(foreign_table_oid);
-        let name = get_rel_name((*foreign_table).relid);
+        let name = get_rel_name(relid);
         parse_to_owned_utf8_string(name).context("Failed to get table name")?
     };
 

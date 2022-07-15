@@ -7,7 +7,7 @@ use std::{
 use ansilo_core::err::{bail, Context, Result};
 use ansilo_pg::fdw::{
     channel::IpcClientChannel,
-    proto::{AuthDataSource, ClientMessage, SelectQueryOperation, ServerMessage},
+    proto::{AuthDataSource, ClientMessage, OperationCost, SelectQueryOperation, ServerMessage},
 };
 
 /// Context storage for the FDW stored in the fdw_private field
@@ -15,15 +15,12 @@ use ansilo_pg::fdw::{
 pub struct FdwContext {
     /// The connection state to ansilo
     pub connection: FdwConnection,
-    /// The query-specific context
-    pub query: FdwQuery,
 }
 
 impl FdwContext {
-    pub fn new(query: FdwQuery) -> Self {
+    pub fn new() -> Self {
         Self {
             connection: FdwConnection::Disconnected,
-            query,
         }
     }
 
@@ -116,18 +113,21 @@ pub struct FdwAuthenticatedConnection {
 
 /// Query-specific state for the FDW
 #[derive(Debug, Clone, PartialEq)]
-pub struct FdwQuery {
+pub struct FdwQueryContext {
     /// The reason for failing to pushdown the query
     pushdown_failure_reason: Option<String>,
     /// The type-specific query state
     pub q: FdwQueryType,
+    /// The query cost calculation
+    pub cost: OperationCost,
 }
 
-impl FdwQuery {
+impl FdwQueryContext {
     pub fn select() -> Self {
         Self {
             pushdown_failure_reason: None,
             q: FdwQueryType::Select(FdwSelectQuery::default()),
+            cost: OperationCost::default(),
         }
     }
 

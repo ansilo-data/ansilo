@@ -1,5 +1,5 @@
 pub use ansilo_connectors::interface::{
-    EntitySizeEstimate, QueryOperationResult, RowStructure, SelectQueryOperation,
+    OperationCost, QueryOperationResult, RowStructure, SelectQueryOperation,
 };
 
 use ansilo_core::sqlil::EntityVersionIdentifier;
@@ -42,7 +42,7 @@ impl AuthDataSource {
     pub fn new(token: impl Into<String>, data_source_id: impl Into<String>) -> Self {
         Self {
             token: token.into(),
-            data_source_id: data_source_id.into()
+            data_source_id: data_source_id.into(),
         }
     }
 }
@@ -64,7 +64,7 @@ pub enum ServerMessage {
     /// Token was accepted
     AuthAccepted,
     /// Estimated size result
-    EstimatedSizeResult(EntitySizeEstimate),
+    EstimatedSizeResult(OperationCost),
     /// Select query specific message
     Select(ServerSelectMessage),
     /// Query params written

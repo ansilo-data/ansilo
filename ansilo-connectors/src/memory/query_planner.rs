@@ -5,9 +5,7 @@ use ansilo_core::{
 
 use crate::{
     common::entity::{ConnectorEntityConfig, EntitySource},
-    interface::{
-        EntitySizeEstimate, OperationCost, QueryOperationResult, QueryPlanner, SelectQueryOperation,
-    },
+    interface::{OperationCost, QueryOperationResult, QueryPlanner, SelectQueryOperation},
 };
 
 use super::{MemoryConnection, MemoryQuery};
@@ -22,8 +20,8 @@ impl QueryPlanner for MemoryQueryPlanner {
     fn estimate_size(
         connection: &MemoryConnection,
         entity: &EntitySource<()>,
-    ) -> Result<EntitySizeEstimate> {
-        Ok(EntitySizeEstimate::new(
+    ) -> Result<OperationCost> {
+        Ok(OperationCost::new(
             Some(
                 connection
                     .0
@@ -31,7 +29,9 @@ impl QueryPlanner for MemoryQueryPlanner {
                     .ok_or(Error::msg("Could not find entity"))?
                     .len() as _,
             ),
-            None
+            None,
+            None,
+            None,
         ))
     }
 
@@ -45,7 +45,7 @@ impl QueryPlanner for MemoryQueryPlanner {
             entity.version_id.as_str(),
         ));
         let cost = Self::estimate_size(connection, entity).unwrap();
-        let costs = OperationCost::new(cost.rows, None, None);
+        let costs = OperationCost::new(cost.rows, None, None, None);
         Ok((costs, select))
     }
 
@@ -76,16 +76,16 @@ impl MemoryQueryPlanner {
         alias: String,
     ) -> Result<QueryOperationResult> {
         select.cols.push((alias, expr));
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
-            None, None, None,
-        )))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn add_where_clause(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
         select.r#where.push(expr);
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
-            None, None, None,
-        )))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn add_join(_select: &mut sql::Select, _join: sql::Join) -> Result<QueryOperationResult> {
@@ -105,15 +105,15 @@ impl MemoryQueryPlanner {
 
     fn set_row_limit(select: &mut sql::Select, row_limit: u64) -> Result<QueryOperationResult> {
         select.row_limit = Some(row_limit);
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
-            None, None, None,
-        )))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn set_rows_to_skip(select: &mut sql::Select, row_skip: u64) -> Result<QueryOperationResult> {
         select.row_skip = row_skip;
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::new(
-            None, None, None,
-        )))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 }

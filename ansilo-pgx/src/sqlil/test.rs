@@ -7,7 +7,7 @@ use pgx::{
 };
 
 use crate::{
-    fdw::ctx::{FdwContext, FdwQuery},
+    fdw::ctx::{FdwContext, FdwQueryContext},
     sqlil::into_pg_type,
 };
 
@@ -27,7 +27,7 @@ pub(super) fn convert_simple_expr_with_context(
     unsafe {
         let (node, planner) = parse_pg_expr(select, params);
 
-        let fdw = FdwContext::new(FdwQuery::select());
+        let fdw = FdwContext::new(FdwQueryContext::select());
 
         super::convert(node.as_ptr() as *const _, ctx, &planner, &fdw)
     }

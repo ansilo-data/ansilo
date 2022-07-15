@@ -126,7 +126,7 @@ pub trait QueryPlanner {
     fn estimate_size(
         connection: &Self::TConnection,
         entity: &EntitySource<Self::TEntitySourceConfig>,
-    ) -> Result<EntitySizeEstimate>;
+    ) -> Result<OperationCost>;
 
     /// Creates a base query to select all rows from the entity
     fn create_base_select(
@@ -158,21 +158,6 @@ pub trait QueryCompiler {
     ) -> Result<Self::TQuery>;
 }
 
-/// A size estimate of the entity
-#[derive(Debug, Clone, PartialEq, Default, Encode, Decode)]
-pub struct EntitySizeEstimate {
-    /// The estimated number of rows
-    pub rows: Option<u64>,
-    /// The estimated average width of each row in bytes
-    pub row_width: Option<u32>,
-}
-
-impl EntitySizeEstimate {
-    pub fn new(rows: Option<u64>, row_width: Option<u32>) -> Self {
-        Self { rows, row_width }
-    }
-}
-
 /// A cost estimate for a query operation
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub enum QueryOperationResult {
@@ -181,10 +166,12 @@ pub enum QueryOperationResult {
 }
 
 /// A cost estimate for a query operation
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Default, Clone, PartialEq, Encode, Decode)]
 pub struct OperationCost {
     /// The estimated number of rows
     pub rows: Option<u64>,
+    /// The estimated average width of each row in bytes
+    pub row_width: Option<u32>,
     /// The relative cost factor of opening the connection for this operation
     pub connection_cost: Option<u64>,
     /// The relative cost factor of performing the operation
@@ -192,9 +179,10 @@ pub struct OperationCost {
 }
 
 impl OperationCost {
-    pub fn new(rows: Option<u64>, connection_cost: Option<u64>, total_cost: Option<u64>) -> Self {
+    pub fn new(rows: Option<u64>, row_width: Option<u32>, connection_cost: Option<u64>, total_cost: Option<u64>) -> Self {
         Self {
             rows,
+            row_width,
             connection_cost,
             total_cost,
         }

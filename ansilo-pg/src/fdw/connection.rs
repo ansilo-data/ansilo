@@ -122,7 +122,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(())
     }
 
-    fn estimate_size(&mut self, entity: &EntityVersionIdentifier) -> Result<EntitySizeEstimate> {
+    fn estimate_size(&mut self, entity: &EntityVersionIdentifier) -> Result<OperationCost> {
         self.connect()?;
         Ok(TConnector::TQueryPlanner::estimate_size(
             self.connection.get()?,
@@ -348,7 +348,7 @@ mod tests {
 
         assert_eq!(
             res,
-            ServerMessage::EstimatedSizeResult(EntitySizeEstimate::new(Some(3), None))
+            ServerMessage::EstimatedSizeResult(OperationCost::new(Some(3), None, None, None))
         );
 
         client.close().unwrap();
@@ -386,7 +386,7 @@ mod tests {
         assert_eq!(
             res,
             ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::new(Some(3), None, None))
+                QueryOperationResult::PerformedRemotely(OperationCost::new(Some(3), None, None, None))
             ))
         );
 
@@ -402,7 +402,7 @@ mod tests {
         assert_eq!(
             res,
             ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::new(None, None, None))
+                QueryOperationResult::PerformedRemotely(OperationCost::default())
             ))
         );
 
@@ -415,7 +415,7 @@ mod tests {
         assert_eq!(
             res,
             ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::new(None, None, None))
+                QueryOperationResult::PerformedRemotely(OperationCost::default())
             ))
         );
 

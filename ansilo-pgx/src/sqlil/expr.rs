@@ -2,7 +2,10 @@ use ansilo_core::{
     err::{bail, Result},
     sqlil,
 };
-use pgx::pg_sys::{self, Node};
+use pgx::{
+    pg_sys::{self, List, Node},
+    PgList,
+};
 
 use crate::fdw::ctx::FdwContext;
 
@@ -47,3 +50,15 @@ pub unsafe fn convert(
     }
 }
 
+pub unsafe fn convert_list(
+    list: *const List,
+    ctx: &mut ConversionContext,
+    planner: &PlannerContext,
+    fdw: &FdwContext,
+) -> Result<Vec<sqlil::Expr>> {
+    let list = PgList::<Node>::from_pg(list as *mut _);
+
+    list.iter_ptr()
+        .map(|i| convert(i, ctx, planner, fdw))
+        .collect::<Result<Vec<_>>>()
+}
