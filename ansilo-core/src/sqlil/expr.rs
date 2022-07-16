@@ -194,6 +194,24 @@ pub enum FunctionCall {
     Coalesce(Vec<SubExpr>),
 }
 
+impl FunctionCall {
+    fn walk<T: FnMut(&Expr) -> ()>(&self, cb: &mut T) {
+        match self {
+            FunctionCall::Abs(e) => e.walk(cb),
+            FunctionCall::Length(e) => e.walk(cb),
+            FunctionCall::Uppercase(e) => e.walk(cb),
+            FunctionCall::Lowercase(e) => e.walk(cb),
+            FunctionCall::Substring(e) => {
+                e.string.walk(cb);
+                e.len.walk(cb);
+                e.start.walk(cb);
+            }
+            FunctionCall::Coalesce(e) => e.into_iter().for_each(|i| i.walk(cb)),
+            FunctionCall::Uuid => {}
+        }
+    }
+}
+
 /// Substring function call
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct SubstringCall {
@@ -228,6 +246,19 @@ pub enum AggregateCall {
     StringAgg(SubExpr, String),
 }
 
+impl AggregateCall {
+    fn walk<T: FnMut(&Expr) -> ()>(&self, cb: &mut T) {
+        match self {
+            AggregateCall::Sum(e) => e.walk(cb),
+            AggregateCall::Count => {}
+            AggregateCall::CountDistinct(e) => e.walk(cb),
+            AggregateCall::Max(e) => e.walk(cb),
+            AggregateCall::Min(e) => e.walk(cb),
+            AggregateCall::StringAgg(e, _) => e.walk(cb),
+        }
+    }
+}
+
 /// Constructurs a new entity expression
 pub fn entity(entity_id: impl Into<String>, version: impl Into<String>) -> EntityVersionIdentifier {
     EntityVersionIdentifier::new(entity_id, version)
@@ -257,5 +288,34 @@ impl Expr {
 
     pub fn constant(val: DataValue) -> Self {
         Self::Constant(Constant::new(val))
+    }
+
+    pub fn walk<T: FnMut(&Expr) -> ()>(&self, cb: &mut T) {
+        cb(self);
+
+        match self {
+            Expr::UnaryOp(e) => e.expr.walk(cb),
+            Expr::BinaryOp(e) => {
+                e.left.walk(cb);
+                e.right.walk(cb);
+            }
+            Expr::Cast(e) => e.expr.walk(cb),
+            Expr::FunctionCall(e) => e.walk(cb),
+            Expr::AggregateCall(e) => e.walk(cb),
+            Expr::EntityVersion(_) => {}
+            Expr::EntityVersionAttribute(_) => {}
+            Expr::Constant(_) => {}
+            Expr::Parameter(_) => {}
+        }
+    }
+
+    pub fn walk_any<T: Fn(&Expr) -> bool>(&self, cb: T) -> bool {
+        let mut flag = false;
+
+        self.walk(&mut |e| {
+            flag = flag || cb(e);
+        });
+
+        flag
     }
 }

@@ -116,6 +116,64 @@ pub enum SelectQueryOperation {
     SetRowOffset(u64),
 }
 
+impl SelectQueryOperation {
+    /// Returns `true` if the select query operation is [`AddColumn`].
+    ///
+    /// [`AddColumn`]: SelectQueryOperation::AddColumn
+    #[must_use]
+    pub fn is_add_column(&self) -> bool {
+        matches!(self, Self::AddColumn(..))
+    }
+
+    /// Returns `true` if the select query operation is [`AddWhere`].
+    ///
+    /// [`AddWhere`]: SelectQueryOperation::AddWhere
+    #[must_use]
+    pub fn is_add_where(&self) -> bool {
+        matches!(self, Self::AddWhere(..))
+    }
+
+    /// Returns `true` if the select query operation is [`AddJoin`].
+    ///
+    /// [`AddJoin`]: SelectQueryOperation::AddJoin
+    #[must_use]
+    pub fn is_add_join(&self) -> bool {
+        matches!(self, Self::AddJoin(..))
+    }
+
+    /// Returns `true` if the select query operation is [`AddGroupBy`].
+    ///
+    /// [`AddGroupBy`]: SelectQueryOperation::AddGroupBy
+    #[must_use]
+    pub fn is_add_group_by(&self) -> bool {
+        matches!(self, Self::AddGroupBy(..))
+    }
+
+    /// Returns `true` if the select query operation is [`AddOrderBy`].
+    ///
+    /// [`AddOrderBy`]: SelectQueryOperation::AddOrderBy
+    #[must_use]
+    pub fn is_add_order_by(&self) -> bool {
+        matches!(self, Self::AddOrderBy(..))
+    }
+
+    /// Returns `true` if the select query operation is [`SetRowLimit`].
+    ///
+    /// [`SetRowLimit`]: SelectQueryOperation::SetRowLimit
+    #[must_use]
+    pub fn is_set_row_limit(&self) -> bool {
+        matches!(self, Self::SetRowLimit(..))
+    }
+
+    /// Returns `true` if the select query operation is [`SetRowOffset`].
+    ///
+    /// [`SetRowOffset`]: SelectQueryOperation::SetRowOffset
+    #[must_use]
+    pub fn is_set_row_offset(&self) -> bool {
+        matches!(self, Self::SetRowOffset(..))
+    }
+}
+
 /// The query planner determines if SQLIL queries can be executed remotely
 pub trait QueryPlanner {
     type TConnection: Connection;
@@ -179,7 +237,12 @@ pub struct OperationCost {
 }
 
 impl OperationCost {
-    pub fn new(rows: Option<u64>, row_width: Option<u32>, connection_cost: Option<u64>, total_cost: Option<u64>) -> Self {
+    pub fn new(
+        rows: Option<u64>,
+        row_width: Option<u32>,
+        connection_cost: Option<u64>,
+        total_cost: Option<u64>,
+    ) -> Self {
         Self {
             rows,
             row_width,
@@ -208,7 +271,7 @@ pub trait QueryHandle {
 #[derive(Debug, Clone, PartialEq)]
 pub struct QueryInputStructure {
     /// The list of query parameter ids and their associated data types
-    /// 
+    ///
     /// The parameters are to be written to the query in the order they appear in the vector.
     /// A parameter with the same id can appear multiple times.
     pub params: Vec<(u32, DataType)>,

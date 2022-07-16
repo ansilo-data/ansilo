@@ -22,7 +22,7 @@ impl PlannerContext {
         outer_rel: *const RelOptInfo,
         inner_rel: *const RelOptInfo,
         join_type: JoinType,
-        extra: JoinPathExtraData,
+        extra: *const JoinPathExtraData,
     ) -> Self {
         Self::JoinRel(JoinRelContext {
             root,
@@ -110,7 +110,7 @@ pub struct JoinRelContext {
     /// The type of join
     pub join_type: JoinType,
     /// The extra join data
-    pub extra: JoinPathExtraData,
+    pub extra: *const JoinPathExtraData,
 }
 
 pub struct UpperRelContext {

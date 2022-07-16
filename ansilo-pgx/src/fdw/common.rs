@@ -8,7 +8,7 @@ use pgx::{
     *,
 };
 
-use crate::util::string::parse_to_owned_utf8_string;
+use crate::{util::string::parse_to_owned_utf8_string, sqlil::parse_entity_version_id_from_foreign_table};
 
 use super::ctx::{FdwContext, FdwQueryContext};
 
@@ -51,6 +51,7 @@ impl ServerOptions {
 /// Connects to ansilo using the appropriate data source from the supplied RelOptInfo
 pub unsafe fn connect(foreign_table_oid: Oid) -> PgBox<FdwContext> {
     let table = GetForeignTable(foreign_table_oid);
+    let entity = parse_entity_version_id_from_foreign_table(foreign_table_oid).unwrap();
     let server = GetForeignServer((*table).serverid);
 
     let opts = ServerOptions::parse(PgList::<DefElem>::from_pg((*server).options))
@@ -58,7 +59,7 @@ pub unsafe fn connect(foreign_table_oid: Oid) -> PgBox<FdwContext> {
 
     let auth = AuthDataSource::new(current_auth_token(), opts.data_source);
 
-    let mut ctx = FdwContext::new();
+    let mut ctx = FdwContext::new(&auth.data_source_id, entity);
     ctx.connect(&opts.socket, auth).expect("Failed to connect");
 
     PgBox::<FdwContext>::from_rust(&mut ctx).into_pg_boxed()

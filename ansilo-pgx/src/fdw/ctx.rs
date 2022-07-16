@@ -1,30 +1,48 @@
 use std::{
+    iter::Chain,
     os::unix::net::UnixStream,
     path::Path,
+    slice::Iter,
     sync::{Arc, Mutex},
 };
 
-use ansilo_core::err::{bail, Context, Result};
+use ansilo_core::{
+    err::{bail, Context, Result},
+    sqlil::{self, EntityVersionIdentifier},
+};
 use ansilo_pg::fdw::{
     channel::IpcClientChannel,
     proto::{AuthDataSource, ClientMessage, OperationCost, SelectQueryOperation, ServerMessage},
 };
+use pgx::pg_sys::RestrictInfo;
+
+use crate::sqlil::ConversionContext;
 
 /// Context storage for the FDW stored in the fdw_private field
 #[derive(Clone)]
 pub struct FdwContext {
     /// The connection state to ansilo
     pub connection: FdwConnection,
+    /// The ID of the data source for this FDW connection
+    pub data_source_id: String,
+    /// The initial entity of fdw context
+    pub entity: EntityVersionIdentifier,
 }
 
 impl FdwContext {
-    pub fn new() -> Self {
+    pub fn new(data_source_id: &str, entity: EntityVersionIdentifier) -> Self {
         Self {
             connection: FdwConnection::Disconnected,
+            data_source_id: data_source_id.into(),
+            entity,
         }
     }
 
     pub fn connect(&mut self, path: &Path, auth: AuthDataSource) -> Result<()> {
+        if auth.data_source_id != self.data_source_id {
+            bail!("Data source ID mismatch");
+        }
+
         if let FdwConnection::Connected(_) = &self.connection {
             bail!("Already connected");
         }
@@ -112,34 +130,39 @@ pub struct FdwAuthenticatedConnection {
 }
 
 /// Query-specific state for the FDW
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct FdwQueryContext {
-    /// The reason for failing to pushdown the query
-    pushdown_failure_reason: Option<String>,
     /// The type-specific query state
     pub q: FdwQueryType,
     /// The query cost calculation
     pub cost: OperationCost,
+    /// Conditions required to be evaluated locally
+    pub local_conds: Vec<*mut RestrictInfo>,
+    /// The conversion context used to track query parameters
+    pub cvt: ConversionContext,
 }
 
 impl FdwQueryContext {
     pub fn select() -> Self {
         Self {
-            pushdown_failure_reason: None,
             q: FdwQueryType::Select(FdwSelectQuery::default()),
             cost: OperationCost::default(),
+            local_conds: vec![],
+            cvt: ConversionContext::new(),
         }
     }
 
     pub fn pushdown_safe(&self) -> bool {
-        self.pushdown_failure_reason.is_none() && self.q.pushdown_safe()
+        self.q.pushdown_safe()
     }
 
-    pub fn mark_pushdown_unsafe(&mut self, reason: impl Into<String>) {
-        let _ = self.pushdown_failure_reason.insert(reason.into());
+    pub fn as_select(&self) -> Option<&FdwSelectQuery> {
+        match &self.q {
+            FdwQueryType::Select(q) => Some(q),
+        }
     }
 
-    pub fn as_select(&mut self) -> Option<&mut FdwSelectQuery> {
+    pub fn as_select_mut(&mut self) -> Option<&mut FdwSelectQuery> {
         match &mut self.q {
             FdwQueryType::Select(q) => Some(q),
         }
@@ -157,6 +180,8 @@ pub struct FdwSelectQuery {
     pub local_ops: Vec<SelectQueryOperation>,
     /// The conditions which are able to be pushed down to the remote
     pub remote_ops: Vec<SelectQueryOperation>,
+    /// The current column alias counter
+    col_num: u32,
 }
 
 impl FdwQueryType {
@@ -164,5 +189,20 @@ impl FdwQueryType {
         match self {
             FdwQueryType::Select(q) => q.local_ops.is_empty(),
         }
+    }
+}
+impl FdwSelectQuery {
+    pub(crate) fn all_ops(&self) -> Chain<Iter<SelectQueryOperation>, Iter<SelectQueryOperation>> {
+        self.remote_ops.iter().chain(self.local_ops.iter())
+    }
+
+    pub(crate) fn new_column_alias(&mut self) -> String {
+        let num = self.col_num;
+        self.col_num += 1;
+        format!("c{num}")
+    }
+
+    pub(crate) fn new_column(&mut self, expr: sqlil::Expr) -> SelectQueryOperation {
+        SelectQueryOperation::AddColumn((self.new_column_alias(expr), expr))
     }
 }

@@ -20,6 +20,7 @@ mod aggref;
 #[cfg(any(test, feature = "pg_test"))]
 pub mod test;
 
+pub use datum::*;
 pub use expr::*;
 pub use ctx::*;
 pub use r#type::*;

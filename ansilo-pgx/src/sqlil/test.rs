@@ -27,7 +27,7 @@ pub(super) fn convert_simple_expr_with_context(
     unsafe {
         let (node, planner) = parse_pg_expr(select, params);
 
-        let fdw = FdwContext::new(FdwQueryContext::select());
+        let fdw = FdwContext::new("data_source", sqlil::entity("entity", "version"));
 
         super::convert(node.as_ptr() as *const _, ctx, &planner, &fdw)
     }
