@@ -1,5 +1,5 @@
 pub use ansilo_connectors::interface::{
-    OperationCost, QueryOperationResult, RowStructure, SelectQueryOperation,
+    OperationCost, QueryOperationResult, RowStructure, SelectQueryOperation, QueryInputStructure
 };
 
 use ansilo_core::sqlil::EntityVersionIdentifier;
@@ -67,10 +67,10 @@ pub enum ServerMessage {
     EstimatedSizeResult(OperationCost),
     /// Select query specific message
     Select(ServerSelectMessage),
+    /// The query was prepared
+    QueryPrepared(QueryInputStructure),
     /// Query params written
     QueryParamsWritten,
-    /// The query was prepared
-    QueryPrepared,
     /// The query was executed
     QueryExecuted(RowStructure),
     /// Rows returned by the query

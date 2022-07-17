@@ -10,3 +10,4 @@ pub mod connection;
 
 #[cfg(test)]
 mod test;
+pub mod data;

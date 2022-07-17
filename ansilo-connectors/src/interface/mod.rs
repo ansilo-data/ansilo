@@ -268,7 +268,7 @@ pub trait QueryHandle {
 }
 
 /// The structure of data expected by a query
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub struct QueryInputStructure {
     /// The list of query parameter ids and their associated data types
     ///

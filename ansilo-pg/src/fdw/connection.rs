@@ -92,8 +92,8 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
                 ServerMessage::Select(self.handle_select_message(select)?)
             }
             ClientMessage::Prepare => {
-                self.prepare()?;
-                ServerMessage::QueryPrepared
+                let structure = self.prepare()?;
+                ServerMessage::QueryPrepared(structure)
             }
             ClientMessage::WriteParams(data) => {
                 self.write_params(data)?;
@@ -193,7 +193,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(res)
     }
 
-    fn prepare(&mut self) -> Result<()> {
+    fn prepare(&mut self) -> Result<QueryInputStructure> {
         let select = self.query.select()?;
         let connection = self.connection.get()?;
 
@@ -201,9 +201,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             TConnector::TQueryCompiler::compile_select(connection, &self.entities, select.clone())?;
         let handle = connection.prepare(query)?;
 
+        let structure = handle.get_structure()?;
         self.query = FdwQueryState::Prepared(QueryHandleWrite(handle));
 
-        Ok(())
+        Ok(structure)
     }
 
     fn write_params(&mut self, data: Vec<u8>) -> Result<()> {
@@ -420,7 +421,7 @@ mod tests {
         );
 
         let res = client.send(ClientMessage::Prepare).unwrap();
-        assert_eq!(res, ServerMessage::QueryPrepared);
+        assert_eq!(res, ServerMessage::QueryPrepared(QueryInputStructure::new(vec![])));
 
         let res = client.send(ClientMessage::Execute).unwrap();
         let row_structure = RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);

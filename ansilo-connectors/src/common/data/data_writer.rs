@@ -7,6 +7,7 @@ use ansilo_core::{
 
 /// Wraps an inner writer T providing an interface to serialise DataValue
 /// to an underlying stream
+#[derive(Clone)]
 pub struct DataWriter<T>
 where
     T: Write,
@@ -62,7 +63,10 @@ where
                 }
                 (None | Some(DataType::Boolean), DataValue::Boolean(val)) => todo!(),
                 (None | Some(DataType::Int8), DataValue::Int8(val)) => todo!(),
-                (None | Some(DataType::UInt8), DataValue::UInt8(val)) => todo!(),
+                (None | Some(DataType::UInt8), DataValue::UInt8(val)) => {
+                    self.write(&[1])?;
+                    self.write(&[val])?;
+                }
                 (None | Some(DataType::Int16), DataValue::Int16(val)) => todo!(),
                 (None | Some(DataType::UInt16), DataValue::UInt16(val)) => todo!(),
                 (None | Some(DataType::Int32), DataValue::Int32(val)) => {
@@ -131,15 +135,25 @@ where
 }
 
 impl DataWriter<io::Cursor<Vec<u8>>> {
-    /// Converts a single DataValue into a buffer
-    pub fn to_vec(data: DataValue) -> Result<Vec<u8>> {
+    /// Converts a vec of DataValue into a buffer
+    pub fn to_vec(data: Vec<DataValue>) -> Result<Vec<u8>> {
         let mut writer = DataWriter::new(io::Cursor::new(vec![]), None);
-        writer
-            .write_data_value(data)
-            .context("Failed to write query parameter")?;
+
+        for val in data.into_iter() {
+            writer
+                .write_data_value(val)
+                .context("Failed to write query parameter")?;
+        }
+
         Ok(writer.inner().into_inner())
     }
+
+    /// Converts a single DataValue into a buffer
+    pub fn to_vec_one(data: DataValue) -> Result<Vec<u8>> {
+        Self::to_vec(vec![data])
+    }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -333,7 +347,23 @@ mod tests {
 
     #[test]
     fn test_data_writer_to_vec() {
-        let buff = DataWriter::to_vec(DataValue::Varchar("abc".as_bytes().to_vec())).unwrap();
+        let buff = DataWriter::to_vec(vec![DataValue::UInt8(10), DataValue::UInt8(20)]).unwrap();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],  // not null
+                vec![10u8], // val 1
+                vec![1u8],  // not null
+                vec![20u8], // val 2
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_to_vec_one() {
+        let buff = DataWriter::to_vec_one(DataValue::Varchar("abc".as_bytes().to_vec())).unwrap();
 
         assert_eq!(
             buff,

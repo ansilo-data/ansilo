@@ -131,7 +131,7 @@ pub struct UpperRelContext {
 pub struct ConversionContext {
     /// Query parameter mappings
     /// Postgres query params (paramkind, paramid) to SQLIL parameter id's
-    params: Vec<(*const Node, u32)>,
+    params: Vec<(*mut Node, u32)>,
 }
 
 impl ConversionContext {
@@ -140,7 +140,7 @@ impl ConversionContext {
     }
 
     /// Registers a new param or retrieves the existing param associated to the supplied node
-    pub(crate) unsafe fn register_param(&mut self, node: *const Node) -> u32 {
+    pub(crate) unsafe fn register_param(&mut self, node: *mut Node) -> u32 {
         if let Some((_, param_id)) = self
             .params
             .iter()
@@ -152,6 +152,18 @@ impl ConversionContext {
             self.params.push((node, param_id));
             param_id
         }
+    }
+
+    pub fn param_nodes(&self) -> Vec<*mut Node> {
+        self.params.iter().map(|(i, _)| *i).collect()
+    }
+
+    pub unsafe fn param_ids(&self, node: *mut Node) -> Vec<u32> {
+        self.params
+            .iter()
+            .filter(|(n, _)| pg_sys::equal(*n as *mut _ as *const _, node as _))
+            .map(|(_, id)| *id)
+            .collect()
     }
 }
 

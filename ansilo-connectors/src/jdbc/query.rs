@@ -208,7 +208,7 @@ impl JdbcQueryParam {
                 ],
             ),
             JdbcQueryParam::Constant(data_value) => {
-                let mut buff = DataWriter::to_vec(data_value.clone())?;
+                let mut buff = DataWriter::to_vec_one(data_value.clone())?;
 
                 let byte_buff = env
                     .new_direct_byte_buffer(buff.as_mut_slice())

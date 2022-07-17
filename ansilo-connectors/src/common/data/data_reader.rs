@@ -6,6 +6,7 @@ use ansilo_core::{
 };
 
 /// Wraps a Read in order to parse and read the data as DataValue
+#[derive(Clone)]
 pub struct DataReader<T>
 where
     T: Read,

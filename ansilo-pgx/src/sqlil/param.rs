@@ -25,7 +25,7 @@ pub(super) unsafe fn convert_param(
     let r#type =
         from_pg_type((*node).paramtype).context("Failed to determine type of query parameter")?;
     // Register the mapping of the pg param node to our sqlil parameter
-    let param_id = ctx.register_param(node as *const _);
+    let param_id = ctx.register_param(node as *mut pg_sys::Param as *mut _);
 
     Ok(sqlil::Expr::Parameter(sqlil::Parameter::new(
         r#type, param_id,

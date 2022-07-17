@@ -27,7 +27,7 @@ pub(super) unsafe fn convert_var(
 
     if pg_sys::bms_is_member((*node).varno as _, (*rel).relids) && (*node).varlevelsup == 0 {
         if (*node).varattno == 0 {
-            bail!("Returning entire rows as experssions is currently not supported");
+            panic!("Returning entire rows as experssions is currently not supported");
         }
 
         // If the var node references of the foreign entities we append it a attribute of that entity
@@ -44,7 +44,7 @@ pub(super) unsafe fn convert_var(
     } else {
         // The input will be treated like a parameter in the query
         let r#type = from_pg_type((*node).vartype).context("Failed to determine type of column")?;
-        let param_id = ctx.register_param(node as *const _);
+        let param_id = ctx.register_param(node as *mut pg_sys::Var as *mut _);
 
         Ok(sqlil::Expr::Parameter(sqlil::Parameter::new(
             r#type, param_id,

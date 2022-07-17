@@ -51,7 +51,7 @@ where
     pub fn new(inner: T) -> Result<Self> {
         let structure = inner.get_structure()?;
         let param_types = structure.params.iter().map(|i| i.1.clone()).collect();
-        
+
         Ok(Self {
             inner: DataWriter::new(
                 BufWriter::with_capacity(1024, QueryHandleWrite(inner)),
@@ -80,6 +80,7 @@ where
         self.inner.write_data_value(data)
     }
 }
+
 
 #[cfg(test)]
 mod tests {

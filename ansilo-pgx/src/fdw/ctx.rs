@@ -1,4 +1,6 @@
 use std::{
+    cmp,
+    collections::HashMap,
     iter::Chain,
     os::unix::net::UnixStream,
     path::Path,
@@ -7,19 +9,23 @@ use std::{
 };
 
 use ansilo_core::{
+    common::data::DataValue,
     err::{bail, Context, Result},
     sqlil::{self, EntityVersionIdentifier},
 };
 use ansilo_pg::fdw::{
     channel::IpcClientChannel,
-    proto::{AuthDataSource, ClientMessage, OperationCost, SelectQueryOperation, ServerMessage},
+    data::{QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
+    proto::{
+        AuthDataSource, ClientMessage, OperationCost, QueryInputStructure, RowStructure,
+        SelectQueryOperation, ServerMessage,
+    },
 };
-use pgx::pg_sys::RestrictInfo;
+use pgx::pg_sys::{self, RestrictInfo};
 
 use crate::sqlil::ConversionContext;
 
 /// Context storage for the FDW stored in the fdw_private field
-#[derive(Clone)]
 pub struct FdwContext {
     /// The connection state to ansilo
     pub connection: FdwConnection,
@@ -27,6 +33,26 @@ pub struct FdwContext {
     pub data_source_id: String,
     /// The initial entity of fdw context
     pub entity: EntityVersionIdentifier,
+    /// The current query handle writer
+    pub query_writer: Option<QueryHandleWriter<FdwQueryHandle>>,
+    /// The current result set reader
+    pub result_set: Option<ResultSetReader<FdwResultSet>>,
+}
+
+#[derive(Clone)]
+pub struct FdwQueryHandle {
+    /// The connection state to ansilo
+    pub connection: FdwConnection,
+    /// The query input structure
+    pub query_input: QueryInputStructure,
+}
+
+#[derive(Clone)]
+pub struct FdwResultSet {
+    /// The connection state to ansilo
+    pub connection: FdwConnection,
+    /// The result set output structure
+    pub row_structure: RowStructure,
 }
 
 impl FdwContext {
@@ -35,6 +61,8 @@ impl FdwContext {
             connection: FdwConnection::Disconnected,
             data_source_id: data_source_id.into(),
             entity,
+            query_writer: None,
+            result_set: None,
         }
     }
 
@@ -43,7 +71,126 @@ impl FdwContext {
             bail!("Data source ID mismatch");
         }
 
-        if let FdwConnection::Connected(_) = &self.connection {
+        self.connection = self.connection.connect(path, auth)?;
+
+        Ok(())
+    }
+
+    pub fn send(&mut self, req: ClientMessage) -> Result<ServerMessage> {
+        self.connection.send(req)
+    }
+
+    pub fn prepare_query(&mut self) -> Result<QueryInputStructure> {
+        let response = self.send(ClientMessage::Prepare)?;
+
+        let query_input = match response {
+            ServerMessage::QueryPrepared(structure) => structure,
+            _ => bail!("Unexpected response while preparing query"),
+        };
+
+        self.query_writer = Some(QueryHandleWriter::new(FdwQueryHandle {
+            connection: self.connection.clone(),
+            query_input: query_input.clone(),
+        })?);
+
+        Ok(query_input)
+    }
+
+    pub fn write_query_input(&mut self, data: Vec<DataValue>) -> Result<()> {
+        let mut writer = self.query_writer.as_mut().context("Query not prepared")?;
+
+        // This wont be to inefficient as it is being buffered
+        // by an underlying BufWriter
+        for val in data.into_iter() {
+            writer.write_data_value(val)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn execute_query(&mut self) -> Result<RowStructure> {
+        let writer = self.query_writer.take().context("Query not prepared")?;
+        let result_set = writer.inner()?.execute()?;
+        let row_structure = result_set.row_structure.clone();
+
+        self.result_set = Some(ResultSetReader::new(result_set)?);
+
+        Ok(row_structure)
+    }
+
+    pub fn read_result_data(&mut self) -> Result<Option<DataValue>> {
+        let reader = self.result_set.as_mut().context("Query not executed")?;
+
+        reader.read_data_value()
+    }
+
+    pub fn disconnect(&mut self) -> Result<()> {
+        self.connection = self.connection.disconnect()?;
+
+        Ok(())
+    }
+}
+
+impl QueryHandle for FdwQueryHandle {
+    type TResultSet = FdwResultSet;
+
+    fn get_structure(&self) -> Result<QueryInputStructure> {
+        Ok(self.query_input.clone())
+    }
+
+    fn write(&mut self, buff: &[u8]) -> Result<usize> {
+        let response = self
+            .connection
+            .send(ClientMessage::WriteParams(buff.to_vec()))?;
+
+        match response {
+            ServerMessage::QueryParamsWritten => Ok(buff.len()),
+            _ => bail!("Unexpected response while writing query params"),
+        }
+    }
+
+    fn execute(&mut self) -> Result<Self::TResultSet> {
+        let response = self.connection.send(ClientMessage::Execute)?;
+
+        match response {
+            ServerMessage::QueryExecuted(row_structure) => Ok(FdwResultSet {
+                connection: self.connection.clone(),
+                row_structure,
+            }),
+            _ => bail!("Unexpected response while writing executing query"),
+        }
+    }
+}
+
+impl ResultSet for FdwResultSet {
+    fn get_structure(&self) -> Result<RowStructure> {
+        Ok(self.row_structure.clone())
+    }
+
+    fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
+        let response = self.connection.send(ClientMessage::Read(buff.len() as _))?;
+
+        match response {
+            ServerMessage::ResultData(data) => {
+                let read = cmp::min(buff.len(), data.len());
+                buff[..read].copy_from_slice(&data[..read]);
+                Ok(read)
+            }
+            _ => bail!("Unexpected response while reading result data"),
+        }
+    }
+}
+
+/// Connection state of the FDW back to ansilo
+#[derive(Clone)]
+pub enum FdwConnection {
+    Disconnected,
+    Connected(Arc<FdwAuthenticatedConnection>),
+}
+
+impl FdwConnection {
+    pub fn connect(&mut self, path: &Path, auth: AuthDataSource) -> Result<Self> {
+        if let FdwConnection::Connected(_) = &self {
             bail!("Already connected");
         }
 
@@ -63,18 +210,15 @@ impl FdwContext {
             ),
         }
 
-        self.connection = FdwConnection::Connected(Arc::new(FdwAuthenticatedConnection::new(
-            auth.data_source_id,
-            client,
-        )));
-
-        Ok(())
+        Ok(FdwConnection::Connected(Arc::new(
+            FdwAuthenticatedConnection::new(auth.data_source_id, client),
+        )))
     }
 
     pub fn send(&mut self, req: ClientMessage) -> Result<ServerMessage> {
-        let con = match &self.connection {
-            FdwConnection::Disconnected => bail!("Not connected to server"),
-            FdwConnection::Connected(con) => Arc::clone(con),
+        let con = match &self {
+            Self::Disconnected => bail!("Not connected to server"),
+            Self::Connected(con) => Arc::clone(con),
         };
 
         let mut client = match con.client.lock() {
@@ -85,11 +229,11 @@ impl FdwContext {
         client.send(req)
     }
 
-    pub fn disconnect(&mut self) -> Result<()> {
+    pub fn disconnect(&mut self) -> Result<Self> {
         {
-            let con = match &self.connection {
-                FdwConnection::Disconnected => bail!("Not connected to server"),
-                FdwConnection::Connected(con) => Arc::clone(con),
+            let con = match &self {
+                Self::Disconnected => bail!("Not connected to server"),
+                Self::Connected(con) => Arc::clone(con),
             };
 
             let mut client = match con.client.lock() {
@@ -100,17 +244,8 @@ impl FdwContext {
             client.close().context("Failed to close connection")?;
         }
 
-        self.connection = FdwConnection::Disconnected;
-
-        Ok(())
+        Ok(FdwConnection::Disconnected)
     }
-}
-
-/// Connection state of the FDW back to ansilo
-#[derive(Clone)]
-pub enum FdwConnection {
-    Disconnected,
-    Connected(Arc<FdwAuthenticatedConnection>),
 }
 
 impl FdwAuthenticatedConnection {
@@ -138,6 +273,8 @@ pub struct FdwQueryContext {
     pub cost: OperationCost,
     /// Conditions required to be evaluated locally
     pub local_conds: Vec<*mut RestrictInfo>,
+    /// Conditions required to be evaluated remotely
+    pub remote_conds: Vec<*mut RestrictInfo>,
     /// The conversion context used to track query parameters
     pub cvt: ConversionContext,
 }
@@ -148,6 +285,7 @@ impl FdwQueryContext {
             q: FdwQueryType::Select(FdwSelectQuery::default()),
             cost: OperationCost::default(),
             local_conds: vec![],
+            remote_conds: vec![],
             cvt: ConversionContext::new(),
         }
     }
@@ -203,6 +341,25 @@ impl FdwSelectQuery {
     }
 
     pub(crate) fn new_column(&mut self, expr: sqlil::Expr) -> SelectQueryOperation {
-        SelectQueryOperation::AddColumn((self.new_column_alias(expr), expr))
+        SelectQueryOperation::AddColumn((self.new_column_alias(), expr))
+    }
+}
+
+/// Context storage for the FDW stored in the fdw_private field
+#[derive(Clone)]
+pub struct FdwScanContext {
+    /// The prepared query parameter expr's and their type oid's
+    /// Each item is keyed by its parameter id
+    pub param_exprs: Option<HashMap<u32, (*mut pg_sys::ExprState, pg_sys::Oid)>>,
+    /// The resultant row structure after the query has been executed
+    pub row_structure: Option<RowStructure>,
+}
+
+impl FdwScanContext {
+    pub fn new() -> Self {
+        Self {
+            param_exprs: None,
+            row_structure: None,
+        }
     }
 }
