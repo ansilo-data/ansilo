@@ -2,7 +2,7 @@ use std::{collections::HashMap, ffi::c_void, mem, ops::ControlFlow, ptr};
 
 use ansilo_core::{
     common::data::DataValue,
-    err::{bail, Result},
+    err::{bail, Context, Result},
     sqlil::{self, JoinType, Ordering, OrderingType},
 };
 use ansilo_pg::fdw::{
@@ -25,7 +25,7 @@ use pgx::{
 
 use crate::{
     sqlil::{
-        convert, convert_list, from_datum, parse_entity_version_id_from_foreign_table,
+        convert, convert_list, from_datum, into_datum, parse_entity_version_id_from_foreign_table,
         parse_entity_version_id_from_rel, ConversionContext, PlannerContext,
     },
     util::list::vec_to_pg_list,
@@ -978,7 +978,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
     let row_structure = ctx.execute_query().unwrap();
 
     scan.row_structure = Some(row_structure);
-    (*node).fdw_state = into_fdw_private_scan(ctx, PgBox::new(scan).into_pg_boxed()) as *mut _;
+    (*node).fdw_state = into_fdw_private_scan(ctx, query, PgBox::new(scan).into_pg_boxed()) as *mut _;
 }
 
 unsafe fn send_query_params(
@@ -1039,28 +1039,120 @@ unsafe fn send_query_params(
     ctx.write_query_input(input_data);
 }
 
+/// Retrieve next row from the result set, or clear tuple slot to indicate EOF
+///
+/// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a9fcea554f6ec98e0c00e214f6d933392
 pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *mut TupleTableSlot {
     let slot = (*node).ss.ss_ScanTupleSlot;
 
-    let (mut ctx, scan) = from_fdw_private_scan((*node).fdw_state as _);
+    let (mut ctx, _, scan) = from_fdw_private_scan((*node).fdw_state as _);
     let row_structure = scan.row_structure.as_ref().unwrap();
+    let tupdesc = (*slot).tts_tupleDescriptor;
+    let nattrs = (*tupdesc).natts as usize;
 
-    // TODO
-    todo!()
+    assert!(row_structure.cols.len() == nattrs);
+
+    let attrs = (*tupdesc).attrs.as_slice(nattrs);
+    (*slot).tts_values = pg_sys::palloc(nattrs * mem::size_of::<pg_sys::Datum>()) as *mut _;
+    (*slot).tts_isnull = pg_sys::palloc(nattrs * mem::size_of::<bool>()) as *mut _;
+
+    // Read the next row into the tuple
+    for i in 0..nattrs {
+        let data = ctx
+            .read_result_data()
+            .context("Failed to read data value")
+            .unwrap();
+
+        // Check if we have reached the last data value
+        if data.is_none() {
+            // If this is the first attribute we have reached the end so return an empty tuple
+            if i == 0 {
+                (*(*slot).tts_ops).clear.unwrap()(slot);
+                return slot;
+            }
+
+            // Else, we have a read a partial row, abort
+            panic!("Unexpected EOF reached while reading next row");
+        }
+
+        // Convert the retrieved value to a pg datum and store in the tuple
+        into_datum(
+            attrs[i].atttypid,
+            &row_structure.cols[i].1,
+            data.unwrap(),
+            (*slot).tts_isnull.add(i),
+            (*slot).tts_values.add(i),
+        )
+        .unwrap();
+    }
+
+    slot
 }
 
+/// Execute a local join execution plan for a foreign join
+///
+/// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#abf164069f2b8ed8277045060b66b98ab
 pub unsafe extern "C" fn recheck_foreign_scan(
     node: *mut ForeignScanState,
     slot: *mut TupleTableSlot,
 ) -> bool {
-    unimplemented!()
-}
-pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
-    unimplemented!()
+    let scanrelid = (*((*node).ss.ps.plan as *mut pg_sys::Scan)).scanrelid;
+    let outerplan = (*(node as *mut pg_sys::PlanState)).lefttree;
+
+    // For base foreign relations, it suffices to set fdw_recheck_quals
+    if scanrelid > 0 {
+        return true;
+    }
+
+    assert!(!outerplan.is_null());
+
+    /* Execute a local join execution plan */
+    let result = {
+        if !(*outerplan).chgParam.is_null() {
+            pg_sys::ExecReScan(outerplan)
+        }
+
+        (*outerplan).ExecProcNode.unwrap()(outerplan)
+    };
+
+    if result.is_null() || (*result).tts_flags & pg_sys::TTS_FLAG_EMPTY as u16 != 0 {
+        return false;
+    }
+
+    /* Store result in the given slot */
+    (*(*slot).tts_ops).copyslot.unwrap()(slot, result);
+
+    return true;
 }
 
+/// Restart the scan.
+/// 
+/// @see https://doxygen.postgresql.org/postgres__fdw_8c_source.html#l01641
+pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
+    let (mut ctx, query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
+
+    ctx.restart_query().unwrap();
+
+    // Rewrite query params, if changed
+    if !(*node).ss.ps.chgParam.is_null() {
+        let input_structure = ctx.query_writer.as_ref().unwrap().get_structure().clone();
+        if !input_structure.params.is_empty() {
+            send_query_params(&mut ctx, &mut scan, &query, &input_structure, node);
+        }
+    }
+
+    ctx.execute_query().unwrap();
+}
+
+/// Finish scanning foreign table and dispose objects used for this scan
+/// 
+/// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a5a14f8d89c5b76e02df2e8615f7a6835
 pub unsafe extern "C" fn end_foreign_scan(node: *mut ForeignScanState) {
-    unimplemented!()
+    let (mut ctx, _, _) = from_fdw_private_scan((*node).fdw_state as _);
+
+    ctx.disconnect().unwrap();
+
+    // TODO: verify not mem leaks
 }
 
 pub unsafe extern "C" fn shutdown_foreign_scan(node: *mut ForeignScanState) {
@@ -1264,10 +1356,11 @@ unsafe fn from_fdw_private_path(list: *mut List) -> PgBox<FdwQueryContext, Alloc
     query
 }
 
-unsafe fn into_fdw_private_scan(ctx: PgBox<FdwContext>, scan: PgBox<FdwScanContext>) -> *mut List {
+unsafe fn into_fdw_private_scan(ctx: PgBox<FdwContext>, query: PgBox<FdwQueryContext>, scan: PgBox<FdwScanContext>) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
     list.push(ctx.into_pg() as *mut _);
+    list.push(query.into_pg() as *mut _);
     list.push(scan.into_pg() as *mut _);
 
     list.into_pg()
@@ -1277,15 +1370,17 @@ unsafe fn from_fdw_private_scan(
     list: *mut List,
 ) -> (
     PgBox<FdwContext, AllocatedByPostgres>,
+    PgBox<FdwQueryContext, AllocatedByPostgres>,
     PgBox<FdwScanContext, AllocatedByPostgres>,
 ) {
     let list = PgList::<c_void>::from_pg(list);
     assert!(list.len() == 2);
 
     let ctx = PgBox::<FdwContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
+    let query = PgBox::<FdwQueryContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
     let scan = PgBox::<FdwScanContext>::from_pg(list.get_ptr(1).unwrap() as *mut _);
 
-    (ctx, scan)
+    (ctx, query, scan)
 }
 
 unsafe fn find_em_for_rel_target(

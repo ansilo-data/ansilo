@@ -23,6 +23,8 @@ pub enum ClientMessage {
     Execute,
     /// Read up to the supplied number of bytes from the query
     Read(u32),
+    /// Discard the current result set and ready the query for new params and execution 
+    RestartQuery,
     /// Instruct the server to close the connection
     Close,
     /// Error occurred with message
@@ -76,6 +78,8 @@ pub enum ServerMessage {
     /// Rows returned by the query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
     ResultData(Vec<u8>),
+    /// Query restarted
+    QueryRestarted,
     /// Error occurred with message
     GenericError(String),
 }

@@ -97,7 +97,7 @@ impl FdwContext {
     }
 
     pub fn write_query_input(&mut self, data: Vec<DataValue>) -> Result<()> {
-        let mut writer = self.query_writer.as_mut().context("Query not prepared")?;
+        let writer = self.query_writer.as_mut().context("Query not prepared")?;
 
         // This wont be to inefficient as it is being buffered
         // by an underlying BufWriter
@@ -122,6 +122,28 @@ impl FdwContext {
         let reader = self.result_set.as_mut().context("Query not executed")?;
 
         reader.read_data_value()
+    }
+
+    pub fn restart_query(&mut self) -> Result<()> {
+        let response = self.send(ClientMessage::RestartQuery)?;
+
+        match response {
+            ServerMessage::QueryRestarted => {}
+            _ => bail!("Unexpected response while restarting query"),
+        };
+
+        let query_input = self
+            .query_writer
+            .take()
+            .context("Query not prepared")?
+            .get_structure()
+            .clone();
+        self.query_writer = Some(QueryHandleWriter::new(FdwQueryHandle {
+            connection: self.connection.clone(),
+            query_input: query_input,
+        })?);
+
+        Ok(())
     }
 
     pub fn disconnect(&mut self) -> Result<()> {
@@ -329,6 +351,7 @@ impl FdwQueryType {
         }
     }
 }
+
 impl FdwSelectQuery {
     pub(crate) fn all_ops(&self) -> Chain<Iter<SelectQueryOperation>, Iter<SelectQueryOperation>> {
         self.remote_ops.iter().chain(self.local_ops.iter())

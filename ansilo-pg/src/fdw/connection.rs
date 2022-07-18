@@ -1,4 +1,7 @@
-use std::io::{Read, Write};
+use std::{
+    io::{Read, Write},
+    mem,
+};
 
 use ansilo_connectors::{
     common::{
@@ -41,7 +44,10 @@ enum FdwQueryState<TConnector: Connector> {
     New,
     PlanningSelect(sqlil::Select),
     Prepared(QueryHandleWrite<TConnector::TQueryHandle>),
-    Executed(ResultSetRead<TConnector::TResultSet>),
+    Executed(
+        QueryHandleWrite<TConnector::TQueryHandle>,
+        ResultSetRead<TConnector::TResultSet>,
+    ),
 }
 
 impl<TConnector: Connector> FdwConnection<TConnector> {
@@ -105,6 +111,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
                 let mut buff = vec![0u8; len as usize];
                 let read = self.read(&mut buff[..])?;
                 ServerMessage::ResultData(buff[..read].to_vec())
+            }
+            ClientMessage::RestartQuery => {
+                self.restart_query()?;
+                ServerMessage::QueryRestarted
             }
             ClientMessage::Close => return Ok(None),
             ClientMessage::GenericError(err) => bail!("Error received from client: {}", err),
@@ -218,12 +228,16 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
     }
 
     fn execute(&mut self) -> Result<RowStructure> {
-        let handle = self.query.query_handle()?;
+        let query = mem::replace(&mut self.query, FdwQueryState::New);
+        let mut handle = match query {
+            FdwQueryState::Prepared(handle) => handle,
+            _ => bail!("Unexpected query state"),
+        };
 
         let result_set = handle.0.execute()?;
         let row_structure = result_set.get_structure()?;
 
-        self.query = FdwQueryState::Executed(ResultSetRead(result_set));
+        self.query = FdwQueryState::Executed(handle, ResultSetRead(result_set));
         Ok(row_structure)
     }
 
@@ -235,6 +249,16 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             .context("Failed to read from result set")?;
 
         Ok(read)
+    }
+
+    fn restart_query(&mut self) -> Result<()> {
+        let query = mem::replace(&mut self.query, FdwQueryState::New);
+        self.query = match query {
+            FdwQueryState::Executed(handle, _) => FdwQueryState::Prepared(handle),
+            _ => bail!("Unexpected query state"),
+        };
+
+        Ok(())
     }
 }
 
@@ -255,7 +279,7 @@ impl<TConnector: Connector> FdwQueryState<TConnector> {
 
     fn result_set(&mut self) -> Result<&mut ResultSetRead<TConnector::TResultSet>> {
         Ok(match self {
-            FdwQueryState::Executed(result_set) => result_set,
+            FdwQueryState::Executed(_, result_set) => result_set,
             _ => bail!("Unexpected query state"),
         })
     }
@@ -387,7 +411,12 @@ mod tests {
         assert_eq!(
             res,
             ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::new(Some(3), None, None, None))
+                QueryOperationResult::PerformedRemotely(OperationCost::new(
+                    Some(3),
+                    None,
+                    None,
+                    None
+                ))
             ))
         );
 
@@ -421,7 +450,10 @@ mod tests {
         );
 
         let res = client.send(ClientMessage::Prepare).unwrap();
-        assert_eq!(res, ServerMessage::QueryPrepared(QueryInputStructure::new(vec![])));
+        assert_eq!(
+            res,
+            ServerMessage::QueryPrepared(QueryInputStructure::new(vec![]))
+        );
 
         let res = client.send(ClientMessage::Execute).unwrap();
         let row_structure = RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
@@ -483,6 +515,76 @@ mod tests {
             res,
             ServerMessage::GenericError("Invalid message received".into())
         );
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_select_with_restart_query() {
+        let (thread, mut client) = create_mock_connection("connection_select");
+
+        let res = client
+            .send(ClientMessage::Select(ClientSelectMessage::Create(
+                sqlil::entity("people", "1.0"),
+            )))
+            .unwrap();
+
+        assert!(matches!(res, ServerMessage::Select(_)));
+
+        let res = client
+            .send(ClientMessage::Select(ClientSelectMessage::Apply(
+                SelectQueryOperation::AddColumn((
+                    "first_name".into(),
+                    sqlil::Expr::attr("people", "1.0", "first_name"),
+                )),
+            )))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Select(ServerSelectMessage::Result(
+                QueryOperationResult::PerformedRemotely(OperationCost::default())
+            ))
+        );
+
+        let res = client.send(ClientMessage::Prepare).unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::QueryPrepared(QueryInputStructure::new(vec![]))
+        );
+
+        for _ in 1..3 {
+            let res = client.send(ClientMessage::Execute).unwrap();
+            let row_structure =
+                RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
+            assert_eq!(res, ServerMessage::QueryExecuted(row_structure.clone()));
+
+            let res = client.send(ClientMessage::Read(1024)).unwrap();
+            let data = match res {
+                ServerMessage::ResultData(data) => data,
+                _ => unreachable!("Unexpected response {:?}", res),
+            };
+
+            let mut result_data = DataReader::new(io::Cursor::new(data), row_structure.types());
+
+            assert_eq!(
+                result_data.read_data_value().unwrap(),
+                Some(DataValue::from("Mary"))
+            );
+            assert_eq!(
+                result_data.read_data_value().unwrap(),
+                Some(DataValue::from("John"))
+            );
+            assert_eq!(
+                result_data.read_data_value().unwrap(),
+                Some(DataValue::from("Gary"))
+            );
+            assert_eq!(result_data.read_data_value().unwrap(), None);
+
+            let res = client.send(ClientMessage::RestartQuery).unwrap();
+            assert_eq!(res, ServerMessage::QueryRestarted);
+        }
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();
