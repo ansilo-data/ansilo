@@ -24,16 +24,15 @@ use pgx::{
 };
 
 use crate::{
+    fdw::{
+        common,
+        ctx::{FdwContext, FdwQueryContext, FdwScanContext, FdwSelectQuery},
+    },
     sqlil::{
         convert, convert_list, from_datum, into_datum, parse_entity_version_id_from_foreign_table,
         parse_entity_version_id_from_rel, ConversionContext, PlannerContext,
     },
     util::list::vec_to_pg_list,
-};
-
-use super::{
-    common,
-    ctx::{FdwContext, FdwQueryContext, FdwScanContext, FdwSelectQuery},
 };
 
 macro_rules! unexpected_response {
@@ -65,8 +64,6 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     let planner = PlannerContext::base_rel(root, baserel);
 
     let baserel_conds = PgList::<RestrictInfo>::from_pg((*baserel).baserestrictinfo);
-
-    let entity = parse_entity_version_id_from_foreign_table(foreigntableid).unwrap();
 
     // If no conditions we can use the cheap path
     let entity = ctx.entity.clone();
@@ -978,7 +975,8 @@ pub unsafe extern "C" fn begin_foreign_scan(
     let row_structure = ctx.execute_query().unwrap();
 
     scan.row_structure = Some(row_structure);
-    (*node).fdw_state = into_fdw_private_scan(ctx, query, PgBox::new(scan).into_pg_boxed()) as *mut _;
+    (*node).fdw_state =
+        into_fdw_private_scan(ctx, query, PgBox::new(scan).into_pg_boxed()) as *mut _;
 }
 
 unsafe fn send_query_params(
@@ -1126,7 +1124,7 @@ pub unsafe extern "C" fn recheck_foreign_scan(
 }
 
 /// Restart the scan.
-/// 
+///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c_source.html#l01641
 pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
     let (mut ctx, query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
@@ -1145,14 +1143,14 @@ pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
 }
 
 /// Finish scanning foreign table and dispose objects used for this scan
-/// 
+///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a5a14f8d89c5b76e02df2e8615f7a6835
 pub unsafe extern "C" fn end_foreign_scan(node: *mut ForeignScanState) {
     let (mut ctx, _, _) = from_fdw_private_scan((*node).fdw_state as _);
 
     ctx.disconnect().unwrap();
 
-    // TODO: verify not mem leaks
+    // TODO: verify no mem leaks
 }
 
 pub unsafe extern "C" fn shutdown_foreign_scan(node: *mut ForeignScanState) {
@@ -1356,7 +1354,11 @@ unsafe fn from_fdw_private_path(list: *mut List) -> PgBox<FdwQueryContext, Alloc
     query
 }
 
-unsafe fn into_fdw_private_scan(ctx: PgBox<FdwContext>, query: PgBox<FdwQueryContext>, scan: PgBox<FdwScanContext>) -> *mut List {
+unsafe fn into_fdw_private_scan(
+    ctx: PgBox<FdwContext>,
+    query: PgBox<FdwQueryContext>,
+    scan: PgBox<FdwScanContext>,
+) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
     list.push(ctx.into_pg() as *mut _);

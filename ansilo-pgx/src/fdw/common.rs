@@ -8,9 +8,11 @@ use pgx::{
     *,
 };
 
-use crate::{util::string::parse_to_owned_utf8_string, sqlil::parse_entity_version_id_from_foreign_table};
+use crate::{
+    sqlil::parse_entity_version_id_from_foreign_table, util::string::parse_to_owned_utf8_string,
+};
 
-use super::ctx::{FdwContext, FdwQueryContext};
+use super::ctx::FdwContext;
 
 #[derive(Debug)]
 struct ServerOptions {
@@ -62,7 +64,7 @@ pub unsafe fn connect(foreign_table_oid: Oid) -> PgBox<FdwContext> {
     let mut ctx = FdwContext::new(&auth.data_source_id, entity);
     ctx.connect(&opts.socket, auth).expect("Failed to connect");
 
-    PgBox::<FdwContext>::from_rust(&mut ctx).into_pg_boxed()
+    PgBox::new(ctx).into_pg_boxed()
 }
 
 unsafe fn def_get_owned_utf8_string(opt: *mut DefElem) -> Result<String> {

@@ -8,18 +8,21 @@ crate-type = ["cdylib"]
 
 [features]
 default = ["pg14"]
-pg14 = ["pgx/pg14", "pgx-tests/pg14" ]
-pg_test = []
+pg14 = ["pgx/pg14", "pgx-tests/pg14"]
+pg_test = ["dep:ansilo-connectors"]
 
 [dependencies]
 ansilo-core = { version = "*", path = "../ansilo-core" }
 ansilo-pg = { version = "*", path = "../ansilo-pg" }
+ansilo-connectors = { version ="*", path = "../ansilo-connectors", optional = true }
 cstr = "0.2.10"
+serde = "1.0"
 serde_json = "1.0"
 time = "0.3"
 pgx = "=0.5.0-beta.0"
 
 [dev-dependencies]
+ansilo-connectors = { version ="*", path = "../ansilo-connectors" }
 pgx-tests = "=0.5.0-beta.0"
 
 # [profile.dev]

@@ -176,7 +176,7 @@ mod tests {
 
     #[pg_test]
     fn test_sqlil_ctx_conversion_register_param() {
-        let node1 = pg_sys::Param {
+        let mut node1 = pg_sys::Param {
             xpr: pg_sys::Expr {
                 type_: pg_sys::NodeTag_T_Const,
             },
@@ -188,7 +188,7 @@ mod tests {
             location: 1,
         };
 
-        let node1_dup = pg_sys::Param {
+        let mut node1_dup = pg_sys::Param {
             xpr: pg_sys::Expr {
                 type_: pg_sys::NodeTag_T_Const,
             },
@@ -200,7 +200,7 @@ mod tests {
             location: 1,
         };
 
-        let node2 = pg_sys::Param {
+        let mut node2 = pg_sys::Param {
             xpr: pg_sys::Expr {
                 type_: pg_sys::NodeTag_T_Const,
             },
@@ -215,16 +215,16 @@ mod tests {
         let mut ctx = ConversionContext::new();
 
         unsafe {
-            let res = ctx.register_param(&node1 as *const _ as *const pg_sys::Node);
+            let res = ctx.register_param(&mut node1 as *mut _ as *mut pg_sys::Node);
             assert_eq!(res, 1);
 
-            let res = ctx.register_param(&node1_dup as *const _ as *const pg_sys::Node);
+            let res = ctx.register_param(&mut node1_dup as *mut _ as *mut pg_sys::Node);
             assert_eq!(res, 1);
 
-            let res = ctx.register_param(&node2 as *const _ as *const pg_sys::Node);
+            let res = ctx.register_param(&mut node2 as *mut _ as *mut pg_sys::Node);
             assert_eq!(res, 2);
 
-            let res = ctx.register_param(&node2 as *const _ as *const pg_sys::Node);
+            let res = ctx.register_param(&mut node2 as *mut _ as *mut pg_sys::Node);
             assert_eq!(res, 2);
         }
     }
