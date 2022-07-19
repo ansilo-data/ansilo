@@ -55,6 +55,7 @@ const DEFAULT_ROW_VOLUME: u64 = 100_000;
 ///
 /// We should consider the effect of all baserestrictinfo clauses here, but
 /// not any join clauses.
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_rel_size(
     root: *mut PlannerInfo,
     baserel: *mut RelOptInfo,
@@ -111,7 +112,10 @@ pub unsafe extern "C" fn get_foreign_rel_size(
             .connection_cost
             .or(base_cost.connection_cost)
             .or(Some(DEFAULT_FDW_STARTUP_COST));
-        cost.total_cost = cost.total_cost.or(base_cost.total_cost);
+        cost.total_cost = cost.total_cost.or(base_cost.total_cost).or(Some(
+            (cost.connection_cost.unwrap() as f64
+                + cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
+        ));
     }
 
     if let Some(rows) = query.cost.rows {
@@ -128,6 +132,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 /// Create possible scan paths for a scan on the foreign table
 ///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a5e0a23f5638e9b82a7e8c6c5be3389a2
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_paths(
     root: *mut PlannerInfo,
     baserel: *mut RelOptInfo,
@@ -263,6 +268,7 @@ pub unsafe extern "C" fn get_foreign_paths(
 /// Add possible ForeignPath to joinrel, if join is safe to push down.
 ///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a37cae9c397f76945ef22779c7c566002
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_join_paths(
     root: *mut PlannerInfo,
     joinrel: *mut RelOptInfo,
@@ -424,6 +430,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
 /// corresponding operations are safe to push down.
 ///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a80eb48019ea69aaf90a87a6027d3bdba
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_upper_paths(
     root: *mut PlannerInfo,
     stage: UpperRelationKind,
@@ -465,6 +472,7 @@ pub unsafe extern "C" fn get_foreign_upper_paths(
     }
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_grouping_paths(
     root: *mut PlannerInfo,
     inputrel: *mut RelOptInfo,
@@ -596,6 +604,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     (*outputrel).fdw_private = into_fdw_private(ctx, group_query) as *mut _;
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_ordered_paths(
     root: *mut PlannerInfo,
     inputrel: *mut RelOptInfo,
@@ -683,6 +692,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
     (*outputrel).fdw_private = into_fdw_private(ctx, order_query) as *mut _;
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_final_paths(
     root: *mut PlannerInfo,
     inputrel: *mut RelOptInfo,
@@ -793,6 +803,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
 /// Create ForeignScan plan node which implements selected best path
 ///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a59f8af85f3e7696f2d44910600ff2463
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_plan(
     root: *mut PlannerInfo,
     foreignrel: *mut RelOptInfo,
@@ -800,7 +811,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     best_path: *mut ForeignPath,
     tlist: *mut List,
     scan_clauses: *mut List,
-    mut outer_plan: *mut Plan,
+    outer_plan: *mut Plan,
 ) -> *mut ForeignScan {
     let (mut ctx, mut query) = from_fdw_private((*foreignrel).fdw_private as *mut _);
     let planner = PlannerContext::base_rel(root, foreignrel);
@@ -840,6 +851,8 @@ pub unsafe extern "C" fn get_foreign_plan(
     let mut fdw_scan_list: Vec<*mut TargetEntry> = vec![];
     let mut result_tlist = PgList::<pg_sys::TargetEntry>::from_pg(tlist);
     let mut resno = 1;
+
+    apply_query_state(&mut ctx, query.clone());
 
     // let mut unpushed_exprs = vec![];
 
@@ -928,6 +941,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     }
 
     // Ensure outer plan generates tuples with the matching desc
+    let mut outer_plan = outer_plan;
     if !outer_plan.is_null() {
         outer_plan = pg_sys::change_plan_targetlist(
             outer_plan,
@@ -937,6 +951,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     }
 
     let fdw_private = into_fdw_private(ctx, PgBox::new(query.clone()).into_pg_boxed());
+    let fdw_scan_list = pg_sys::add_to_flat_tlist(ptr::null_mut(), vec_to_pg_list(fdw_scan_list));
 
     pg_sys::make_foreignscan(
         tlist,
@@ -944,12 +959,13 @@ pub unsafe extern "C" fn get_foreign_plan(
         scan_relid,
         vec_to_pg_list(query.cvt.param_nodes()),
         fdw_private,
-        vec_to_pg_list(fdw_scan_list),
+        fdw_scan_list,
         pg_sys::extract_actual_clauses(vec_to_pg_list(query.remote_conds.clone()), false),
         outer_plan,
     )
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn begin_foreign_scan(
     node: *mut ForeignScanState,
     eflags: ::std::os::raw::c_int,
@@ -1040,6 +1056,7 @@ unsafe fn send_query_params(
 /// Retrieve next row from the result set, or clear tuple slot to indicate EOF
 ///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a9fcea554f6ec98e0c00e214f6d933392
+#[pg_guard]
 pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *mut TupleTableSlot {
     let slot = (*node).ss.ss_ScanTupleSlot;
 
@@ -1049,6 +1066,9 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
     let nattrs = (*tupdesc).natts as usize;
 
     assert!(row_structure.cols.len() == nattrs);
+
+    // equivalent of ExecClearTuple(slot) (symbol is not exposed)
+    (*(*slot).tts_ops).clear.unwrap()(slot);
 
     let attrs = (*tupdesc).attrs.as_slice(nattrs);
     (*slot).tts_values = pg_sys::palloc(nattrs * mem::size_of::<pg_sys::Datum>()) as *mut _;
@@ -1065,7 +1085,6 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         if data.is_none() {
             // If this is the first attribute we have reached the end so return an empty tuple
             if i == 0 {
-                (*(*slot).tts_ops).clear.unwrap()(slot);
                 return slot;
             }
 
@@ -1084,12 +1103,14 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         .unwrap();
     }
 
+    pg_sys::ExecStoreVirtualTuple(slot);
     slot
 }
 
 /// Execute a local join execution plan for a foreign join
 ///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#abf164069f2b8ed8277045060b66b98ab
+#[pg_guard]
 pub unsafe extern "C" fn recheck_foreign_scan(
     node: *mut ForeignScanState,
     slot: *mut TupleTableSlot,
@@ -1126,6 +1147,7 @@ pub unsafe extern "C" fn recheck_foreign_scan(
 /// Restart the scan.
 ///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c_source.html#l01641
+#[pg_guard]
 pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
     let (mut ctx, query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
 
@@ -1145,6 +1167,7 @@ pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
 /// Finish scanning foreign table and dispose objects used for this scan
 ///
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a5a14f8d89c5b76e02df2e8615f7a6835
+#[pg_guard]
 pub unsafe extern "C" fn end_foreign_scan(node: *mut ForeignScanState) {
     let (mut ctx, _, _) = from_fdw_private_scan((*node).fdw_state as _);
 
@@ -1153,10 +1176,12 @@ pub unsafe extern "C" fn end_foreign_scan(node: *mut ForeignScanState) {
     // TODO: verify no mem leaks
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn shutdown_foreign_scan(node: *mut ForeignScanState) {
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn estimate_dsm_foreign_scan(
     node: *mut ForeignScanState,
     pcxt: *mut ParallelContext,
@@ -1164,6 +1189,7 @@ pub unsafe extern "C" fn estimate_dsm_foreign_scan(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn initialize_dsm_foreign_scan(
     node: *mut ForeignScanState,
     pcxt: *mut ParallelContext,
@@ -1172,6 +1198,7 @@ pub unsafe extern "C" fn initialize_dsm_foreign_scan(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn re_initialize_dsm_foreign_scan(
     node: *mut ForeignScanState,
     pcxt: *mut ParallelContext,
@@ -1180,6 +1207,7 @@ pub unsafe extern "C" fn re_initialize_dsm_foreign_scan(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn initialize_worker_foreign_scan(
     node: *mut ForeignScanState,
     toc: *mut shm_toc,
@@ -1188,6 +1216,7 @@ pub unsafe extern "C" fn initialize_worker_foreign_scan(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn is_foreign_scan_parallel_safe(
     root: *mut PlannerInfo,
     rel: *mut RelOptInfo,
@@ -1196,6 +1225,7 @@ pub unsafe extern "C" fn is_foreign_scan_parallel_safe(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn reparameterize_foreign_path_by_child(
     root: *mut PlannerInfo,
     fdw_private: *mut List,
@@ -1376,11 +1406,11 @@ unsafe fn from_fdw_private_scan(
     PgBox<FdwScanContext, AllocatedByPostgres>,
 ) {
     let list = PgList::<c_void>::from_pg(list);
-    assert!(list.len() == 2);
+    assert!(list.len() == 3);
 
     let ctx = PgBox::<FdwContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
-    let query = PgBox::<FdwQueryContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
-    let scan = PgBox::<FdwScanContext>::from_pg(list.get_ptr(1).unwrap() as *mut _);
+    let query = PgBox::<FdwQueryContext>::from_pg(list.get_ptr(1).unwrap() as *mut _);
+    let scan = PgBox::<FdwScanContext>::from_pg(list.get_ptr(2).unwrap() as *mut _);
 
     (ctx, query, scan)
 }

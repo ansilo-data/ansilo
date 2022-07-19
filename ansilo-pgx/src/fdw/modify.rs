@@ -1,5 +1,13 @@
-use pgx::pg_sys::*;
+use pgx::{
+    pg_sys::{
+        DropBehavior, EState, ExecRowMark, ForeignScanState, Index, List, LockClauseStrength,
+        ModifyTable, ModifyTableState, PlannerInfo, RangeTblEntry, Relation, ResultRelInfo,
+        RowMarkType, TupleTableSlot,
+    },
+    *,
+};
 
+#[pg_guard]
 pub unsafe extern "C" fn add_foreign_update_targets(
     root: *mut PlannerInfo,
     rtindex: Index,
@@ -9,6 +17,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn plan_foreign_modify(
     root: *mut PlannerInfo,
     plan: *mut ModifyTable,
@@ -18,6 +27,7 @@ pub unsafe extern "C" fn plan_foreign_modify(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn begin_foreign_modify(
     mtstate: *mut ModifyTableState,
     rinfo: *mut ResultRelInfo,
@@ -28,6 +38,7 @@ pub unsafe extern "C" fn begin_foreign_modify(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn exec_foreign_insert(
     estate: *mut EState,
     rinfo: *mut ResultRelInfo,
@@ -37,6 +48,7 @@ pub unsafe extern "C" fn exec_foreign_insert(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn exec_foreign_batch_insert(
     estate: *mut EState,
     rinfo: *mut ResultRelInfo,
@@ -47,10 +59,14 @@ pub unsafe extern "C" fn exec_foreign_batch_insert(
     unimplemented!()
 }
 
-pub unsafe extern "C" fn get_foreign_modify_batch_size(rinfo: *mut ResultRelInfo) -> ::std::os::raw::c_int {
+#[pg_guard]
+pub unsafe extern "C" fn get_foreign_modify_batch_size(
+    rinfo: *mut ResultRelInfo,
+) -> ::std::os::raw::c_int {
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn exec_foreign_update(
     estate: *mut EState,
     rinfo: *mut ResultRelInfo,
@@ -60,6 +76,7 @@ pub unsafe extern "C" fn exec_foreign_update(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn exec_foreign_delete(
     estate: *mut EState,
     rinfo: *mut ResultRelInfo,
@@ -69,19 +86,27 @@ pub unsafe extern "C" fn exec_foreign_delete(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn end_foreign_modify(estate: *mut EState, rinfo: *mut ResultRelInfo) {
     unimplemented!()
 }
-pub unsafe extern "C" fn begin_foreign_insert(mtstate: *mut ModifyTableState, rinfo: *mut ResultRelInfo) {
+#[pg_guard]
+pub unsafe extern "C" fn begin_foreign_insert(
+    mtstate: *mut ModifyTableState,
+    rinfo: *mut ResultRelInfo,
+) {
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn end_foreign_insert(estate: *mut EState, rinfo: *mut ResultRelInfo) {
     unimplemented!()
 }
+#[pg_guard]
 pub unsafe extern "C" fn is_foreign_rel_updatable(rel: Relation) -> ::std::os::raw::c_int {
     unimplemented!()
 }
+#[pg_guard]
 pub unsafe extern "C" fn plan_direct_modify(
     root: *mut PlannerInfo,
     plan: *mut ModifyTable,
@@ -91,18 +116,25 @@ pub unsafe extern "C" fn plan_direct_modify(
     unimplemented!()
 }
 
-pub unsafe extern "C" fn begin_direct_modify(node: *mut ForeignScanState, eflags: ::std::os::raw::c_int) {
+#[pg_guard]
+pub unsafe extern "C" fn begin_direct_modify(
+    node: *mut ForeignScanState,
+    eflags: ::std::os::raw::c_int,
+) {
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn iterate_direct_modify(node: *mut ForeignScanState) -> *mut TupleTableSlot {
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn end_direct_modify(node: *mut ForeignScanState) {
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn get_foreign_row_mark_type(
     rte: *mut RangeTblEntry,
     strength: LockClauseStrength,
@@ -110,6 +142,7 @@ pub unsafe extern "C" fn get_foreign_row_mark_type(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn refetch_foreign_row(
     estate: *mut EState,
     erm: *mut ExecRowMark,
@@ -120,6 +153,7 @@ pub unsafe extern "C" fn refetch_foreign_row(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn exec_foreign_truncate(
     rels: *mut List,
     behavior: DropBehavior,
@@ -127,4 +161,3 @@ pub unsafe extern "C" fn exec_foreign_truncate(
 ) {
     unimplemented!()
 }
-

@@ -1,9 +1,12 @@
-use pgx::pg_sys::*;
+use pgx::*;
+use pgx::pg_sys::{ExplainState, ModifyTableState, ResultRelInfo, ForeignScanState, List};
 
+#[pg_guard]
 pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *mut ExplainState) {
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn explain_foreign_modify(
     mtstate: *mut ModifyTableState,
     rinfo: *mut ResultRelInfo,
@@ -14,6 +17,7 @@ pub unsafe extern "C" fn explain_foreign_modify(
     unimplemented!()
 }
 
+#[pg_guard]
 pub unsafe extern "C" fn explain_direct_modify(node: *mut ForeignScanState, es: *mut ExplainState) {
     unimplemented!()
 }

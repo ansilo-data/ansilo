@@ -80,6 +80,8 @@ mod tests {
             client.update(
                 format!(
                     r#"
+                DROP FOREIGN TABLE IF EXISTS "people:1.0";
+                DROP SERVER IF EXISTS test_srv;
                 CREATE SERVER test_srv FOREIGN DATA WRAPPER ansilo_fdw OPTIONS (
                     socket '{socket_path}',
                     data_source 'memory'
@@ -142,8 +144,8 @@ mod tests {
             results,
             vec![
                 ("Mary".into(), "Jane".into()),
-                ("Mary".into(), "Jane".into()),
-                ("Mary".into(), "Jane".into()),
+                ("John".into(), "Smith".into()),
+                ("Gary".into(), "Gregson".into()),
             ]
         );
     }
