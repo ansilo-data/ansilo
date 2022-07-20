@@ -21,8 +21,8 @@ mod tests {
     };
     use ansilo_core::data::*;
     use ansilo_core::{
-        data::{DataType, DataValue},
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        data::{DataType, DataValue},
         sqlil,
     };
     use ansilo_pg::fdw::server::FdwServer;
@@ -148,5 +148,16 @@ mod tests {
                 ("Gary".into(), "Gregson".into()),
             ]
         );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_count_all() {
+        setup_test("scan_select_count_all");
+
+        let results = execute_query(r#"SELECT COUNT(*) as count FROM "people:1.0""#, |i| {
+            (i["count"].value::<i64>().unwrap(),)
+        });
+
+        assert_eq!(results, vec![(3,),]);
     }
 }

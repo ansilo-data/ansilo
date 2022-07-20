@@ -14,6 +14,8 @@ use pgx::{
     IntoDatum, PgBox,
 };
 
+use super::from_pg_type;
+
 /// Attempt to convert an ansilo DataValue into a postgres Datum type
 ///
 /// This is a hot code path. We need to take good care in optimising this.
@@ -103,14 +105,32 @@ pub unsafe fn into_datum(
         (pg_sys::UUIDOID, DataType::Uuid, DataValue::Uuid(data)) => {
             into_uuid(data).into_datum().unwrap()
         }
-        (type_oid, r#type, _) => bail!(
-            "Type mismatch between underlying {:?} type and postgres type {:?}",
-            r#type,
-            type_oid
-        ),
+        (type_oid, r#type, data) => {
+            // If we fail on the strict conversion path we try to coerce the type before giving up
+            if let Ok(_) = from_pg_type(type_oid)
+                .and_then(|r#type| Ok((data.try_coerce_into(&r#type)?, r#type)))
+                .and_then(|(coerced, r#type)| {
+                    into_datum(type_oid, &r#type, coerced, is_null, datum)
+                })
+            {
+                return Ok(());
+            }
+
+            bail!(
+                "Type mismatch between underlying {:?} type and postgres type {:?}",
+                r#type,
+                type_oid
+            )
+        }
     };
 
     Ok(())
+}
+
+fn try_coerce_into(type_oid: Oid, val: DataValue) -> Result<DataValue> {
+    let desired_type = from_pg_type(type_oid)?;
+
+    val.try_coerce_into(&desired_type)
 }
 
 fn into_string(data: Vec<u8>, opts: &StringOptions) -> Result<String> {
@@ -568,6 +588,40 @@ mod tests {
             assert_eq!(
                 pgx::Uuid::from_datum(datum, false).unwrap().as_bytes(),
                 uuid.as_bytes()
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_into_datum_text_from_binary_coerces_type() {
+        unsafe {
+            let (is_null, datum) = into_datum_owned(
+                pg_sys::TEXTOID,
+                DataType::Binary,
+                DataValue::Binary("Hello world".as_bytes().to_vec()),
+            )
+            .unwrap();
+            assert_eq!(is_null, false);
+            assert_eq!(
+                String::from_datum(datum, false).unwrap(),
+                "Hello world".to_string()
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_into_datum_bytea_from_utf8_string_coerces_type() {
+        unsafe {
+            let (is_null, datum) = into_datum_owned(
+                pg_sys::BYTEAOID,
+                DataType::Utf8String(StringOptions::default()),
+                DataValue::Utf8String("Hello world".as_bytes().to_vec()),
+            )
+            .unwrap();
+            assert_eq!(is_null, false);
+            assert_eq!(
+                Vec::<u8>::from_datum(datum, false).unwrap(),
+                "Hello world".as_bytes().to_vec()
             );
         }
     }

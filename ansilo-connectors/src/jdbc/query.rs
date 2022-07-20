@@ -221,7 +221,7 @@ impl JdbcQueryParam {
                     &[
                         JValue::Int(index as i32),
                         JValue::Int(
-                            JdbcDataType(data_value.clone().into())
+                            JdbcDataType(data_value.into())
                                 .try_into()
                                 .context("Failed to parse query param data type")?,
                         ),

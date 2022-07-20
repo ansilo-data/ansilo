@@ -227,7 +227,7 @@ impl MemoryQueryExecutor {
 
                 attr.r#type.clone()
             }
-            sqlil::Expr::Constant(v) => v.value.clone().into(),
+            sqlil::Expr::Constant(v) => (&v.value).into(),
             sqlil::Expr::Parameter(p) => p.r#type.clone(),
             sqlil::Expr::UnaryOp(_) => todo!(),
             sqlil::Expr::BinaryOp(op) => {
