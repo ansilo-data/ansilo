@@ -20,7 +20,13 @@ public class NVarcharDataType implements JdbcStreamDataType {
 
     @Override
     public InputStream getStream(ResultSet resultSet, int colIndex) throws Exception {
-        var string = resultSet.getNString(colIndex);
+        String string;
+        // TODO: remove hack and have per-platform type mapping 
+        if (resultSet instanceof org.sqlite.core.CoreResultSet) {
+            string = resultSet.getString(colIndex);
+        } else {
+            string = resultSet.getNString(colIndex);
+        }
 
         if (string == null) {
             return null;
@@ -38,7 +44,12 @@ public class NVarcharDataType implements JdbcStreamDataType {
         if (isNull) {
             statement.setNull(index, Types.NVARCHAR);
         } else {
-            statement.setNString(index, StandardCharsets.UTF_8.decode(buff).toString());
+            // TODO: remove hack and have per-platform type mapping 
+            if (statement instanceof org.sqlite.core.CorePreparedStatement) {
+                statement.setString(index, StandardCharsets.UTF_8.decode(buff).toString());
+            } else {
+                statement.setNString(index, StandardCharsets.UTF_8.decode(buff).toString());
+            }
         }
     }
 }

@@ -121,7 +121,7 @@ impl ResultSet for JdbcResultSet {
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::common::data::{DataType, EncodingType, VarcharOptions};
+    use ansilo_core::data::{DataType, StringOptions};
     use jni::objects::{JObject, JValue};
 
     use crate::jdbc::tests::create_sqlite_memory_connection;
@@ -182,7 +182,7 @@ mod tests {
                 ("num".to_string(), DataType::Int32),
                 (
                     "str".to_string(),
-                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Ascii))
+                    DataType::Utf8String(StringOptions::default())
                 ),
             ])
         );

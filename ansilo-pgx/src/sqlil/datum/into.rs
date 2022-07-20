@@ -1,10 +1,10 @@
 use ansilo_core::{
-    common::data::{
+    data::{
         chrono::{
             Datelike, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone, Timelike, Weekday,
         },
         chrono_tz::Tz,
-        uuid, DataType, DataValue, EncodingType, VarcharOptions,
+        uuid, DataType, DataValue, StringOptions,
     },
     err::{bail, Result},
 };
@@ -34,11 +34,11 @@ pub unsafe fn into_datum(
         //
         (
             pg_sys::VARCHAROID | pg_sys::TEXTOID,
-            DataType::Varchar(opts),
-            DataValue::Varchar(data),
+            DataType::Utf8String(opts),
+            DataValue::Utf8String(data),
         ) => into_string(data, opts)?.into_datum().unwrap(),
         //
-        (pg_sys::BYTEAOID, DataType::Varchar(_), DataValue::Varchar(data)) => {
+        (pg_sys::BYTEAOID, DataType::Utf8String(_), DataValue::Utf8String(data)) => {
             data.into_datum().unwrap()
         }
         (pg_sys::BYTEAOID, DataType::Binary, DataValue::Binary(data)) => data.into_datum().unwrap(),
@@ -113,20 +113,8 @@ pub unsafe fn into_datum(
     Ok(())
 }
 
-fn into_string(data: Vec<u8>, opts: &VarcharOptions) -> Result<String> {
-    Ok(match opts.encoding {
-        // ASCII should be interpretable as UTF-8
-        EncodingType::Ascii => String::from_utf8(data)?,
-        EncodingType::Utf8 => String::from_utf8(data)?,
-        EncodingType::Utf16 if data.len() % 2 == 0 => String::from_utf16(
-            data.chunks(2)
-                .into_iter()
-                .map(|i| u16::from_ne_bytes([i[0], i[1]]))
-                .collect::<Vec<u16>>()
-                .as_slice(),
-        )?,
-        _ => bail!("Invalid string data found"),
-    })
+fn into_string(data: Vec<u8>, opts: &StringOptions) -> Result<String> {
+    Ok(String::from_utf8(data)?)
 }
 
 /// Converts the supplied DataValue into a pgalloc'd Datum
@@ -207,7 +195,7 @@ fn into_uuid(data: uuid::Uuid) -> pgx::Uuid {
 #[cfg(any(test, feature = "pg_test"))]
 #[pg_schema]
 mod tests {
-    use ansilo_core::common::data::{rust_decimal::Decimal, DecimalOptions};
+    use ansilo_core::data::{rust_decimal::Decimal, DecimalOptions};
     use pgx::*;
 
     use super::*;
@@ -375,47 +363,8 @@ mod tests {
         unsafe {
             let (is_null, datum) = into_datum_owned(
                 pg_sys::VARCHAROID,
-                DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
-                DataValue::Varchar("Hello world".as_bytes().to_vec()),
-            )
-            .unwrap();
-            assert_eq!(is_null, false);
-            assert_eq!(
-                String::from_datum(datum, false).unwrap(),
-                "Hello world".to_string()
-            );
-        }
-    }
-
-    #[pg_test]
-    fn test_into_datum_varchar_utf16() {
-        unsafe {
-            let (is_null, datum) = into_datum_owned(
-                pg_sys::VARCHAROID,
-                DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf16)),
-                DataValue::Varchar(
-                    "Hello world"
-                        .encode_utf16()
-                        .flat_map(|i| i.to_ne_bytes())
-                        .collect::<Vec<u8>>(),
-                ),
-            )
-            .unwrap();
-            assert_eq!(is_null, false);
-            assert_eq!(
-                String::from_datum(datum, false).unwrap(),
-                "Hello world".to_string()
-            );
-        }
-    }
-
-    #[pg_test]
-    fn test_into_datum_varchar_ascii() {
-        unsafe {
-            let (is_null, datum) = into_datum_owned(
-                pg_sys::VARCHAROID,
-                DataType::Varchar(VarcharOptions::new(None, EncodingType::Ascii)),
-                DataValue::Varchar(b"Hello world".to_vec()),
+                DataType::Utf8String(StringOptions::default()),
+                DataValue::Utf8String("Hello world".as_bytes().to_vec()),
             )
             .unwrap();
             assert_eq!(is_null, false);
@@ -431,8 +380,8 @@ mod tests {
         unsafe {
             let (is_null, datum) = into_datum_owned(
                 pg_sys::TEXTOID,
-                DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
-                DataValue::Varchar("Hello world".as_bytes().to_vec()),
+                DataType::Utf8String(StringOptions::default()),
+                DataValue::Utf8String("Hello world".as_bytes().to_vec()),
             )
             .unwrap();
             assert_eq!(is_null, false);

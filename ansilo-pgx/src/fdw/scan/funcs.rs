@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ffi::c_void, mem, ops::ControlFlow, ptr};
 
 use ansilo_core::{
-    common::data::DataValue,
+    data::DataValue,
     err::{bail, Context, Result},
     sqlil::{self, JoinType, Ordering, OrderingType},
 };

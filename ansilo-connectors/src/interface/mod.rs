@@ -2,7 +2,7 @@ pub mod boxed;
 pub mod container;
 
 use ansilo_core::{
-    common::data::DataType,
+    data::DataType,
     config::{self, EntityVersionConfig, NodeConfig},
     err::Result,
     sqlil as sql,

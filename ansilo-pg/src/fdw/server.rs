@@ -210,7 +210,7 @@ mod tests {
         memory::{MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector},
     };
     use ansilo_core::{
-        common::data::{DataType, DataValue},
+        data::{DataType, DataValue},
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
         sqlil,
     };

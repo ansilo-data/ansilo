@@ -1,7 +1,7 @@
 use std::io::{self, BufWriter, Write};
 
 use ansilo_core::{
-    common::data::DataValue,
+    data::DataValue,
     err::{Error, Result},
 };
 
@@ -85,7 +85,7 @@ where
 #[cfg(test)]
 mod tests {
 
-    use ansilo_core::common::data::DataType;
+    use ansilo_core::data::DataType;
 
     use crate::common::data::rs_tests::MockResultSet;
 
@@ -156,7 +156,7 @@ mod tests {
         let structure = QueryInputStructure::new(vec![(1, DataType::Int32)]);
         let mut query = MockQueryHandle::new(structure.clone(), 1024);
 
-        let res = query.write_data_value(DataValue::Varchar("invalid".as_bytes().to_vec()));
+        let res = query.write_data_value(DataValue::Utf8String("invalid".as_bytes().to_vec()));
 
         assert!(res.is_err());
     }

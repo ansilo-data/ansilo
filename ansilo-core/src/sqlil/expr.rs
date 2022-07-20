@@ -1,6 +1,6 @@
 use bincode::{Decode, Encode};
 
-use crate::common::data::{DataType, DataValue};
+use crate::data::{DataType, DataValue};
 
 /// A SQLIL expression node
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]

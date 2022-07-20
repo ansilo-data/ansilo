@@ -1,5 +1,5 @@
 use ansilo_core::{
-    common::data::{DataType, DecimalOptions, EncodingType, VarcharOptions},
+    data::{DataType, DecimalOptions, StringOptions},
     err::{bail, Result},
 };
 use pgx::pg_sys;
@@ -14,10 +14,7 @@ pub fn from_pg_type(type_oid: pg_sys::Oid) -> Result<DataType> {
         pg_sys::FLOAT8OID => Ok(DataType::Float64),
         pg_sys::NUMERICOID => Ok(DataType::Decimal(DecimalOptions::new(None, None))),
         // We only support UTF8 postgres
-        pg_sys::VARCHAROID | pg_sys::TEXTOID => Ok(DataType::Varchar(VarcharOptions::new(
-            None,
-            EncodingType::Utf8,
-        ))),
+        pg_sys::VARCHAROID | pg_sys::TEXTOID => Ok(DataType::Utf8String(StringOptions::default())),
         pg_sys::CHAROID => {
             bail!("Postgres CHAR types are not supported, use another integer or character type")
         }
@@ -53,7 +50,7 @@ pub fn into_pg_type(r#type: &DataType) -> Result<pg_sys::Oid> {
         DataType::Float32 => Ok(pg_sys::FLOAT4OID),
         DataType::Float64 => Ok(pg_sys::FLOAT8OID),
         DataType::Decimal(_) => Ok(pg_sys::NUMERICOID),
-        DataType::Varchar(_) => Ok(pg_sys::VARCHAROID),
+        DataType::Utf8String(_) => Ok(pg_sys::VARCHAROID),
         //
         DataType::Binary => Ok(pg_sys::BYTEAOID),
         //

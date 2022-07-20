@@ -1,5 +1,5 @@
 use ansilo_core::{
-    common::data::DataValue,
+    data::DataValue,
     err::{bail, Context, Result},
     sqlil as sql,
 };

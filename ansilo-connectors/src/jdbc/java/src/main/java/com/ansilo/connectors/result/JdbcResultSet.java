@@ -173,7 +173,7 @@ public class JdbcResultSet {
                         // Copy the read buffer into the
                         buff.put(this.readBuff, 0, read);
 
-                        // Require at least 5 bytes to store the read header frame + 1 byte of read
+                        // Require at least 2 bytes to read the header frame + 1 byte of read
                         // data
                         // (assume the buffer will be far larger as that would be terribly
                         // inefficient)

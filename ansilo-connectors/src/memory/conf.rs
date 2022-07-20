@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ansilo_core::{common::data::DataValue, sqlil::EntityVersionIdentifier};
+use ansilo_core::{data::DataValue, sqlil::EntityVersionIdentifier};
 use serde::{Deserialize, Serialize};
 
 use crate::common::entity::EntitySource;

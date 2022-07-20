@@ -1,7 +1,7 @@
 use std::io::{Cursor, Read, Seek};
 
 use ansilo_core::{
-    common::data::{DataType, DataValue},
+    data::{DataType, DataValue},
     err::{Context, Result},
 };
 

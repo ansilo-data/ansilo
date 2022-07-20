@@ -1,5 +1,5 @@
 use ansilo_core::{
-    common::data::{DataType, DecimalOptions, EncodingType, VarcharOptions},
+    data::{DataType, DecimalOptions, StringOptions},
     err::{self, bail, Result},
 };
 
@@ -26,21 +26,21 @@ impl TryFrom<i32> for JdbcDataType {
             8 => DataType::Float64,
             9 => DataType::Int64,
             10 => DataType::Decimal(DecimalOptions::default()),
-            11 => DataType::Varchar(VarcharOptions::new(None, EncodingType::Ascii)),
-            12 => DataType::Varchar(VarcharOptions::new(None, EncodingType::Ascii)),
+            11 => DataType::Utf8String(StringOptions::default()),
+            12 => DataType::Utf8String(StringOptions::default()),
             13 => DataType::Date,
             14 => DataType::Time,
             15 => DataType::DateTime,
             16 => DataType::DateTime,
             17 => DataType::Boolean, // TODO: verify
             18 => DataType::JSON,
-            19 => DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
+            19 => DataType::Utf8String(StringOptions::default()),
             20 => DataType::JSON,
             21 => DataType::JSON,
             22 => DataType::Binary,
             23 => DataType::Binary,
             24 => DataType::Boolean,
-            25 | 26 | 27 => DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
+            25 | 26 | 27 => DataType::Utf8String(StringOptions::default()),
             28 => DataType::Binary,
             29 => bail!("SQLXML is not a supported data type"),
             30 => DataType::DateTimeWithTZ,
@@ -59,8 +59,7 @@ impl TryInto<i32> for JdbcDataType {
 
     fn try_into(self) -> Result<i32> {
         let id = match self.0 {
-            DataType::Varchar(opt) if opt.encoding == EncodingType::Ascii => 12,
-            DataType::Varchar(_) => 26,
+            DataType::Utf8String(_) => 26,
             DataType::Binary => 22,
             DataType::Boolean => 1,
             DataType::Int8 => 2,
@@ -94,7 +93,7 @@ mod tests {
     #[test]
     fn test_jdbc_data_type_conversions() {
         let data_type = [
-            DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
+            DataType::Utf8String(StringOptions::default()),
             DataType::Binary,
             DataType::Boolean,
             DataType::Int8,

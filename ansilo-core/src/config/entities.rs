@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::common::data::DataType;
+use crate::data::DataType;
 
 /// An entity is a typed and documented dataset to be exposed by this ansilo node
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

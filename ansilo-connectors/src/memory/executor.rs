@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ansilo_core::{
-    common::data::{DataType, DataValue},
+    data::{DataType, DataValue},
     err::{bail, Error, Result},
     sqlil,
 };
@@ -294,6 +294,7 @@ enum DataContext {
     Group(Vec<Vec<DataValue>>),
 }
 
+#[allow(unused)]
 impl DataContext {
     fn as_cell(self) -> Result<DataValue> {
         if let Self::Cell(v) = self {
@@ -355,8 +356,8 @@ impl DataContext {
 #[cfg(test)]
 mod tests {
     use ansilo_core::{
-        common::data::{EncodingType, VarcharOptions},
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig},
+        data::StringOptions,
         sqlil::AggregateCall,
     };
 
@@ -419,21 +420,21 @@ mod tests {
                 vec![
                     (
                         "first_name".to_string(),
-                        DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                        DataType::Utf8String(StringOptions::default())
                     ),
                     (
                         "last_name".to_string(),
-                        DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                        DataType::Utf8String(StringOptions::default())
                     ),
                 ],
                 vec![
                     vec![
-                        DataValue::Varchar("Mary".as_bytes().to_vec()),
-                        DataValue::Varchar("Jane".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Jane".as_bytes().to_vec())
                     ],
                     vec![
-                        DataValue::Varchar("John".as_bytes().to_vec()),
-                        DataValue::Varchar("Smith".as_bytes().to_vec())
+                        DataValue::Utf8String("John".as_bytes().to_vec()),
+                        DataValue::Utf8String("Smith".as_bytes().to_vec())
                     ],
                 ]
             )
@@ -490,11 +491,11 @@ mod tests {
             MemoryResultSet::new(
                 vec![(
                     "alias".to_string(),
-                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                    DataType::Utf8String(StringOptions::default())
                 ),],
                 vec![
-                    vec![DataValue::Varchar("Mary".as_bytes().to_vec()),],
-                    vec![DataValue::Varchar("John".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("John".as_bytes().to_vec()),],
                 ]
             )
             .unwrap()
@@ -526,9 +527,9 @@ mod tests {
             MemoryResultSet::new(
                 vec![(
                     "alias".to_string(),
-                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                    DataType::Utf8String(StringOptions::default())
                 ),],
-                vec![vec![DataValue::Varchar("Mary".as_bytes().to_vec()),],]
+                vec![vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],]
             )
             .unwrap()
         )
@@ -552,9 +553,9 @@ mod tests {
             MemoryResultSet::new(
                 vec![(
                     "alias".to_string(),
-                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                    DataType::Utf8String(StringOptions::default())
                 ),],
-                vec![vec![DataValue::Varchar("John".as_bytes().to_vec()),],]
+                vec![vec![DataValue::Utf8String("John".as_bytes().to_vec()),],]
             )
             .unwrap()
         )
@@ -578,9 +579,9 @@ mod tests {
             MemoryResultSet::new(
                 vec![(
                     "alias".to_string(),
-                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                    DataType::Utf8String(StringOptions::default())
                 ),],
-                vec![vec![DataValue::Varchar("Mary".as_bytes().to_vec()),],]
+                vec![vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],]
             )
             .unwrap()
         )
@@ -610,11 +611,11 @@ mod tests {
             MemoryResultSet::new(
                 vec![(
                     "alias".to_string(),
-                    DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                    DataType::Utf8String(StringOptions::default())
                 ),],
                 vec![
-                    vec![DataValue::Varchar("Mary".as_bytes().to_vec()),],
-                    vec![DataValue::Varchar("John".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("John".as_bytes().to_vec()),],
                 ]
             )
             .unwrap()
@@ -650,17 +651,17 @@ mod tests {
                 vec![
                     (
                         "alias".to_string(),
-                        DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8))
+                        DataType::Utf8String(StringOptions::default())
                     ),
                     ("count".to_string(), DataType::UInt64,)
                 ],
                 vec![
                     vec![
-                        DataValue::Varchar("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
                         DataValue::UInt64(1)
                     ],
                     vec![
-                        DataValue::Varchar("John".as_bytes().to_vec()),
+                        DataValue::Utf8String("John".as_bytes().to_vec()),
                         DataValue::UInt64(1)
                     ],
                 ]
@@ -683,10 +684,7 @@ mod tests {
         assert_eq!(
             results,
             MemoryResultSet::new(
-                vec![(
-                    "count".to_string(),
-                    DataType::UInt64,
-                )],
+                vec![("count".to_string(), DataType::UInt64,)],
                 vec![vec![DataValue::UInt64(2)],]
             )
             .unwrap()

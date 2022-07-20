@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use ansilo_core::{
-    common::data::{DataType, DataValue},
+    data::{DataType, DataValue},
     err::{bail, Context, Result},
 };
 
@@ -53,7 +53,7 @@ where
             // TODO: data types
             #[allow(unused_variables)]
             match (self.current_data_type(), data) {
-                (None | Some(DataType::Varchar(_)), DataValue::Varchar(val)) => {
+                (None | Some(DataType::Utf8String(_)), DataValue::Utf8String(val)) => {
                     self.write(&[1])?;
                     self.write_stream(val.as_slice())?;
                 }
@@ -162,7 +162,7 @@ mod tests {
 
     use std::io;
 
-    use ansilo_core::common::data::{EncodingType, VarcharOptions};
+    use ansilo_core::data::StringOptions;
 
     use super::*;
 
@@ -205,13 +205,11 @@ mod tests {
 
     #[test]
     fn test_data_writer_write_varchar() {
-        let mut writer = create_data_writer(Some(vec![DataType::Varchar(VarcharOptions::new(
-            None,
-            EncodingType::Utf8,
-        ))]));
+        let mut writer =
+            create_data_writer(Some(vec![DataType::Utf8String(StringOptions::default())]));
 
         writer
-            .write_data_value(DataValue::Varchar("abc".as_bytes().to_vec()))
+            .write_data_value(DataValue::Utf8String("abc".as_bytes().to_vec()))
             .unwrap();
 
         let buff = writer.inner().into_inner();
@@ -230,13 +228,11 @@ mod tests {
 
     #[test]
     fn test_data_writer_write_long_varchar() {
-        let mut writer = create_data_writer(Some(vec![DataType::Varchar(VarcharOptions::new(
-            None,
-            EncodingType::Utf8,
-        ))]));
+        let mut writer =
+            create_data_writer(Some(vec![DataType::Utf8String(StringOptions::default())]));
 
         writer
-            .write_data_value(DataValue::Varchar("a".repeat(500).as_bytes().to_vec()))
+            .write_data_value(DataValue::Utf8String("a".repeat(500).as_bytes().to_vec()))
             .unwrap();
 
         let buff = writer.inner().into_inner();
@@ -281,12 +277,12 @@ mod tests {
     fn test_data_writer_write_int_then_varchar() {
         let mut writer = create_data_writer(Some(vec![
             DataType::Int32,
-            DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
+            DataType::Utf8String(StringOptions::default()),
         ]));
 
         writer.write_data_value(DataValue::Int32(123)).unwrap();
         writer
-            .write_data_value(DataValue::Varchar("abc".as_bytes().to_vec()))
+            .write_data_value(DataValue::Utf8String("abc".as_bytes().to_vec()))
             .unwrap();
 
         let buff = writer.inner().into_inner();
@@ -323,7 +319,7 @@ mod tests {
 
         writer.write_data_value(DataValue::Int32(123)).unwrap();
         writer
-            .write_data_value(DataValue::Varchar("abc".as_bytes().to_vec()))
+            .write_data_value(DataValue::Utf8String("abc".as_bytes().to_vec()))
             .unwrap();
         writer.write_data_value(DataValue::Int32(456)).unwrap();
         writer.write_data_value(DataValue::Null).unwrap();
@@ -365,7 +361,8 @@ mod tests {
 
     #[test]
     fn test_data_writer_to_vec_one() {
-        let buff = DataWriter::to_vec_one(DataValue::Varchar("abc".as_bytes().to_vec())).unwrap();
+        let buff =
+            DataWriter::to_vec_one(DataValue::Utf8String("abc".as_bytes().to_vec())).unwrap();
 
         assert_eq!(
             buff,

@@ -1,5 +1,5 @@
 use ansilo_core::{
-    common::data::DataValue,
+    data::DataValue,
     err::{Context, Result},
     sqlil,
 };
@@ -36,7 +36,7 @@ mod tests {
     use pgx::*;
 
     use crate::sqlil::test;
-    use ansilo_core::common::data::rust_decimal::Decimal;
+    use ansilo_core::data::rust_decimal::Decimal;
 
     #[pg_test]
     fn test_sqlil_convert_const_int() {
@@ -50,7 +50,7 @@ mod tests {
     fn test_sqlil_convert_const_string() {
         assert_eq!(
             test::convert_simple_expr("SELECT 'hello from pg'::text").unwrap(),
-            sqlil::Expr::constant(DataValue::Varchar("hello from pg".as_bytes().to_vec()))
+            sqlil::Expr::constant(DataValue::Utf8String("hello from pg".as_bytes().to_vec()))
         );
     }
 

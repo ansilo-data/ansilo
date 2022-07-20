@@ -39,7 +39,7 @@ mod tests {
     use pgx::*;
 
     use crate::sqlil::test;
-    use ansilo_core::{common::data::DataType, sqlil::Parameter};
+    use ansilo_core::{data::DataType, sqlil::Parameter};
 
     #[pg_test]
     fn test_sqlil_convert_param() {

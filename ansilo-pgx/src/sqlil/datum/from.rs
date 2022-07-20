@@ -1,7 +1,7 @@
 use std::{any::TypeId, str::FromStr};
 
 use ansilo_core::{
-    common::data::{
+    data::{
         chrono::{NaiveDate, NaiveDateTime, NaiveTime, Weekday},
         chrono_tz::Tz,
         rust_decimal::{prelude::FromPrimitive, Decimal},
@@ -32,10 +32,10 @@ pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValu
         pg_sys::FLOAT8OID => Ok(DataValue::Float64(f64::parse(datum)?)),
         pg_sys::NUMERICOID => Ok(from_numeric(datum)),
         // We assume UTF8 as we hard code this configuration during initdb
-        pg_sys::VARCHAROID => Ok(DataValue::Varchar(
+        pg_sys::VARCHAROID => Ok(DataValue::Utf8String(
             String::parse(datum)?.as_bytes().to_vec(),
         )),
-        pg_sys::TEXTOID => Ok(DataValue::Varchar(
+        pg_sys::TEXTOID => Ok(DataValue::Utf8String(
             String::parse(datum)?.as_bytes().to_vec(),
         )),
         // char is an internal type (i8) used by postgres, likely not portable
@@ -133,7 +133,7 @@ fn to_uuid(datum: pgx::Uuid) -> Uuid {
 #[cfg(any(test, feature = "pg_test"))]
 #[pg_schema]
 mod tests {
-    use ansilo_core::common::data::uuid;
+    use ansilo_core::data::uuid;
     use pgx::*;
 
     use super::*;
@@ -341,7 +341,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 from_datum(pg_sys::VARCHAROID, "Example String".into_datum().unwrap()).unwrap(),
-                DataValue::Varchar("Example String".as_bytes().to_vec())
+                DataValue::Utf8String("Example String".as_bytes().to_vec())
             );
         }
     }
@@ -355,7 +355,7 @@ mod tests {
                     datum_from_query::<String>("SELECT 'Example String'")
                 )
                 .unwrap(),
-                DataValue::Varchar("Example String".as_bytes().to_vec())
+                DataValue::Utf8String("Example String".as_bytes().to_vec())
             );
         }
     }
@@ -365,7 +365,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 from_datum(pg_sys::TEXTOID, "Example Text".into_datum().unwrap()).unwrap(),
-                DataValue::Varchar("Example Text".as_bytes().to_vec())
+                DataValue::Utf8String("Example Text".as_bytes().to_vec())
             );
         }
     }
@@ -379,7 +379,7 @@ mod tests {
                     datum_from_query::<String>("SELECT 'Example Text'::text")
                 )
                 .unwrap(),
-                DataValue::Varchar("Example Text".as_bytes().to_vec())
+                DataValue::Utf8String("Example Text".as_bytes().to_vec())
             );
         }
     }

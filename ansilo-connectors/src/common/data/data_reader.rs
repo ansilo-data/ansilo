@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use ansilo_core::{
-    common::data::{DataType, DataValue},
+    data::{DataType, DataValue},
     err::{bail, Context, Result},
 };
 
@@ -60,7 +60,7 @@ where
         let res = if not_null.unwrap() != 0 {
             // TODO: data types
             match self.current_data_type() {
-                DataType::Varchar(_) => DataValue::Varchar(self.read_stream()?),
+                DataType::Utf8String(_) => DataValue::Utf8String(self.read_stream()?),
                 DataType::Binary => DataValue::Binary(self.read_stream()?),
                 DataType::Boolean => DataValue::Boolean(self.read_exact::<1>()?[0] != 0),
                 DataType::Int8 => todo!(),
@@ -158,7 +158,7 @@ mod tests {
 
     use std::io::Cursor;
 
-    use ansilo_core::common::data::{EncodingType, VarcharOptions};
+    use ansilo_core::data::{StringOptions};
 
     use super::*;
 
@@ -197,10 +197,7 @@ mod tests {
     #[test]
     fn test_data_reader_varchar() {
         let mut res = create_data_reader(
-            vec![DataType::Varchar(VarcharOptions::new(
-                None,
-                EncodingType::Utf8,
-            ))],
+            vec![DataType::Utf8String(StringOptions::default())],
             [
                 vec![1u8],                 // not null
                 vec![3u8],                 // read length
@@ -212,17 +209,14 @@ mod tests {
 
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Varchar("abc".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("abc".as_bytes().to_vec()))
         );
     }
 
     #[test]
     fn test_data_reader_varchar_multiple_reads() {
         let mut res = create_data_reader(
-            vec![DataType::Varchar(VarcharOptions::new(
-                None,
-                EncodingType::Utf8,
-            ))],
+            vec![DataType::Utf8String(StringOptions::default())],
             [
                 vec![1u8],                   // not null
                 vec![3u8],                   // read length
@@ -236,7 +230,7 @@ mod tests {
 
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Varchar("abc12345".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("abc12345".as_bytes().to_vec()))
         );
     }
 
@@ -285,7 +279,7 @@ mod tests {
         let mut res = create_data_reader(
             vec![
                 DataType::Int32,
-                DataType::Varchar(VarcharOptions::new(None, EncodingType::Utf8)),
+                DataType::Utf8String(StringOptions::default()),
             ],
             [
                 vec![1u8],                      // not null
@@ -307,12 +301,12 @@ mod tests {
         assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int32(123)));
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Varchar("abc".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("abc".as_bytes().to_vec()))
         );
         assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int32(456)));
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Varchar("123".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("123".as_bytes().to_vec()))
         );
         assert_eq!(res.read_data_value().unwrap(), None);
     }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ansilo_core::{
-    common::data::{DataType, DataValue},
+    data::{DataType, DataValue},
     err::{bail, Context, Result},
 };
 use jni::{
@@ -240,7 +240,7 @@ impl JdbcQueryParam {
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::common::data::{DataValue, EncodingType, VarcharOptions};
+    use ansilo_core::data::{DataValue, StringOptions};
     use jni::objects::{JObject, JString};
 
     use crate::{common::data::ResultSetReader, jdbc::tests::create_sqlite_memory_connection};
@@ -348,7 +348,7 @@ mod tests {
             "SELECT ? as str",
             vec![JdbcQueryParam::Dynamic(
                 1,
-                DataType::Varchar(VarcharOptions::new(None, EncodingType::Ascii)),
+                DataType::Utf8String(StringOptions::default()),
             )],
         );
 
@@ -372,7 +372,7 @@ mod tests {
 
         assert_eq!(
             rs.read_data_value().unwrap(),
-            Some(DataValue::Varchar("abc".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("abc".as_bytes().to_vec()))
         );
         assert_eq!(rs.read_data_value().unwrap(), None);
     }

@@ -1,6 +1,6 @@
 use std::io::{self, BufReader, Read};
 
-use ansilo_core::{common::data::DataValue, err::Result};
+use ansilo_core::{data::DataValue, err::Result};
 
 use crate::interface::{ResultSet, RowStructure};
 
@@ -71,7 +71,7 @@ where
 #[cfg(test)]
 pub(super) mod rs_tests {
 
-    use ansilo_core::{common::data::DataType, err::Context};
+    use ansilo_core::{data::DataType, err::Context};
 
     use super::*;
 

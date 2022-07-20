@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ansilo_core::{common::data::DataType, err::Result, sqlil};
+use ansilo_core::{data::DataType, err::Result, sqlil};
 
 use crate::{
     common::entity::ConnectorEntityConfig,

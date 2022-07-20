@@ -3,7 +3,7 @@
 // use std::any::Any;
 
 // use ansilo_core::{
-//     common::data::DataType,
+//     data::DataType,
 //     config::{self, EntityVersionConfig, NodeConfig},
 //     err::{Error, Result},
 //     sqlil as sql,

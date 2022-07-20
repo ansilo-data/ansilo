@@ -6,7 +6,7 @@ use ansilo_connectors::{
     jdbc::JdbcQuery,
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector},
 };
-use ansilo_core::{common::data::DataValue, config::NodeConfig};
+use ansilo_core::{data::DataValue, config::NodeConfig};
 
 use crate::{common::get_current_target_dir, oracle::start_oracle};
 
@@ -52,7 +52,7 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
 
     assert_eq!(
         res.read_data_value().unwrap(),
-        Some(DataValue::Varchar("X".as_bytes().to_vec()))
+        Some(DataValue::Utf8String("X".as_bytes().to_vec()))
     );
     assert_eq!(res.read_data_value().unwrap(), None);
 }

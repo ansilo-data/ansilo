@@ -19,9 +19,9 @@ mod tests {
         interface::{container::ConnectionPools, Connector},
         memory::{MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector},
     };
-    use ansilo_core::common::data::*;
+    use ansilo_core::data::*;
     use ansilo_core::{
-        common::data::{DataType, DataValue},
+        data::{DataType, DataValue},
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
         sqlil,
     };

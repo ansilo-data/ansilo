@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::data::{DataValue, DataType};
+use super::{DataValue, DataType};
 
 impl DataValue {
     /// Tries to coerce the data value supplied type.
@@ -15,7 +15,7 @@ impl DataValue {
         Ok(match self {
             // Nulls are type-independent
             DataValue::Null => self,
-            DataValue::Varchar(_) => todo!(),
+            DataValue::Utf8String(_) => todo!(),
             DataValue::Binary(_) => todo!(),
             DataValue::Boolean(_) => todo!(),
             DataValue::Int8(_) => todo!(),

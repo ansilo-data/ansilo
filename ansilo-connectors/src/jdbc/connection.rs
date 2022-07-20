@@ -266,7 +266,7 @@ impl Drop for JdbcConnectionState {
 mod tests {
     use std::collections::HashMap;
 
-    use ansilo_core::common::data::DataType;
+    use ansilo_core::data::DataType;
 
     use crate::{
         interface::{QueryHandle, QueryInputStructure},

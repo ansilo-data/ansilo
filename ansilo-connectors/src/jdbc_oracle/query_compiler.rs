@@ -396,7 +396,7 @@ mod tests {
     use std::collections::HashMap;
 
     use ansilo_core::{
-        common::data::{DataType, DataValue},
+        data::{DataType, DataValue},
         config::{EntitySourceConfig, EntityVersionConfig},
     };
 

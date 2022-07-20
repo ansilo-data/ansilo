@@ -78,7 +78,7 @@ mod tests {
     use super::*;
 
     use crate::sqlil::test;
-    use ansilo_core::common::data::*;
+    use ansilo_core::data::*;
 
     #[pg_test]
     fn test_sqlil_convert_aggref_count_star() {
