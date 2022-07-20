@@ -5,6 +5,7 @@ use pgx::pg_sys::{
 };
 
 /// Query planner and optimizer context needed to perform conversion of postgres nodes to sqlil
+#[derive(Clone)]
 pub enum PlannerContext {
     BaseRel(BaseRelContext),
     JoinRel(JoinRelContext),
@@ -91,6 +92,7 @@ impl PlannerContext {
     }
 }
 
+#[derive(Clone)]
 pub struct BaseRelContext {
     /// The root query planner info
     pub root: *const PlannerInfo,
@@ -98,6 +100,7 @@ pub struct BaseRelContext {
     pub base_rel: *const RelOptInfo,
 }
 
+#[derive(Clone)]
 pub struct JoinRelContext {
     /// The root query planner info
     pub root: *const PlannerInfo,
@@ -113,6 +116,7 @@ pub struct JoinRelContext {
     pub extra: *const JoinPathExtraData,
 }
 
+#[derive(Clone)]
 pub struct UpperRelContext {
     /// The root query planner info
     pub root: *const PlannerInfo,

@@ -26,7 +26,9 @@ mod tests {
         sqlil,
     };
     use ansilo_pg::fdw::server::FdwServer;
+    use assert_json_diff::*;
     use serde::{de::DeserializeOwned, Serialize};
+    use serde_json::json;
 
     fn create_memory_connection_pool() -> (ConnectorEntityConfig<()>, MemoryConnectionPool) {
         let mut conf = MemoryConnectionConfig::new();
@@ -52,6 +54,7 @@ mod tests {
                 vec![DataValue::from("Mary"), DataValue::from("Jane")],
                 vec![DataValue::from("John"), DataValue::from("Smith")],
                 vec![DataValue::from("Gary"), DataValue::from("Gregson")],
+                vec![DataValue::from("Mary"), DataValue::from("Bennet")],
             ],
         );
 
@@ -125,8 +128,15 @@ mod tests {
         serde_json::from_str(json.as_str()).unwrap()
     }
 
-    fn explain_query(query: impl Into<String>) -> String {
-        Spi::explain(query.into().as_str()).0.to_string()
+    fn explain_query(query: impl Into<String>) -> serde_json::Value {
+        Spi::explain(query.into().as_str())
+            .0
+            .as_array()
+            .take()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .clone()
     }
 
     #[pg_test]
@@ -146,8 +156,24 @@ mod tests {
                 ("Mary".into(), "Jane".into()),
                 ("John".into(), "Smith".into()),
                 ("Gary".into(), "Gregson".into()),
+                ("Mary".into(), "Bennet".into()),
             ]
         );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_all_explain() {
+        setup_test("scan_select_all_explain");
+
+        let results = explain_query(r#"SELECT * FROM "people:1.0""#);
+
+        assert_json_include!(actual: results, expected: json!({
+            "Plan": {
+                "Node Type": "Foreign Scan",
+                "Operation": "Select",
+                "Relation Name": "people:1.0",
+            }
+        }));
     }
 
     #[pg_test]
@@ -158,6 +184,83 @@ mod tests {
             (i["count"].value::<i64>().unwrap(),)
         });
 
-        assert_eq!(results, vec![(3,),]);
+        assert_eq!(results, vec![(4,),]);
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_count_all_explain() {
+        setup_test("scan_select_count_all_explain");
+
+        let results = explain_query(r#"SELECT COUNT(*) FROM "people:1.0""#);
+
+        assert_json_include!(actual: results, expected: json!({
+            "Plan": {
+                "Node Type": "Foreign Scan",
+                "Operation": "Select",
+            }
+        }));
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_group_by_name() {
+        setup_test("scan_select_group_by_name");
+
+        let results = execute_query(
+            r#"SELECT first_name FROM "people:1.0" GROUP BY first_name"#,
+            |i| (i["first_name"].value::<String>().unwrap(),),
+        );
+
+        assert_eq!(
+            results,
+            vec![("Mary".into(),), ("John".into(),), ("Gary".into(),),]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_group_by_name_explain() {
+        setup_test("scan_select_group_by_name_explain");
+
+        let results = explain_query(r#"SELECT first_name FROM "people:1.0" GROUP BY first_name"#);
+
+        assert_json_include!(actual: results, expected: json!({
+            "Plan": {
+                "Node Type": "Foreign Scan",
+                "Operation": "Select",
+            }
+        }));
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_group_by_name_with_count() {
+        setup_test("scan_select_group_by_name_with_count");
+
+        let results = execute_query(
+            r#"SELECT first_name, COUNT(*) as count FROM "people:1.0" GROUP BY first_name"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["count"].value::<i64>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![("Mary".into(), 2), ("John".into(), 1), ("Gary".into(), 1),]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_group_by_name_with_count_explain() {
+        setup_test("scan_select_group_by_name_with_count_explain");
+
+        let results = explain_query(r#"SELECT first_name, COUNT(*) as count FROM "people:1.0" GROUP BY first_name"#);
+
+        assert_json_include!(actual: results, expected: json!({
+            "Plan": {
+                "Node Type": "Foreign Scan",
+                "Operation": "Select",
+            }
+        }));
     }
 }

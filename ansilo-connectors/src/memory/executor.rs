@@ -19,6 +19,9 @@ pub(crate) struct MemoryQueryExecutor {
     params: Vec<DataValue>,
 }
 
+/// This entire implementation is garbage
+/// but it doesn't matter is this is used
+/// an a testing instrument.
 impl MemoryQueryExecutor {
     pub(crate) fn new(
         data: Arc<MemoryConnectionConfig>,
@@ -43,27 +46,20 @@ impl MemoryQueryExecutor {
         let mut filtered = vec![];
         for row in source {
             if self.satisfies_where(row)? {
-                filtered.push(row);
+                filtered.push(row.clone());
             }
         }
 
         let mut results: Vec<Vec<DataValue>> = if self.is_aggregated() {
-            let keys = filtered
-                .iter()
-                .map(|i| self.grouping_key(i))
-                .collect::<Result<Vec<_>>>()?;
-
-            filtered
+            let groups = self.group(filtered)?;
+            groups
                 .into_iter()
-                .zip(keys.iter())
-                .group_by(|(_, key)| *key)
-                .into_iter()
-                .map(|(_, i)| self.project_group(&i.map(|(row, _)| row.clone()).collect()))
+                .map(|g| self.project_group(&g))
                 .try_collect()?
         } else {
             filtered
                 .into_iter()
-                .map(|i| self.project(i))
+                .map(|i| self.project(&i))
                 .try_collect()?
         };
 
@@ -126,6 +122,23 @@ impl MemoryQueryExecutor {
         }
 
         self.project_row(row, &self.query.group_bys)
+    }
+
+    fn group(&self, rows: Vec<Vec<DataValue>>) -> Result<Vec<Vec<Vec<DataValue>>>> {
+        let mut groups = Vec::<(Vec<DataValue>, Vec<Vec<DataValue>>)>::new();
+
+        for row in rows.into_iter() {
+            let key = self.grouping_key(&row)?;
+            if let Some((key, group)) = groups.iter_mut().find(|(k, _)| k == &key) {
+                group.push(row);
+            } else {
+                groups.push((key, vec![row]));
+            }
+        }
+
+        let groups = groups.into_iter().map(|(_, g)| g).collect();
+
+        Ok(groups)
     }
 
     fn project_group(&self, group: &Vec<Vec<DataValue>>) -> Result<Vec<DataValue>> {
@@ -386,6 +399,7 @@ mod tests {
             vec![
                 vec![DataValue::from("Mary"), DataValue::from("Jane")],
                 vec![DataValue::from("John"), DataValue::from("Smith")],
+                vec![DataValue::from("Mary"), DataValue::from("Bennet")],
             ],
         );
 
@@ -436,6 +450,10 @@ mod tests {
                         DataValue::Utf8String("John".as_bytes().to_vec()),
                         DataValue::Utf8String("Smith".as_bytes().to_vec())
                     ],
+                    vec![
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Bennet".as_bytes().to_vec())
+                    ],
                 ]
             )
             .unwrap()
@@ -470,7 +488,7 @@ mod tests {
 
         assert_eq!(
             results,
-            MemoryResultSet::new(vec![], vec![vec![], vec![]]).unwrap()
+            MemoryResultSet::new(vec![], vec![vec![], vec![], vec![]]).unwrap()
         );
     }
 
@@ -496,6 +514,7 @@ mod tests {
                 vec![
                     vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
                     vec![DataValue::Utf8String("John".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
                 ]
             )
             .unwrap()
@@ -515,7 +534,7 @@ mod tests {
             .push(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
                 sqlil::Expr::attr("people", "1.0", "first_name"),
                 sqlil::BinaryOpType::Equal,
-                sqlil::Expr::Constant(sqlil::Constant::new(DataValue::from("Mary"))),
+                sqlil::Expr::Constant(sqlil::Constant::new(DataValue::from("John"))),
             )));
 
         let executor = create_executor(select, vec![]);
@@ -529,7 +548,7 @@ mod tests {
                     "alias".to_string(),
                     DataType::Utf8String(StringOptions::default())
                 ),],
-                vec![vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],]
+                vec![vec![DataValue::Utf8String("John".as_bytes().to_vec()),],]
             )
             .unwrap()
         )
@@ -555,7 +574,10 @@ mod tests {
                     "alias".to_string(),
                     DataType::Utf8String(StringOptions::default())
                 ),],
-                vec![vec![DataValue::Utf8String("John".as_bytes().to_vec()),],]
+                vec![
+                    vec![DataValue::Utf8String("John".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
+                ]
             )
             .unwrap()
         )
@@ -658,7 +680,7 @@ mod tests {
                 vec![
                     vec![
                         DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::UInt64(1)
+                        DataValue::UInt64(2)
                     ],
                     vec![
                         DataValue::Utf8String("John".as_bytes().to_vec()),
@@ -685,7 +707,7 @@ mod tests {
             results,
             MemoryResultSet::new(
                 vec![("count".to_string(), DataType::UInt64,)],
-                vec![vec![DataValue::UInt64(2)],]
+                vec![vec![DataValue::UInt64(3)],]
             )
             .unwrap()
         )

@@ -92,8 +92,11 @@ impl MemoryQueryPlanner {
         Ok(QueryOperationResult::PerformedLocally)
     }
 
-    fn add_group_by(_select: &mut sql::Select, _expr: sql::Expr) -> Result<QueryOperationResult> {
-        Ok(QueryOperationResult::PerformedLocally)
+    fn add_group_by(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
+        select.group_bys.push(expr);
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn add_order_by(

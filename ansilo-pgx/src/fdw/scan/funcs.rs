@@ -153,7 +153,7 @@ pub unsafe extern "C" fn get_foreign_paths(
         ptr::null_mut(),
         (*baserel).lateral_relids,
         ptr::null_mut(),
-        into_fdw_private_path(PgBox::new(base_query.clone()).into_pg_boxed()),
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
     );
     add_path(baserel, path as *mut pg_sys::Path);
 
@@ -257,7 +257,7 @@ pub unsafe extern "C" fn get_foreign_paths(
             ptr::null_mut(),
             (*ppi).ppi_req_outer,
             ptr::null_mut(),
-            into_fdw_private_path(query),
+            into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
         );
         add_path(baserel, path as *mut pg_sys::Path);
     }
@@ -419,7 +419,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         ptr::null_mut(), /* no pathkeys */
         (*joinrel).lateral_relids,
         epq_path,
-        ptr::null_mut(),
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed())
     );
     add_path(joinrel, join_path as *mut _);
 
@@ -597,7 +597,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         group_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        ptr::null_mut(),
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed())
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -685,7 +685,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         order_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        ptr::null_mut(),
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed())
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -793,7 +793,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         limit_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        ptr::null_mut(),
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed())
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -814,7 +814,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     outer_plan: *mut Plan,
 ) -> *mut ForeignScan {
     let (mut ctx, mut query) = from_fdw_private((*foreignrel).fdw_private as *mut _);
-    let planner = PlannerContext::base_rel(root, foreignrel);
+    let planner = from_fdw_private_path((*best_path).fdw_private);
 
     let scan_relid = if (*foreignrel).reloptkind == pg_sys::RelOptKind_RELOPT_BASEREL
         || (*foreignrel).reloptkind == pg_sys::RelOptKind_RELOPT_OTHER_MEMBER_REL
@@ -854,44 +854,7 @@ pub unsafe extern "C" fn get_foreign_plan(
 
     apply_query_state(&mut ctx, query.clone());
 
-    // let mut unpushed_exprs = vec![];
-
-    // TODO: check if possible / grouping expr's
-    // // First attempt to map all target cols to expr's
-    // for (i, node) in PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs)
-    //     .iter_ptr()
-    //     .enumerate()
-    // {
-    //     if let Ok(expr) = convert(node, &mut query.cvt, &planner, &ctx) {
-    //         let col_alias = select.new_column_alias();
-    //         let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
-
-    //         if apply_query_operation(&mut ctx, select, query_op).is_some() {
-    //             // We successfully pushed down the whole expr, update the tlist to a var
-    //             // to pull in the resultant value
-    //             let mut tle = result_tlist.get_ptr(i).unwrap();
-    //             (*tle).expr = pg_sys::makeVar(
-    //                 pg_sys::INDEX_VAR,
-    //                 resno,
-    //                 pg_sys::exprType(node),
-    //                 pg_sys::exprTypmod(node),
-    //                 pg_sys::exprCollation(node),
-    //                 0,
-    //             ) as *mut _;
-
-    //             let fdw_tle = pg_sys::makeTargetEntry(node as *mut _, resno, (*tle).resname, false);
-    //             fdw_scan_list.push(fdw_tle);
-
-    //             resno += 1;
-    //             continue;
-    //         }
-    //     }
-
-    //     // Store any expressions we cannot push down to the remote so they can be evaluated locally
-    //     unpushed_exprs.push(node);
-    // }
-
-    // Second, pull out all cols required for local_conds or unpushed_exprs so that
+    // First, pull out all cols required for local_conds or unpushed_exprs so that
     // we retrieve the columns needed for any local condition evaluation.
 
     let required_cols = result_tlist
@@ -1379,19 +1342,19 @@ unsafe fn from_fdw_private(
     (ctx, query)
 }
 
-unsafe fn into_fdw_private_path(query: PgBox<FdwQueryContext>) -> *mut List {
+unsafe fn into_fdw_private_path(planner: PgBox<PlannerContext>) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
-    list.push(query.into_pg() as *mut _);
+    list.push(planner.into_pg() as *mut _);
 
     list.into_pg()
 }
 
-unsafe fn from_fdw_private_path(list: *mut List) -> PgBox<FdwQueryContext, AllocatedByPostgres> {
+unsafe fn from_fdw_private_path(list: *mut List) -> PgBox<PlannerContext, AllocatedByPostgres> {
     let list = PgList::<c_void>::from_pg(list);
     assert!(list.len() == 1);
 
-    let query = PgBox::<FdwQueryContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
+    let query = PgBox::<PlannerContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
 
     query
 }

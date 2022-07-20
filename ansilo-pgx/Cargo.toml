@@ -9,13 +9,14 @@ crate-type = ["cdylib"]
 [features]
 default = ["pg14"]
 pg14 = ["pgx/pg14", "pgx-tests/pg14"]
-pg_test = ["dep:ansilo-connectors", "dep:ansilo-dev"]
+pg_test = ["dep:ansilo-connectors", "dep:ansilo-dev", "dep:assert-json-diff"]
 
 [dependencies]
 ansilo-core = { path = "../ansilo-core" }
 ansilo-pg = { path = "../ansilo-pg" }
 ansilo-connectors = { path = "../ansilo-connectors", optional = true }
 ansilo-dev = { path = "../ansilo-dev", optional = true }
+assert-json-diff = { version = "2.0", optional = true }
 cstr = "0.2.10"
 serde = "1.0"
 serde_json = "1.0"
@@ -25,6 +26,7 @@ pgx = "=0.5.0-beta.0"
 [dev-dependencies]
 ansilo-connectors = { path = "../ansilo-connectors" }
 ansilo-dev = { path = "../ansilo-dev" }
+assert-json-diff = { version = "2.0" }
 pgx-tests = "=0.5.0-beta.0"
 
 # [profile.dev]
