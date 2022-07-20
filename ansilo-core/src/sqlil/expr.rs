@@ -290,6 +290,7 @@ impl Expr {
         Self::Constant(Constant::new(val))
     }
 
+    /// Walks the expression tree, passing all nodes to the supplied callback
     pub fn walk<T: FnMut(&Expr) -> ()>(&self, cb: &mut T) {
         cb(self);
 
@@ -309,6 +310,8 @@ impl Expr {
         }
     }
 
+    /// Returns whether any of the expression in the tree pass the supplied
+    /// filter callback
     pub fn walk_any<T: Fn(&Expr) -> bool>(&self, cb: T) -> bool {
         let mut flag = false;
 

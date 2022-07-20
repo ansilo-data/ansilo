@@ -78,7 +78,10 @@ where
                     self.write(&val.to_ne_bytes())?;
                 }
                 (None | Some(DataType::Int64), DataValue::Int64(val)) => todo!(),
-                (None | Some(DataType::UInt64), DataValue::UInt64(val)) => todo!(),
+                (None | Some(DataType::UInt64), DataValue::UInt64(val)) => {
+                    self.write(&[1])?;
+                    self.write(&val.to_ne_bytes())?;
+                }
                 (None | Some(DataType::Float32), DataValue::Float32(val)) => todo!(),
                 (None | Some(DataType::Float64), DataValue::Float64(val)) => todo!(),
                 (None | Some(DataType::Decimal(_)), DataValue::Decimal(val)) => todo!(),
@@ -153,7 +156,6 @@ impl DataWriter<io::Cursor<Vec<u8>>> {
         Self::to_vec(vec![data])
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -372,6 +374,24 @@ mod tests {
                 vec![3u8],                 // chunk length
                 "abc".as_bytes().to_vec(), // data
                 vec![0u8],                 // eof
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_uint64() {
+        let mut writer = create_data_writer(Some(vec![DataType::UInt64]));
+
+        writer.write_data_value(DataValue::UInt64(1234)).unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                       // not null
+                1234_u64.to_ne_bytes().to_vec(), // data
             ]
             .concat()
         )

@@ -3,7 +3,6 @@
 mod expr;
 mod ctx;
 mod datum;
-mod r#type;
 mod table;
 mod func;
 mod var;
@@ -23,7 +22,6 @@ pub mod test;
 pub use datum::*;
 pub use expr::*;
 pub use ctx::*;
-pub use r#type::*;
 pub use table::*;
 pub use func::*;
 pub use var::*;

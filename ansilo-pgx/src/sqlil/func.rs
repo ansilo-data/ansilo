@@ -9,7 +9,7 @@ use pgx::{
 
 use crate::{fdw::ctx::FdwContext, util::syscache::PgSysCacheItem};
 
-use super::{convert, r#type::from_pg_type, ConversionContext, PlannerContext};
+use super::{convert, datum::from_pg_type, ConversionContext, PlannerContext};
 
 pub(super) unsafe fn convert_func_expr(
     node: *const pg_sys::FuncExpr,

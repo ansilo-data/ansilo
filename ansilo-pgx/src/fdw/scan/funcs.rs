@@ -905,7 +905,13 @@ pub unsafe extern "C" fn get_foreign_plan(
                 .map(|i| (*i).clause as *mut Node),
         )
         // .chain(unpushed_exprs.into_iter())
-        .map(|i| pg_sys::pull_var_clause(i, pg_sys::PVC_RECURSE_PLACEHOLDERS as _))
+        .chain(PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs).iter_ptr())
+        .map(|i| {
+            pg_sys::pull_var_clause(
+                i,
+                (pg_sys::PVC_RECURSE_PLACEHOLDERS | pg_sys::PVC_INCLUDE_AGGREGATES) as _,
+            )
+        })
         .flat_map(|i| {
             PgList::<pg_sys::Var>::from_pg(i)
                 .iter_ptr()
@@ -937,21 +943,22 @@ pub unsafe extern "C" fn get_foreign_plan(
         }
 
         fdw_scan_list.push(col as *mut _);
-        // col.varattno
     }
+    
+    // Convert expr nodes to target entry list
+    let fdw_scan_list = pg_sys::add_to_flat_tlist(ptr::null_mut(), vec_to_pg_list(fdw_scan_list));
 
     // Ensure outer plan generates tuples with the matching desc
     let mut outer_plan = outer_plan;
     if !outer_plan.is_null() {
         outer_plan = pg_sys::change_plan_targetlist(
             outer_plan,
-            vec_to_pg_list(fdw_scan_list.clone()),
+            fdw_scan_list,
             (*best_path).path.parallel_safe,
         );
     }
 
     let fdw_private = into_fdw_private(ctx, PgBox::new(query.clone()).into_pg_boxed());
-    let fdw_scan_list = pg_sys::add_to_flat_tlist(ptr::null_mut(), vec_to_pg_list(fdw_scan_list));
 
     pg_sys::make_foreignscan(
         tlist,
@@ -1169,6 +1176,11 @@ pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a5a14f8d89c5b76e02df2e8615f7a6835
 #[pg_guard]
 pub unsafe extern "C" fn end_foreign_scan(node: *mut ForeignScanState) {
+    // Check if this is an EXPLAIN query and skip if so
+    if (*node).fdw_state.is_null() {
+        return;
+    }
+
     let (mut ctx, _, _) = from_fdw_private_scan((*node).fdw_state as _);
 
     ctx.disconnect().unwrap();

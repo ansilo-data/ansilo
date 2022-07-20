@@ -7,7 +7,7 @@ use pgx::{pg_schema, pg_sys};
 use crate::{fdw::ctx::FdwContext, util::string::parse_to_owned_utf8_string};
 
 use super::{
-    r#type::from_pg_type, table::parse_entity_version_id_from_foreign_table, ConversionContext,
+    datum::from_pg_type, table::parse_entity_version_id_from_foreign_table, ConversionContext,
     PlannerContext,
 };
 

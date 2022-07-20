@@ -7,8 +7,8 @@ use pgx::{
 };
 
 use crate::{
-    fdw::ctx::{FdwContext, FdwQueryContext},
-    sqlil::into_pg_type,
+    fdw::ctx::{FdwContext},
+    sqlil::datum::into_pg_type,
 };
 
 use super::{ConversionContext, PlannerContext};
@@ -78,6 +78,4 @@ fn parse_pg_expr(select: &'static str, params: Vec<DataType>) -> (PgBox<Node>, P
     }
 }
 
-// unsafe "C" fn noop(root: *mut pg_sys::PlannerInfo, extra: *mut ::std::os::raw::c_void) {
 
-// }
