@@ -1,29 +1,20 @@
 use std::{
     cmp,
-    collections::HashMap,
-    iter::Chain,
     os::unix::net::UnixStream,
     path::Path,
-    slice::Iter,
     sync::{Arc, Mutex},
 };
 
 use ansilo_core::{
     data::DataValue,
     err::{anyhow, bail, Context, Error, Result},
-    sqlil::{self, EntityVersionIdentifier},
+    sqlil::EntityVersionIdentifier,
 };
 use ansilo_pg::fdw::{
     channel::IpcClientChannel,
     data::{QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
-    proto::{
-        AuthDataSource, ClientMessage, OperationCost, QueryInputStructure, RowStructure,
-        SelectQueryOperation, ServerMessage,
-    },
+    proto::{AuthDataSource, ClientMessage, QueryInputStructure, RowStructure, ServerMessage},
 };
-use pgx::pg_sys::{self, RestrictInfo};
-
-use crate::sqlil::ConversionContext;
 
 /// Context data for query planning
 pub struct FdwContext {

@@ -1,14 +1,17 @@
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::ptr;
 
+use ansilo_core::err::Result;
 use cstr::cstr;
 use pgx::pg_sys::{
-    ExplainState, ForeignScan, ForeignScanState, List, ModifyTableState, ResultRelInfo,
+    ExplainState, ForeignScan, ForeignScanState, List, ModifyTableState, Node, Plan, PlanState,
+    RestrictInfo, ResultRelInfo,
 };
 use pgx::*;
 
 use crate::fdw::ctx::*;
-use crate::util::string::to_cstr;
+use crate::util::list::vec_to_pg_list;
+use crate::util::string::{parse_to_owned_utf8_string, to_cstr};
 
 #[pg_guard]
 pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *mut ExplainState) {
@@ -18,7 +21,28 @@ pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *
     let select = query.as_select().unwrap();
 
     if (*es).verbose {
-        explain_json(es, "Query Context", serde_json::to_value(select).unwrap())
+        explain_conds(
+            (*node).ss.ps.plan,
+            es,
+            "Local Conds",
+            query.local_conds.clone(),
+        );
+        explain_conds(
+            (*node).ss.ps.plan,
+            es,
+            "Remote Conds",
+            query.remote_conds.clone(),
+        );
+        explain_json(
+            es,
+            "Local Ops",
+            serde_json::to_value(select.local_ops.clone()).unwrap(),
+        );
+        explain_json(
+            es,
+            "Remote Ops",
+            serde_json::to_value(select.remote_ops.clone()).unwrap(),
+        );
     }
 }
 
@@ -36,6 +60,45 @@ pub unsafe extern "C" fn explain_foreign_modify(
 #[pg_guard]
 pub unsafe extern "C" fn explain_direct_modify(node: *mut ForeignScanState, es: *mut ExplainState) {
     unimplemented!()
+}
+
+/// Deparses the supplied conditions so that they can be shown in the explain query output
+unsafe fn explain_conds(
+    plan: *mut Plan,
+    es: *mut ExplainState,
+    label: &'static str,
+    conds: Vec<*mut RestrictInfo>,
+) {
+    // These bindings are not provided by pgx
+    extern "C" {
+        /// @see https://doxygen.postgresql.org/ruleutils_8c.html#a92d74c070ec1014f3afc3653136b7c3f
+        fn set_deparse_context_plan(
+            ctx: *mut List,
+            planstate: *mut Plan,
+            ancestors: *mut List,
+        ) -> *mut List;
+
+        /// @see https://doxygen.postgresql.org/ruleutils_8c.html#a15ae01afb23cc9c716378cae7b1ea411
+        fn deparse_expression(
+            node: *mut Node,
+            ctx: *mut List,
+            forceprefix: bool,
+            showimplicit: bool,
+        ) -> *mut i8;
+    }
+
+    let label = to_cstr(label).unwrap();
+    let ancestors = PgList::<()>::new();
+    let context = set_deparse_context_plan((*es).deparse_cxt, plan, ancestors.as_ptr());
+
+    let deparsed = conds
+        .into_iter()
+        .map(|i| (*i).clause)
+        .map(|i| deparse_expression(i as *mut _, context, false, false))
+        .collect::<Vec<_>>();
+    let deparsed = vec_to_pg_list(deparsed);
+
+    pg_sys::ExplainPropertyList(label.as_ptr(), deparsed, es);
 }
 
 /// Output the supplied JSON object to the current ExplainState

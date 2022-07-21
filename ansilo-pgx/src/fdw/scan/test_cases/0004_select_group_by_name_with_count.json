@@ -1,0 +1,46 @@
+{
+    "SQL": "SELECT first_name, COUNT(*) as count FROM \"people:1.0\" GROUP BY first_name",
+    "Expected": {
+        "Plan": {
+            "Node Type": "Foreign Scan",
+            "Operation": "Select",
+            "Output": [
+                "first_name",
+                "(count(*))"
+            ],
+            "Local Conds": [],
+            "Remote Conds": [],
+            "Local Ops": [],
+            "Remote Ops": [
+                {
+                    "AddGroupBy": {
+                        "@type": "EntityVersionAttribute",
+                        "attribute_id": "first_name",
+                        "entity_id": "people",
+                        "version_id": "1.0"
+                    }
+                },
+                {
+                    "AddColumn": {
+                        "0": "c1",
+                        "1": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "first_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        }
+                    }
+                },
+                {
+                    "AddColumn": {
+                        "0": "c2",
+                        "1": {
+                            "@type": "AggregateCall",
+                            "Count": "null"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

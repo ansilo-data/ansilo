@@ -1,28 +1,12 @@
-use std::{
-    cmp,
-    collections::HashMap,
-    iter::Chain,
-    os::unix::net::UnixStream,
-    path::Path,
-    slice::Iter,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, iter::Chain, slice::Iter};
 
 use ansilo_core::{
-    data::DataValue,
-    err::{anyhow, bail, Context, Error, Result},
-    sqlil::{self, EntityVersionIdentifier},
+    err::{anyhow, Error},
+    sqlil,
 };
-use ansilo_pg::fdw::{
-    channel::IpcClientChannel,
-    data::{QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
-    proto::{
-        AuthDataSource, ClientMessage, OperationCost, QueryInputStructure, RowStructure,
-        SelectQueryOperation, ServerMessage,
-    },
-};
+use ansilo_pg::fdw::proto::{OperationCost, RowStructure, SelectQueryOperation, ServerMessage};
 use pgx::pg_sys::{self, RestrictInfo};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::sqlil::ConversionContext;
 

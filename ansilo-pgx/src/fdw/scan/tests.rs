@@ -103,7 +103,8 @@ mod tests {
         });
     }
 
-    fn setup_test(test_name: &'static str) {
+    fn setup_test(test_name: impl Into<String>) {
+        let test_name = test_name.into();
         let sock_path = format!("/tmp/ansilo/fdw_server/{test_name}");
         start_fdw_server(sock_path.clone());
         setup_db(sock_path);
@@ -129,14 +130,42 @@ mod tests {
     }
 
     fn explain_query(query: impl Into<String>) -> serde_json::Value {
-        Spi::explain(query.into().as_str())
-            .0
-            .as_array()
-            .take()
-            .unwrap()
-            .get(0)
-            .unwrap()
-            .clone()
+        let query = query.into();
+        let json = Spi::connect(|mut client| {
+            let table = client
+                .update(
+                    &format!("EXPLAIN (format json, verbose true) {}", query.as_str()),
+                    None,
+                    None,
+                )
+                .first();
+            Ok(Some(
+                table
+                    .get_one::<Json>()
+                    .expect("failed to get json EXPLAIN result"),
+            ))
+        })
+        .unwrap();
+
+        json.0.as_array().take().unwrap().get(0).unwrap().clone()
+    }
+
+    macro_rules! assert_query_plan_expected {
+        ($path:expr) => {
+            setup_test(format!("query_plan/{}", $path));
+            assert_query_plan_expected_fn(include_str!($path));
+        };
+    }
+
+    fn assert_query_plan_expected_fn(spec_json: &str) {
+        let json = serde_json::from_str::<serde_json::Value>(spec_json).unwrap();
+
+        let query = json["SQL"].as_str().unwrap().to_string();
+        let expected_plan = json["Expected"].clone();
+
+        let actual_plan = explain_query(query);
+
+        assert_json_include!(actual: actual_plan, expected: expected_plan)
     }
 
     #[pg_test]
@@ -163,17 +192,7 @@ mod tests {
 
     #[pg_test]
     fn test_fdw_scan_select_all_explain() {
-        setup_test("scan_select_all_explain");
-
-        let results = explain_query(r#"SELECT * FROM "people:1.0""#);
-
-        assert_json_include!(actual: results, expected: json!({
-            "Plan": {
-                "Node Type": "Foreign Scan",
-                "Operation": "Select",
-                "Relation Name": "people:1.0",
-            }
-        }));
+        assert_query_plan_expected!("test_cases/0001_select_all.json");
     }
 
     #[pg_test]
@@ -189,16 +208,7 @@ mod tests {
 
     #[pg_test]
     fn test_fdw_scan_select_count_all_explain() {
-        setup_test("scan_select_count_all_explain");
-
-        let results = explain_query(r#"SELECT COUNT(*) FROM "people:1.0""#);
-
-        assert_json_include!(actual: results, expected: json!({
-            "Plan": {
-                "Node Type": "Foreign Scan",
-                "Operation": "Select",
-            }
-        }));
+        assert_query_plan_expected!("test_cases/0002_select_count_all.json");
     }
 
     #[pg_test]
@@ -218,16 +228,7 @@ mod tests {
 
     #[pg_test]
     fn test_fdw_scan_select_group_by_name_explain() {
-        setup_test("scan_select_group_by_name_explain");
-
-        let results = explain_query(r#"SELECT first_name FROM "people:1.0" GROUP BY first_name"#);
-
-        assert_json_include!(actual: results, expected: json!({
-            "Plan": {
-                "Node Type": "Foreign Scan",
-                "Operation": "Select",
-            }
-        }));
+        assert_query_plan_expected!("test_cases/0003_select_group_by_name.json");
     }
 
     #[pg_test]
@@ -252,15 +253,6 @@ mod tests {
 
     #[pg_test]
     fn test_fdw_scan_select_group_by_name_with_count_explain() {
-        setup_test("scan_select_group_by_name_with_count_explain");
-
-        let results = explain_query(r#"SELECT first_name, COUNT(*) as count FROM "people:1.0" GROUP BY first_name"#);
-
-        assert_json_include!(actual: results, expected: json!({
-            "Plan": {
-                "Node Type": "Foreign Scan",
-                "Operation": "Select",
-            }
-        }));
+        assert_query_plan_expected!("test_cases/0004_select_group_by_name_with_count.json");
     }
 }

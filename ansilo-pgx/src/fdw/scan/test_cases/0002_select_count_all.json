@@ -1,0 +1,26 @@
+{
+    "SQL": "SELECT COUNT(*) FROM \"people:1.0\"",
+    "Expected": {
+        "Plan": {
+            "Node Type": "Foreign Scan",
+            "Operation": "Select",
+            "Output": [
+                "(count(*))"
+            ],
+            "Local Conds": [],
+            "Remote Conds": [],
+            "Local Ops": [],
+            "Remote Ops": [
+                {
+                    "AddColumn": {
+                        "0": "c1",
+                        "1": {
+                            "@type": "AggregateCall",
+                            "Count": "null"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
