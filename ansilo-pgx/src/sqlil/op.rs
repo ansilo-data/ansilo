@@ -73,6 +73,11 @@ pub unsafe fn convert_binary_op_expr(
             sqlil::BinaryOpType::Concat,
             right,
         )),
+        "=" => sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+            left,
+            sqlil::BinaryOpType::Equal,
+            right,
+        )),
         // TODO: add operators
         _ => bail!("Unsupported binary operator: '{}'", op),
     })
@@ -147,6 +152,25 @@ mod tests {
                     DataType::Utf8String(StringOptions::default()),
                     2
                 ))
+            ))
+        );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_op_eq() {
+        let expr = test::convert_simple_expr_with_context(
+            "SELECT $1 = $2",
+            &mut ConversionContext::new(),
+            vec![DataType::Int32, DataType::Int32],
+        )
+        .unwrap();
+
+        assert_eq!(
+            expr,
+            sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 1)),
+                sqlil::BinaryOpType::Equal,
+                sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 2))
             ))
         );
     }

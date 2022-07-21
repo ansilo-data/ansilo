@@ -386,7 +386,7 @@ impl OracleJdbcQueryCompiler {
             sql::AggregateCall::CountDistinct(_) => todo!(),
             sql::AggregateCall::Max(_) => todo!(),
             sql::AggregateCall::Min(_) => todo!(),
-            sql::AggregateCall::StringAgg(_, _) => todo!(),
+            sql::AggregateCall::StringAgg(_) => todo!(),
         })
     }
 }

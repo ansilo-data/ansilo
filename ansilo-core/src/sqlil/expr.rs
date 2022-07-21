@@ -1,9 +1,11 @@
 use bincode::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 
 use crate::data::{DataType, DataValue};
 
 /// A SQLIL expression node
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[serde(tag = "@type")]
 pub enum Expr {
     EntityVersion(EntityVersionIdentifier),
     EntityVersionAttribute(EntityVersionAttributeIdentifier),
@@ -21,7 +23,7 @@ pub enum Expr {
 type SubExpr = Box<Expr>;
 
 /// A reference to an entity version
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct EntityVersionIdentifier {
     /// The ID of the referenced entity
     pub entity_id: String,
@@ -39,9 +41,10 @@ impl EntityVersionIdentifier {
 }
 
 /// A reference to an attribute from an entity version
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct EntityVersionAttributeIdentifier {
     /// The referenced entity version
+    #[serde(flatten)]
     pub entity: EntityVersionIdentifier,
     /// The referenced attribute id
     pub attribute_id: String,
@@ -57,7 +60,7 @@ impl EntityVersionAttributeIdentifier {
 }
 
 /// A constant embedded in the query
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct Constant {
     /// The value of the constant
     #[bincode(with_serde)]
@@ -71,7 +74,7 @@ impl Constant {
 }
 
 /// A parameter embedded in the query
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct Parameter {
     /// The data type of the constant
     pub r#type: DataType,
@@ -86,7 +89,7 @@ impl Parameter {
 }
 
 /// A unary operation over one expression
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct UnaryOp {
     /// The data type of the constant
     pub r#type: UnaryOpType,
@@ -104,7 +107,7 @@ impl UnaryOp {
 }
 
 /// Supported unary operators
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub enum UnaryOpType {
     LogicalNot,
     Negate,
@@ -114,7 +117,7 @@ pub enum UnaryOpType {
 }
 
 /// A binary operation over two expressions
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct BinaryOp {
     /// The LHS of the expression
     pub left: SubExpr,
@@ -135,7 +138,7 @@ impl BinaryOp {
 }
 
 /// Supported binary operators
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub enum BinaryOpType {
     Add,
     Subtract,
@@ -164,7 +167,7 @@ pub enum BinaryOpType {
 }
 
 /// Supported type casts
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct Cast {
     // Input value to the cast
     pub expr: SubExpr,
@@ -179,7 +182,7 @@ impl Cast {
 }
 
 /// Supported function calls
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub enum FunctionCall {
     // Math functions
     Abs(SubExpr),
@@ -213,7 +216,7 @@ impl FunctionCall {
 }
 
 /// Substring function call
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct SubstringCall {
     /// The string to operator on
     pub string: SubExpr,
@@ -234,7 +237,7 @@ impl SubstringCall {
 }
 
 /// Aggregate function calls
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub enum AggregateCall {
     // Math functions
     Sum(SubExpr),
@@ -243,7 +246,7 @@ pub enum AggregateCall {
     Max(SubExpr),
     Min(SubExpr),
     // String functions
-    StringAgg(SubExpr, String),
+    StringAgg(StringAggCall),
 }
 
 impl AggregateCall {
@@ -254,9 +257,18 @@ impl AggregateCall {
             AggregateCall::CountDistinct(e) => e.walk(cb),
             AggregateCall::Max(e) => e.walk(cb),
             AggregateCall::Min(e) => e.walk(cb),
-            AggregateCall::StringAgg(e, _) => e.walk(cb),
+            AggregateCall::StringAgg(e) => e.expr.walk(cb),
         }
     }
+}
+
+/// Call arguments to string aggregation
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+pub struct StringAggCall {
+    /// The expr being aggregated
+    pub expr: SubExpr,
+    /// The seperator used during aggregation
+    pub separator: String,
 }
 
 /// Constructurs a new entity expression

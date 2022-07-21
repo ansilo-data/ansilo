@@ -36,6 +36,10 @@ where
         self.inner
     }
 
+    pub fn inner_mut(&mut self) -> &mut T {
+        &mut self.inner
+    }
+
     pub fn get_structure(&mut self) -> Option<&Vec<DataType>> {
         self.structure.as_ref()
     }

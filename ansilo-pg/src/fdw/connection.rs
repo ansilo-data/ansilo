@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     io::{Read, Write},
     mem,
 };
@@ -231,7 +232,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         let query = mem::replace(&mut self.query, FdwQueryState::New);
         let mut handle = match query {
             FdwQueryState::Prepared(handle) => handle,
-            _ => bail!("Unexpected query state"),
+            _ => bail!(
+                "Failed to execute query: expecting query state to be 'prepared' found {}",
+                query
+            ),
         };
 
         let result_set = handle.0.execute()?;
@@ -255,7 +259,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         let query = mem::replace(&mut self.query, FdwQueryState::New);
         self.query = match query {
             FdwQueryState::Executed(handle, _) => FdwQueryState::Prepared(handle),
-            _ => bail!("Unexpected query state"),
+            _ => bail!(
+                "Failed to restart query: expecting query state to be 'executed' found {}",
+                query
+            ),
         };
 
         Ok(())
@@ -266,21 +273,32 @@ impl<TConnector: Connector> FdwQueryState<TConnector> {
     fn select(&mut self) -> Result<&mut sqlil::Select> {
         Ok(match self {
             FdwQueryState::PlanningSelect(select) => select,
-            _ => bail!("Unexpected query state"),
+            _ => bail!("Expecting query state to be 'planning' found {}", self),
         })
     }
 
     fn query_handle(&mut self) -> Result<&mut QueryHandleWrite<TConnector::TQueryHandle>> {
         Ok(match self {
             FdwQueryState::Prepared(handle) => handle,
-            _ => bail!("Unexpected query state"),
+            _ => bail!("Expecting query state to be 'prepared' found {}", self),
         })
     }
 
     fn result_set(&mut self) -> Result<&mut ResultSetRead<TConnector::TResultSet>> {
         Ok(match self {
             FdwQueryState::Executed(_, result_set) => result_set,
-            _ => bail!("Unexpected query state"),
+            _ => bail!("Expecting query state to be 'executed' found {}", self),
+        })
+    }
+}
+
+impl<TConnector: Connector> Display for FdwQueryState<TConnector> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            FdwQueryState::New => "new",
+            FdwQueryState::PlanningSelect(_) => "planning",
+            FdwQueryState::Prepared(_) => "prepared",
+            FdwQueryState::Executed(_, _) => "executed",
         })
     }
 }
@@ -306,8 +324,8 @@ mod tests {
         memory::{MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector},
     };
     use ansilo_core::{
-        data::{DataType, DataValue},
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        data::{DataType, DataValue},
     };
 
     use crate::fdw::{

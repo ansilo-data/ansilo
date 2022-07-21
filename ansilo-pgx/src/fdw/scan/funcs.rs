@@ -24,10 +24,7 @@ use pgx::{
 };
 
 use crate::{
-    fdw::{
-        common,
-        ctx::{FdwContext, FdwQueryContext, FdwScanContext, FdwSelectQuery},
-    },
+    fdw::{common, ctx::*},
     sqlil::{
         convert, convert_list, from_datum, into_datum, parse_entity_version_id_from_foreign_table,
         parse_entity_version_id_from_rel, ConversionContext, PlannerContext,
@@ -36,8 +33,8 @@ use crate::{
 };
 
 macro_rules! unexpected_response {
-    ($res:expr) => {
-        error!("Unexpected response from server: {:?}", $res)
+    ($ctx:expr, $res:expr) => {
+        error!("Unexpected response from server while {}: {:?}", $ctx, $res)
     };
 }
 
@@ -72,7 +69,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 
     let mut base_cost = match res {
         ServerMessage::EstimatedSizeResult(e) => e,
-        _ => unexpected_response!(res),
+        _ => unexpected_response!("estimating size", res),
     };
 
     // We have to evaluate the possibility and costs of pushing down the restriction clauses
@@ -92,14 +89,17 @@ pub unsafe extern "C" fn get_foreign_rel_size(
         })
         .collect::<Vec<_>>();
 
-    for (query_op, node) in conds.into_iter() {
-        if let Some(cost) =
-            apply_query_operation(&mut ctx, query.as_select_mut().unwrap(), query_op)
-        {
-            query.remote_conds.push(node);
-            query.cost = cost;
+    let mut query = estimate_path_cost(
+        &mut ctx,
+        query,
+        conds.iter().map(|(i, _)| i).cloned().collect(),
+    );
+
+    for (cond, ri) in conds.into_iter() {
+        if query.as_select().unwrap().remote_ops.contains(&cond) {
+            query.remote_conds.push(ri);
         } else {
-            query.local_conds.push(node);
+            query.local_conds.push(ri);
         }
     }
 
@@ -126,7 +126,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
         (*(*baserel).reltarget).width = row_width as _;
     }
 
-    (*baserel).fdw_private = into_fdw_private(ctx, PgBox::new(query).into_pg_boxed()) as *mut _;
+    (*baserel).fdw_private = into_fdw_private_rel(ctx, query) as *mut _;
 }
 
 /// Create possible scan paths for a scan on the foreign table
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn get_foreign_paths(
     baserel: *mut RelOptInfo,
     foreigntableid: Oid,
 ) {
-    let (mut ctx, base_query) = from_fdw_private((*baserel).fdw_private as *mut _);
+    let (mut ctx, base_query) = from_fdw_private_rel((*baserel).fdw_private as *mut _);
     let base_cost = base_query.cost.clone();
     let planner = PlannerContext::base_rel(root, baserel);
 
@@ -307,8 +307,8 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         }
     }
 
-    let (mut outer_ctx, outer_query) = from_fdw_private((*outerrel).fdw_private as *mut _);
-    let (inner_ctx, inner_query) = from_fdw_private((*innerrel).fdw_private as *mut _);
+    let (mut outer_ctx, outer_query) = from_fdw_private_rel((*outerrel).fdw_private as *mut _);
+    let (inner_ctx, inner_query) = from_fdw_private_rel((*innerrel).fdw_private as *mut _);
 
     // We only support pushing down joins to the same data source
     if outer_ctx.data_source_id != inner_ctx.data_source_id {
@@ -423,7 +423,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     );
     add_path(joinrel, join_path as *mut _);
 
-    (*joinrel).fdw_private = into_fdw_private(outer_ctx, join_query) as *mut _;
+    (*joinrel).fdw_private = into_fdw_private_rel(outer_ctx, join_query) as *mut _;
 }
 
 /// Add paths for post-join operations like aggregation, grouping etc. if
@@ -480,7 +480,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     extra: *mut pg_sys::GroupPathExtraData,
     planner: &PlannerContext,
 ) {
-    let (mut ctx, input_query) = from_fdw_private((*inputrel).fdw_private as *mut _);
+    let (mut ctx, input_query) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
 
     // If we have local conditions on the input we cannot push down the group by
     if !input_query.local_conds.is_empty() {
@@ -607,7 +607,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private(ctx, group_query) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(ctx, group_query) as *mut _;
 }
 
 #[pg_guard]
@@ -617,7 +617,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
     outputrel: *mut RelOptInfo,
     planner: &PlannerContext,
 ) {
-    let (mut ctx, input_query) = from_fdw_private((*inputrel).fdw_private as *mut _);
+    let (mut ctx, input_query) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
     let mut order_query = input_query.clone();
     let mut query_ops = vec![];
 
@@ -695,7 +695,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private(ctx, order_query) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(ctx, order_query) as *mut _;
 }
 
 #[pg_guard]
@@ -707,7 +707,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     planner: &PlannerContext,
 ) {
     let parse = (*root).parse;
-    let (mut ctx, input_query) = from_fdw_private((*inputrel).fdw_private as *mut _);
+    let (mut ctx, input_query) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
 
     // Only supported for select
     if (*parse).commandType != pg_sys::CmdType_CMD_SELECT {
@@ -803,7 +803,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private(ctx, limit_query) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(ctx, limit_query) as *mut _;
 }
 
 /// Create ForeignScan plan node which implements selected best path
@@ -819,7 +819,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     scan_clauses: *mut List,
     outer_plan: *mut Plan,
 ) -> *mut ForeignScan {
-    let (mut ctx, mut query) = from_fdw_private((*foreignrel).fdw_private as *mut _);
+    let (mut ctx, mut query) = from_fdw_private_rel((*foreignrel).fdw_private as *mut _);
     let planner = from_fdw_private_path((*best_path).fdw_private);
 
     let scan_relid = if (*foreignrel).reloptkind == pg_sys::RelOptKind_RELOPT_BASEREL
@@ -914,7 +914,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         );
     }
 
-    let fdw_private = into_fdw_private(ctx, PgBox::new(query.clone()).into_pg_boxed());
+    let fdw_private = into_fdw_private_rel(ctx, PgBox::new(query.clone()).into_pg_boxed());
 
     pg_sys::make_foreignscan(
         tlist,
@@ -952,7 +952,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
     }
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (mut ctx, mut query) = from_fdw_private((*plan).fdw_private);
+    let (mut ctx, mut query) = from_fdw_private_rel((*plan).fdw_private);
     let mut scan = FdwScanContext::new();
 
     // Prepare the query for the chosen path
@@ -1230,7 +1230,7 @@ unsafe fn apply_query_state(ctx: &mut FdwContext, mut query: FdwQueryContext) {
         ServerMessage::Select(ServerSelectMessage::Result(
             QueryOperationResult::PerformedRemotely(cost),
         )) => cost,
-        _ => unexpected_response!(res),
+        _ => unexpected_response!("creating select query", res),
     };
 
     // We have already applied these ops to the query before but not on the
@@ -1307,7 +1307,7 @@ fn apply_query_operation(
 
     let result = match response {
         ServerMessage::Select(ServerSelectMessage::Result(result)) => result,
-        _ => unexpected_response!(response),
+        _ => unexpected_response!("applying query operation", response),
     };
 
     match result {
@@ -1320,80 +1320,6 @@ fn apply_query_operation(
             None
         }
     }
-}
-
-/// Converts the supplied context data to a pointer suitable
-/// to be stored in fdw_private fields
-unsafe fn into_fdw_private(ctx: PgBox<FdwContext>, query: PgBox<FdwQueryContext>) -> *mut List {
-    let mut list = PgList::<c_void>::new();
-
-    list.push(ctx.into_pg() as *mut _);
-    list.push(query.into_pg() as *mut _);
-
-    list.into_pg()
-}
-
-unsafe fn from_fdw_private(
-    list: *mut List,
-) -> (
-    PgBox<FdwContext, AllocatedByPostgres>,
-    PgBox<FdwQueryContext, AllocatedByPostgres>,
-) {
-    let list = PgList::<c_void>::from_pg(list);
-    assert!(list.len() == 2);
-
-    let ctx = PgBox::<FdwContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
-    let query = PgBox::<FdwQueryContext>::from_pg(list.get_ptr(1).unwrap() as *mut _);
-
-    (ctx, query)
-}
-
-unsafe fn into_fdw_private_path(planner: PgBox<PlannerContext>) -> *mut List {
-    let mut list = PgList::<c_void>::new();
-
-    list.push(planner.into_pg() as *mut _);
-
-    list.into_pg()
-}
-
-unsafe fn from_fdw_private_path(list: *mut List) -> PgBox<PlannerContext, AllocatedByPostgres> {
-    let list = PgList::<c_void>::from_pg(list);
-    assert!(list.len() == 1);
-
-    let query = PgBox::<PlannerContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
-
-    query
-}
-
-unsafe fn into_fdw_private_scan(
-    ctx: PgBox<FdwContext>,
-    query: PgBox<FdwQueryContext>,
-    scan: PgBox<FdwScanContext>,
-) -> *mut List {
-    let mut list = PgList::<c_void>::new();
-
-    list.push(ctx.into_pg() as *mut _);
-    list.push(query.into_pg() as *mut _);
-    list.push(scan.into_pg() as *mut _);
-
-    list.into_pg()
-}
-
-unsafe fn from_fdw_private_scan(
-    list: *mut List,
-) -> (
-    PgBox<FdwContext, AllocatedByPostgres>,
-    PgBox<FdwQueryContext, AllocatedByPostgres>,
-    PgBox<FdwScanContext, AllocatedByPostgres>,
-) {
-    let list = PgList::<c_void>::from_pg(list);
-    assert!(list.len() == 3);
-
-    let ctx = PgBox::<FdwContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
-    let query = PgBox::<FdwQueryContext>::from_pg(list.get_ptr(1).unwrap() as *mut _);
-    let scan = PgBox::<FdwScanContext>::from_pg(list.get_ptr(2).unwrap() as *mut _);
-
-    (ctx, query, scan)
 }
 
 unsafe fn find_em_for_rel_target(

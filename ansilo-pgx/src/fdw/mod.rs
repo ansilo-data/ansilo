@@ -70,8 +70,8 @@ fn ansilo_fdw_handler() -> pg_sys::Datum {
     handler.EndDirectModify = None; // Some(self::end_direct_modify);
     handler.GetForeignRowMarkType = None; // Some(self::get_foreign_row_mark_type);
     handler.RefetchForeignRow = None; // Some(self::refetch_foreign_row);
-    handler.RecheckForeignScan = None; // Some(self::recheck_foreign_scan);
-    handler.ExplainForeignScan = None; // Some(self::explain_foreign_scan);
+    handler.RecheckForeignScan = Some(self::recheck_foreign_scan);
+    handler.ExplainForeignScan = Some(self::explain_foreign_scan);
     handler.ExplainForeignModify = None; // Some(self::explain_foreign_modify);
     handler.ExplainDirectModify = None; // Some(self::explain_direct_modify);
     handler.AnalyzeForeignTable = None; // Some(self::analyze_foreign_table);

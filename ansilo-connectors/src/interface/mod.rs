@@ -8,6 +8,7 @@ use ansilo_core::{
     sqlil as sql,
 };
 use bincode::{Decode, Encode};
+use serde::{Serialize, Deserialize};
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
@@ -105,7 +106,7 @@ pub trait EntityValidator {
 }
 
 /// Select planning operations
-#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
 pub enum SelectQueryOperation {
     AddColumn((String, sql::Expr)),
     AddWhere(sql::Expr),
