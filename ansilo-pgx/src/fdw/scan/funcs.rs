@@ -419,7 +419,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         ptr::null_mut(), /* no pathkeys */
         (*joinrel).lateral_relids,
         epq_path,
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed())
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
     );
     add_path(joinrel, join_path as *mut _);
 
@@ -502,18 +502,19 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     let mut query_ops = vec![];
 
     // Iterate each target expr
-    for (i, expr) in PgList::<Node>::from_pg((*groupedrel).exprs)
+    for (i, node) in PgList::<Node>::from_pg((*groupedrel).exprs)
         .iter_ptr()
         .enumerate()
     {
-        let expr = convert(expr, &mut group_query.cvt, &planner, &ctx);
+        let expr = convert(node, &mut group_query.cvt, &planner, &ctx);
 
         let sort_group_ref = if (*groupedrel).sortgrouprefs.is_null() {
             0
         } else {
             *((*groupedrel).sortgrouprefs.add(i))
         };
-        let sort_group = pg_sys::get_sortgroupref_clause_noerr(sort_group_ref, (*groupedrel).exprs);
+        let sort_group =
+            pg_sys::get_sortgroupref_clause_noerr(sort_group_ref, (*(*root).parse).groupClause);
 
         // Is this expr a GROUP BY expression?
         if sort_group_ref != 0 && !sort_group.is_null() {
@@ -531,24 +532,29 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
 
             query_ops.push(SelectQueryOperation::AddGroupBy(expr));
         } else {
-            // This is an expression in the output list, append to the query output
-            // TODO: Support pushing down bare aggregates and transform locally into target output
-            // if the entire expr is unable to be pushed down as per:
-            // @see https://doxygen.postgresql.org/postgres__fdw_8c_source.html#l06192
-            if expr.is_ok()
-                && !expr
-                    .as_ref()
-                    .unwrap()
-                    .walk_any(|e| matches!(e, sqlil::Expr::Parameter(_)))
-            {
-                query_ops.push(
-                    group_query
-                        .as_select_mut()
+            // Retrieve the vars/aggrefs from the expression
+            let required_vars = pull_vars([node].into_iter());
+
+            // Try map each to an expression to be pushed down
+            for var in required_vars {
+                let expr = convert(var, &mut group_query.cvt, &planner, &ctx);
+
+                if expr.is_ok()
+                    && !expr
+                        .as_ref()
                         .unwrap()
-                        .new_column(expr.unwrap()),
-                );
-            } else {
-                return;
+                        .walk_any(|e| matches!(e, sqlil::Expr::Parameter(_)))
+                {
+                    query_ops.push(
+                        group_query
+                            .as_select_mut()
+                            .unwrap()
+                            .new_column(expr.unwrap()),
+                    );
+                } else {
+                    // Failed to convert to expression, we cannot push down this grouping
+                    return;
+                }
             }
         }
     }
@@ -597,7 +603,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         group_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed())
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -685,7 +691,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         order_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed())
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -793,7 +799,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         limit_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed())
+        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -854,33 +860,20 @@ pub unsafe extern "C" fn get_foreign_plan(
 
     apply_query_state(&mut ctx, query.clone());
 
-    // First, pull out all cols required for local_conds or unpushed_exprs so that
-    // we retrieve the columns needed for any local condition evaluation.
-
-    let required_cols = result_tlist
-        .iter_ptr()
-        .map(|i| (*i).expr as *mut Node)
-        .chain(
-            query
-                .local_conds
-                .clone()
-                .into_iter()
-                .map(|i| (*i).clause as *mut Node),
-        )
-        // .chain(unpushed_exprs.into_iter())
-        .chain(PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs).iter_ptr())
-        .map(|i| {
-            pg_sys::pull_var_clause(
-                i,
-                (pg_sys::PVC_RECURSE_PLACEHOLDERS | pg_sys::PVC_INCLUDE_AGGREGATES) as _,
+    // First, pull out all cols/aggrefs required for the query (tlist, local conds and target expr's)
+    let required_cols = pull_vars(
+        result_tlist
+            .iter_ptr()
+            .map(|i| (*i).expr as *mut Node)
+            .chain(
+                query
+                    .local_conds
+                    .clone()
+                    .into_iter()
+                    .map(|i| (*i).clause as *mut Node),
             )
-        })
-        .flat_map(|i| {
-            PgList::<pg_sys::Var>::from_pg(i)
-                .iter_ptr()
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
+            .chain(PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs).iter_ptr()),
+    );
 
     for col in required_cols {
         // If we already have added this col for selection, skip it
@@ -907,7 +900,7 @@ pub unsafe extern "C" fn get_foreign_plan(
 
         fdw_scan_list.push(col as *mut _);
     }
-    
+
     // Convert expr nodes to target entry list
     let fdw_scan_list = pg_sys::add_to_flat_tlist(ptr::null_mut(), vec_to_pg_list(fdw_scan_list));
 
@@ -933,6 +926,19 @@ pub unsafe extern "C" fn get_foreign_plan(
         pg_sys::extract_actual_clauses(vec_to_pg_list(query.remote_conds.clone()), false),
         outer_plan,
     )
+}
+
+/// Retrieves all vars (columns) and aggref's from the supplied node iterator
+unsafe fn pull_vars(nodes: impl std::iter::Iterator<Item = *mut Node>) -> Vec<*mut Node> {
+    nodes
+        .map(|i| {
+            pg_sys::pull_var_clause(
+                i,
+                (pg_sys::PVC_RECURSE_PLACEHOLDERS | pg_sys::PVC_INCLUDE_AGGREGATES) as _,
+            )
+        })
+        .flat_map(|i| PgList::<Node>::from_pg(i).iter_ptr().collect::<Vec<_>>())
+        .collect::<Vec<_>>()
 }
 
 #[pg_guard]

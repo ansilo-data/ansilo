@@ -10,7 +10,7 @@ use std::{
 
 use ansilo_core::{
     data::DataValue,
-    err::{bail, Context, Result},
+    err::{anyhow, bail, Context, Error, Result},
     sqlil::{self, EntityVersionIdentifier},
 };
 use ansilo_pg::fdw::{
@@ -85,7 +85,7 @@ impl FdwContext {
 
         let query_input = match response {
             ServerMessage::QueryPrepared(structure) => structure,
-            _ => bail!("Unexpected response while preparing query"),
+            _ => return Err(unexpected_response(response).context("Preparing query")),
         };
 
         self.query_writer = Some(QueryHandleWriter::new(FdwQueryHandle {
@@ -129,7 +129,7 @@ impl FdwContext {
 
         match response {
             ServerMessage::QueryRestarted => {}
-            _ => bail!("Unexpected response while restarting query"),
+            _ => return Err(unexpected_response(response).context("Failed to restart query")),
         };
 
         let query_input = self
@@ -167,7 +167,7 @@ impl QueryHandle for FdwQueryHandle {
 
         match response {
             ServerMessage::QueryParamsWritten => Ok(buff.len()),
-            _ => bail!("Unexpected response while writing query params"),
+            _ => return Err(unexpected_response(response).context("Failed to write query params")),
         }
     }
 
@@ -179,7 +179,7 @@ impl QueryHandle for FdwQueryHandle {
                 connection: self.connection.clone(),
                 row_structure,
             }),
-            _ => bail!("Unexpected response while writing executing query"),
+            _ => return Err(unexpected_response(response).context("Failed to execute query")),
         }
     }
 }
@@ -198,7 +198,9 @@ impl ResultSet for FdwResultSet {
                 buff[..read].copy_from_slice(&data[..read]);
                 Ok(read)
             }
-            _ => bail!("Unexpected response while reading result data"),
+            _ => {
+                return Err(unexpected_response(response).context("Failed to read from result set"))
+            }
         }
     }
 }
@@ -226,10 +228,7 @@ impl FdwConnection {
 
         match response {
             ServerMessage::AuthAccepted => {}
-            _ => bail!(
-                "Failed to authenticate: unexpected response received from server {:?}",
-                response
-            ),
+            _ => return Err(unexpected_response(response).context("Failed to authenticate")),
         }
 
         Ok(FdwConnection::Connected(Arc::new(
@@ -384,5 +383,13 @@ impl FdwScanContext {
             param_exprs: None,
             row_structure: None,
         }
+    }
+}
+
+fn unexpected_response(response: ServerMessage) -> Error {
+    if let ServerMessage::GenericError(message) = response {
+        anyhow!("Error from server: {message}")
+    } else {
+        anyhow!("Unexpected response {:?}", response)
     }
 }

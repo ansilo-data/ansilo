@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ansilo_core::{
-    data::{DataType, DataValue},
+    data::{DataType, DataValue, StringOptions},
     err::{bail, Error, Result},
     sqlil,
 };
@@ -129,7 +129,7 @@ impl MemoryQueryExecutor {
 
         for row in rows.into_iter() {
             let key = self.grouping_key(&row)?;
-            if let Some((key, group)) = groups.iter_mut().find(|(k, _)| k == &key) {
+            if let Some((_, group)) = groups.iter_mut().find(|(k, _)| k == &key) {
                 group.push(row);
             } else {
                 groups.push((key, vec![row]));
@@ -141,12 +141,17 @@ impl MemoryQueryExecutor {
         Ok(groups)
     }
 
-    fn project_group(&self, group: &Vec<Vec<DataValue>>) -> Result<Vec<DataValue>> {
+    fn project_group(&self, group_rows: &Vec<Vec<DataValue>>) -> Result<Vec<DataValue>> {
         let mut res = vec![];
 
-        let group = DataContext::Group(group.clone());
+        let group = DataContext::Group(group_rows.clone());
         for (_, expr) in self.query.cols.iter() {
-            res.push(self.evaluate(&group, expr)?.as_cell()?);
+            res.push(if self.query.group_bys.contains(expr) {
+                self.evaluate(&DataContext::Row(group_rows[0].clone()), expr)?
+                    .as_cell()?
+            } else {
+                self.evaluate(&group, expr)?.as_cell()?
+            });
         }
 
         Ok(res)
@@ -160,9 +165,6 @@ impl MemoryQueryExecutor {
 
                 match data {
                     DataContext::Row(row) => DataContext::Cell(row[attr_idx].clone()),
-                    DataContext::Group(group) if self.query.group_bys.contains(expr) => {
-                        DataContext::Cell(group.first().unwrap()[attr_idx].clone())
-                    }
                     DataContext::Group(group) => {
                         DataContext::Row(group.into_iter().map(|r| r[attr_idx].clone()).collect())
                     }
@@ -196,7 +198,19 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::BitwiseXor => todo!(),
                     sqlil::BinaryOpType::BitwiseShiftLeft => todo!(),
                     sqlil::BinaryOpType::BitwiseShiftRight => todo!(),
-                    sqlil::BinaryOpType::Concat => todo!(),
+                    sqlil::BinaryOpType::Concat => {
+                        let string = DataType::Utf8String(StringOptions::default());
+                        let left = left.try_coerce_into(&string)?;
+                        let right = right.try_coerce_into(&string)?;
+
+                        match (left, right) {
+                            (DataValue::Utf8String(mut left), DataValue::Utf8String(mut right)) => {
+                                left.append(&mut right);
+                                DataValue::Utf8String(left)
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
                     sqlil::BinaryOpType::Regexp => todo!(),
                     sqlil::BinaryOpType::In => todo!(),
                     sqlil::BinaryOpType::NotIn => todo!(),
@@ -261,7 +275,7 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::BitwiseXor => todo!(),
                     sqlil::BinaryOpType::BitwiseShiftLeft => todo!(),
                     sqlil::BinaryOpType::BitwiseShiftRight => todo!(),
-                    sqlil::BinaryOpType::Concat => todo!(),
+                    sqlil::BinaryOpType::Concat => DataType::Utf8String(StringOptions::default()),
                     sqlil::BinaryOpType::Regexp => todo!(),
                     sqlil::BinaryOpType::In => todo!(),
                     sqlil::BinaryOpType::NotIn => todo!(),
@@ -708,6 +722,88 @@ mod tests {
             MemoryResultSet::new(
                 vec![("count".to_string(), DataType::UInt64,)],
                 vec![vec![DataValue::UInt64(3)],]
+            )
+            .unwrap()
+        )
+    }
+
+    #[test]
+    fn test_memory_connector_executor_select_bin_op_concat() {
+        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        select.cols.push((
+            "full_name".to_string(),
+            sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                sqlil::Expr::attr("people", "1.0", "first_name"),
+                sqlil::BinaryOpType::Concat,
+                sqlil::Expr::attr("people", "1.0", "last_name"),
+            )),
+        ));
+
+        let executor = create_executor(select, vec![]);
+        let results = executor.run().unwrap();
+
+        assert_eq!(
+            results,
+            MemoryResultSet::new(
+                vec![(
+                    "full_name".to_string(),
+                    DataType::Utf8String(StringOptions::default()),
+                )],
+                vec![
+                    vec![DataValue::Utf8String("MaryJane".as_bytes().to_vec())],
+                    vec![DataValue::Utf8String("JohnSmith".as_bytes().to_vec())],
+                    vec![DataValue::Utf8String("MaryBennet".as_bytes().to_vec())]
+                ]
+            )
+            .unwrap()
+        )
+    }
+
+    #[test]
+    fn test_memory_connector_executor_select_group_by_expr_key_with_count() {
+        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let full_name = sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::BinaryOpType::Concat,
+            sqlil::Expr::attr("people", "1.0", "last_name"),
+        ));
+        select
+            .cols
+            .push(("full_name".to_string(), full_name.clone()));
+        select.cols.push((
+            "count".to_string(),
+            sqlil::Expr::AggregateCall(AggregateCall::Count),
+        ));
+
+        select.group_bys.push(full_name);
+
+        let executor = create_executor(select, vec![]);
+        let results = executor.run().unwrap();
+
+        assert_eq!(
+            results,
+            MemoryResultSet::new(
+                vec![
+                    (
+                        "full_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    ),
+                    ("count".to_string(), DataType::UInt64,)
+                ],
+                vec![
+                    vec![
+                        DataValue::Utf8String("MaryJane".as_bytes().to_vec()),
+                        DataValue::UInt64(1)
+                    ],
+                    vec![
+                        DataValue::Utf8String("JohnSmith".as_bytes().to_vec()),
+                        DataValue::UInt64(1)
+                    ],
+                    vec![
+                        DataValue::Utf8String("MaryBennet".as_bytes().to_vec()),
+                        DataValue::UInt64(1)
+                    ],
+                ]
             )
             .unwrap()
         )

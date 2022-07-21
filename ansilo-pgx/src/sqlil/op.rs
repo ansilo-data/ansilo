@@ -68,6 +68,11 @@ pub unsafe fn convert_binary_op_expr(
 
     Ok(match op {
         "+" => sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(left, sqlil::BinaryOpType::Add, right)),
+        "||" => sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+            left,
+            sqlil::BinaryOpType::Concat,
+            right,
+        )),
         // TODO: add operators
         _ => bail!("Unsupported binary operator: '{}'", op),
     })
@@ -114,6 +119,34 @@ mod tests {
                 sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 1)),
                 sqlil::BinaryOpType::Add,
                 sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 2))
+            ))
+        );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_op_string_concat() {
+        let expr = test::convert_simple_expr_with_context(
+            "SELECT $1 || $2",
+            &mut ConversionContext::new(),
+            vec![
+                DataType::Utf8String(StringOptions::default()),
+                DataType::Utf8String(StringOptions::default()),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(
+            expr,
+            sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                sqlil::Expr::Parameter(sqlil::Parameter::new(
+                    DataType::Utf8String(StringOptions::default()),
+                    1
+                )),
+                sqlil::BinaryOpType::Concat,
+                sqlil::Expr::Parameter(sqlil::Parameter::new(
+                    DataType::Utf8String(StringOptions::default()),
+                    2
+                ))
             ))
         );
     }
