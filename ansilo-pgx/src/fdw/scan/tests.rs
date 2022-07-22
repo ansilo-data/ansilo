@@ -446,4 +446,79 @@ mod tests {
     fn test_fdw_scan_select_all_order_by_local_explain() {
         assert_query_plan_expected!("test_cases/0011_select_order_by_local.json");
     }
+
+    #[pg_test]
+    fn test_fdw_scan_select_limit() {
+        setup_test("scan_select_limit");
+
+        let results = execute_query(r#"SELECT * FROM "people:1.0" LIMIT 2"#, |i| {
+            (
+                i["first_name"].value::<String>().unwrap(),
+                i["last_name"].value::<String>().unwrap(),
+            )
+        });
+
+        assert_eq!(
+            results,
+            vec![
+                ("Mary".into(), "Jane".into()),
+                ("John".into(), "Smith".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_limit_explain() {
+        assert_query_plan_expected!("test_cases/0012_select_limit.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_offset() {
+        setup_test("scan_select_offset");
+
+        let results = execute_query(r#"SELECT * FROM "people:1.0" OFFSET 2"#, |i| {
+            (
+                i["first_name"].value::<String>().unwrap(),
+                i["last_name"].value::<String>().unwrap(),
+            )
+        });
+
+        assert_eq!(
+            results,
+            vec![
+                ("Gary".into(), "Gregson".into()),
+                ("Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_offset_explain() {
+        assert_query_plan_expected!("test_cases/0013_select_offset.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_limit_offset() {
+        setup_test("scan_select_limit_offset");
+
+        let results = execute_query(r#"SELECT * FROM "people:1.0" LIMIT 2 OFFSET 1"#, |i| {
+            (
+                i["first_name"].value::<String>().unwrap(),
+                i["last_name"].value::<String>().unwrap(),
+            )
+        });
+
+        assert_eq!(
+            results,
+            vec![
+                ("John".into(), "Smith".into()),
+                ("Gary".into(), "Gregson".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_offset_limit_explain() {
+        assert_query_plan_expected!("test_cases/0014_select_limit_offset.json");
+    }
 }

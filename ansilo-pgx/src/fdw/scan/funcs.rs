@@ -732,7 +732,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     }
 
     // No work needed
-    if (*extra).limit_needed {
+    if !(*extra).limit_needed {
         return;
     }
 
@@ -743,7 +743,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
 
     // Only support const limits and offsets
     unsafe fn as_const_u64(node: *mut Node) -> Result<Option<u64>> {
-        if !node.is_null() {
+        if node.is_null() {
             return Ok(None);
         }
 
@@ -756,9 +756,9 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         let val = from_datum((*node).consttype, (*node).constvalue)?;
 
         Ok(Some(match val {
-            DataValue::Int32(i) => i as u64,
-            DataValue::Int64(i) => i as u64,
-            _ => bail!("Invalid const data type"),
+            DataValue::Int32(i) if i >= 0 => i as u64,
+            DataValue::Int64(i) if i >= 0 => i as u64,
+            _ => bail!("Invalid const data type or value"),
         }))
     }
 
