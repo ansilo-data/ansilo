@@ -82,11 +82,37 @@ impl Ordering {
     pub fn new(r#type: OrderingType, expr: Expr) -> Self {
         Self { r#type, expr }
     }
+
+    pub fn asc(expr: Expr) -> Self {
+        Self::new(OrderingType::Asc, expr)
+    }
+
+    pub fn desc(expr: Expr) -> Self {
+        Self::new(OrderingType::Desc, expr)
+    }
 }
 
 /// Type of ordering
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub enum OrderingType {
     Asc,
     Desc,
+}
+
+impl OrderingType {
+    /// Returns `true` if the ordering type is [`Asc`].
+    ///
+    /// [`Asc`]: OrderingType::Asc
+    #[must_use]
+    pub fn is_asc(&self) -> bool {
+        matches!(self, Self::Asc)
+    }
+
+    /// Returns `true` if the ordering type is [`Desc`].
+    ///
+    /// [`Desc`]: OrderingType::Desc
+    #[must_use]
+    pub fn is_desc(&self) -> bool {
+        matches!(self, Self::Desc)
+    }
 }

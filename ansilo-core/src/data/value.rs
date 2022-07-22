@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Data container for respective types
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum DataValue {
     Null,
     Utf8String(Vec<u8>),
@@ -22,7 +22,7 @@ pub enum DataValue {
     Date(chrono::NaiveDate),
     Time(chrono::NaiveTime),
     DateTime(chrono::NaiveDateTime),
-    DateTimeWithTZ((chrono::NaiveDateTime, chrono_tz::Tz)),
+    DateTimeWithTZ(DateTimeWithTZ),
     Uuid(uuid::Uuid),
 }
 
@@ -35,5 +35,25 @@ impl DataValue {
 impl From<&str> for DataValue {
     fn from(str: &str) -> Self {
         DataValue::Utf8String(str.as_bytes().to_vec())
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct DateTimeWithTZ {
+    /// The UTC date time
+    pub dt: chrono::NaiveDateTime,
+    /// The associated timezone
+    pub tz: chrono_tz::Tz,
+}
+
+impl DateTimeWithTZ {
+    pub fn new(dt: chrono::NaiveDateTime, tz: chrono_tz::Tz) -> Self {
+        Self { dt, tz }
+    }
+}
+
+impl PartialOrd for DateTimeWithTZ {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.dt.partial_cmp(&other.dt)
     }
 }

@@ -196,6 +196,56 @@ mod tests {
     }
 
     #[pg_test]
+    fn test_fdw_scan_select_all_where_remote_cond() {
+        setup_test("scan_select_all_remote_cond");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" WHERE first_name = 'Mary'"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Mary".into(), "Jane".into()),
+                ("Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_all_explain_where_remote_cond() {
+        assert_query_plan_expected!("test_cases/0002_select_all_where_remote_cond.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_all_where_local_cond() {
+        setup_test("scan_select_all_local_cond");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" WHERE MD5(first_name) = MD5('John')"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(results, vec![("John".into(), "Smith".into()),]);
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_all_explain_where_local_cond() {
+        assert_query_plan_expected!("test_cases/0003_select_all_where_local_cond.json");
+    }
+
+    #[pg_test]
     fn test_fdw_scan_select_count_all() {
         setup_test("scan_select_count_all");
 
@@ -208,7 +258,7 @@ mod tests {
 
     #[pg_test]
     fn test_fdw_scan_select_count_all_explain() {
-        assert_query_plan_expected!("test_cases/0002_select_count_all.json");
+        assert_query_plan_expected!("test_cases/0004_select_count_all.json");
     }
 
     #[pg_test]
@@ -228,7 +278,7 @@ mod tests {
 
     #[pg_test]
     fn test_fdw_scan_select_group_by_name_explain() {
-        assert_query_plan_expected!("test_cases/0003_select_group_by_name.json");
+        assert_query_plan_expected!("test_cases/0005_select_group_by_name.json");
     }
 
     #[pg_test]
@@ -253,6 +303,30 @@ mod tests {
 
     #[pg_test]
     fn test_fdw_scan_select_group_by_name_with_count_explain() {
-        assert_query_plan_expected!("test_cases/0004_select_group_by_name_with_count.json");
+        assert_query_plan_expected!("test_cases/0006_select_group_by_name_with_count.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_group_by_local() {
+        setup_test("scan_select_group_by_local");
+
+        let results = execute_query(
+            r#"SELECT MD5(first_name) as hash FROM "people:1.0" GROUP BY MD5(first_name)"#,
+            |i| (i["hash"].value::<String>().unwrap(),),
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("01d4848202a3c7697ec037b02b4ee4e8".into(),),
+                ("61409aa1fd47d4a5332de23cbf59a36f".into(),),
+                ("e39e74fb4e80ba656f773669ed50315a".into(),),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_group_by_local_explain() {
+        assert_query_plan_expected!("test_cases/0007_select_group_by_local.json");
     }
 }

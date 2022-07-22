@@ -77,7 +77,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     let conds = baserel_conds
         .iter_ptr()
         .filter_map(|i| {
-            let expr = convert((*i).clause as *const _, &mut query.cvt, &planner, &*ctx).ok();
+            let expr = convert((*i).clause as *const _, &mut query.cvt, &planner, &ctx).ok();
 
             // Store conditions requiring local evaluation for later
             if expr.is_none() {
@@ -89,9 +89,9 @@ pub unsafe extern "C" fn get_foreign_rel_size(
         })
         .collect::<Vec<_>>();
 
-    let mut query = estimate_path_cost(
+    estimate_path_cost(
         &mut ctx,
-        query,
+        &mut query,
         conds.iter().map(|(i, _)| i).cloned().collect(),
     );
 
@@ -153,7 +153,7 @@ pub unsafe extern "C" fn get_foreign_paths(
         ptr::null_mut(),
         (*baserel).lateral_relids,
         ptr::null_mut(),
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
+        into_fdw_private_path(planner.clone(), base_query.clone()),
     );
     add_path(baserel, path as *mut pg_sys::Path);
 
@@ -245,7 +245,7 @@ pub unsafe extern "C" fn get_foreign_paths(
             .map(|i| SelectQueryOperation::AddWhere(i))
             .collect::<Vec<_>>();
 
-        let query = estimate_path_cost(&mut ctx, query, ops);
+        estimate_path_cost(&mut ctx, &mut query, ops);
 
         let path = pg_sys::create_foreignscan_path(
             root,
@@ -257,7 +257,7 @@ pub unsafe extern "C" fn get_foreign_paths(
             ptr::null_mut(),
             (*ppi).ppi_req_outer,
             ptr::null_mut(),
-            into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
+            into_fdw_private_path(planner.clone(), query.clone()),
         );
         add_path(baserel, path as *mut pg_sys::Path);
     }
@@ -384,7 +384,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     // Apply the join then the conditions to the inner rel
     inner_ops.insert(0, join_op.clone());
 
-    let mut join_query = estimate_path_cost(&mut outer_ctx, join_query, inner_ops);
+    estimate_path_cost(&mut outer_ctx, &mut join_query, inner_ops);
 
     /// If we failed to push down the join then dont generate the path
     if !join_query
@@ -419,7 +419,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         ptr::null_mut(), /* no pathkeys */
         (*joinrel).lateral_relids,
         epq_path,
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
+        into_fdw_private_path(planner, join_query.clone()),
     );
     add_path(joinrel, join_path as *mut _);
 
@@ -565,7 +565,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         return;
     }
 
-    let mut group_query = estimate_path_cost(&mut ctx, group_query, query_ops.clone());
+    estimate_path_cost(&mut ctx, &mut group_query, query_ops.clone());
 
     // If failed to push down then abort
     if query_ops
@@ -603,7 +603,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         group_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
+        into_fdw_private_path(planner.clone(), group_query.clone()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -662,7 +662,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         )));
     }
 
-    let mut order_query = estimate_path_cost(&mut ctx, order_query, query_ops.clone());
+    estimate_path_cost(&mut ctx, &mut order_query, query_ops.clone());
 
     // If failed to push down then abort
     if query_ops
@@ -691,7 +691,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         order_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
+        into_fdw_private_path(planner.clone(), order_query.clone()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -770,7 +770,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         query_ops.push(SelectQueryOperation::SetRowLimit(limit));
     }
 
-    let mut limit_query = estimate_path_cost(&mut ctx, limit_query, query_ops.clone());
+    estimate_path_cost(&mut ctx, &mut limit_query, query_ops.clone());
 
     // If failed to push down then abort
     if query_ops
@@ -799,7 +799,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         limit_query.cost.total_cost.unwrap() as f64,
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(PgBox::new(planner.clone()).into_pg_boxed()),
+        into_fdw_private_path(planner.clone(), limit_query.clone()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -819,8 +819,8 @@ pub unsafe extern "C" fn get_foreign_plan(
     scan_clauses: *mut List,
     outer_plan: *mut Plan,
 ) -> *mut ForeignScan {
-    let (mut ctx, mut query) = from_fdw_private_rel((*foreignrel).fdw_private as *mut _);
-    let planner = from_fdw_private_path((*best_path).fdw_private);
+    let (mut ctx, _) = from_fdw_private_rel((*foreignrel).fdw_private as *mut _);
+    let (planner, mut query) = from_fdw_private_path((*best_path).fdw_private);
 
     let scan_relid = if (*foreignrel).reloptkind == pg_sys::RelOptKind_RELOPT_BASEREL
         || (*foreignrel).reloptkind == pg_sys::RelOptKind_RELOPT_OTHER_MEMBER_REL
@@ -858,7 +858,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     let mut result_tlist = PgList::<pg_sys::TargetEntry>::from_pg(tlist);
     let mut resno = 1;
 
-    apply_query_state(&mut ctx, query.clone());
+    apply_query_state(&mut ctx, &query);
 
     // First, pull out all cols/aggrefs required for the query (tlist, local conds and target expr's)
     let required_cols = pull_vars(
@@ -914,7 +914,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         );
     }
 
-    let fdw_private = into_fdw_private_rel(ctx, PgBox::new(query.clone()).into_pg_boxed());
+    let fdw_private = into_fdw_private_rel(ctx, query.clone());
 
     pg_sys::make_foreignscan(
         tlist,
@@ -956,7 +956,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
     let mut scan = FdwScanContext::new();
 
     // Prepare the query for the chosen path
-    apply_query_state(&mut ctx, query.clone());
+    apply_query_state(&mut ctx, &query);
     let input_structure = ctx.prepare_query().unwrap();
 
     // Send query params, if any
@@ -967,8 +967,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
     let row_structure = ctx.execute_query().unwrap();
 
     scan.row_structure = Some(row_structure);
-    (*node).fdw_state =
-        into_fdw_private_scan(ctx, query, PgBox::new(scan).into_pg_boxed()) as *mut _;
+    (*node).fdw_state = into_fdw_private_scan(ctx, query, scan) as *mut _;
 }
 
 unsafe fn send_query_params(
@@ -1216,8 +1215,8 @@ pub unsafe extern "C" fn reparameterize_foreign_path_by_child(
 }
 
 // Sends the query
-unsafe fn apply_query_state(ctx: &mut FdwContext, mut query: FdwQueryContext) {
-    let select = query.as_select_mut().unwrap();
+unsafe fn apply_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
+    let select = query.as_select().unwrap();
 
     // Initialise a new select query
     let res = ctx
@@ -1248,10 +1247,10 @@ unsafe fn apply_query_state(ctx: &mut FdwContext, mut query: FdwQueryContext) {
 // Generate a path cost estimation based on the supplied conditions
 unsafe fn estimate_path_cost(
     ctx: &mut FdwContext,
-    mut query: FdwQueryContext,
+    query: &mut FdwQueryContext,
     new_query_ops: Vec<SelectQueryOperation>,
-) -> PgBox<FdwQueryContext, AllocatedByPostgres> {
-    apply_query_state(ctx, query.clone());
+) {
+    apply_query_state(ctx, query);
 
     let select = query.as_select_mut().unwrap();
     let mut cost = None;
@@ -1271,8 +1270,6 @@ unsafe fn estimate_path_cost(
     if let Some(cost) = cost {
         query.cost = cost;
     }
-
-    PgBox::new(query).into_pg_boxed()
 }
 
 fn can_push_down(select: &mut FdwSelectQuery, query_op: &SelectQueryOperation) -> bool {

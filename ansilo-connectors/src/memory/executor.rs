@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cmp, sync::Arc};
 
 use ansilo_core::{
     data::{DataType, DataValue, StringOptions},
@@ -62,6 +62,17 @@ impl MemoryQueryExecutor {
                 .map(|i| self.project(&i))
                 .try_collect()?
         };
+
+        if !self.query.order_bys.is_empty() {
+            let mut to_sort = results
+                .into_iter()
+                .map(|i| self.sort_key(&i).map(|key| (i, key)))
+                .collect::<Result<Vec<_>>>()?;
+
+            to_sort.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(cmp::Ordering::Equal));
+
+            results = to_sort.into_iter().map(|(row, _)| row).collect();
+        }
 
         if self.query.row_skip > 0 {
             results = results.into_iter().skip(self.query.row_skip as _).collect();
@@ -155,6 +166,46 @@ impl MemoryQueryExecutor {
         }
 
         Ok(res)
+    }
+
+    fn sort_key(&self, row: &Vec<DataValue>) -> Result<Vec<Ordered<DataValue>>> {
+        assert!(!self.query.order_bys.is_empty());
+
+        let row = DataContext::Row(row.clone());
+        let mut keys = vec![];
+
+        for ordering in self.query.order_bys.iter() {
+            let key = self.evaluate(&row, &ordering.expr)?.as_cell()?;
+
+            keys.push(Ordered::new(ordering.r#type, key));
+        }
+
+        Ok(keys)
+    }
+
+    fn sort_cmp(&self, a: &Vec<DataValue>, b: &Vec<DataValue>) -> Result<Option<cmp::Ordering>> {
+        assert!(!self.query.order_bys.is_empty());
+
+        let a = DataContext::Row(a.clone());
+        let b = DataContext::Row(b.clone());
+
+        for ordering in self.query.order_bys.iter() {
+            let a1 = self.evaluate(&a, &ordering.expr)?.as_cell()?;
+            let b1 = self.evaluate(&b, &ordering.expr)?.as_cell()?;
+
+            let cmp = match a1.partial_cmp(&b1) {
+                Some(cmp) => cmp,
+                Some(cmp::Ordering::Equal) | None => continue,
+            };
+
+            return Ok(Some(if ordering.r#type.is_asc() {
+                cmp
+            } else {
+                cmp.reverse()
+            }));
+        }
+
+        Ok(None)
     }
 
     fn evaluate(&self, data: &DataContext, expr: &sqlil::Expr) -> Result<DataContext> {
@@ -380,12 +431,41 @@ impl DataContext {
     }
 }
 
+#[derive(PartialEq, Clone, Debug)]
+enum Ordered<T: PartialOrd> {
+    Asc(T),
+    Desc(T),
+}
+
+impl<T: PartialOrd> Ordered<T> {
+    pub(crate) fn new(r#type: sqlil::OrderingType, key: T) -> Self {
+        match r#type {
+            sqlil::OrderingType::Asc => Self::Asc(key),
+            sqlil::OrderingType::Desc => Self::Desc(key),
+        }
+    }
+}
+
+impl<T: PartialOrd> PartialOrd for Ordered<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        let (a, b, rev) = match (self, other) {
+            (Self::Asc(a), Self::Asc(b)) => (a, b, false),
+            (Self::Desc(a), Self::Desc(b)) => (a, b, true),
+            _ => panic!("Sort ordering mismatch"),
+        };
+
+        let cmp = a.partial_cmp(b);
+
+        cmp.map(|cmp| if rev { cmp.reverse() } else { cmp })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ansilo_core::{
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig},
         data::StringOptions,
-        sqlil::AggregateCall,
+        sqlil::{AggregateCall, Ordering},
     };
 
     use super::*;
@@ -573,7 +653,7 @@ mod tests {
         let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::EntityVersionAttribute(sqlil::attr("people", "1.0", "first_name")),
+            sqlil::Expr::attr("people", "1.0", "first_name"),
         ));
 
         select.row_skip = 1;
@@ -602,7 +682,7 @@ mod tests {
         let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::EntityVersionAttribute(sqlil::attr("people", "1.0", "first_name")),
+            sqlil::Expr::attr("people", "1.0", "first_name"),
         ));
 
         select.row_limit = Some(1);
@@ -628,7 +708,7 @@ mod tests {
         let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::EntityVersionAttribute(sqlil::attr("people", "1.0", "first_name")),
+            sqlil::Expr::attr("people", "1.0", "first_name"),
         ));
 
         select
@@ -663,7 +743,7 @@ mod tests {
         let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::EntityVersionAttribute(sqlil::attr("people", "1.0", "first_name")),
+            sqlil::Expr::attr("people", "1.0", "first_name"),
         ));
         select.cols.push((
             "count".to_string(),
@@ -802,6 +882,170 @@ mod tests {
                     vec![
                         DataValue::Utf8String("MaryBennet".as_bytes().to_vec()),
                         DataValue::UInt64(1)
+                    ],
+                ]
+            )
+            .unwrap()
+        )
+    }
+
+    #[test]
+    fn test_memory_connector_executor_select_order_by_single() {
+        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        select.cols.push((
+            "first_name".to_string(),
+            sqlil::Expr::attr("people", "1.0", "first_name"),
+        ));
+        select.cols.push((
+            "last_name".to_string(),
+            sqlil::Expr::attr("people", "1.0", "last_name"),
+        ));
+
+        select.order_bys.push(Ordering::asc(sqlil::Expr::attr(
+            "people",
+            "1.0",
+            "first_name",
+        )));
+
+        let executor = create_executor(select, vec![]);
+        let results = executor.run().unwrap();
+
+        assert_eq!(
+            results,
+            MemoryResultSet::new(
+                vec![
+                    (
+                        "first_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    ),
+                    (
+                        "last_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    )
+                ],
+                vec![
+                    vec![
+                        DataValue::Utf8String("John".as_bytes().to_vec()),
+                        DataValue::Utf8String("Smith".as_bytes().to_vec())
+                    ],
+                    vec![
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Jane".as_bytes().to_vec())
+                    ],
+                    vec![
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Bennet".as_bytes().to_vec())
+                    ],
+                ]
+            )
+            .unwrap()
+        )
+    }
+
+    #[test]
+    fn test_memory_connector_executor_select_order_by_single_desc() {
+        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        select.cols.push((
+            "first_name".to_string(),
+            sqlil::Expr::attr("people", "1.0", "first_name"),
+        ));
+        select.cols.push((
+            "last_name".to_string(),
+            sqlil::Expr::attr("people", "1.0", "last_name"),
+        ));
+
+        select.order_bys.push(Ordering::desc(sqlil::Expr::attr(
+            "people",
+            "1.0",
+            "first_name",
+        )));
+
+        let executor = create_executor(select, vec![]);
+        let results = executor.run().unwrap();
+
+        assert_eq!(
+            results,
+            MemoryResultSet::new(
+                vec![
+                    (
+                        "first_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    ),
+                    (
+                        "last_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    )
+                ],
+                vec![
+                    vec![
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Jane".as_bytes().to_vec())
+                    ],
+                    vec![
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Bennet".as_bytes().to_vec())
+                    ],
+                    vec![
+                        DataValue::Utf8String("John".as_bytes().to_vec()),
+                        DataValue::Utf8String("Smith".as_bytes().to_vec())
+                    ],
+                ]
+            )
+            .unwrap()
+        )
+    }
+
+    #[test]
+    fn test_memory_connector_executor_select_order_by_multiple() {
+        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        select.cols.push((
+            "first_name".to_string(),
+            sqlil::Expr::attr("people", "1.0", "first_name"),
+        ));
+        select.cols.push((
+            "last_name".to_string(),
+            sqlil::Expr::attr("people", "1.0", "last_name"),
+        ));
+
+        select.order_bys.push(Ordering::asc(sqlil::Expr::attr(
+            "people",
+            "1.0",
+            "first_name",
+        )));
+        select.order_bys.push(Ordering::desc(sqlil::Expr::attr(
+            "people",
+            "1.0",
+            "last_name",
+        )));
+
+        let executor = create_executor(select, vec![]);
+        let results = executor.run().unwrap();
+
+        assert_eq!(
+            results,
+            MemoryResultSet::new(
+                vec![
+                    (
+                        "first_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    ),
+                    (
+                        "last_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    )
+                ],
+                vec![
+                    vec![
+                        DataValue::Utf8String("John".as_bytes().to_vec()),
+                        DataValue::Utf8String("Smith".as_bytes().to_vec())
+                    ],
+                    vec![
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Jane".as_bytes().to_vec())
+                    ],
+                    vec![
+                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Bennet".as_bytes().to_vec())
                     ],
                 ]
             )

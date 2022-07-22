@@ -6,7 +6,7 @@ use ansilo_core::{
         chrono_tz::Tz,
         rust_decimal::{prelude::FromPrimitive, Decimal},
         uuid::Uuid,
-        DataValue,
+        DataValue, DateTimeWithTZ,
     },
     err::{bail, Context, Error, Result},
 };
@@ -119,11 +119,11 @@ fn from_date_time(datum: pgx::Timestamp) -> NaiveDateTime {
     )
 }
 
-fn from_date_time_tz(datum: pgx::TimestampWithTimeZone) -> (NaiveDateTime, Tz) {
+fn from_date_time_tz(datum: pgx::TimestampWithTimeZone) -> DateTimeWithTZ {
     let ts = datum.unix_timestamp();
     let ns = datum.nanosecond();
     // TODO: do we need timezones here?, dont think so. maybe just have UtcTimestamp type
-    (NaiveDateTime::from_timestamp(ts, ns), Tz::UTC)
+    DateTimeWithTZ::new(NaiveDateTime::from_timestamp(ts, ns), Tz::UTC)
 }
 
 fn to_uuid(datum: pgx::Uuid) -> Uuid {
@@ -626,7 +626,7 @@ mod tests {
                     .unwrap()
                 )
                 .unwrap(),
-                DataValue::DateTimeWithTZ((
+                DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                     NaiveDateTime::new(
                         NaiveDate::from_ymd(2020, 1, 5),
                         NaiveTime::from_hms_milli(7, 43, 11, 123)
@@ -648,7 +648,7 @@ mod tests {
                     )
                 )
                 .unwrap(),
-                DataValue::DateTimeWithTZ((
+                DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                     NaiveDateTime::new(
                         NaiveDate::from_ymd(2020, 1, 22),
                         NaiveTime::from_hms_micro(18, 50, 42, 123456)

@@ -1,0 +1,65 @@
+{
+    "SQL": "SELECT * FROM \"people:1.0\" WHERE first_name = 'Mary'",
+    "Expected": {
+        "Plan": {
+            "Node Type": "Foreign Scan",
+            "Operation": "Select",
+            "Output": [
+                "first_name",
+                "last_name"
+            ],
+            "Local Conds": [],
+            "Remote Conds": [
+                "((first_name)::text = 'Mary'::text)"
+            ],
+            "Local Ops": [],
+            "Remote Ops": [
+                {
+                    "AddWhere": {
+                        "@type": "BinaryOp",
+                        "left": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "first_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        },
+                        "right": {
+                            "@type": "Constant",
+                            "value": {
+                                "Utf8String": {
+                                    "0": 77,
+                                    "1": 97,
+                                    "2": 114,
+                                    "3": 121
+                                }
+                            }
+                        },
+                        "type": "Equal"
+                    }
+                },
+                {
+                    "AddColumn": {
+                        "0": "c0",
+                        "1": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "first_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        }
+                    }
+                },
+                {
+                    "AddColumn": {
+                        "0": "c1",
+                        "1": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "last_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

@@ -100,10 +100,13 @@ impl MemoryQueryPlanner {
     }
 
     fn add_order_by(
-        _select: &mut sql::Select,
-        _ordering: sql::Ordering,
+        select: &mut sql::Select,
+        ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
-        Ok(QueryOperationResult::PerformedLocally)
+        select.order_bys.push(ordering);
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn set_row_limit(select: &mut sql::Select, row_limit: u64) -> Result<QueryOperationResult> {

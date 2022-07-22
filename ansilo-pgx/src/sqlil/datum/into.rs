@@ -4,7 +4,7 @@ use ansilo_core::{
             Datelike, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone, Timelike, Weekday,
         },
         chrono_tz::Tz,
-        uuid, DataType, DataValue, StringOptions,
+        uuid, DataType, DataValue, DateTimeWithTZ, StringOptions,
     },
     err::{bail, Result},
 };
@@ -194,12 +194,12 @@ fn into_date_time(data: NaiveDateTime) -> pgx::Timestamp {
     ))
 }
 
-fn into_date_time_tz(data: (NaiveDateTime, Tz)) -> pgx::TimestampWithTimeZone {
+fn into_date_time_tz(data: DateTimeWithTZ) -> pgx::TimestampWithTimeZone {
     pgx::TimestampWithTimeZone::new(
-        *into_date_time(data.0),
+        *into_date_time(data.dt),
         time::UtcOffset::from_whole_seconds(
-            data.1
-                .offset_from_local_datetime(&data.0)
+            data.tz
+                .offset_from_local_datetime(&data.dt)
                 .unwrap()
                 .fix()
                 .local_minus_utc(),
@@ -549,7 +549,7 @@ mod tests {
                 into_datum_owned(
                     pg_sys::TIMESTAMPTZOID,
                     DataType::DateTimeWithTZ,
-                    DataValue::DateTimeWithTZ((
+                    DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                         NaiveDateTime::new(
                             NaiveDate::from_ymd(2020, 1, 5),
                             NaiveTime::from_hms_milli(7, 43, 11, 123)
