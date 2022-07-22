@@ -88,8 +88,11 @@ impl MemoryQueryPlanner {
         ))
     }
 
-    fn add_join(_select: &mut sql::Select, _join: sql::Join) -> Result<QueryOperationResult> {
-        Ok(QueryOperationResult::PerformedLocally)
+    fn add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
+        select.joins.push(join);
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn add_group_by(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {

@@ -69,6 +69,40 @@ pub enum JoinType {
     Full,
 }
 
+impl JoinType {
+    /// Returns `true` if the join type is [`Inner`].
+    ///
+    /// [`Inner`]: JoinType::Inner
+    #[must_use]
+    pub fn is_inner(&self) -> bool {
+        matches!(self, Self::Inner)
+    }
+
+    /// Returns `true` if the join type is [`Left`].
+    ///
+    /// [`Left`]: JoinType::Left
+    #[must_use]
+    pub fn is_left(&self) -> bool {
+        matches!(self, Self::Left)
+    }
+
+    /// Returns `true` if the join type is [`Right`].
+    ///
+    /// [`Right`]: JoinType::Right
+    #[must_use]
+    pub fn is_right(&self) -> bool {
+        matches!(self, Self::Right)
+    }
+
+    /// Returns `true` if the join type is [`Full`].
+    ///
+    /// [`Full`]: JoinType::Full
+    #[must_use]
+    pub fn is_full(&self) -> bool {
+        matches!(self, Self::Full)
+    }
+}
+
 /// An ordering expression
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct Ordering {

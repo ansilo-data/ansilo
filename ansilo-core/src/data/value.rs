@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Data container for respective types
-#[derive(Debug, PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum DataValue {
     Null,
     Utf8String(Vec<u8>),
@@ -55,5 +55,36 @@ impl DateTimeWithTZ {
 impl PartialOrd for DateTimeWithTZ {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.dt.partial_cmp(&other.dt)
+    }
+}
+
+impl std::fmt::Debug for DataValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Null => write!(f, "Null"),
+            Self::Utf8String(arg0) => f
+                .debug_tuple("Utf8String")
+                .field(&String::from_utf8_lossy(arg0))
+                .finish(),
+            Self::Binary(arg0) => f.debug_tuple("Binary").field(arg0).finish(),
+            Self::Boolean(arg0) => f.debug_tuple("Boolean").field(arg0).finish(),
+            Self::Int8(arg0) => f.debug_tuple("Int8").field(arg0).finish(),
+            Self::UInt8(arg0) => f.debug_tuple("UInt8").field(arg0).finish(),
+            Self::Int16(arg0) => f.debug_tuple("Int16").field(arg0).finish(),
+            Self::UInt16(arg0) => f.debug_tuple("UInt16").field(arg0).finish(),
+            Self::Int32(arg0) => f.debug_tuple("Int32").field(arg0).finish(),
+            Self::UInt32(arg0) => f.debug_tuple("UInt32").field(arg0).finish(),
+            Self::Int64(arg0) => f.debug_tuple("Int64").field(arg0).finish(),
+            Self::UInt64(arg0) => f.debug_tuple("UInt64").field(arg0).finish(),
+            Self::Float32(arg0) => f.debug_tuple("Float32").field(arg0).finish(),
+            Self::Float64(arg0) => f.debug_tuple("Float64").field(arg0).finish(),
+            Self::Decimal(arg0) => f.debug_tuple("Decimal").field(arg0).finish(),
+            Self::JSON(arg0) => f.debug_tuple("JSON").field(arg0).finish(),
+            Self::Date(arg0) => f.debug_tuple("Date").field(arg0).finish(),
+            Self::Time(arg0) => f.debug_tuple("Time").field(arg0).finish(),
+            Self::DateTime(arg0) => f.debug_tuple("DateTime").field(arg0).finish(),
+            Self::DateTimeWithTZ(arg0) => f.debug_tuple("DateTimeWithTZ").field(arg0).finish(),
+            Self::Uuid(arg0) => f.debug_tuple("Uuid").field(arg0).finish(),
+        }
     }
 }
