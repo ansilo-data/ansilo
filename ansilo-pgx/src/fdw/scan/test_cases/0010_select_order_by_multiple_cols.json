@@ -1,0 +1,51 @@
+{
+    "SQL": "SELECT * FROM \"people:1.0\" ORDER BY first_name, last_name DESC",
+    "Expected": {
+        "Plan": {
+            "Node Type": "Foreign Scan",
+            "Operation": "Select",
+            "Output": [
+                "first_name",
+                "last_name"
+            ],
+            "Local Conds": [],
+            "Remote Conds": [],
+            "Local Ops": [],
+            "Remote Ops": [
+                {
+                    "AddOrderBy": {
+                        "expr": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "first_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        },
+                        "type": "Asc"
+                    }
+                },
+                {
+                    "AddOrderBy": {
+                        "expr": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "last_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        },
+                        "type": "Desc"
+                    }
+                },
+                {
+                    "AddColumn": {
+                        "0": "c0",
+                        "1": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "first_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

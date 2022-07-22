@@ -1,0 +1,56 @@
+{
+    "SQL": "SELECT * FROM \"people:1.0\" ORDER BY MD5(first_name)",
+    "Expected": {
+        "Plan": {
+            "Node Type": "Sort",
+            "Output": [
+                "first_name",
+                "last_name",
+                "(md5((first_name)::text))"
+            ],
+            "Sort Key": [
+                "(md5((\"people:1.0\".first_name)::text))"
+            ],
+            "Plans": [
+                {
+                    "Node Type": "Foreign Scan",
+                    "Operation": "Select",
+                    "Parent Relationship": "Outer",
+                    "Relation Name": "people:1.0",
+                    "Output": [
+                        "first_name",
+                        "last_name",
+                        "md5((first_name)::text)"
+                    ],
+                    "Local Conds": [],
+                    "Remote Conds": [],
+                    "Local Ops": [],
+                    "Remote Ops": [
+                        {
+                            "AddColumn": {
+                                "0": "c0",
+                                "1": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "first_name",
+                                    "entity_id": "people",
+                                    "version_id": "1.0"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c1",
+                                "1": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "last_name",
+                                    "entity_id": "people",
+                                    "version_id": "1.0"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

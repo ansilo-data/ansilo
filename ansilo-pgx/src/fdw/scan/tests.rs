@@ -329,4 +329,121 @@ mod tests {
     fn test_fdw_scan_select_group_by_local_explain() {
         assert_query_plan_expected!("test_cases/0007_select_group_by_local.json");
     }
+
+    #[pg_test]
+    fn test_fdw_scan_select_order_by_single_col() {
+        setup_test("scan_select_order_by_single_col");
+
+        let results = execute_query(r#"SELECT * FROM "people:1.0" ORDER BY first_name"#, |i| {
+            (
+                i["first_name"].value::<String>().unwrap(),
+                i["last_name"].value::<String>().unwrap(),
+            )
+        });
+
+        assert_eq!(
+            results,
+            vec![
+                ("Gary".into(), "Gregson".into()),
+                ("John".into(), "Smith".into()),
+                ("Mary".into(), "Jane".into()),
+                ("Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_all_order_by_single_col_explain() {
+        assert_query_plan_expected!("test_cases/0008_select_order_by_single_col.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_order_by_single_col_desc() {
+        setup_test("scan_select_order_by_single_col_desc");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" ORDER BY first_name DESC"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Mary".into(), "Jane".into()),
+                ("Mary".into(), "Bennet".into()),
+                ("John".into(), "Smith".into()),
+                ("Gary".into(), "Gregson".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_all_order_by_single_col_desc_explain() {
+        assert_query_plan_expected!("test_cases/0009_select_order_by_single_col_desc.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_order_by_multiple_cols() {
+        setup_test("scan_select_order_by_multiple_cols");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" ORDER BY first_name, last_name DESC"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Gary".into(), "Gregson".into()),
+                ("John".into(), "Smith".into()),
+                ("Mary".into(), "Jane".into()),
+                ("Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_all_order_by_multiple_cols_explain() {
+        assert_query_plan_expected!("test_cases/0010_select_order_by_multiple_cols.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_order_by_local() {
+        setup_test("scan_select_order_by_local");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" ORDER BY MD5(first_name), last_name"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Gary".into(), "Gregson".into()),
+                ("John".into(), "Smith".into()),
+                ("Mary".into(), "Bennet".into()),
+                ("Mary".into(), "Jane".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_all_order_by_local_explain() {
+        assert_query_plan_expected!("test_cases/0011_select_order_by_local.json");
+    }
 }

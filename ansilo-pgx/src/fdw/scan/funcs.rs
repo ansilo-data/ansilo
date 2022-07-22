@@ -695,7 +695,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
     // We could theoriticall pass sort_pathkeys to this path
     // However this could mean the query optimiser may leverage this information
     // to perform merge joins. Given we cannot 100% guarantee thats the sort
-    // order will be respected by the data source we do not apply the path keys
+    // order will be respected by the data sources so we do not apply the path keys
     // to this path.
     // TODO[low]: We could probably implement a response flag to determine if data source
     // will guarantee the requested sort ordering at some point.
