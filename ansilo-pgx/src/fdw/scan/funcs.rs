@@ -629,28 +629,38 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
             return;
         }
 
-        // We dont support NULLS FIRST
-        if (*path_key).pk_nulls_first {
-            return;
-        }
-
         let em = find_em_for_rel_target(root, ec, inputrel, planner, &mut order_query, &mut ctx);
 
         if em.is_none() {
             return;
         }
 
-        let (expr, node) = em.unwrap();
+        let (expr, em) = em.unwrap();
 
-        let expr_type = pg_sys::exprType(node);
+        // We intentionally ignore (*path_key).pk_nulls_first and leave the order
+        // the behaviour as unspecified, so that the data source can apply its platform-specific
+        // behaviour
+        let oprid = pg_sys::get_opfamily_member(
+            (*path_key).pk_opfamily,
+            (*em).em_datatype,
+            (*em).em_datatype,
+            (*path_key).pk_strategy as _,
+        );
+
+        if oprid == pg_sys::InvalidOid {
+            panic!("Failed to determine sort order operator");
+        }
+
+
+        let expr_type = pg_sys::exprType((*em).em_expr as *mut _);
         let opr_item = pg_sys::lookup_type_cache(
             expr_type,
             (pg_sys::TYPECACHE_LT_OPR | pg_sys::TYPECACHE_GT_OPR) as _,
         );
 
-        let sort_type = if (*opr_item).lt_opr != 0 {
+        let sort_type = if oprid == (*opr_item).lt_opr {
             OrderingType::Asc
-        } else if (*opr_item).gt_opr != 0 {
+        } else if  oprid ==(*opr_item).gt_opr  {
             OrderingType::Desc
         } else {
             // Custom sort operators are not supported
@@ -682,6 +692,13 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         ));
     }
 
+    // We could theoriticall pass sort_pathkeys to this path
+    // However this could mean the query optimiser may leverage this information
+    // to perform merge joins. Given we cannot 100% guarantee thats the sort
+    // order will be respected by the data source we do not apply the path keys
+    // to this path.
+    // TODO[low]: We could probably implement a response flag to determine if data source
+    // will guarantee the requested sort ordering at some point.
     let path = pg_sys::create_foreign_upper_path(
         root,
         inputrel,
@@ -1326,7 +1343,7 @@ unsafe fn find_em_for_rel_target(
     planner: &PlannerContext,
     query: &mut FdwQueryContext,
     ctx: &mut FdwContext,
-) -> Option<(sqlil::Expr, *mut Node)> {
+) -> Option<(sqlil::Expr, *mut pg_sys::EquivalenceMember)> {
     let target = (*rel).reltarget;
 
     for (i, mut expr) in PgList::<pg_sys::Expr>::from_pg((*target).exprs)
@@ -1378,7 +1395,7 @@ unsafe fn find_em_for_rel_target(
 
                 let expr = convert((*em).em_expr as *mut _, &mut query.cvt, planner, ctx);
                 if let Ok(expr) = expr {
-                    return Some((expr, (*em).em_expr as *mut Node));
+                    return Some((expr, em));
                 }
             }
         }
