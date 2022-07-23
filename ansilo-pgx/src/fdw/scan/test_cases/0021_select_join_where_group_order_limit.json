@@ -1,0 +1,130 @@
+{
+    "SQL": "SELECT p.first_name, p.last_name, COUNT(*) as pets FROM \"people:1.0\" p INNER JOIN \"pets:1.0\" pets ON pets.owner_id = p.id WHERE pets.pet_name != 'XXX' GROUP BY p.first_name, p.last_name ORDER BY pets DESC LIMIT 3",
+    "Expected": {
+        "Plan": {
+            "Node Type": "Foreign Scan",
+            "Operation": "Select",
+            "Output": [
+                "p.first_name",
+                "p.last_name",
+                "(count(*))"
+            ],
+            "Local Conds": [],
+            "Remote Conds": [
+                "(id = owner_id)",
+                "((pet_name)::text <> 'XXX'::text)"
+            ],
+            "Local Ops": [],
+            "Remote Ops": [
+                {
+                    "AddJoin": {
+                        "conds": [
+                            {
+                                "@type": "BinaryOp",
+                                "left": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "id",
+                                    "entity_id": "people",
+                                    "version_id": "1.0"
+                                },
+                                "right": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "owner_id",
+                                    "entity_id": "pets",
+                                    "version_id": "1.0"
+                                },
+                                "type": "Equal"
+                            }
+                        ],
+                        "target": {
+                            "entity_id": "pets",
+                            "version_id": "1.0"
+                        },
+                        "type": "Inner"
+                    }
+                },
+                {
+                    "AddWhere": {
+                        "@type": "BinaryOp",
+                        "left": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "pet_name",
+                            "entity_id": "pets",
+                            "version_id": "1.0"
+                        },
+                        "right": {
+                            "@type": "Constant",
+                            "value": {
+                                "Utf8String": {
+                                    "0": 88,
+                                    "1": 88,
+                                    "2": 88
+                                }
+                            }
+                        },
+                        "type": "NotEqual"
+                    }
+                },
+                {
+                    "AddGroupBy": {
+                        "@type": "EntityVersionAttribute",
+                        "attribute_id": "first_name",
+                        "entity_id": "people",
+                        "version_id": "1.0"
+                    }
+                },
+                {
+                    "AddGroupBy": {
+                        "@type": "EntityVersionAttribute",
+                        "attribute_id": "last_name",
+                        "entity_id": "people",
+                        "version_id": "1.0"
+                    }
+                },
+                {
+                    "AddOrderBy": {
+                        "expr": {
+                            "@type": "AggregateCall",
+                            "Count": "null"
+                        },
+                        "type": "Desc"
+                    }
+                },
+                {
+                    "SetRowLimit": 3
+                },
+                {
+                    "AddColumn": {
+                        "0": "c1",
+                        "1": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "first_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        }
+                    }
+                },
+                {
+                    "AddColumn": {
+                        "0": "c2",
+                        "1": {
+                            "@type": "EntityVersionAttribute",
+                            "attribute_id": "last_name",
+                            "entity_id": "people",
+                            "version_id": "1.0"
+                        }
+                    }
+                },
+                {
+                    "AddColumn": {
+                        "0": "c3",
+                        "1": {
+                            "@type": "AggregateCall",
+                            "Count": "null"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

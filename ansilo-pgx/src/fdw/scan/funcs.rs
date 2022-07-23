@@ -81,7 +81,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 
             // Store conditions requiring local evaluation for later
             if expr.is_none() {
-  &mut &mut               query.local_conds.push(i);
+                &mut &mut query.local_conds.push(i);
                 return None;
             }
 
@@ -126,7 +126,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
         (*(*baserel).reltarget).width = row_width as _;
     }
 
-    (*baserel).fdw_private = into_fdw_private_rel(ctx, query) as *mut _;
+    (*baserel).fdw_private = into_fdw_private_rel(ctx, query, planner) as *mut _;
 }
 
 /// Create possible scan paths for a scan on the foreign table
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn get_foreign_paths(
     baserel: *mut RelOptInfo,
     foreigntableid: Oid,
 ) {
-    let (mut ctx, base_query) = from_fdw_private_rel((*baserel).fdw_private as *mut _);
+    let (mut ctx, base_query, _) = from_fdw_private_rel((*baserel).fdw_private as *mut _);
     let base_cost = base_query.cost.clone();
     let planner = PlannerContext::base_rel(root, baserel);
 
@@ -323,8 +323,8 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         }
     }
 
-    let (mut outer_ctx, outer_query) = from_fdw_private_rel((*outerrel).fdw_private as *mut _);
-    let (inner_ctx, inner_query) = from_fdw_private_rel((*innerrel).fdw_private as *mut _);
+    let (mut outer_ctx, outer_query, _) = from_fdw_private_rel((*outerrel).fdw_private as *mut _);
+    let (inner_ctx, inner_query, _) = from_fdw_private_rel((*innerrel).fdw_private as *mut _);
 
     // We only support pushing down joins to the same data source
     if outer_ctx.data_source_id != inner_ctx.data_source_id {
@@ -398,7 +398,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         join_clauses,
     ));
 
-    // Apply the join before the conditions 
+    // Apply the join before the conditions
     inner_ops.insert(0, join_op.clone());
 
     estimate_path_cost(&mut outer_ctx, &mut join_query, inner_ops);
@@ -414,7 +414,9 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     }
 
     // Copy across remote conds from inner ctx
-    join_query.remote_conds.append(&mut inner_query.remote_conds.clone());
+    join_query
+        .remote_conds
+        .append(&mut inner_query.remote_conds.clone());
 
     // Calculate default costs (we are pessimistic)
     {
@@ -439,11 +441,11 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         ptr::null_mut(), /* no pathkeys */
         (*joinrel).lateral_relids,
         epq_path,
-        into_fdw_private_path(planner, join_query.clone()),
+        into_fdw_private_path(planner.clone(), join_query.clone()),
     );
     add_path(joinrel, join_path as *mut _);
 
-    (*joinrel).fdw_private = into_fdw_private_rel(outer_ctx, join_query) as *mut _;
+    (*joinrel).fdw_private = into_fdw_private_rel(outer_ctx, join_query, planner) as *mut _;
 }
 
 /// Add paths for post-join operations like aggregation, grouping etc. if
@@ -500,7 +502,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     extra: *mut pg_sys::GroupPathExtraData,
     planner: &PlannerContext,
 ) {
-    let (mut ctx, input_query) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
+    let (mut ctx, input_query, _) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
 
     // If we have local conditions on the input we cannot push down the group by
     if !input_query.local_conds.is_empty() {
@@ -607,7 +609,10 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     // Calculate default costs (we are pessimistic)
     {
         let cost = &mut group_query.cost;
-        cost.rows = cost.rows.or(Some((*inputrel).rows as u64));
+        cost.rows = cost
+            .rows
+            .or(input_query.cost.rows)
+            .or(Some(DEFAULT_ROW_VOLUME));
         cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
         cost.total_cost = cost.total_cost.or(Some(
             (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
@@ -627,7 +632,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private_rel(ctx, group_query) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(ctx, group_query, planner.clone()) as *mut _;
 }
 
 #[pg_guard]
@@ -637,7 +642,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
     outputrel: *mut RelOptInfo,
     planner: &PlannerContext,
 ) {
-    let (mut ctx, input_query) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
+    let (mut ctx, input_query, _) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
     let mut order_query = input_query.clone();
     let mut query_ops = vec![];
 
@@ -704,7 +709,10 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
     // Calculate default costs (we are pessimistic)
     {
         let cost = &mut order_query.cost;
-        cost.rows = cost.rows.or(Some((*inputrel).rows as u64));
+        cost.rows = cost
+            .rows
+            .or(input_query.cost.rows)
+            .or(Some(DEFAULT_ROW_VOLUME));
         cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
         cost.total_cost = cost.total_cost.or(Some(
             (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
@@ -731,7 +739,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private_rel(ctx, order_query) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(ctx, order_query, planner.clone()) as *mut _;
 }
 
 #[pg_guard]
@@ -743,7 +751,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     planner: &PlannerContext,
 ) {
     let parse = (*root).parse;
-    let (mut ctx, input_query) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
+    let (mut ctx, input_query, _) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
 
     // Only supported for select
     if (*parse).commandType != pg_sys::CmdType_CMD_SELECT {
@@ -819,7 +827,11 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     // Calculate default costs (we are pessimistic)
     {
         let cost = &mut limit_query.cost;
-        cost.rows = cost.rows.or(limit).or(Some((*inputrel).rows as u64));
+        cost.rows = cost
+            .rows
+            .or(limit)
+            .or(input_query.cost.rows)
+            .or(Some(DEFAULT_ROW_VOLUME));
         cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
         cost.total_cost = cost.total_cost.or(Some(
             (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
@@ -839,7 +851,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private_rel(ctx, limit_query) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(ctx, limit_query, planner.clone()) as *mut _;
 }
 
 /// Create ForeignScan plan node which implements selected best path
@@ -855,7 +867,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     scan_clauses: *mut List,
     outer_plan: *mut Plan,
 ) -> *mut ForeignScan {
-    let (mut ctx, _) = from_fdw_private_rel((*foreignrel).fdw_private as *mut _);
+    let (mut ctx, _, _) = from_fdw_private_rel((*foreignrel).fdw_private as *mut _);
     let (planner, mut query) = from_fdw_private_path((*best_path).fdw_private);
 
     let scan_relid = if (*foreignrel).reloptkind == pg_sys::RelOptKind_RELOPT_BASEREL
@@ -896,6 +908,16 @@ pub unsafe extern "C" fn get_foreign_plan(
 
     apply_query_state(&mut ctx, &query);
 
+    // These checks are used the validate that tuple state is still expected when operating under
+    // READ COMMITTED isolation level (EPQ = EvalPlanQual)
+    let fdw_recheck_quals = if scan_relid > 0 {
+        // In the case of base foreign rels we want to support EPQ checks so pull out the vars
+        pg_sys::extract_actual_clauses(vec_to_pg_list(query.remote_conds.clone()), false)
+    } else {
+        // In the case of join/upper rels we assume EPQ will level never be required
+        ptr::null_mut()
+    };
+
     // First, pull out all cols/aggrefs required for the query (tlist, local conds and target expr's)
     let required_cols = pull_vars(
         result_tlist
@@ -908,7 +930,8 @@ pub unsafe extern "C" fn get_foreign_plan(
                     .into_iter()
                     .map(|i| (*i).clause as *mut Node),
             )
-            .chain(PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs).iter_ptr()),
+            .chain(PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs).iter_ptr())
+            .chain(PgList::<Node>::from_pg(fdw_recheck_quals).iter_ptr()),
     );
 
     for col in required_cols {
@@ -950,7 +973,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         );
     }
 
-    let fdw_private = into_fdw_private_rel(ctx, query.clone());
+    let fdw_private = into_fdw_private_rel(ctx, query.clone(), planner.clone());
 
     pg_sys::make_foreignscan(
         tlist,
@@ -959,7 +982,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         vec_to_pg_list(query.cvt.param_nodes()),
         fdw_private,
         fdw_scan_list,
-        pg_sys::extract_actual_clauses(vec_to_pg_list(query.remote_conds.clone()), false),
+        fdw_recheck_quals,
         outer_plan,
     )
 }
@@ -988,7 +1011,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
     }
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (mut ctx, mut query) = from_fdw_private_rel((*plan).fdw_private);
+    let (mut ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
     let mut scan = FdwScanContext::new();
 
     // Prepare the query for the chosen path
@@ -1129,7 +1152,7 @@ pub unsafe extern "C" fn recheck_foreign_scan(
     let scanrelid = (*((*node).ss.ps.plan as *mut pg_sys::Scan)).scanrelid;
     let outerplan = (*(node as *mut pg_sys::PlanState)).lefttree;
 
-    // For base foreign relations, it suffices to set fdw_recheck_quals
+    // For base foreign relations, it suffices to check fdw_recheck_quals
     if scanrelid > 0 {
         return true;
     }

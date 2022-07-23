@@ -19,11 +19,9 @@ pub(super) unsafe fn convert_var(
 ) -> Result<sqlil::Expr> {
     // @see https://doxygen.postgresql.org/deparse_8c_source.html#l02667 (deparseVar)
 
-    let rel = if let Some(upper) = planner.as_upper_rel() {
-        upper.input_rel
-    } else {
-        planner.current_rel()
-    };
+    let rel = planner
+        .get_scan_rel()
+        .context("Failed to find base/join rel in current query context")?;
 
     if pg_sys::bms_is_member((*node).varno as _, (*rel).relids) && (*node).varlevelsup == 0 {
         if (*node).varattno == 0 {
@@ -63,34 +61,36 @@ mod tests {
     #[pg_test]
     fn test_sqlil_convert_var_col() {
         Spi::connect(|mut client| {
-            let _ = client.update(r#"
+            let _ = client.update(
+                r#"
             CREATE SERVER dummy_srv FOREIGN DATA WRAPPER null_fdw;
-            CREATE FOREIGN TABLE tab (col INTEGER) SERVER dummy_srv;"#, None, None);
+            CREATE FOREIGN TABLE tab (col INTEGER) SERVER dummy_srv;"#,
+                None,
+                None,
+            );
             Ok(Some(()))
         });
 
         let expr = test::convert_simple_expr("SELECT tab.col FROM tab").unwrap();
 
-        assert_eq!(
-            expr,
-            sqlil::Expr::attr("tab", "latest", "col")
-        );
+        assert_eq!(expr, sqlil::Expr::attr("tab", "latest", "col"));
     }
 
     #[pg_test]
     fn test_sqlil_convert_var_col_with_explicit_version() {
         Spi::connect(|mut client| {
-            let _ = client.update(r#"
+            let _ = client.update(
+                r#"
             CREATE SERVER dummy_srv FOREIGN DATA WRAPPER null_fdw;
-            CREATE FOREIGN TABLE "tab:1.0" (col INTEGER) SERVER dummy_srv;"#, None, None);
+            CREATE FOREIGN TABLE "tab:1.0" (col INTEGER) SERVER dummy_srv;"#,
+                None,
+                None,
+            );
             Ok(Some(()))
         });
 
         let expr = test::convert_simple_expr(r#"SELECT tab.col FROM "tab:1.0" as tab"#).unwrap();
 
-        assert_eq!(
-            expr,
-            sqlil::Expr::attr("tab", "1.0", "col")
-        );
+        assert_eq!(expr, sqlil::Expr::attr("tab", "1.0", "col"));
     }
 }

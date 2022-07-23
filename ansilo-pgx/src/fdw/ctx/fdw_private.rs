@@ -11,11 +11,13 @@ use super::{FdwContext, FdwQueryContext, FdwScanContext};
 pub(crate) unsafe fn into_fdw_private_rel(
     ctx: PgBox<FdwContext, AllocatedByPostgres>,
     query: FdwQueryContext,
+    planner: PlannerContext
 ) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
     list.push(ctx.into_pg() as *mut _);
     list.push(PgBox::new(query).into_pg() as *mut _);
+    list.push(PgBox::new(planner).into_pg() as *mut _);
 
     list.into_pg()
 }
@@ -25,14 +27,16 @@ pub(crate) unsafe fn from_fdw_private_rel(
 ) -> (
     PgBox<FdwContext, AllocatedByPostgres>,
     PgBox<FdwQueryContext, AllocatedByPostgres>,
+    PgBox<PlannerContext, AllocatedByPostgres>,
 ) {
     let list = PgList::<c_void>::from_pg(list);
-    assert!(list.len() == 2);
+    assert!(list.len() == 3);
 
     let ctx = PgBox::<FdwContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
     let query = PgBox::<FdwQueryContext>::from_pg(list.get_ptr(1).unwrap() as *mut _);
+    let planner = PgBox::<PlannerContext>::from_pg(list.get_ptr(2).unwrap() as *mut _);
 
-    (ctx, query)
+    (ctx, query, planner)
 }
 
 pub(crate) unsafe fn into_fdw_private_path(

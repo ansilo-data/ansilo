@@ -4,6 +4,8 @@ use pgx::pg_sys::{
     self, JoinPathExtraData, JoinType, Node, PlannerInfo, RelOptInfo, UpperRelationKind,
 };
 
+use crate::fdw::ctx::from_fdw_private_rel;
+
 /// Query planner and optimizer context needed to perform conversion of postgres nodes to sqlil
 #[derive(Clone)]
 pub enum PlannerContext {
@@ -13,17 +15,17 @@ pub enum PlannerContext {
 }
 
 impl PlannerContext {
-    pub fn base_rel(root: *const PlannerInfo, base_rel: *const RelOptInfo) -> Self {
+    pub fn base_rel(root: *mut PlannerInfo, base_rel: *mut RelOptInfo) -> Self {
         Self::BaseRel(BaseRelContext { root, base_rel })
     }
 
     pub fn join_rel(
-        root: *const PlannerInfo,
-        join_rel: *const RelOptInfo,
-        outer_rel: *const RelOptInfo,
-        inner_rel: *const RelOptInfo,
+        root: *mut PlannerInfo,
+        join_rel: *mut RelOptInfo,
+        outer_rel: *mut RelOptInfo,
+        inner_rel: *mut RelOptInfo,
         join_type: JoinType,
-        extra: *const JoinPathExtraData,
+        extra: *mut JoinPathExtraData,
     ) -> Self {
         Self::JoinRel(JoinRelContext {
             root,
@@ -36,11 +38,11 @@ impl PlannerContext {
     }
 
     pub fn upper_rel(
-        root: *const PlannerInfo,
+        root: *mut PlannerInfo,
         kind: UpperRelationKind,
-        input_rel: *const RelOptInfo,
-        output_rel: *const RelOptInfo,
-        extra: *const c_void,
+        input_rel: *mut RelOptInfo,
+        output_rel: *mut RelOptInfo,
+        extra: *mut c_void,
     ) -> Self {
         Self::UpperRel(UpperRelContext {
             root,
@@ -59,75 +61,71 @@ impl PlannerContext {
         }
     }
 
-    pub fn current_rel(&self) -> *const RelOptInfo {
-        match self {
-            PlannerContext::BaseRel(i) => (*i).base_rel,
-            PlannerContext::JoinRel(i) => (*i).join_rel,
-            PlannerContext::UpperRel(i) => (*i).output_rel,
-        }
-    }
+    /// Returns the rel representing either the base scan rel
+    /// or the upmost join rel if present
+    pub unsafe fn get_scan_rel(&self) -> Option<*mut RelOptInfo> {
+        let mut input_rel = match self {
+            PlannerContext::BaseRel(i) => return Some((*i).base_rel),
+            PlannerContext::JoinRel(i) => return Some((*i).join_rel),
+            PlannerContext::UpperRel(i) => (*i).input_rel,
+        };
 
-    pub fn as_base_rel(&self) -> Option<&BaseRelContext> {
-        if let Self::BaseRel(v) = self {
-            Some(v)
-        } else {
-            None
+        if [
+            pg_sys::RelOptKind_RELOPT_BASEREL,
+            pg_sys::RelOptKind_RELOPT_JOINREL,
+            pg_sys::RelOptKind_RELOPT_OTHER_JOINREL,
+        ]
+        .contains(&(*input_rel).reloptkind as _)
+        {
+            return Some(input_rel);
         }
-    }
 
-    pub fn as_join_rel(&self) -> Option<&JoinRelContext> {
-        if let Self::JoinRel(v) = self {
-            Some(v)
-        } else {
-            None
+        if (*input_rel).fdw_private.is_null() {
+            return None;
         }
-    }
 
-    pub fn as_upper_rel(&self) -> Option<&UpperRelContext> {
-        if let Self::UpperRel(v) = self {
-            Some(v)
-        } else {
-            None
-        }
+        let (_, _, planner) = from_fdw_private_rel((*input_rel).fdw_private as *mut _);
+
+        planner.get_scan_rel()
     }
 }
 
 #[derive(Clone)]
 pub struct BaseRelContext {
     /// The root query planner info
-    pub root: *const PlannerInfo,
+    pub root: *mut PlannerInfo,
     /// The relation currently being processed
-    pub base_rel: *const RelOptInfo,
+    pub base_rel: *mut RelOptInfo,
 }
 
 #[derive(Clone)]
 pub struct JoinRelContext {
     /// The root query planner info
-    pub root: *const PlannerInfo,
+    pub root: *mut PlannerInfo,
     /// The relation currently being processed
-    pub join_rel: *const RelOptInfo,
+    pub join_rel: *mut RelOptInfo,
     /// The join inner rel
-    pub outer_rel: *const RelOptInfo,
+    pub outer_rel: *mut RelOptInfo,
     /// The join inner rel
-    pub inner_rel: *const RelOptInfo,
+    pub inner_rel: *mut RelOptInfo,
     /// The type of join
     pub join_type: JoinType,
     /// The extra join data
-    pub extra: *const JoinPathExtraData,
+    pub extra: *mut JoinPathExtraData,
 }
 
 #[derive(Clone)]
 pub struct UpperRelContext {
     /// The root query planner info
-    pub root: *const PlannerInfo,
+    pub root: *mut PlannerInfo,
     /// The type of the upper relation
     pub kind: UpperRelationKind,
     /// The input rel
-    pub input_rel: *const RelOptInfo,
+    pub input_rel: *mut RelOptInfo,
     /// The output rel
-    pub output_rel: *const RelOptInfo,
+    pub output_rel: *mut RelOptInfo,
     /// The extra join data
-    pub extra: *const c_void,
+    pub extra: *mut c_void,
 }
 
 /// Mapping data that is accrued while converting pg expr's to sqlil

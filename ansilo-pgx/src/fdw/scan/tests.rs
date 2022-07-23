@@ -718,4 +718,71 @@ mod tests {
     fn test_fdw_scan_select_full_join_explain() {
         assert_query_plan_expected!("test_cases/0019_select_full_join.json");
     }
+
+    #[pg_test]
+    fn test_fdw_scan_select_inner_join_local() {
+        setup_test("scan_select_inner_join_local");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" p INNER JOIN "pets:1.0" pets ON MD5(pets.owner_id::text) = MD5(p.id::text)"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                    i["pet_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Mary".into(), "Jane".into(), "Salt".into()),
+                ("Mary".into(), "Jane".into(), "Pepper".into()),
+                ("Gary".into(), "Gregson".into(), "Relish".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_inner_join_local_explain() {
+        assert_query_plan_expected!("test_cases/0020_select_inner_join_local.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_join_where_group_order_limit() {
+        setup_test("scan_select_join_where_group_order_limit");
+
+        let results = execute_query(
+            r#"
+            SELECT p.first_name, p.last_name, COUNT(*) as pets 
+            FROM "people:1.0" p 
+            INNER JOIN "pets:1.0" pets ON pets.owner_id = p.id
+            WHERE pets.pet_name != 'XXX'
+            GROUP BY p.first_name, p.last_name
+            ORDER BY pets DESC
+            LIMIT 3
+            "#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                    i["pets"].value::<i32>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Mary".into(), "Jane".into(), 2),
+                ("Gary".into(), "Gregson".into(), 1),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_join_where_group_order_limit_explain() {
+        assert_query_plan_expected!("test_cases/0021_select_join_where_group_order_limit.json");
+    }
 }

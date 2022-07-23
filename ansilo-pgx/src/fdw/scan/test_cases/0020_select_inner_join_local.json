@@ -1,0 +1,127 @@
+{
+    "SQL": "SELECT * FROM \"people:1.0\" p INNER JOIN \"pets:1.0\" pets ON MD5(pets.owner_id::text) = MD5(p.id::text)",
+    "Expected": {
+        "Plan": {
+            "Node Type": "Hash Join",
+            "Join Type": "Inner",
+            "Output": [
+                "p.id",
+                "p.first_name",
+                "p.last_name",
+                "pets.id",
+                "pets.owner_id",
+                "pets.pet_name"
+            ],
+            "Inner Unique": false,
+            "Hash Cond": "(md5((p.id)::text) = md5((pets.owner_id)::text))",
+            "Plans": [
+                {
+                    "Node Type": "Foreign Scan",
+                    "Operation": "Select",
+                    "Relation Name": "people:1.0",
+                    "Output": [
+                        "p.id",
+                        "p.first_name",
+                        "p.last_name"
+                    ],
+                    "Local Conds": [],
+                    "Remote Conds": [],
+                    "Local Ops": [],
+                    "Remote Ops": [
+                        {
+                            "AddColumn": {
+                                "0": "c0",
+                                "1": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "id",
+                                    "entity_id": "people",
+                                    "version_id": "1.0"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c1",
+                                "1": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "first_name",
+                                    "entity_id": "people",
+                                    "version_id": "1.0"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c2",
+                                "1": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "last_name",
+                                    "entity_id": "people",
+                                    "version_id": "1.0"
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "Node Type": "Hash",
+                    "Output": [
+                        "pets.id",
+                        "pets.owner_id",
+                        "pets.pet_name"
+                    ],
+                    "Plans": [
+                        {
+                            "Node Type": "Foreign Scan",
+                            "Operation": "Select",
+                            "Relation Name": "pets:1.0",
+                            "Output": [
+                                "pets.id",
+                                "pets.owner_id",
+                                "pets.pet_name"
+                            ],
+                            "Local Conds": [],
+                            "Remote Conds": [],
+                            "Local Ops": [],
+                            "Remote Ops": [
+                                {
+                                    "AddColumn": {
+                                        "0": "c0",
+                                        "1": {
+                                            "@type": "EntityVersionAttribute",
+                                            "attribute_id": "id",
+                                            "entity_id": "pets",
+                                            "version_id": "1.0"
+                                        }
+                                    }
+                                },
+                                {
+                                    "AddColumn": {
+                                        "0": "c1",
+                                        "1": {
+                                            "@type": "EntityVersionAttribute",
+                                            "attribute_id": "owner_id",
+                                            "entity_id": "pets",
+                                            "version_id": "1.0"
+                                        }
+                                    }
+                                },
+                                {
+                                    "AddColumn": {
+                                        "0": "c2",
+                                        "1": {
+                                            "@type": "EntityVersionAttribute",
+                                            "attribute_id": "pet_name",
+                                            "entity_id": "pets",
+                                            "version_id": "1.0"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
