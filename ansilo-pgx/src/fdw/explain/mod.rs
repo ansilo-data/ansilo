@@ -35,11 +35,6 @@ pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *
         );
         explain_json(
             es,
-            "Local Ops",
-            serde_json::to_value(select.local_ops.clone()).unwrap(),
-        );
-        explain_json(
-            es,
             "Remote Ops",
             serde_json::to_value(select.remote_ops.clone()).unwrap(),
         );

@@ -13,7 +13,6 @@
                 "(md5((first_name)::text) = '61409aa1fd47d4a5332de23cbf59a36f'::text)"
             ],
             "Remote Conds": [],
-            "Local Ops": [],
             "Remote Ops": [
                 {
                     "AddColumn": {

@@ -16,7 +16,6 @@
             "Remote Conds": [
                 "(id = owner_id)"
             ],
-            "Local Ops": [],
             "Remote Ops": [
                 {
                     "AddJoin": {

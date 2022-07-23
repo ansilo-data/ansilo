@@ -13,7 +13,6 @@
             "Remote Conds": [
                 "((first_name)::text = 'Mary'::text)"
             ],
-            "Local Ops": [],
             "Remote Ops": [
                 {
                     "AddWhere": {

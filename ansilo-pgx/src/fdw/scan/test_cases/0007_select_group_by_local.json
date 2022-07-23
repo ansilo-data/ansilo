@@ -28,7 +28,6 @@
                             ],
                             "Local Conds": [],
                             "Remote Conds": [],
-                            "Local Ops": [],
                             "Remote Ops": [
                                 {
                                     "AddColumn": {

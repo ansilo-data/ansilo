@@ -340,24 +340,14 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         _ => return,
     };
 
-    // Skip where not everything can be pushed down
-    if !outer_query.pushdown_safe() || !inner_query.pushdown_safe() {
-        return;
-    }
-
     // Skip where local conditions need to be evaluated before the join
     if !outer_query.local_conds.is_empty() || !inner_query.local_conds.is_empty() {
         return;
     }
 
-    // We only support joining to a base table with conditions (no grouping, windowing etc)
-    let mut inner_ops = inner_query
-        .as_select()
-        .unwrap()
-        .all_ops()
-        .cloned()
-        .collect::<Vec<_>>();
+    let mut inner_ops = inner_query.as_select().unwrap().remote_ops.clone();
 
+    // We only support joining to a base table with conditions (no grouping, windowing etc)
     if inner_ops.iter().any(|i| !i.is_add_where()) {
         return;
     }
@@ -1294,7 +1284,7 @@ unsafe fn apply_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
     // We have already applied these ops to the query before but not on the
     // remote side
     // TODO: optimise so we dont perform duplicate work
-    for query_op in select.all_ops() {
+    for query_op in select.remote_ops.iter() {
         let _ = ctx
             .send(ClientMessage::Select(ClientSelectMessage::Apply(
                 query_op.clone(),
@@ -1311,17 +1301,16 @@ unsafe fn estimate_path_cost(
 ) {
     apply_query_state(ctx, query);
 
-    let select = query.as_select_mut().unwrap();
     let mut cost = None;
 
     // Apply each of the query operations and evaluate the cost
     for query_op in new_query_ops {
-        if !can_push_down(select, &query_op) {
-            select.local_ops.push(query_op);
+        if !can_push_down(query, &query_op) {
             continue;
         }
 
-        if let Some(new_cost) = apply_query_operation(ctx, select, query_op) {
+        if let Some(new_cost) = apply_query_operation(ctx, query.as_select_mut().unwrap(), query_op)
+        {
             cost = Some(new_cost);
         }
     }
@@ -1331,22 +1320,14 @@ unsafe fn estimate_path_cost(
     }
 }
 
-fn can_push_down(select: &mut FdwSelectQuery, query_op: &SelectQueryOperation) -> bool {
-    if select.local_ops.is_empty() {
-        return true;
-    }
-
-    // Push downs are not affected by output cols
-    let mut ops = select.local_ops.iter().filter(|i| !i.is_add_column());
+fn can_push_down(query: &FdwQueryContext, query_op: &SelectQueryOperation) -> bool {
+    let select = query.as_select().unwrap();
+    let has_local_conds = !query.local_conds.is_empty();
 
     match query_op {
         SelectQueryOperation::AddColumn(_) => true,
-        SelectQueryOperation::AddWhere(_) => ops.any(|i| !i.is_add_where()),
-        SelectQueryOperation::AddJoin(_) => ops.any(|i| !i.is_add_where()),
-        SelectQueryOperation::AddGroupBy(_) => ops.count() > 0,
-        SelectQueryOperation::AddOrderBy(_) => ops.count() > 0,
-        SelectQueryOperation::SetRowLimit(_) => ops.count() > 0,
-        SelectQueryOperation::SetRowOffset(_) => ops.count() > 0,
+        SelectQueryOperation::AddWhere(_) => true,
+        _ => !has_local_conds,
     }
 }
 
@@ -1371,10 +1352,7 @@ fn apply_query_operation(
             select.remote_ops.push(query_op);
             Some(cost)
         }
-        QueryOperationResult::PerformedLocally => {
-            select.local_ops.push(query_op);
-            None
-        }
+        QueryOperationResult::PerformedLocally => None,
     }
 }
 

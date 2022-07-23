@@ -36,10 +36,6 @@ impl FdwQueryContext {
         }
     }
 
-    pub fn pushdown_safe(&self) -> bool {
-        self.q.pushdown_safe()
-    }
-
     pub fn as_select(&self) -> Option<&FdwSelectQuery> {
         match &self.q {
             FdwQueryType::Select(q) => Some(q),
@@ -60,27 +56,13 @@ pub enum FdwQueryType {
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct FdwSelectQuery {
-    /// The conditions which are performed locally (can't be pushed down)
-    pub local_ops: Vec<SelectQueryOperation>,
     /// The conditions which are able to be pushed down to the remote
     pub remote_ops: Vec<SelectQueryOperation>,
     /// The current column alias counter
     col_num: u32,
 }
 
-impl FdwQueryType {
-    fn pushdown_safe(&self) -> bool {
-        match self {
-            FdwQueryType::Select(q) => q.local_ops.is_empty(),
-        }
-    }
-}
-
 impl FdwSelectQuery {
-    pub(crate) fn all_ops(&self) -> Chain<Iter<SelectQueryOperation>, Iter<SelectQueryOperation>> {
-        self.remote_ops.iter().chain(self.local_ops.iter())
-    }
-
     pub(crate) fn new_column_alias(&mut self) -> String {
         let num = self.col_num;
         self.col_num += 1;

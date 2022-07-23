@@ -12,7 +12,6 @@
             ],
             "Local Conds": [],
             "Remote Conds": [],
-            "Local Ops": [],
             "Remote Ops": [
                 {
                     "SetRowOffset": 1
