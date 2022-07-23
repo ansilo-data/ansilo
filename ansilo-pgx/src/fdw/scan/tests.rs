@@ -66,9 +66,7 @@ mod tests {
             "large",
             EntityVersionConfig::minimal(
                 "1.0",
-                vec![
-                    EntityAttributeConfig::minimal("x", DataType::UInt32),
-                ],
+                vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
                 EntitySourceConfig::minimal(""),
             ),
             (),
@@ -831,19 +829,9 @@ mod tests {
                 (SELECT first_name FROM "people:1.0" WHERE id = x) as first_name
             FROM generate_series(1, 2)
             "#,
-            |i| {
-                (
-                    i["first_name"].value::<String>().unwrap(),
-                )
-            },
+            |i| (i["first_name"].value::<String>().unwrap(),),
         );
 
-        assert_eq!(
-            results,
-            vec![
-                ("Mary".into()),
-                ("John".into()),
-            ]
-        );
+        assert_eq!(results, vec![("Mary".into(),), ("John".into(),),]);
     }
 }
