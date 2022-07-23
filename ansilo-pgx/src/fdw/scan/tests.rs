@@ -827,7 +827,7 @@ mod tests {
             r#"
             SELECT 
                 (SELECT first_name FROM "people:1.0" WHERE id = x) as first_name
-            FROM generate_series(1, 2)
+            FROM generate_series(1, 2) as x
             "#,
             |i| (i["first_name"].value::<String>().unwrap(),),
         );
