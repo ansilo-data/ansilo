@@ -310,7 +310,7 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
-    void executeMultiple() throws Exception {
+    void executeMultipleWithRestart() throws Exception {
         this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
         this.initPreparedQuery();
 
@@ -325,6 +325,7 @@ public class JdbcPreparedQueryTest {
             assertEquals(5, wrote);
 
             this.preparedQuery.execute();
+            this.preparedQuery.restart();;
         }
 
         verify(this.innerStatement, times(3)).setInt(1, 123);

@@ -160,6 +160,18 @@ impl QueryHandle for JdbcPreparedQuery {
         })
     }
 
+    fn restart(&mut self) -> Result<()> {
+        self.jvm.with_local_frame(32, |env| {
+            let jdbc_result_set = env
+                .call_method(self.jdbc_prepared_statement.as_obj(), "restart", "()V", &[])
+                .context("Failed to invoke JdbcPreparedQuery::restart")?;
+
+            // TODO: exception handling
+
+            Ok(())
+        })
+    }
+
     fn execute(&mut self) -> Result<JdbcResultSet> {
         self.jvm.with_local_frame(32, |env| {
             let jdbc_result_set = env

@@ -4,7 +4,7 @@ use pgx::*;
 #[pg_schema]
 mod tests {
     use std::{
-        fs,
+        fs, iter,
         panic::{RefUnwindSafe, UnwindSafe},
         path::PathBuf,
         thread,
@@ -56,6 +56,18 @@ mod tests {
                     EntityAttributeConfig::minimal("id", DataType::UInt32),
                     EntityAttributeConfig::minimal("owner_id", DataType::UInt32),
                     EntityAttributeConfig::minimal("pet_name", DataType::rust_string()),
+                ],
+                EntitySourceConfig::minimal(""),
+            ),
+            (),
+        ));
+
+        entities.add(EntitySource::minimal(
+            "large",
+            EntityVersionConfig::minimal(
+                "1.0",
+                vec![
+                    EntityAttributeConfig::minimal("x", DataType::UInt32),
                 ],
                 EntitySourceConfig::minimal(""),
             ),
@@ -116,6 +128,15 @@ mod tests {
             ],
         );
 
+        conf.set_data(
+            "large",
+            "1.0",
+            (0..1_000_000)
+                .into_iter()
+                .map(|x| vec![DataValue::UInt32(x)])
+                .collect(),
+        );
+
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
             .unwrap();
 
@@ -141,9 +162,7 @@ mod tests {
             client.update(
                 format!(
                     r#"
-                DROP FOREIGN TABLE IF EXISTS "people:1.0";
-                DROP FOREIGN TABLE IF EXISTS "pets:1.0";
-                DROP SERVER IF EXISTS test_srv;
+                DROP SERVER IF EXISTS test_srv CASCADE;
                 CREATE SERVER test_srv FOREIGN DATA WRAPPER ansilo_fdw OPTIONS (
                     socket '{socket_path}',
                     data_source 'memory'
@@ -159,6 +178,10 @@ mod tests {
                     id BIGINT,
                     owner_id BIGINT,
                     pet_name VARCHAR
+                ) SERVER test_srv;
+
+                CREATE FOREIGN TABLE "large:1.0" (
+                    x BIGINT
                 ) SERVER test_srv;
                 "#
                 )
@@ -704,9 +727,21 @@ mod tests {
         assert_eq!(
             results,
             vec![
-                (Some("Mary".into()), Some("Jane".into()), Some("Pepper".into())),
-                (Some("Mary".into()), Some("Jane".into()), Some("Salt".into())),
-                (Some("Gary".into()), Some("Gregson".into()), Some("Relish".into())),
+                (
+                    Some("Mary".into()),
+                    Some("Jane".into()),
+                    Some("Pepper".into())
+                ),
+                (
+                    Some("Mary".into()),
+                    Some("Jane".into()),
+                    Some("Salt".into())
+                ),
+                (
+                    Some("Gary".into()),
+                    Some("Gregson".into()),
+                    Some("Relish".into())
+                ),
                 (Some("John".into()), Some("Smith".into()), None),
                 (Some("Mary".into()), Some("Bennet".into()), None),
                 (None, None, Some("Luna".into())),
@@ -784,5 +819,31 @@ mod tests {
     #[pg_test]
     fn test_fdw_scan_select_join_where_group_order_limit_explain() {
         assert_query_plan_expected!("test_cases/0021_select_join_where_group_order_limit.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_paramterized_sub_query() {
+        setup_test("scan_select_paramterized_sub_query");
+
+        let results = execute_query(
+            r#"
+            SELECT 
+                (SELECT first_name FROM "people:1.0" WHERE id = x) as first_name
+            FROM generate_series(1, 2)
+            "#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Mary".into()),
+                ("John".into()),
+            ]
+        );
     }
 }

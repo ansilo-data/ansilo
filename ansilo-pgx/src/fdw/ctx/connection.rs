@@ -26,6 +26,8 @@ pub struct FdwContext {
     pub entity: EntityVersionIdentifier,
     /// The current query handle writer
     pub query_writer: Option<QueryHandleWriter<FdwQueryHandle>>,
+    /// The current query handle
+    pub query_handle: Option<FdwQueryHandle>,
     /// The current result set reader
     pub result_set: Option<ResultSetReader<FdwResultSet>>,
 }
@@ -60,6 +62,7 @@ impl FdwContext {
             data_source_id: data_source_id.into(),
             entity,
             query_writer: None,
+            query_handle: None,
             result_set: None,
         }
     }
@@ -108,9 +111,11 @@ impl FdwContext {
 
     pub fn execute_query(&mut self) -> Result<RowStructure> {
         let writer = self.query_writer.take().context("Query not prepared")?;
-        let result_set = writer.inner()?.execute()?;
+        let mut query_handle = writer.inner()?;
+        let result_set = query_handle.execute()?;
         let row_structure = result_set.row_structure.clone();
 
+        self.query_handle = Some(query_handle);
         self.result_set = Some(ResultSetReader::new(result_set)?);
 
         Ok(row_structure)
@@ -123,22 +128,12 @@ impl FdwContext {
     }
 
     pub fn restart_query(&mut self) -> Result<()> {
-        let response = self.send(ClientMessage::RestartQuery)?;
+        let handle = self.query_handle.as_mut().context("Query not executed")?;
+        handle.restart()?;
 
-        match response {
-            ServerMessage::QueryRestarted => {}
-            _ => return Err(unexpected_response(response).context("Failed to restart query")),
-        };
-
-        let query_input = self
-            .query_writer
-            .take()
-            .context("Query not prepared")?
-            .get_structure()
-            .clone();
         self.query_writer = Some(QueryHandleWriter::new(FdwQueryHandle {
             connection: self.connection.clone(),
-            query_input: query_input,
+            query_input: handle.query_input.clone(),
         })?);
 
         Ok(())
@@ -167,6 +162,15 @@ impl QueryHandle for FdwQueryHandle {
         match response {
             ServerMessage::QueryParamsWritten => Ok(buff.len()),
             _ => return Err(unexpected_response(response).context("Failed to write query params")),
+        }
+    }
+
+    fn restart(&mut self) -> Result<()> {
+        let response = self.connection.send(ClientMessage::RestartQuery)?;
+
+        match response {
+            ServerMessage::QueryRestarted => Ok(()),
+            _ => return Err(unexpected_response(response).context("Failed to restart query")),
         }
     }
 

@@ -1,9 +1,13 @@
-use std::sync::Arc;
+use std::{collections::HashMap, io, sync::Arc};
 
-use ansilo_core::{data::DataType, err::Result, sqlil};
+use ansilo_core::{
+    data::DataType,
+    err::{bail, Context, Result},
+    sqlil,
+};
 
 use crate::{
-    common::entity::ConnectorEntityConfig,
+    common::{data::DataReader, entity::ConnectorEntityConfig},
     interface::{QueryHandle, QueryInputStructure},
 };
 
@@ -25,6 +29,8 @@ pub struct MemoryQueryHandle {
     query: MemoryQuery,
     data: Arc<MemoryConnectionConfig>,
     entities: ConnectorEntityConfig<()>,
+    param_buff: Vec<u8>,
+    reset: bool,
 }
 
 impl MemoryQueryHandle {
@@ -37,6 +43,8 @@ impl MemoryQueryHandle {
             query,
             data,
             entities,
+            param_buff: vec![],
+            reset: false,
         }
     }
 }
@@ -48,16 +56,41 @@ impl QueryHandle for MemoryQueryHandle {
         Ok(QueryInputStructure::new(self.query.params.clone()))
     }
 
-    fn write(&mut self, _buff: &[u8]) -> Result<usize> {
-        unimplemented!()
+    fn write(&mut self, buff: &[u8]) -> Result<usize> {
+        if self.reset {
+            self.param_buff.clear();
+            self.reset = false;
+        }
+        self.param_buff.extend_from_slice(buff);
+        Ok(buff.len())
+    }
+
+    fn restart(&mut self) -> Result<()> {
+        self.reset = true;
+        Ok(())
     }
 
     fn execute(&mut self) -> Result<MemoryResultSet> {
+        let mut params = HashMap::new();
+        let mut param_reader = DataReader::new(
+            io::Cursor::new(self.param_buff.clone()),
+            self.get_structure().unwrap().types(),
+        );
+
+        for (id, _) in self.query.params.iter() {
+            params.insert(
+                *id,
+                param_reader
+                    .read_data_value()?
+                    .context("Not all query parameters have been written")?,
+            );
+        }
+
         let executor = MemoryQueryExecutor::new(
             Arc::clone(&self.data),
             self.entities.clone(),
             self.query.select.clone(),
-            vec![],
+            params,
         );
 
         executor.run()

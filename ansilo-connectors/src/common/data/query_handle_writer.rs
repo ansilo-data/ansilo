@@ -2,7 +2,7 @@ use std::io::{self, BufWriter, Write};
 
 use ansilo_core::{
     data::DataValue,
-    err::{Error, Result, Context},
+    err::{Context, Error, Result},
 };
 
 use crate::interface::{QueryHandle, QueryInputStructure};
@@ -64,8 +64,11 @@ where
     /// Returns the underlying query handle.
     /// Flushes any buffered data.
     pub fn inner(mut self) -> Result<T> {
-        self.inner.inner_mut().flush().context("Failed to flush the buffer")?;
-        
+        self.inner
+            .inner_mut()
+            .flush()
+            .context("Failed to flush the buffer")?;
+
         Ok(self
             .inner
             .inner()
@@ -84,7 +87,6 @@ where
         self.inner.write_data_value(data)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -106,6 +108,10 @@ mod tests {
 
         fn write(&mut self, buff: &[u8]) -> Result<usize> {
             Ok(self.1.write(buff)?)
+        }
+
+        fn restart(&mut self) -> Result<()> {
+            unimplemented!()
         }
 
         fn execute(&mut self) -> Result<MockResultSet> {

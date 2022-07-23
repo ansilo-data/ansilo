@@ -16,7 +16,16 @@ impl QueryCompiler for MemoryQueryCompiler {
         _conf: &ConnectorEntityConfig<()>,
         select: sql::Select,
     ) -> Result<MemoryQuery> {
-        // TODO[low]: param support
-        Ok(MemoryQuery::new(select, vec![]))
+        let mut params = vec![];
+
+        select.exprs().for_each(|e| {
+            e.walk(&mut |e| {
+                if let sql::Expr::Parameter(p) = e {
+                    params.push((p.id, p.r#type.clone()))
+                }
+            })
+        });
+
+        Ok(MemoryQuery::new(select, params))
     }
 }

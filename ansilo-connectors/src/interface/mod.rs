@@ -2,13 +2,13 @@ pub mod boxed;
 pub mod container;
 
 use ansilo_core::{
-    data::DataType,
     config::{self, EntityVersionConfig, NodeConfig},
+    data::DataType,
     err::Result,
     sqlil as sql,
 };
 use bincode::{Decode, Encode};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
@@ -264,6 +264,9 @@ pub trait QueryHandle {
     /// Returns the number of bytes written
     fn write(&mut self, buff: &[u8]) -> Result<usize>;
 
+    /// Restarts the query, so new query parameters can be written
+    fn restart(&mut self) -> Result<()>;
+
     /// Executes the supplied query
     fn execute(&mut self) -> Result<Self::TResultSet>;
 }
@@ -281,6 +284,10 @@ pub struct QueryInputStructure {
 impl QueryInputStructure {
     pub fn new(params: Vec<(u32, DataType)>) -> Self {
         Self { params }
+    }
+
+    pub fn types(&self) -> Vec<DataType> {
+        self.params.iter().map(|(_, t)| t.clone()).collect()
     }
 }
 

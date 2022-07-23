@@ -1,9 +1,14 @@
-use std::{cmp, collections::HashSet, iter, sync::Arc};
+use std::{
+    cmp,
+    collections::{HashMap, HashSet},
+    iter,
+    sync::Arc,
+};
 
 use ansilo_core::{
     config::EntityAttributeConfig,
     data::{DataType, DataValue, StringOptions},
-    err::{bail, Error, Result},
+    err::{bail, Context, Error, Result},
     sqlil::{self, EntityVersionIdentifier},
 };
 use itertools::Itertools;
@@ -17,7 +22,7 @@ pub(crate) struct MemoryQueryExecutor {
     data: Arc<MemoryConnectionConfig>,
     entities: ConnectorEntityConfig<()>,
     query: sqlil::Select,
-    params: Vec<DataValue>,
+    params: HashMap<u32, DataValue>,
 }
 
 /// This entire implementation is garbage but it doesn't matter as this is used
@@ -27,7 +32,7 @@ impl MemoryQueryExecutor {
         data: Arc<MemoryConnectionConfig>,
         entities: ConnectorEntityConfig<()>,
         query: sqlil::Select,
-        params: Vec<DataValue>,
+        params: HashMap<u32, DataValue>,
     ) -> Self {
         Self {
             data,
@@ -318,7 +323,12 @@ impl MemoryQueryExecutor {
                 }
             }
             sqlil::Expr::Constant(v) => DataContext::Cell(v.value.clone()),
-            sqlil::Expr::Parameter(_) => todo!(),
+            sqlil::Expr::Parameter(param) => DataContext::Cell(
+                self.params
+                    .get(&param.id)
+                    .context("Unknown parameter id")?
+                    .clone(),
+            ),
             sqlil::Expr::UnaryOp(_) => todo!(),
             sqlil::Expr::BinaryOp(op) => {
                 let left = self.evaluate(data, &op.left)?.as_cell()?;
@@ -329,6 +339,18 @@ impl MemoryQueryExecutor {
                 {
                     return Ok(DataContext::Cell(DataValue::Null));
                 }
+
+                let (left, right) = if left.r#type() != right.r#type() {
+                    if let Ok(coerced) = right.clone().try_coerce_into(&left.r#type()) {
+                        (left, coerced)
+                    } else if let Ok(coerced) = left.clone().try_coerce_into(&right.r#type()) {
+                        (coerced, right)
+                    } else {
+                        (left, right)
+                    }
+                } else {
+                    (left, right)
+                };
 
                 DataContext::Cell(match op.r#type {
                     sqlil::BinaryOpType::Add => todo!(),
@@ -660,7 +682,10 @@ mod tests {
         (entities, conf)
     }
 
-    fn create_executor(query: sqlil::Select, params: Vec<DataValue>) -> MemoryQueryExecutor {
+    fn create_executor(
+        query: sqlil::Select,
+        params: HashMap<u32, DataValue>,
+    ) -> MemoryQueryExecutor {
         let (entities, data) = mock_data();
 
         MemoryQueryExecutor::new(Arc::new(data), entities, query, params)
@@ -678,7 +703,7 @@ mod tests {
             sqlil::Expr::attr("people", "1.0", "last_name"),
         ));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
 
         let results = executor.run().unwrap();
 
@@ -718,7 +743,7 @@ mod tests {
     fn test_memory_connector_executor_select_invalid_entity() {
         let select = sqlil::Select::new(sqlil::entity("invalid", "1.0"));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
 
         executor.run().unwrap_err();
     }
@@ -727,7 +752,7 @@ mod tests {
     fn test_memory_connector_executor_select_invalid_version() {
         let select = sqlil::Select::new(sqlil::entity("people", "invalid"));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
 
         executor.run().unwrap_err();
     }
@@ -736,7 +761,7 @@ mod tests {
     fn test_memory_connector_executor_select_no_cols() {
         let select = sqlil::Select::new(sqlil::entity("people", "1.0"));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
 
         let results = executor.run().unwrap();
 
@@ -754,7 +779,7 @@ mod tests {
             sqlil::Expr::attr("people", "1.0", "first_name"),
         ));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
 
         let results = executor.run().unwrap();
 
@@ -791,7 +816,7 @@ mod tests {
                 sqlil::Expr::Constant(sqlil::Constant::new(DataValue::from("John"))),
             )));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
 
         let results = executor.run().unwrap();
 
@@ -818,7 +843,7 @@ mod tests {
 
         select.row_skip = 1;
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -847,7 +872,7 @@ mod tests {
 
         select.row_limit = Some(1);
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -879,7 +904,7 @@ mod tests {
                 "first_name",
             )));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -918,7 +943,7 @@ mod tests {
                 "first_name",
             )));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -954,7 +979,7 @@ mod tests {
             sqlil::Expr::AggregateCall(AggregateCall::Count),
         ));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -979,7 +1004,7 @@ mod tests {
             )),
         ));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1017,7 +1042,7 @@ mod tests {
 
         select.group_bys.push(full_name);
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1067,7 +1092,7 @@ mod tests {
             "first_name",
         )));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1120,7 +1145,7 @@ mod tests {
             "first_name",
         )));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1178,7 +1203,7 @@ mod tests {
             "last_name",
         )));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1240,7 +1265,7 @@ mod tests {
             sqlil::Expr::attr("pets", "1.0", "pet_name"),
         ));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1309,7 +1334,7 @@ mod tests {
             sqlil::Expr::attr("pets", "1.0", "pet_name"),
         ));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1383,7 +1408,7 @@ mod tests {
             sqlil::Expr::attr("pets", "1.0", "pet_name"),
         ));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1457,7 +1482,7 @@ mod tests {
             sqlil::Expr::attr("pets", "1.0", "pet_name"),
         ));
 
-        let executor = create_executor(select, vec![]);
+        let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
 
         assert_eq!(
@@ -1504,6 +1529,60 @@ mod tests {
                         DataValue::Utf8String("Luna".as_bytes().to_vec()),
                     ],
                 ]
+            )
+            .unwrap()
+        )
+    }
+
+    #[test]
+    fn test_memory_connector_executor_select_where_parameter() {
+        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        select.cols.push((
+            "first_name".to_string(),
+            sqlil::Expr::attr("people", "1.0", "first_name"),
+        ));
+        select.cols.push((
+            "last_name".to_string(),
+            sqlil::Expr::attr("people", "1.0", "last_name"),
+        ));
+
+        select
+            .r#where
+            .push(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                sqlil::Expr::attr("people", "1.0", "first_name"),
+                sqlil::BinaryOpType::Equal,
+                sqlil::Expr::Parameter(sqlil::Parameter::new(
+                    DataType::Utf8String(StringOptions::default()),
+                    1,
+                )),
+            )));
+
+        let executor = create_executor(
+            select,
+            [(1, DataValue::Utf8String("John".as_bytes().to_vec()))]
+                .into_iter()
+                .collect(),
+        );
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(
+            results,
+            MemoryResultSet::new(
+                vec![
+                    (
+                        "first_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    ),
+                    (
+                        "last_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    ),
+                ],
+                vec![vec![
+                    DataValue::Utf8String("John".as_bytes().to_vec()),
+                    DataValue::Utf8String("Smith".as_bytes().to_vec())
+                ],]
             )
             .unwrap()
         )

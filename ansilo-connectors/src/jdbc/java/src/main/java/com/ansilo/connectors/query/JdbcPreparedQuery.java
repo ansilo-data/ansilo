@@ -180,6 +180,17 @@ public class JdbcPreparedQuery {
     }
 
     /**
+     * Resets the parameter index to zero such that new query parameters can be written.
+     * 
+     * @return
+     * @throws SQLException
+     */
+    public void restart() throws SQLException {
+        // Reset parameter index for next execution
+        this.paramIndex = 0;
+    }
+
+    /**
      * Executes the query and resets the paraemter index to zero.
      * 
      * @return

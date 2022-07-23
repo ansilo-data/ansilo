@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::DataType;
+
 /// Data container for respective types
 #[derive(PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum DataValue {
@@ -29,6 +31,10 @@ pub enum DataValue {
 impl DataValue {
     pub fn is_null(&self) -> bool {
         *self == DataValue::Null
+    }
+
+    pub fn r#type(&self) -> DataType {
+        self.into()
     }
 }
 

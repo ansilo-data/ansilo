@@ -193,6 +193,13 @@ impl QueryHandle for QueryHandles {
         }
     }
 
+    fn restart(&mut self) -> Result<()> {
+        match self {
+            QueryHandles::Jdbc(h) => h.restart(),
+            QueryHandles::Memory(h) => h.restart(),
+        }
+    }
+
     fn execute(&mut self) -> Result<Self::TResultSet> {
         Ok(match self {
             QueryHandles::Jdbc(h) => ResultSets::Jdbc(h.execute()?),

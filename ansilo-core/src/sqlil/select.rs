@@ -37,6 +37,17 @@ impl Select {
             row_skip: 0,
         }
     }
+
+    /// Gets an iterator of all expressions in the query
+    pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
+        self.cols
+            .iter()
+            .map(|(_, e)| e)
+            .chain(self.joins.iter().flat_map(|i| &i.conds))
+            .chain(self.r#where.iter())
+            .chain(self.group_bys.iter())
+            .chain(self.order_bys.iter().map(|i| &i.expr))
+    }
 }
 
 /// A join clause
