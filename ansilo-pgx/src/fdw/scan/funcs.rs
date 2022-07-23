@@ -633,6 +633,12 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
     planner: &PlannerContext,
 ) {
     let (mut ctx, input_query, _) = from_fdw_private_rel((*inputrel).fdw_private as *mut _);
+
+    // We cannot ordering if conditions require local evaluation
+    if !input_query.local_conds.is_empty() {
+        return;
+    }
+
     let mut order_query = input_query.clone();
     let mut query_ops = vec![];
 
@@ -748,6 +754,11 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         return;
     }
 
+    // We cannot apply limit if conditions require local evaluation
+    if !input_query.local_conds.is_empty() {
+        return;
+    }
+    
     // No work needed
     if !(*extra).limit_needed {
         return;
@@ -1305,10 +1316,6 @@ unsafe fn estimate_path_cost(
 
     // Apply each of the query operations and evaluate the cost
     for query_op in new_query_ops {
-        if !can_push_down(query, &query_op) {
-            continue;
-        }
-
         if let Some(new_cost) = apply_query_operation(ctx, query.as_select_mut().unwrap(), query_op)
         {
             cost = Some(new_cost);
@@ -1317,17 +1324,6 @@ unsafe fn estimate_path_cost(
 
     if let Some(cost) = cost {
         query.cost = cost;
-    }
-}
-
-fn can_push_down(query: &FdwQueryContext, query_op: &SelectQueryOperation) -> bool {
-    let select = query.as_select().unwrap();
-    let has_local_conds = !query.local_conds.is_empty();
-
-    match query_op {
-        SelectQueryOperation::AddColumn(_) => true,
-        SelectQueryOperation::AddWhere(_) => true,
-        _ => !has_local_conds,
     }
 }
 
