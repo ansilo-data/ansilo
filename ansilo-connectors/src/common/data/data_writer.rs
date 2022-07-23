@@ -44,6 +44,11 @@ where
         self.structure.as_ref()
     }
 
+    pub fn restart(&mut self) -> Result<()> {
+        self.param_idx = 0;
+        Ok(())
+    }
+
     /// Writes the supplied data value to the underlying query handle
     pub fn write_data_value(&mut self, data: DataValue) -> Result<()> {
         if self.structure.is_some() && self.param_idx == self.num_params().unwrap() {

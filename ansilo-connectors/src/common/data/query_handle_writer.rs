@@ -63,11 +63,22 @@ where
 
     /// Returns the underlying query handle.
     /// Flushes any buffered data.
-    pub fn inner(mut self) -> Result<T> {
+    pub fn inner_mut(&mut self) -> &mut T {
+        &mut self.inner.inner_mut().get_mut().0
+    }
+
+    /// Flushes the written params to the underlying query
+    pub fn flush(&mut self) -> Result<()> {
         self.inner
             .inner_mut()
             .flush()
-            .context("Failed to flush the buffer")?;
+            .context("Failed to flush the buffer")
+    }
+
+    /// Returns the underlying query handle.
+    /// Flushes any buffered data.
+    pub fn inner(mut self) -> Result<T> {
+        self.flush()?;
 
         Ok(self
             .inner
@@ -80,6 +91,13 @@ where
     /// Get the expected data types of the query parameters
     pub fn get_structure(&self) -> &QueryInputStructure {
         &self.structure
+    }
+
+    /// Restarts the inner query
+    pub fn restart(&mut self) -> Result<()> {
+        self.inner.restart()?;
+        self.inner_mut().restart()?;
+        Ok(())
     }
 
     /// Writes the supplied data value to the underlying query handle

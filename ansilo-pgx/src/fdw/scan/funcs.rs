@@ -1085,7 +1085,7 @@ unsafe fn send_query_params(
         });
 
     // Finally, serialise and send the query params
-    ctx.write_query_input(input_data);
+    ctx.write_query_input(input_data).unwrap();
 }
 
 /// Retrieve next row from the result set, or clear tuple slot to indicate EOF

@@ -257,8 +257,12 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
     fn restart_query(&mut self) -> Result<()> {
         let query = mem::replace(&mut self.query, FdwQueryState::New);
+        
         self.query = match query {
-            FdwQueryState::Executed(handle, _) => FdwQueryState::Prepared(handle),
+            FdwQueryState::Executed(mut handle, _) => {
+                handle.0.restart()?;
+                FdwQueryState::Prepared(handle)
+            }
             _ => bail!(
                 "Failed to restart query: expecting query state to be 'executed' found {}",
                 query

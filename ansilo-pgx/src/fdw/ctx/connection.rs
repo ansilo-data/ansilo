@@ -26,8 +26,6 @@ pub struct FdwContext {
     pub entity: EntityVersionIdentifier,
     /// The current query handle writer
     pub query_writer: Option<QueryHandleWriter<FdwQueryHandle>>,
-    /// The current query handle
-    pub query_handle: Option<FdwQueryHandle>,
     /// The current result set reader
     pub result_set: Option<ResultSetReader<FdwResultSet>>,
 }
@@ -62,7 +60,6 @@ impl FdwContext {
             data_source_id: data_source_id.into(),
             entity,
             query_writer: None,
-            query_handle: None,
             result_set: None,
         }
     }
@@ -110,12 +107,12 @@ impl FdwContext {
     }
 
     pub fn execute_query(&mut self) -> Result<RowStructure> {
-        let writer = self.query_writer.take().context("Query not prepared")?;
-        let mut query_handle = writer.inner()?;
-        let result_set = query_handle.execute()?;
+        let writer = self.query_writer.as_mut().context("Query not prepared")?;
+        
+        writer.flush()?;
+        let result_set = writer.inner_mut().execute()?;
         let row_structure = result_set.row_structure.clone();
 
-        self.query_handle = Some(query_handle);
         self.result_set = Some(ResultSetReader::new(result_set)?);
 
         Ok(row_structure)
@@ -128,13 +125,8 @@ impl FdwContext {
     }
 
     pub fn restart_query(&mut self) -> Result<()> {
-        let handle = self.query_handle.as_mut().context("Query not executed")?;
-        handle.restart()?;
-
-        self.query_writer = Some(QueryHandleWriter::new(FdwQueryHandle {
-            connection: self.connection.clone(),
-            query_input: handle.query_input.clone(),
-        })?);
+        let writer = self.query_writer.as_mut().context("Query not executed")?;
+        writer.restart()?;
 
         Ok(())
     }
