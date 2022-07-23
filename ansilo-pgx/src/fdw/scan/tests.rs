@@ -39,8 +39,23 @@ mod tests {
             EntityVersionConfig::minimal(
                 "1.0",
                 vec![
+                    EntityAttributeConfig::minimal("id", DataType::UInt32),
                     EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
                     EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
+                ],
+                EntitySourceConfig::minimal(""),
+            ),
+            (),
+        ));
+
+        entities.add(EntitySource::minimal(
+            "pets",
+            EntityVersionConfig::minimal(
+                "1.0",
+                vec![
+                    EntityAttributeConfig::minimal("id", DataType::UInt32),
+                    EntityAttributeConfig::minimal("owner_id", DataType::UInt32),
+                    EntityAttributeConfig::minimal("pet_name", DataType::rust_string()),
                 ],
                 EntitySourceConfig::minimal(""),
             ),
@@ -51,10 +66,53 @@ mod tests {
             "people",
             "1.0",
             vec![
-                vec![DataValue::from("Mary"), DataValue::from("Jane")],
-                vec![DataValue::from("John"), DataValue::from("Smith")],
-                vec![DataValue::from("Gary"), DataValue::from("Gregson")],
-                vec![DataValue::from("Mary"), DataValue::from("Bennet")],
+                vec![
+                    DataValue::UInt32(1),
+                    DataValue::from("Mary"),
+                    DataValue::from("Jane"),
+                ],
+                vec![
+                    DataValue::UInt32(2),
+                    DataValue::from("John"),
+                    DataValue::from("Smith"),
+                ],
+                vec![
+                    DataValue::UInt32(3),
+                    DataValue::from("Gary"),
+                    DataValue::from("Gregson"),
+                ],
+                vec![
+                    DataValue::UInt32(4),
+                    DataValue::from("Mary"),
+                    DataValue::from("Bennet"),
+                ],
+            ],
+        );
+
+        conf.set_data(
+            "pets",
+            "1.0",
+            vec![
+                vec![
+                    DataValue::UInt32(1),
+                    DataValue::UInt32(1),
+                    DataValue::from("Pepper"),
+                ],
+                vec![
+                    DataValue::UInt32(2),
+                    DataValue::UInt32(1),
+                    DataValue::from("Salt"),
+                ],
+                vec![
+                    DataValue::UInt32(3),
+                    DataValue::UInt32(3),
+                    DataValue::from("Relish"),
+                ],
+                vec![
+                    DataValue::UInt32(4),
+                    DataValue::Null,
+                    DataValue::from("Luna"),
+                ],
             ],
         );
 
@@ -84,6 +142,7 @@ mod tests {
                 format!(
                     r#"
                 DROP FOREIGN TABLE IF EXISTS "people:1.0";
+                DROP FOREIGN TABLE IF EXISTS "pets:1.0";
                 DROP SERVER IF EXISTS test_srv;
                 CREATE SERVER test_srv FOREIGN DATA WRAPPER ansilo_fdw OPTIONS (
                     socket '{socket_path}',
@@ -91,8 +150,15 @@ mod tests {
                 );
 
                 CREATE FOREIGN TABLE "people:1.0" (
+                    id BIGINT,
                     first_name VARCHAR,
                     last_name VARCHAR
+                ) SERVER test_srv;
+
+                CREATE FOREIGN TABLE "pets:1.0" (
+                    id BIGINT,
+                    owner_id BIGINT,
+                    pet_name VARCHAR
                 ) SERVER test_srv;
                 "#
                 )
@@ -520,5 +586,136 @@ mod tests {
     #[pg_test]
     fn test_fdw_scan_select_offset_limit_explain() {
         assert_query_plan_expected!("test_cases/0014_select_limit_offset.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_single_col() {
+        assert_query_plan_expected!("test_cases/0015_select_single_col.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_inner_join() {
+        setup_test("scan_select_inner_join");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" p INNER JOIN "pets:1.0" pets ON pets.owner_id = p.id"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                    i["pet_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Mary".into(), "Jane".into(), "Pepper".into()),
+                ("Mary".into(), "Jane".into(), "Salt".into()),
+                ("Gary".into(), "Gregson".into(), "Relish".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_inner_join_explain() {
+        assert_query_plan_expected!("test_cases/0016_select_inner_join.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_left_join() {
+        setup_test("scan_select_left_join");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" p LEFT JOIN "pets:1.0" pets ON pets.owner_id = p.id"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                    i["pet_name"].value::<String>(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                ("Mary".into(), "Jane".into(), Some("Pepper".into())),
+                ("Mary".into(), "Jane".into(), Some("Salt".into())),
+                ("Gary".into(), "Gregson".into(), Some("Relish".into())),
+                ("John".into(), "Smith".into(), None),
+                ("Mary".into(), "Bennet".into(), None),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_left_join_explain() {
+        assert_query_plan_expected!("test_cases/0017_select_left_join.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_right_join() {
+        setup_test("scan_select_right_join");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" p RIGHT JOIN "pets:1.0" pets ON pets.owner_id = p.id"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>(),
+                    i["last_name"].value::<String>(),
+                    i["pet_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (Some("Mary".into()), Some("Jane".into()), "Pepper".into()),
+                (Some("Mary".into()), Some("Jane".into()), "Salt".into()),
+                (Some("Gary".into()), Some("Gregson".into()), "Relish".into()),
+                (None, None, "Luna".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_right_join_explain() {
+        assert_query_plan_expected!("test_cases/0018_select_right_join.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_full_join() {
+        setup_test("scan_select_full_join");
+
+        let results = execute_query(
+            r#"SELECT * FROM "people:1.0" p FULL JOIN "pets:1.0" pets ON pets.owner_id = p.id"#,
+            |i| {
+                (
+                    i["first_name"].value::<String>(),
+                    i["last_name"].value::<String>(),
+                    i["pet_name"].value::<String>(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (Some("Mary".into()), Some("Jane".into()), Some("Pepper".into())),
+                (Some("Mary".into()), Some("Jane".into()), Some("Salt".into())),
+                (Some("Gary".into()), Some("Gregson".into()), Some("Relish".into())),
+                (Some("John".into()), Some("Smith".into()), None),
+                (Some("Mary".into()), Some("Bennet".into()), None),
+                (None, None, Some("Luna".into())),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_scan_select_full_join_explain() {
+        assert_query_plan_expected!("test_cases/0019_select_full_join.json");
     }
 }

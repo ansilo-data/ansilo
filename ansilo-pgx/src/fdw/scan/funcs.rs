@@ -81,7 +81,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 
             // Store conditions requiring local evaluation for later
             if expr.is_none() {
-                query.local_conds.push(i);
+  &mut &mut               query.local_conds.push(i);
                 return None;
             }
 
@@ -239,13 +239,29 @@ pub unsafe extern "C" fn get_foreign_paths(
     for ppi in param_paths.into_iter() {
         let mut query = base_query.clone();
 
-        let ops = convert_list((*ppi).ppi_clauses, &mut query.cvt, &planner, &ctx)
-            .unwrap()
-            .into_iter()
-            .map(|i| SelectQueryOperation::AddWhere(i))
-            .collect::<Vec<_>>();
+        let clauses = pg_sys::extract_actual_clauses((*ppi).ppi_clauses, false);
+        let ops = convert_list(clauses, &mut query.cvt, &planner, &ctx).map(|ops| {
+            ops.into_iter()
+                .map(|i| SelectQueryOperation::AddWhere(i))
+                .collect::<Vec<_>>()
+        });
+
+        let ops = match ops {
+            Ok(ops) => ops,
+            Err(_) => return,
+        };
 
         estimate_path_cost(&mut ctx, &mut query, ops);
+
+        // Calculate default costs
+        {
+            let cost = &mut query.cost;
+            cost.rows = cost.rows.or(Some(DEFAULT_ROW_VOLUME));
+            cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
+            cost.total_cost = cost.total_cost.or(Some(
+                (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
+            ));
+        }
 
         let path = pg_sys::create_foreignscan_path(
             root,
@@ -341,6 +357,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         .all_ops()
         .cloned()
         .collect::<Vec<_>>();
+
     if inner_ops.iter().any(|i| !i.is_add_where()) {
         return;
     }
@@ -381,7 +398,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         join_clauses,
     ));
 
-    // Apply the join then the conditions to the inner rel
+    // Apply the join before the conditions 
     inner_ops.insert(0, join_op.clone());
 
     estimate_path_cost(&mut outer_ctx, &mut join_query, inner_ops);
@@ -395,6 +412,9 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     {
         return;
     }
+
+    // Copy across remote conds from inner ctx
+    join_query.remote_conds.append(&mut inner_query.remote_conds.clone());
 
     // Calculate default costs (we are pessimistic)
     {
@@ -651,7 +671,6 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
             panic!("Failed to determine sort order operator");
         }
 
-
         let expr_type = pg_sys::exprType((*em).em_expr as *mut _);
         let opr_item = pg_sys::lookup_type_cache(
             expr_type,
@@ -660,7 +679,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
 
         let sort_type = if oprid == (*opr_item).lt_opr {
             OrderingType::Asc
-        } else if  oprid ==(*opr_item).gt_opr  {
+        } else if oprid == (*opr_item).gt_opr {
             OrderingType::Desc
         } else {
             // Custom sort operators are not supported

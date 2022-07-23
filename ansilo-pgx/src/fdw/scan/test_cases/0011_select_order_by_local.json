@@ -4,6 +4,7 @@
         "Plan": {
             "Node Type": "Sort",
             "Output": [
+                "id",
                 "first_name",
                 "last_name",
                 "(md5((first_name)::text))"
@@ -18,6 +19,7 @@
                     "Parent Relationship": "Outer",
                     "Relation Name": "people:1.0",
                     "Output": [
+                        "id",
                         "first_name",
                         "last_name",
                         "md5((first_name)::text)"
@@ -31,7 +33,7 @@
                                 "0": "c0",
                                 "1": {
                                     "@type": "EntityVersionAttribute",
-                                    "attribute_id": "first_name",
+                                    "attribute_id": "id",
                                     "entity_id": "people",
                                     "version_id": "1.0"
                                 }
@@ -40,6 +42,17 @@
                         {
                             "AddColumn": {
                                 "0": "c1",
+                                "1": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "first_name",
+                                    "entity_id": "people",
+                                    "version_id": "1.0"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c2",
                                 "1": {
                                     "@type": "EntityVersionAttribute",
                                     "attribute_id": "last_name",
