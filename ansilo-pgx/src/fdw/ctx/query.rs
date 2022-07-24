@@ -92,11 +92,3 @@ impl FdwScanContext {
         }
     }
 }
-
-fn unexpected_response(response: ServerMessage) -> Error {
-    if let ServerMessage::GenericError(message) = response {
-        anyhow!("Error from server: {message}")
-    } else {
-        anyhow!("Unexpected response {:?}", response)
-    }
-}

@@ -64,7 +64,7 @@ impl PlannerContext {
     /// Returns the rel representing either the base scan rel
     /// or the upmost join rel if present
     pub unsafe fn get_scan_rel(&self) -> Option<*mut RelOptInfo> {
-        let mut input_rel = match self {
+        let input_rel = match self {
             PlannerContext::BaseRel(i) => return Some((*i).base_rel),
             PlannerContext::JoinRel(i) => return Some((*i).join_rel),
             PlannerContext::UpperRel(i) => (*i).input_rel,

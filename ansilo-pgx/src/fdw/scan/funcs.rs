@@ -63,14 +63,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 
     let baserel_conds = PgList::<RestrictInfo>::from_pg((*baserel).baserestrictinfo);
 
-    // If no conditions we can use the cheap path
-    let entity = ctx.entity.clone();
-    let res = ctx.send(ClientMessage::EstimateSize(entity)).unwrap();
-
-    let mut base_cost = match res {
-        ServerMessage::EstimatedSizeResult(e) => e,
-        _ => unexpected_response!("estimating size", res),
-    };
+    let base_cost = ctx.estimate_size().unwrap();
 
     // We have to evaluate the possibility and costs of pushing down the restriction clauses
     let mut query = FdwQueryContext::select();
@@ -758,7 +751,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     if !input_query.local_conds.is_empty() {
         return;
     }
-    
+
     // No work needed
     if !(*extra).limit_needed {
         return;
@@ -1279,28 +1272,13 @@ unsafe fn apply_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
     let select = query.as_select().unwrap();
 
     // Initialise a new select query
-    let res = ctx
-        .send(ClientMessage::Select(ClientSelectMessage::Create(
-            ctx.entity.clone(),
-        )))
-        .unwrap();
-
-    let cost = match res {
-        ServerMessage::Select(ServerSelectMessage::Result(
-            QueryOperationResult::PerformedRemotely(cost),
-        )) => cost,
-        _ => unexpected_response!("creating select query", res),
-    };
+    ctx.create_select().unwrap();
 
     // We have already applied these ops to the query before but not on the
     // remote side
     // TODO: optimise so we dont perform duplicate work
     for query_op in select.remote_ops.iter() {
-        let _ = ctx
-            .send(ClientMessage::Select(ClientSelectMessage::Apply(
-                query_op.clone(),
-            )))
-            .unwrap();
+        ctx.apply_query_op(query_op.clone()).unwrap();
     }
 }
 
@@ -1332,16 +1310,7 @@ fn apply_query_operation(
     select: &mut FdwSelectQuery,
     query_op: SelectQueryOperation,
 ) -> Option<OperationCost> {
-    let response = ctx
-        .send(ClientMessage::Select(ClientSelectMessage::Apply(
-            query_op.clone(),
-        )))
-        .unwrap();
-
-    let result = match response {
-        ServerMessage::Select(ServerSelectMessage::Result(result)) => result,
-        _ => unexpected_response!("applying query operation", response),
-    };
+    let result = ctx.apply_query_op(query_op.clone()).unwrap();
 
     match result {
         QueryOperationResult::PerformedRemotely(cost) => {

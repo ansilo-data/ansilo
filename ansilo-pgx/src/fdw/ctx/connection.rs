@@ -13,7 +13,11 @@ use ansilo_core::{
 use ansilo_pg::fdw::{
     channel::IpcClientChannel,
     data::{QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
-    proto::{AuthDataSource, ClientMessage, QueryInputStructure, RowStructure, ServerMessage},
+    proto::{
+        AuthDataSource, ClientMessage, ClientSelectMessage, OperationCost, QueryInputStructure,
+        QueryOperationResult, RowStructure, SelectQueryOperation, ServerMessage,
+        ServerSelectMessage,
+    },
 };
 
 /// Context data for query planning
@@ -78,6 +82,51 @@ impl FdwContext {
         self.connection.send(req)
     }
 
+    pub fn estimate_size(&mut self) -> Result<OperationCost> {
+        let entity = self.entity.clone();
+        let res = self.send(ClientMessage::EstimateSize(entity)).unwrap();
+
+        let base_cost = match res {
+            ServerMessage::EstimatedSizeResult(e) => e,
+            _ => return Err(unexpected_response(res).context("Estimate Size")),
+        };
+
+        Ok(base_cost)
+    }
+
+    pub fn create_select(&mut self) -> Result<OperationCost> {
+        let res = self
+            .send(ClientMessage::Select(ClientSelectMessage::Create(
+                self.entity.clone(),
+            )))
+            .unwrap();
+
+        let cost = match res {
+            ServerMessage::Select(ServerSelectMessage::Result(
+                QueryOperationResult::PerformedRemotely(cost),
+            )) => cost,
+            _ => return Err(unexpected_response(res).context("Creating select")),
+        };
+
+        Ok(cost)
+    }
+
+    pub fn apply_query_op(
+        &mut self,
+        query_op: SelectQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        let res = self
+            .send(ClientMessage::Select(ClientSelectMessage::Apply(query_op)))
+            .unwrap();
+
+        let result = match res {
+            ServerMessage::Select(ServerSelectMessage::Result(result)) => result,
+            _ => return Err(unexpected_response(res).context("Applying query op")),
+        };
+
+        Ok(result)
+    }
+
     pub fn prepare_query(&mut self) -> Result<QueryInputStructure> {
         let response = self.send(ClientMessage::Prepare)?;
 
@@ -108,7 +157,7 @@ impl FdwContext {
 
     pub fn execute_query(&mut self) -> Result<RowStructure> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
-        
+
         writer.flush()?;
         let result_set = writer.inner_mut().execute()?;
         let row_structure = result_set.row_structure.clone();
