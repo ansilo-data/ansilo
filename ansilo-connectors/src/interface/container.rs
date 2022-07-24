@@ -11,7 +11,7 @@ use crate::{
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector, OracleJdbcEntitySourceConfig},
     memory::{
         MemoryConnection, MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
-        MemoryQuery, MemoryQueryHandle, MemoryResultSet,
+        MemoryConnectorEntitySourceConfig, MemoryQuery, MemoryQueryHandle, MemoryResultSet,
     },
 };
 
@@ -32,7 +32,7 @@ pub enum ConnectionConfigs {
 #[derive(Debug)]
 pub enum EntitySourceConfigs {
     OracleJdbc(OracleJdbcEntitySourceConfig),
-    Memory(()),
+    Memory(MemoryConnectorEntitySourceConfig),
 }
 
 #[derive(Clone)]
@@ -41,7 +41,10 @@ pub enum ConnectionPools {
         JdbcConnectionPool,
         ConnectorEntityConfig<OracleJdbcEntitySourceConfig>,
     ),
-    Memory(MemoryConnectionPool, ConnectorEntityConfig<()>),
+    Memory(
+        MemoryConnectionPool,
+        ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+    ),
 }
 
 pub enum Connections {

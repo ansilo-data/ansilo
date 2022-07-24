@@ -207,11 +207,14 @@ mod tests {
 
     use ansilo_connectors::{
         common::entity::EntitySource,
-        memory::{MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector},
+        memory::{
+            MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
+            MemoryConnectorEntitySourceConfig,
+        },
     };
     use ansilo_core::{
-        data::{DataType, DataValue},
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        data::{DataType, DataValue},
         sqlil,
     };
 
@@ -222,7 +225,7 @@ mod tests {
 
     use super::*;
 
-    fn create_memory_connection_pool() -> (ConnectorEntityConfig<()>, MemoryConnectionPool) {
+    fn create_memory_connection_pool() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionPool) {
         let mut conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -236,7 +239,7 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            (),
+            MemoryConnectorEntitySourceConfig::default(),
         ));
 
         conf.set_data(

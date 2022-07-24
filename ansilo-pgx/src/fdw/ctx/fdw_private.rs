@@ -2,9 +2,7 @@ use std::ffi::c_void;
 
 use pgx::{pg_sys::List, *};
 
-use crate::sqlil::PlannerContext;
-
-use super::{FdwContext, FdwQueryContext, FdwScanContext};
+use super::{FdwContext, FdwQueryContext, FdwScanContext, PlannerContext};
 
 /// Converts the supplied context data to a pointer suitable
 /// to be stored in fdw_private fields

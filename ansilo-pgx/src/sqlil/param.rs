@@ -7,9 +7,9 @@ use pgx::{
     pg_sys::{self, Node},
 };
 
-use crate::fdw::ctx::FdwContext;
+use crate::fdw::ctx::{FdwContext, PlannerContext};
 
-use super::{datum::from_pg_type, ConversionContext, PlannerContext};
+use super::{datum::from_pg_type, ConversionContext};
 
 pub(super) unsafe fn convert_param(
     node: *const pg_sys::Param,

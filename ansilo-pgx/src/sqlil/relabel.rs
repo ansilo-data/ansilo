@@ -1,7 +1,7 @@
 use ansilo_core::{err::Result, sqlil};
 use pgx::pg_sys::{self};
 
-use crate::fdw::ctx::FdwContext;
+use crate::fdw::ctx::{FdwContext, PlannerContext};
 
 use super::*;
 

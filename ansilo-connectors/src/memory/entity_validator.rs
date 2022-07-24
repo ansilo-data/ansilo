@@ -5,19 +5,19 @@ use ansilo_core::{
 
 use crate::{common::entity::EntitySource, interface::EntityValidator};
 
-use super::MemoryConnection;
+use super::{MemoryConnection, MemoryConnectorEntitySourceConfig};
 
 pub struct MemoryEntityValidator {}
 
 impl EntityValidator for MemoryEntityValidator {
     type TConnection = MemoryConnection;
-    type TEntitySourceConfig = ();
+    type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
     fn validate(
         _connection: &MemoryConnection,
         _entity_version: &EntityVersionConfig,
         _nc: &NodeConfig,
-    ) -> Result<EntitySource<()>> {
+    ) -> Result<EntitySource<MemoryConnectorEntitySourceConfig>> {
         todo!()
     }
 }

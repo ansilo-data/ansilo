@@ -4,11 +4,10 @@ use ansilo_core::{
 };
 use pgx::{pg_schema, pg_sys};
 
-use crate::{fdw::ctx::FdwContext, util::string::parse_to_owned_utf8_string};
+use crate::{fdw::ctx::{FdwContext, PlannerContext}, util::string::parse_to_owned_utf8_string};
 
 use super::{
     datum::from_pg_type, table::parse_entity_version_id_from_foreign_table, ConversionContext,
-    PlannerContext,
 };
 
 pub(super) unsafe fn convert_var(

@@ -2,45 +2,37 @@
     "SQL": "SELECT MD5(first_name) FROM \"people:1.0\" GROUP BY MD5(first_name)",
     "Expected": {
         "Plan": {
-            "Node Type": "Group",
+            "Node Type": "Aggregate",
+            "Strategy": "Hashed",
+            "Partial Mode": "Simple",
             "Output": [
                 "(md5((first_name)::text))"
             ],
             "Group Key": [
-                "(md5((\"people:1.0\".first_name)::text))"
+                "md5((\"people:1.0\".first_name)::text)"
             ],
             "Plans": [
                 {
-                    "Node Type": "Sort",
+                    "Node Type": "Foreign Scan",
+                    "Operation": "Select",
+                    "Relation Name": "people:1.0",
+                    "Plan Width": 32,
                     "Output": [
-                        "(md5((first_name)::text))"
+                        "md5((first_name)::text)"
                     ],
-                    "Sort Key": [
-                        "(md5((\"people:1.0\".first_name)::text))"
-                    ],
-                    "Plans": [
+                    "Local Conds": [],
+                    "Remote Conds": [],
+                    "Remote Ops": [
                         {
-                            "Node Type": "Foreign Scan",
-                            "Operation": "Select",
-                            "Relation Name": "people:1.0",
-                            "Output": [
-                                "md5((first_name)::text)"
-                            ],
-                            "Local Conds": [],
-                            "Remote Conds": [],
-                            "Remote Ops": [
-                                {
-                                    "AddColumn": {
-                                        "0": "c0",
-                                        "1": {
-                                            "@type": "EntityVersionAttribute",
-                                            "attribute_id": "first_name",
-                                            "entity_id": "people",
-                                            "version_id": "1.0"
-                                        }
-                                    }
+                            "AddColumn": {
+                                "0": "c0",
+                                "1": {
+                                    "@type": "EntityVersionAttribute",
+                                    "attribute_id": "first_name",
+                                    "entity_id": "people",
+                                    "version_id": "1.0"
                                 }
-                            ]
+                            }
                         }
                     ]
                 }

@@ -7,7 +7,7 @@ use pgx::{
     *,
 };
 
-use crate::fdw::ctx::FdwContext;
+use crate::fdw::ctx::{FdwContext, PlannerContext};
 
 use super::*;
 

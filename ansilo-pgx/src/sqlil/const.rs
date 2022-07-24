@@ -9,9 +9,9 @@ use pgx::{
     *,
 };
 
-use crate::fdw::ctx::FdwContext;
+use crate::fdw::ctx::{FdwContext, PlannerContext};
 
-use super::{datum::from_datum, ConversionContext, PlannerContext};
+use super::{datum::from_datum, ConversionContext};
 
 pub(super) unsafe fn convert_const(
     node: *const pg_sys::Const,

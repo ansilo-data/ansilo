@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ffi::c_void, mem, ops::ControlFlow, ptr};
+use std::{cmp, collections::HashMap, ffi::c_void, mem, ops::ControlFlow, ptr};
 
 use ansilo_core::{
     data::DataValue,
@@ -27,21 +27,15 @@ use crate::{
     fdw::{common, ctx::*},
     sqlil::{
         convert, convert_list, from_datum, into_datum, parse_entity_version_id_from_foreign_table,
-        parse_entity_version_id_from_rel, ConversionContext, PlannerContext,
+        parse_entity_version_id_from_rel, ConversionContext,
     },
     util::list::vec_to_pg_list,
 };
 
-macro_rules! unexpected_response {
-    ($ctx:expr, $res:expr) => {
-        error!("Unexpected response from server while {}: {:?}", $ctx, $res)
-    };
-}
-
 /// Default cost values in case they cant be estimated
 /// Values borroed from
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c_source.html#l03570
-const DEFAULT_FDW_STARTUP_COST: u64 = 100;
+const DEFAULT_FDW_STARTUP_COST: f64 = 100.0;
 const DEFAULT_FDW_TUPLE_COST: f64 = 0.01;
 
 /// We want to be pessimistict about the number of rows in tables
@@ -61,61 +55,26 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     let mut ctx = common::connect(foreigntableid);
     let planner = PlannerContext::base_rel(root, baserel);
 
-    let baserel_conds = PgList::<RestrictInfo>::from_pg((*baserel).baserestrictinfo);
-
     let base_cost = ctx.estimate_size().unwrap();
 
     // We have to evaluate the possibility and costs of pushing down the restriction clauses
-    let mut query = FdwQueryContext::select();
-    let conds = baserel_conds
-        .iter_ptr()
-        .filter_map(|i| {
-            let expr = convert((*i).clause as *const _, &mut query.cvt, &planner, &ctx).ok();
+    let mut query = FdwQueryContext::select(base_cost.clone());
 
-            // Store conditions requiring local evaluation for later
-            if expr.is_none() {
-                &mut &mut query.local_conds.push(i);
-                return None;
-            }
-
-            Some((SelectQueryOperation::AddWhere(expr.unwrap()), i))
-        })
-        .collect::<Vec<_>>();
-
-    estimate_path_cost(
+    let baserel_conds = PgList::<RestrictInfo>::from_pg((*baserel).baserestrictinfo);
+    apply_query_conds(
         &mut ctx,
         &mut query,
-        conds.iter().map(|(i, _)| i).cloned().collect(),
+        &planner,
+        baserel_conds.iter_ptr().collect(),
     );
 
-    for (cond, ri) in conds.into_iter() {
-        if query.as_select().unwrap().remote_ops.contains(&cond) {
-            query.remote_conds.push(ri);
-        } else {
-            query.local_conds.push(ri);
-        }
-    }
+    let cost = calculate_query_cost(&mut query, &planner);
 
-    // Default to base cost
-    {
-        let cost = &mut query.cost;
-        cost.rows = cost.rows.or(base_cost.rows).or(Some(DEFAULT_ROW_VOLUME));
-        cost.row_width = cost.row_width.or(base_cost.row_width);
-        cost.connection_cost = cost
-            .connection_cost
-            .or(base_cost.connection_cost)
-            .or(Some(DEFAULT_FDW_STARTUP_COST));
-        cost.total_cost = cost.total_cost.or(base_cost.total_cost).or(Some(
-            (cost.connection_cost.unwrap() as f64
-                + cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
-        ));
-    }
-
-    if let Some(rows) = query.cost.rows {
+    if let Some(rows) = cost.rows {
         (*baserel).rows = rows as _;
     }
 
-    if let Some(row_width) = query.cost.row_width {
+    if let Some(row_width) = cost.row_width {
         (*(*baserel).reltarget).width = row_width as _;
     }
 
@@ -131,9 +90,9 @@ pub unsafe extern "C" fn get_foreign_paths(
     baserel: *mut RelOptInfo,
     foreigntableid: Oid,
 ) {
-    let (mut ctx, base_query, _) = from_fdw_private_rel((*baserel).fdw_private as *mut _);
-    let base_cost = base_query.cost.clone();
+    let (mut ctx, mut base_query, _) = from_fdw_private_rel((*baserel).fdw_private as *mut _);
     let planner = PlannerContext::base_rel(root, baserel);
+    let base_cost = calculate_query_cost(&mut base_query, &planner);
 
     // Create a default full-scan path for the rel
     let path = pg_sys::create_foreignscan_path(
@@ -141,8 +100,8 @@ pub unsafe extern "C" fn get_foreign_paths(
         baserel,
         ptr::null_mut(),
         base_cost.rows.unwrap() as f64,
-        base_cost.connection_cost.unwrap() as f64,
-        base_cost.total_cost.unwrap() as f64,
+        base_cost.connection_cost.unwrap(),
+        base_cost.total_cost.unwrap(),
         ptr::null_mut(),
         (*baserel).lateral_relids,
         ptr::null_mut(),
@@ -232,37 +191,24 @@ pub unsafe extern "C" fn get_foreign_paths(
     for ppi in param_paths.into_iter() {
         let mut query = base_query.clone();
 
-        let clauses = pg_sys::extract_actual_clauses((*ppi).ppi_clauses, false);
-        let ops = convert_list(clauses, &mut query.cvt, &planner, &ctx).map(|ops| {
-            ops.into_iter()
-                .map(|i| SelectQueryOperation::AddWhere(i))
-                .collect::<Vec<_>>()
-        });
+        apply_query_conds(
+            &mut ctx,
+            &mut query,
+            &planner,
+            PgList::<RestrictInfo>::from_pg((*ppi).ppi_clauses)
+                .iter_ptr()
+                .collect(),
+        );
 
-        let ops = match ops {
-            Ok(ops) => ops,
-            Err(_) => return,
-        };
-
-        estimate_path_cost(&mut ctx, &mut query, ops);
-
-        // Calculate default costs
-        {
-            let cost = &mut query.cost;
-            cost.rows = cost.rows.or(Some(DEFAULT_ROW_VOLUME));
-            cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
-            cost.total_cost = cost.total_cost.or(Some(
-                (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
-            ));
-        }
+        let cost = calculate_query_cost(&mut query, &planner);
 
         let path = pg_sys::create_foreignscan_path(
             root,
             baserel,
             ptr::null_mut(),
-            query.cost.rows.unwrap() as f64,
-            query.cost.connection_cost.unwrap() as f64,
-            query.cost.total_cost.unwrap() as f64,
+            cost.rows.unwrap() as f64,
+            cost.connection_cost.unwrap(),
+            cost.total_cost.unwrap(),
             ptr::null_mut(),
             (*ppi).ppi_req_outer,
             ptr::null_mut(),
@@ -346,6 +292,11 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     }
 
     let mut join_query = outer_query.clone();
+
+    // We need to recalculate the retrieved row estimate
+    // (done later in the function)
+    join_query.retrieved_rows = None;
+
     let planner = PlannerContext::join_rel(root, joinrel, outerrel, innerrel, jointype, extra);
     let mut join_clauses = vec![];
 
@@ -384,7 +335,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     // Apply the join before the conditions
     inner_ops.insert(0, join_op.clone());
 
-    estimate_path_cost(&mut outer_ctx, &mut join_query, inner_ops);
+    apply_query_operations(&mut outer_ctx, &mut join_query, inner_ops);
 
     /// If we failed to push down the join then dont generate the path
     if !join_query
@@ -401,26 +352,27 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         .remote_conds
         .append(&mut inner_query.remote_conds.clone());
 
-    // Calculate default costs (we are pessimistic)
-    {
-        let cost = &mut join_query.cost;
-        cost.rows = cost
-            .rows
-            .or(Some(((*innerrel).rows * (*outerrel).rows) as u64));
-        cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
-        cost.total_cost = cost.total_cost.or(Some(
-            (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
-        ));
+    // If retrieved rows is not calculated by the data source we
+    // estimate it here
+    if join_query.retrieved_rows.is_none() {
+        let cross_product =
+            outer_query.retrieved_rows.unwrap() * inner_query.retrieved_rows.unwrap();
+        let (selectivity, _) = calculate_cond_costs(&planner, join_query.remote_conds.clone());
+
+        join_query.retrieved_rows =
+            Some(pg_sys::clamp_row_est(cross_product as f64 * selectivity) as u64);
     }
+
+    let cost = calculate_query_cost(&mut join_query, &planner);
 
     // Finally create the new path
     let join_path = pg_sys::create_foreign_join_path(
         root,
         joinrel,
         ptr::null_mut(), /* default pathtarget */
-        join_query.cost.rows.unwrap() as f64,
-        join_query.cost.connection_cost.unwrap() as f64,
-        join_query.cost.total_cost.unwrap() as f64,
+        cost.rows.unwrap() as f64,
+        cost.connection_cost.unwrap(),
+        cost.total_cost.unwrap(),
         ptr::null_mut(), /* no pathkeys */
         (*joinrel).lateral_relids,
         epq_path,
@@ -503,7 +455,13 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     }
 
     let mut group_query = input_query.clone();
+
+    // Invalidate the retrieved rows estimate and, if required,
+    // estimate it below
+    group_query.retrieved_rows = None;
+
     let groupedrel = (*outputrel).reltarget;
+    let mut group_by_exprs = vec![];
     let mut query_ops = vec![];
 
     // Iterate each target expr
@@ -536,6 +494,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
             }
 
             query_ops.push(SelectQueryOperation::AddGroupBy(expr));
+            group_by_exprs.push(node);
         } else {
             // Retrieve the vars/aggrefs from the expression
             let required_vars = pull_vars([node].into_iter());
@@ -570,7 +529,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         return;
     }
 
-    estimate_path_cost(&mut ctx, &mut group_query, query_ops.clone());
+    apply_query_operations(&mut ctx, &mut group_query, query_ops.clone());
 
     // If failed to push down then abort
     if query_ops
@@ -589,26 +548,57 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         .cloned()
         .collect::<Vec<_>>();
 
-    // Calculate default costs (we are pessimistic)
-    {
-        let cost = &mut group_query.cost;
-        cost.rows = cost
-            .rows
-            .or(input_query.cost.rows)
-            .or(Some(DEFAULT_ROW_VOLUME));
-        cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
-        cost.total_cost = cost.total_cost.or(Some(
-            (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
-        ));
+    // If the row estimate is not retrieved from the source
+    // estimate it below
+    if group_query.retrieved_rows.is_none() {
+        group_query.retrieved_rows = Some(pg_sys::estimate_num_groups(
+            root,
+            vec_to_pg_list(group_by_exprs),
+            // We can assume retreived rows estimate is equal to the
+            // input row estimate as we have checked there are no
+            // conds requiring local evaluation
+            input_query.retrieved_rows.unwrap() as _,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        ) as u64);
     }
+
+    // Calculate costs for grouping operation
+    if (*(*root).parse).hasAggs {
+        extern "C" {
+            fn get_agg_clause_costs(
+                root: *mut PlannerInfo,
+                aggsplit: pg_sys::AggSplit,
+                costs: *mut pg_sys::AggClauseCosts,
+            );
+        }
+
+        let mut aggcosts = pg_sys::AggClauseCosts::default();
+        get_agg_clause_costs(
+            root,
+            pg_sys::AggSplit_AGGSPLIT_SIMPLE,
+            &mut aggcosts as *mut _,
+        );
+
+        group_query.add_cost(move |_, mut cost| {
+            cost.connection_cost = cost.connection_cost.map(|c| c + aggcosts.transCost.startup);
+            cost.total_cost = cost.total_cost.map(|c| {
+                c + aggcosts.transCost.per_tuple * input_query.retrieved_rows.unwrap() as f64
+            });
+
+            cost
+        });
+    }
+
+    let cost = calculate_query_cost(&mut group_query, &planner);
 
     let path = pg_sys::create_foreign_upper_path(
         root,
         outputrel,
         groupedrel,
-        group_query.cost.rows.unwrap() as f64,
-        group_query.cost.connection_cost.unwrap() as f64,
-        group_query.cost.total_cost.unwrap() as f64,
+        cost.rows.unwrap() as f64,
+        cost.connection_cost.unwrap(),
+        cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
         into_fdw_private_path(planner.clone(), group_query.clone()),
@@ -634,6 +624,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
 
     let mut order_query = input_query.clone();
     let mut query_ops = vec![];
+    let mut path_keys = vec![];
 
     for path_key in PgList::<PathKey>::from_pg((*root).sort_pathkeys).iter_ptr() {
         let ec = (*path_key).pk_eclass;
@@ -683,9 +674,10 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         query_ops.push(SelectQueryOperation::AddOrderBy(Ordering::new(
             sort_type, expr,
         )));
+        path_keys.push(path_key);
     }
 
-    estimate_path_cost(&mut ctx, &mut order_query, query_ops.clone());
+    apply_query_operations(&mut ctx, &mut order_query, query_ops.clone());
 
     // If failed to push down then abort
     if query_ops
@@ -695,18 +687,56 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         return;
     }
 
-    // Calculate default costs (we are pessimistic)
+    // Calculate the cost of sorting the rows
     {
-        let cost = &mut order_query.cost;
-        cost.rows = cost
-            .rows
-            .or(input_query.cost.rows)
-            .or(Some(DEFAULT_ROW_VOLUME));
-        cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
-        cost.total_cost = cost.total_cost.or(Some(
-            (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
-        ));
+        let input_rows = input_query.retrieved_rows.unwrap();
+        let row_width = input_query
+            .base_cost
+            .row_width
+            .unwrap_or((*(*inputrel).reltarget).width as _);
+        let path_keys = vec_to_pg_list(path_keys);
+
+        order_query.add_cost(move |query, mut cost| {
+            // Retrieve the LIMIT clause if supplied
+            let limit = if let Some(limit) = query
+                .as_select()
+                .unwrap()
+                .remote_ops
+                .iter()
+                .find(|i| i.is_set_row_limit())
+            {
+                match limit {
+                    SelectQueryOperation::SetRowLimit(lim) => *lim as f64,
+                    _ => unreachable!(),
+                }
+            } else {
+                -1.0
+            };
+
+            let mut sort_path = pg_sys::Path::default();
+            pg_sys::cost_sort(
+                &mut sort_path as *mut _,
+                root,
+                path_keys,
+                0.0,
+                input_rows as _,
+                row_width as _,
+                0.0,
+                pg_sys::work_mem,
+                limit as _,
+            );
+
+            // Add sort costs
+            cost.connection_cost = cost.connection_cost.map(|c| c + sort_path.startup_cost);
+            cost.total_cost = cost.total_cost.map(|c| c + sort_path.total_cost);
+
+            cost
+        });
     }
+
+    // Ordering should not affect the number of rows so we just
+    // calculate the cost using the existing estimate
+    let cost = calculate_query_cost(&mut order_query, &planner);
 
     // We could theoriticall pass sort_pathkeys to this path
     // However this could mean the query optimiser may leverage this information
@@ -719,9 +749,9 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         root,
         inputrel,
         (*root).upper_targets[pg_sys::UpperRelationKind_UPPERREL_ORDERED as usize],
-        order_query.cost.rows.unwrap() as f64,
-        order_query.cost.connection_cost.unwrap() as f64,
-        order_query.cost.total_cost.unwrap() as f64,
+        cost.rows.unwrap() as f64,
+        cost.connection_cost.unwrap(),
+        cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
         into_fdw_private_path(planner.clone(), order_query.clone()),
@@ -798,6 +828,10 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     }
 
     let mut limit_query = input_query.clone();
+
+    // Invalidate retrieved rows so it can be estimated later
+    limit_query.retrieved_rows = None;
+
     let mut query_ops = vec![];
 
     if let Some(offset) = offset {
@@ -808,7 +842,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         query_ops.push(SelectQueryOperation::SetRowLimit(limit));
     }
 
-    estimate_path_cost(&mut ctx, &mut limit_query, query_ops.clone());
+    apply_query_operations(&mut ctx, &mut limit_query, query_ops.clone());
 
     // If failed to push down then abort
     if query_ops
@@ -818,27 +852,41 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         return;
     }
 
-    // Calculate default costs (we are pessimistic)
-    {
-        let cost = &mut limit_query.cost;
-        cost.rows = cost
-            .rows
-            .or(limit)
-            .or(input_query.cost.rows)
-            .or(Some(DEFAULT_ROW_VOLUME));
-        cost.connection_cost = cost.connection_cost.or(Some(DEFAULT_FDW_STARTUP_COST));
-        cost.total_cost = cost.total_cost.or(Some(
-            (cost.rows.unwrap() as f64 * DEFAULT_FDW_TUPLE_COST) as u64,
-        ));
+    // Calculate the retrieved rows
+    if limit_query.retrieved_rows.is_none() {
+        let mut input_rows = input_query.retrieved_rows.unwrap();
+        input_rows -= offset.unwrap_or(0);
+
+        limit_query.retrieved_rows =
+            Some(limit.map_or_else(|| input_rows, |limit| cmp::min(limit, input_rows)));
     }
+
+    // The optimizer doesn't seem to like pushing down LIMIT clauses
+    // we would want to do this most times so let's give it a bit of encouragement
+    // by reducing the base connection cost for this path.
+    if let Some(limit) = limit {
+        limit_query.add_cost(|_, mut cost| {
+            cost.connection_cost = cost.total_cost.map(|c| {
+                c - DEFAULT_FDW_STARTUP_COST * 0.5
+            });
+
+            cost.total_cost = cost.total_cost.map(|c| {
+                c - DEFAULT_FDW_STARTUP_COST * 0.5
+            });
+
+            cost
+        });
+    }
+
+    let mut cost = calculate_query_cost(&mut limit_query, &planner);
 
     let path = pg_sys::create_foreign_upper_path(
         root,
         inputrel,
         (*root).upper_targets[pg_sys::UpperRelationKind_UPPERREL_FINAL as usize],
-        limit_query.cost.rows.unwrap() as f64,
-        limit_query.cost.connection_cost.unwrap() as f64,
-        limit_query.cost.total_cost.unwrap() as f64,
+        cost.rows.unwrap() as f64,
+        cost.connection_cost.unwrap(),
+        cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
         into_fdw_private_path(planner.clone(), limit_query.clone()),
@@ -900,7 +948,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     let mut result_tlist = PgList::<pg_sys::TargetEntry>::from_pg(tlist);
     let mut resno = 1;
 
-    apply_query_state(&mut ctx, &query);
+    restore_query_state(&mut ctx, &query);
 
     // These checks are used the validate that tuple state is still expected when operating under
     // READ COMMITTED isolation level (EPQ = EvalPlanQual)
@@ -1009,7 +1057,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
     let mut scan = FdwScanContext::new();
 
     // Prepare the query for the chosen path
-    apply_query_state(&mut ctx, &query);
+    restore_query_state(&mut ctx, &query);
     let input_structure = ctx.prepare_query().unwrap();
 
     // Send query params, if any
@@ -1268,7 +1316,7 @@ pub unsafe extern "C" fn reparameterize_foreign_path_by_child(
 }
 
 // Sends the query
-unsafe fn apply_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
+unsafe fn restore_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
     let select = query.as_select().unwrap();
 
     // Initialise a new select query
@@ -1283,12 +1331,12 @@ unsafe fn apply_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
 }
 
 // Generate a path cost estimation based on the supplied conditions
-unsafe fn estimate_path_cost(
+unsafe fn apply_query_operations(
     ctx: &mut FdwContext,
     query: &mut FdwQueryContext,
     new_query_ops: Vec<SelectQueryOperation>,
 ) {
-    apply_query_state(ctx, query);
+    restore_query_state(ctx, query);
 
     let mut cost = None;
 
@@ -1301,7 +1349,9 @@ unsafe fn estimate_path_cost(
     }
 
     if let Some(cost) = cost {
-        query.cost = cost;
+        if let Some(rows) = cost.rows {
+            query.retrieved_rows = Some(rows);
+        }
     }
 }
 
@@ -1318,6 +1368,38 @@ fn apply_query_operation(
             Some(cost)
         }
         QueryOperationResult::PerformedLocally => None,
+    }
+}
+
+unsafe fn apply_query_conds(
+    ctx: &mut FdwContext,
+    query: &mut FdwQueryContext,
+    planner: &PlannerContext,
+    conds: Vec<*mut RestrictInfo>,
+) {
+    let conds = conds
+        .into_iter()
+        .filter_map(|i| {
+            let expr = convert((*i).clause as *const _, &mut query.cvt, &planner, &ctx).ok();
+
+            // Store conditions requiring local evaluation for later
+            if expr.is_none() {
+                query.local_conds.push(i);
+                return None;
+            }
+
+            Some((SelectQueryOperation::AddWhere(expr.unwrap()), i))
+        })
+        .collect::<Vec<_>>();
+
+    apply_query_operations(ctx, query, conds.iter().map(|(i, _)| i).cloned().collect());
+
+    for (cond, ri) in conds.into_iter() {
+        if query.as_select().unwrap().remote_ops.contains(&cond) {
+            query.remote_conds.push(ri);
+        } else {
+            query.local_conds.push(ri);
+        }
     }
 }
 
@@ -1387,4 +1469,76 @@ unsafe fn find_em_for_rel_target(
     }
 
     None
+}
+
+unsafe fn calculate_query_cost(
+    query: &mut FdwQueryContext,
+    planner: &PlannerContext,
+) -> OperationCost {
+    // TODO: store retrieved rows in query
+    // use to calculate for join path
+    // continue with other paths
+    let mut cost = query.base_cost.clone();
+
+    let (remote_sel, remote_qual_cost) = calculate_cond_costs(planner, query.remote_conds.clone());
+    let (local_sel, local_qual_cost) = calculate_cond_costs(planner, query.local_conds.clone());
+
+    let retrieved_rows = query
+        .retrieved_rows
+        .or(cost
+            .rows
+            .map(|rows| pg_sys::clamp_row_est(rows as f64 * remote_sel) as u64))
+        .unwrap_or(DEFAULT_ROW_VOLUME) as f64;
+
+    query.retrieved_rows = Some(retrieved_rows as u64);
+    cost.rows = Some(pg_sys::clamp_row_est(retrieved_rows * local_sel) as u64);
+
+    cost.connection_cost = cost
+        .connection_cost
+        .or(Some(DEFAULT_FDW_STARTUP_COST))
+        .map(|c| (c + remote_qual_cost.startup + local_qual_cost.startup));
+
+    cost.total_cost = Some(
+        (cost.connection_cost.unwrap()
+            + (retrieved_rows
+                * (DEFAULT_FDW_TUPLE_COST + pg_sys::cpu_tuple_cost + local_qual_cost.per_tuple))),
+    );
+
+    let query_copy = query.clone();
+    for cost_fn in query.cost_fns.iter_mut() {
+        cost = cost_fn(&query_copy, cost);
+    }
+
+    cost
+}
+
+unsafe fn calculate_cond_costs(
+    planner: &PlannerContext,
+    conds: Vec<*mut RestrictInfo>,
+) -> (f64, pg_sys::QualCost) {
+    let base_relid = if let PlannerContext::BaseRel(rel) = planner {
+        (*rel.base_rel).relid
+    } else {
+        0
+    };
+
+    let join_type = if let PlannerContext::JoinRel(join) = planner {
+        join.join_type
+    } else {
+        pg_sys::JoinType_JOIN_INNER
+    };
+
+    let conds = vec_to_pg_list(conds);
+    let selectivity = pg_sys::clauselist_selectivity(
+        planner.root(),
+        conds,
+        base_relid as _,
+        join_type,
+        ptr::null_mut() as _,
+    );
+
+    let mut cost = pg_sys::QualCost::default();
+    pg_sys::cost_qual_eval(&mut cost, conds, planner.root());
+
+    (selectivity, cost)
 }

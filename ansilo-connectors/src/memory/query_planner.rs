@@ -8,19 +8,23 @@ use crate::{
     interface::{OperationCost, QueryOperationResult, QueryPlanner, SelectQueryOperation},
 };
 
-use super::{MemoryConnection, MemoryQuery};
+use super::{MemoryConnection, MemoryConnectorEntitySourceConfig, MemoryQuery};
 
 pub struct MemoryQueryPlanner {}
 
 impl QueryPlanner for MemoryQueryPlanner {
     type TConnection = MemoryConnection;
     type TQuery = MemoryQuery;
-    type TEntitySourceConfig = ();
+    type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
     fn estimate_size(
         connection: &MemoryConnection,
-        entity: &EntitySource<()>,
+        entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
     ) -> Result<OperationCost> {
+        if let Some(mock_size) = &entity.source_conf.mock_entity_size {
+            return Ok(mock_size.clone());
+        }
+
         Ok(OperationCost::new(
             Some(
                 connection
@@ -37,8 +41,8 @@ impl QueryPlanner for MemoryQueryPlanner {
 
     fn create_base_select(
         connection: &MemoryConnection,
-        _conf: &ConnectorEntityConfig<()>,
-        entity: &EntitySource<()>,
+        _conf: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+        entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
     ) -> Result<(OperationCost, sql::Select)> {
         let select = sql::Select::new(sql::entity(
             entity.conf.id.as_str(),

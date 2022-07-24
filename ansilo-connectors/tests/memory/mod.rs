@@ -1,7 +1,7 @@
 use ansilo_connectors::{
     common::entity::{ConnectorEntityConfig, EntitySource},
     interface::{Connection, ConnectionPool, Connector, QueryHandle},
-    memory::{MemoryConnectionConfig, MemoryConnector, MemoryQuery, MemoryResultSet},
+    memory::{MemoryConnectionConfig, MemoryConnector, MemoryQuery, MemoryResultSet, MemoryConnectorEntitySourceConfig},
 };
 use ansilo_core::{
     data::{DataType, DataValue},
@@ -9,7 +9,7 @@ use ansilo_core::{
     sqlil,
 };
 
-fn mock_data() -> (ConnectorEntityConfig<()>, MemoryConnectionConfig) {
+fn mock_data() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionConfig) {
     let mut conf = MemoryConnectionConfig::new();
     let mut entities = ConnectorEntityConfig::new();
 
@@ -23,7 +23,7 @@ fn mock_data() -> (ConnectorEntityConfig<()>, MemoryConnectionConfig) {
             ],
             EntitySourceConfig::minimal(""),
         ),
-        (),
+        MemoryConnectorEntitySourceConfig::default()
     ));
 
     conf.set_data(

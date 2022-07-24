@@ -7,7 +7,7 @@ use pgx::{
     *,
 };
 
-use crate::{fdw::ctx::FdwContext, util::syscache::PgSysCacheItem};
+use crate::{fdw::ctx::{FdwContext, PlannerContext}, util::syscache::PgSysCacheItem};
 
 use super::*;
 

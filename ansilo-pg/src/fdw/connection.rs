@@ -257,7 +257,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
     fn restart_query(&mut self) -> Result<()> {
         let query = mem::replace(&mut self.query, FdwQueryState::New);
-        
+
         self.query = match query {
             FdwQueryState::Executed(mut handle, _) => {
                 handle.0.restart()?;
@@ -325,7 +325,10 @@ mod tests {
 
     use ansilo_connectors::{
         common::{data::DataReader, entity::EntitySource},
-        memory::{MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector},
+        memory::{
+            MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
+            MemoryConnectorEntitySourceConfig,
+        },
     };
     use ansilo_core::{
         config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
@@ -338,7 +341,7 @@ mod tests {
 
     use super::*;
 
-    fn create_memory_connection_pool() -> (ConnectorEntityConfig<()>, MemoryConnectionPool) {
+    fn create_memory_connection_pool() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionPool) {
         let mut conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -352,7 +355,7 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            (),
+            MemoryConnectorEntitySourceConfig::default(),
         ));
 
         conf.set_data(
@@ -513,10 +516,7 @@ mod tests {
 
         let res = client.send(ClientMessage::Execute).unwrap();
 
-        assert_eq!(
-            res,
-            ServerMessage::GenericError("Unexpected query state".into())
-        );
+        assert!(matches!(res, ServerMessage::GenericError(_)));
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();

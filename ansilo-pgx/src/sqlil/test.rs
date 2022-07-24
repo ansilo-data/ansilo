@@ -7,11 +7,11 @@ use pgx::{
 };
 
 use crate::{
-    fdw::ctx::{FdwContext},
+    fdw::ctx::{FdwContext, PlannerContext},
     sqlil::datum::into_pg_type,
 };
 
-use super::{ConversionContext, PlannerContext};
+use super::{ConversionContext};
 
 /// Converts the first target expr from the supplied select query to SQLIL for testing
 pub(super) fn convert_simple_expr(select: &'static str) -> Result<sqlil::Expr> {

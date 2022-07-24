@@ -16,8 +16,11 @@ mod tests {
     use crate::sqlil::test;
     use ansilo_connectors::{
         common::entity::{ConnectorEntityConfig, EntitySource},
-        interface::{container::ConnectionPools, Connector},
-        memory::{MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector},
+        interface::{container::ConnectionPools, Connector, OperationCost},
+        memory::{
+            MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
+            MemoryConnectorEntitySourceConfig,
+        },
     };
     use ansilo_core::data::*;
     use ansilo_core::{
@@ -30,7 +33,10 @@ mod tests {
     use serde::{de::DeserializeOwned, Serialize};
     use serde_json::json;
 
-    fn create_memory_connection_pool() -> (ConnectorEntityConfig<()>, MemoryConnectionPool) {
+    fn create_memory_connection_pool() -> (
+        ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+        MemoryConnectionPool,
+    ) {
         let mut conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -45,7 +51,14 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            (),
+            // We mock the tabel size to be large as the query optimizer
+            // does not like pushing down queries on very small tables.
+            MemoryConnectorEntitySourceConfig::new(Some(OperationCost::new(
+                Some(1000),
+                None,
+                None,
+                None,
+            ))),
         ));
 
         entities.add(EntitySource::minimal(
@@ -59,7 +72,7 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            (),
+            MemoryConnectorEntitySourceConfig::default(),
         ));
 
         entities.add(EntitySource::minimal(
@@ -69,7 +82,7 @@ mod tests {
                 vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
                 EntitySourceConfig::minimal(""),
             ),
-            (),
+            MemoryConnectorEntitySourceConfig::default(),
         ));
 
         conf.set_data(
@@ -397,19 +410,22 @@ mod tests {
     fn test_fdw_scan_select_group_by_local() {
         setup_test("scan_select_group_by_local");
 
-        let results = execute_query(
+        let mut results = execute_query(
             r#"SELECT MD5(first_name) as hash FROM "people:1.0" GROUP BY MD5(first_name)"#,
             |i| (i["hash"].value::<String>().unwrap(),),
         );
 
-        assert_eq!(
-            results,
-            vec![
-                ("01d4848202a3c7697ec037b02b4ee4e8".into(),),
-                ("61409aa1fd47d4a5332de23cbf59a36f".into(),),
-                ("e39e74fb4e80ba656f773669ed50315a".into(),),
-            ]
-        );
+        let mut expected = vec![
+            ("01d4848202a3c7697ec037b02b4ee4e8".into(),),
+            ("61409aa1fd47d4a5332de23cbf59a36f".into(),),
+            ("e39e74fb4e80ba656f773669ed50315a".into(),),
+        ];
+
+        // Result order is unspecified
+        results.sort();
+        expected.sort();
+        
+        assert_eq!(results, expected);
     }
 
     #[pg_test]

@@ -1,4 +1,7 @@
-use crate::{common::entity::ConnectorEntityConfig, interface::Connector};
+use crate::{
+    common::entity::ConnectorEntityConfig,
+    interface::{Connector, OperationCost},
+};
 
 mod conf;
 pub mod executor;
@@ -33,7 +36,7 @@ impl Connector for MemoryConnector {
     type TConnectionConfig = MemoryConnectionConfig;
     type TEntitySearcher = MemoryEntitySearcher;
     type TEntityValidator = MemoryEntityValidator;
-    type TEntitySourceConfig = ();
+    type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
     type TQueryPlanner = MemoryQueryPlanner;
     type TQueryCompiler = MemoryQueryCompiler;
     type TQueryHandle = MemoryQueryHandle;
@@ -47,15 +50,26 @@ impl Connector for MemoryConnector {
     }
 
     fn parse_entity_source_options(_options: config::Value) -> Result<Self::TEntitySourceConfig> {
-        Ok(())
+        Ok(MemoryConnectorEntitySourceConfig::default())
     }
 
     fn create_connection_pool(
         conf: MemoryConnectionConfig,
         _nc: &NodeConfig,
-        entities: &ConnectorEntityConfig<()>,
+        entities: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     ) -> Result<Self::TConnectionPool> {
         MemoryConnectionPool::new(conf, entities.clone())
+    }
+}
+
+#[derive(Clone, Default, PartialEq, Debug)]
+pub struct MemoryConnectorEntitySourceConfig {
+    pub mock_entity_size: Option<OperationCost>,
+}
+
+impl MemoryConnectorEntitySourceConfig {
+    pub fn new(mock_entity_size: Option<OperationCost>) -> Self {
+        Self { mock_entity_size }
     }
 }
 

@@ -1,38 +1,44 @@
-use std::{collections::HashMap, iter::Chain, slice::Iter};
+use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
-use ansilo_core::{
-    err::{anyhow, Error},
-    sqlil,
-};
-use ansilo_pg::fdw::proto::{OperationCost, RowStructure, SelectQueryOperation, ServerMessage};
+use ansilo_core::sqlil;
+use ansilo_pg::fdw::proto::{OperationCost, RowStructure, SelectQueryOperation};
 use pgx::pg_sys::{self, RestrictInfo};
 use serde::{Deserialize, Serialize};
 
 use crate::sqlil::ConversionContext;
 
 /// Query-specific state for the FDW
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct FdwQueryContext {
     /// The type-specific query state
     pub q: FdwQueryType,
-    /// The query cost calculation
-    pub cost: OperationCost,
+    /// The base entity size estimation
+    pub base_cost: OperationCost,
+    /// The estimate of the number of rows returned by the query
+    /// before any local conditions are checked
+    pub retrieved_rows: Option<u64>,
     /// Conditions required to be evaluated locally
     pub local_conds: Vec<*mut RestrictInfo>,
     /// Conditions required to be evaluated remotely
     pub remote_conds: Vec<*mut RestrictInfo>,
     /// The conversion context used to track query parameters
     pub cvt: ConversionContext,
+    /// Callbacks used to calculate query costs based on the current path
+    pub cost_fns: Vec<Rc<dyn Fn(&Self, OperationCost) -> OperationCost>>,
 }
 
 impl FdwQueryContext {
-    pub fn select() -> Self {
+    pub fn select(base_cost: OperationCost) -> Self {
+        let retrieved_rows = base_cost.rows;
+
         Self {
             q: FdwQueryType::Select(FdwSelectQuery::default()),
-            cost: OperationCost::default(),
+            base_cost,
+            retrieved_rows,
             local_conds: vec![],
             remote_conds: vec![],
             cvt: ConversionContext::new(),
+            cost_fns: vec![]
         }
     }
 
@@ -46,6 +52,10 @@ impl FdwQueryContext {
         match &mut self.q {
             FdwQueryType::Select(q) => Some(q),
         }
+    }
+
+    pub fn add_cost(&mut self, cb: impl Fn(&Self, OperationCost) -> OperationCost + 'static) {
+        self.cost_fns.push(Rc::new(cb));
     }
 }
 

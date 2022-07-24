@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::entity::EntitySource;
 
+use super::MemoryConnectorEntitySourceConfig;
+
 /// The connection config for the Oracle JDBC driver
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MemoryConnectionConfig {
@@ -39,7 +41,7 @@ impl MemoryConnectionConfig {
             .get(&format!("{}-{}", entity_id.into(), version_id.into()))
     }
 
-    pub fn get_entity_data(&self, entity: &EntitySource<()>) -> Option<&Vec<Vec<DataValue>>> {
+    pub fn get_entity_data(&self, entity: &EntitySource<MemoryConnectorEntitySourceConfig>) -> Option<&Vec<Vec<DataValue>>> {
         self.get_data(&entity.conf.id, &entity.version_id)
     }
 

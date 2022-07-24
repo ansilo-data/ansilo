@@ -2,18 +2,18 @@ use ansilo_core::{err::Result, sqlil as sql};
 
 use crate::{common::entity::ConnectorEntityConfig, interface::QueryCompiler};
 
-use super::{MemoryConnection, MemoryQuery};
+use super::{MemoryConnection, MemoryQuery, MemoryConnectorEntitySourceConfig};
 
 pub struct MemoryQueryCompiler;
 
 impl QueryCompiler for MemoryQueryCompiler {
     type TConnection = MemoryConnection;
     type TQuery = MemoryQuery;
-    type TEntitySourceConfig = ();
+    type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
     fn compile_select(
         _con: &MemoryConnection,
-        _conf: &ConnectorEntityConfig<()>,
+        _conf: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
         select: sql::Select,
     ) -> Result<MemoryQuery> {
         let mut params = vec![];

@@ -15,12 +15,12 @@ use itertools::Itertools;
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
-use super::{MemoryConnectionConfig, MemoryResultSet};
+use super::{MemoryConnectionConfig, MemoryResultSet, MemoryConnectorEntitySourceConfig};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MemoryQueryExecutor {
     data: Arc<MemoryConnectionConfig>,
-    entities: ConnectorEntityConfig<()>,
+    entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     query: sqlil::Select,
     params: HashMap<u32, DataValue>,
 }
@@ -30,7 +30,7 @@ pub(crate) struct MemoryQueryExecutor {
 impl MemoryQueryExecutor {
     pub(crate) fn new(
         data: Arc<MemoryConnectionConfig>,
-        entities: ConnectorEntityConfig<()>,
+        entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
         query: sqlil::Select,
         params: HashMap<u32, DataValue>,
     ) -> Self {
@@ -453,7 +453,7 @@ impl MemoryQueryExecutor {
         })
     }
 
-    fn get_conf(&self, e: &sqlil::EntityVersionIdentifier) -> Result<&EntitySource<()>> {
+    fn get_conf(&self, e: &sqlil::EntityVersionIdentifier) -> Result<&EntitySource<MemoryConnectorEntitySourceConfig>> {
         let entity = self
             .entities
             .find(e)
@@ -598,7 +598,7 @@ mod tests {
 
     use super::*;
 
-    fn mock_data() -> (ConnectorEntityConfig<()>, MemoryConnectionConfig) {
+    fn mock_data() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionConfig) {
         let mut conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -613,7 +613,7 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            (),
+            MemoryConnectorEntitySourceConfig::default()
         ));
 
         entities.add(EntitySource::minimal(
@@ -627,7 +627,7 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            (),
+            MemoryConnectorEntitySourceConfig::default()
         ));
 
         conf.set_data(
