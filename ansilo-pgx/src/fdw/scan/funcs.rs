@@ -38,6 +38,10 @@ use crate::{
 const DEFAULT_FDW_STARTUP_COST: f64 = 100.0;
 const DEFAULT_FDW_TUPLE_COST: f64 = 0.01;
 
+/// We want to favour doing work remotely rather the locally
+/// so we apply the following cost multiplier to all remote work
+const DEFAULT_FDW_REMOTE_WORK_MULTIPLIER: f64 = 0.25;
+
 /// We want to be pessimistict about the number of rows in tables
 /// to avoid overly selective query plans
 const DEFAULT_ROW_VOLUME: u64 = 100_000;
@@ -55,7 +59,10 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     let mut ctx = common::connect(foreigntableid);
     let planner = PlannerContext::base_rel(root, baserel);
 
-    let base_cost = ctx.estimate_size().unwrap();
+    let mut base_cost = ctx.estimate_size().unwrap();
+
+    // Default row number if not supplied from data source
+    base_cost.rows = base_cost.rows.or(Some(DEFAULT_ROW_VOLUME));
 
     // We have to evaluate the possibility and costs of pushing down the restriction clauses
     let mut query = FdwQueryContext::select(base_cost.clone());
@@ -363,17 +370,25 @@ pub unsafe extern "C" fn get_foreign_join_paths(
             Some(pg_sys::clamp_row_est(cross_product as f64 * selectivity) as u64);
     }
 
-    // Calculate the costs for the join
+    // Calculate the costs of performing the join operation remotely
     {
         let join_conds = (*extra).restrictlist;
         join_query.add_cost(move |_, mut cost| {
             let mut cond_cost = pg_sys::QualCost::default();
             pg_sys::cost_qual_eval(&mut cond_cost, join_conds, root);
 
-            cost.startup_cost = cost.startup_cost.map(|c| c + cond_cost.startup);
-            cost.total_cost = cost
-                .total_cost
-                .map(|c| c + cond_cost.per_tuple * cross_product as f64);
+            cost.startup_cost = cost
+                .startup_cost
+                .map(|c| c + cond_cost.startup * DEFAULT_FDW_REMOTE_WORK_MULTIPLIER);
+
+            // Calculate the costs for performing the join remotely can blow up quadratically
+            // so in order favour remote joins over local joins but still compare multiple
+            // remote joins equally we apply a sqrt to shift it to a linear growth
+            cost.total_cost = cost.total_cost.map(|c| {
+                c + cond_cost.per_tuple
+                    * (cross_product as f64).sqrt()
+                    * DEFAULT_FDW_REMOTE_WORK_MULTIPLIER
+            });
 
             cost
         });
@@ -579,7 +594,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         ) as u64);
     }
 
-    // Calculate costs for calculating aggregates
+    // Calculate costs for calculating aggregates remotely
     extern "C" {
         fn get_agg_clause_costs(
             root: *mut PlannerInfo,
@@ -596,10 +611,14 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     );
 
     group_query.add_cost(move |_, mut cost| {
-        cost.startup_cost = cost.startup_cost.map(|c| c + aggcosts.transCost.startup);
-        cost.total_cost = cost
-            .total_cost
-            .map(|c| c + aggcosts.transCost.per_tuple * input_query.retrieved_rows.unwrap() as f64);
+        cost.startup_cost = cost
+            .startup_cost
+            .map(|c| c + aggcosts.transCost.startup * DEFAULT_FDW_REMOTE_WORK_MULTIPLIER);
+        cost.total_cost = cost.total_cost.map(|c| {
+            c + aggcosts.transCost.per_tuple
+                * input_query.retrieved_rows.unwrap() as f64
+                * DEFAULT_FDW_REMOTE_WORK_MULTIPLIER
+        });
 
         cost
     });
@@ -741,8 +760,12 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
             );
 
             // Add sort costs
-            cost.startup_cost = cost.startup_cost.map(|c| c + sort_path.startup_cost);
-            cost.total_cost = cost.total_cost.map(|c| c + sort_path.total_cost);
+            cost.startup_cost = cost
+                .startup_cost
+                .map(|c| c + sort_path.startup_cost * DEFAULT_FDW_REMOTE_WORK_MULTIPLIER);
+            cost.total_cost = cost
+                .total_cost
+                .map(|c| c + sort_path.total_cost * DEFAULT_FDW_REMOTE_WORK_MULTIPLIER);
 
             cost
         });

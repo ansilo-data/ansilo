@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, cell::RefCell};
+use std::{collections::HashMap, rc::Rc};
 
 use ansilo_core::sqlil;
 use ansilo_pg::fdw::proto::{OperationCost, RowStructure, SelectQueryOperation};

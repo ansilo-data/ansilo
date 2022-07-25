@@ -89,7 +89,7 @@ unsafe fn explain_conds(
     let deparsed = conds
         .into_iter()
         .map(|i| (*i).clause)
-        .map(|i| deparse_expression(i as *mut _, context, false, false))
+        .map(|i| deparse_expression(i as *mut _, context, true, false))
         .collect::<Vec<_>>();
     let deparsed = vec_to_pg_list(deparsed);
 
