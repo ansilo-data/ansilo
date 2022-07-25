@@ -11,7 +11,7 @@
             ],
             "Local Conds": [],
             "Remote Conds": [
-                "((first_name)::text = 'Mary'::text)"
+                "((\"people:1.0\".first_name)::text = 'Mary'::text)"
             ],
             "Remote Ops": [
                 {
