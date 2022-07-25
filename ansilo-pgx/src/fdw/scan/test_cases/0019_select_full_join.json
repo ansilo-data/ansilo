@@ -14,7 +14,7 @@
             ],
             "Local Conds": [],
             "Remote Conds": [
-                "(owner_id = id)"
+                "(pets.owner_id = p.id)"
             ],
             "Remote Ops": [
                 {
