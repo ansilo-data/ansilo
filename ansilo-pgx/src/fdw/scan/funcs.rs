@@ -100,7 +100,7 @@ pub unsafe extern "C" fn get_foreign_paths(
         baserel,
         ptr::null_mut(),
         base_cost.rows.unwrap() as f64,
-        base_cost.connection_cost.unwrap(),
+        base_cost.startup_cost.unwrap(),
         base_cost.total_cost.unwrap(),
         ptr::null_mut(),
         (*baserel).lateral_relids,
@@ -207,7 +207,7 @@ pub unsafe extern "C" fn get_foreign_paths(
             baserel,
             ptr::null_mut(),
             cost.rows.unwrap() as f64,
-            cost.connection_cost.unwrap(),
+            cost.startup_cost.unwrap(),
             cost.total_cost.unwrap(),
             ptr::null_mut(),
             (*ppi).ppi_req_outer,
@@ -354,13 +354,29 @@ pub unsafe extern "C" fn get_foreign_join_paths(
 
     // If retrieved rows is not calculated by the data source we
     // estimate it here
+    let cross_product = outer_query.retrieved_rows.unwrap() * inner_query.retrieved_rows.unwrap();
+
     if join_query.retrieved_rows.is_none() {
-        let cross_product =
-            outer_query.retrieved_rows.unwrap() * inner_query.retrieved_rows.unwrap();
         let (selectivity, _) = calculate_cond_costs(&planner, join_query.remote_conds.clone());
 
         join_query.retrieved_rows =
             Some(pg_sys::clamp_row_est(cross_product as f64 * selectivity) as u64);
+    }
+
+    // Calculate the costs for the join
+    {
+        let join_conds = (*extra).restrictlist;
+        join_query.add_cost(move |_, mut cost| {
+            let mut cond_cost = pg_sys::QualCost::default();
+            pg_sys::cost_qual_eval(&mut cond_cost, join_conds, root);
+
+            cost.startup_cost = cost.startup_cost.map(|c| c + cond_cost.startup);
+            cost.total_cost = cost
+                .total_cost
+                .map(|c| c + cond_cost.per_tuple * cross_product as f64);
+
+            cost
+        });
     }
 
     let cost = calculate_query_cost(&mut join_query, &planner);
@@ -371,7 +387,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         joinrel,
         ptr::null_mut(), /* default pathtarget */
         cost.rows.unwrap() as f64,
-        cost.connection_cost.unwrap(),
+        cost.startup_cost.unwrap(),
         cost.total_cost.unwrap(),
         ptr::null_mut(), /* no pathkeys */
         (*joinrel).lateral_relids,
@@ -563,32 +579,30 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         ) as u64);
     }
 
-    // Calculate costs for grouping operation
-    if (*(*root).parse).hasAggs {
-        extern "C" {
-            fn get_agg_clause_costs(
-                root: *mut PlannerInfo,
-                aggsplit: pg_sys::AggSplit,
-                costs: *mut pg_sys::AggClauseCosts,
-            );
-        }
-
-        let mut aggcosts = pg_sys::AggClauseCosts::default();
-        get_agg_clause_costs(
-            root,
-            pg_sys::AggSplit_AGGSPLIT_SIMPLE,
-            &mut aggcosts as *mut _,
+    // Calculate costs for calculating aggregates
+    extern "C" {
+        fn get_agg_clause_costs(
+            root: *mut PlannerInfo,
+            aggsplit: pg_sys::AggSplit,
+            costs: *mut pg_sys::AggClauseCosts,
         );
-
-        group_query.add_cost(move |_, mut cost| {
-            cost.connection_cost = cost.connection_cost.map(|c| c + aggcosts.transCost.startup);
-            cost.total_cost = cost.total_cost.map(|c| {
-                c + aggcosts.transCost.per_tuple * input_query.retrieved_rows.unwrap() as f64
-            });
-
-            cost
-        });
     }
+
+    let mut aggcosts = pg_sys::AggClauseCosts::default();
+    get_agg_clause_costs(
+        root,
+        pg_sys::AggSplit_AGGSPLIT_SIMPLE,
+        &mut aggcosts as *mut _,
+    );
+
+    group_query.add_cost(move |_, mut cost| {
+        cost.startup_cost = cost.startup_cost.map(|c| c + aggcosts.transCost.startup);
+        cost.total_cost = cost
+            .total_cost
+            .map(|c| c + aggcosts.transCost.per_tuple * input_query.retrieved_rows.unwrap() as f64);
+
+        cost
+    });
 
     let cost = calculate_query_cost(&mut group_query, &planner);
 
@@ -597,7 +611,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         outputrel,
         groupedrel,
         cost.rows.unwrap() as f64,
-        cost.connection_cost.unwrap(),
+        cost.startup_cost.unwrap(),
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
@@ -727,7 +741,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
             );
 
             // Add sort costs
-            cost.connection_cost = cost.connection_cost.map(|c| c + sort_path.startup_cost);
+            cost.startup_cost = cost.startup_cost.map(|c| c + sort_path.startup_cost);
             cost.total_cost = cost.total_cost.map(|c| c + sort_path.total_cost);
 
             cost
@@ -750,7 +764,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         inputrel,
         (*root).upper_targets[pg_sys::UpperRelationKind_UPPERREL_ORDERED as usize],
         cost.rows.unwrap() as f64,
-        cost.connection_cost.unwrap(),
+        cost.startup_cost.unwrap(),
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
@@ -866,13 +880,9 @@ pub unsafe extern "C" fn get_foreign_final_paths(
     // by reducing the base connection cost for this path.
     if let Some(limit) = limit {
         limit_query.add_cost(|_, mut cost| {
-            cost.connection_cost = cost.total_cost.map(|c| {
-                c - DEFAULT_FDW_STARTUP_COST * 0.5
-            });
+            cost.startup_cost = cost.total_cost.map(|c| c - DEFAULT_FDW_STARTUP_COST * 0.5);
 
-            cost.total_cost = cost.total_cost.map(|c| {
-                c - DEFAULT_FDW_STARTUP_COST * 0.5
-            });
+            cost.total_cost = cost.total_cost.map(|c| c - DEFAULT_FDW_STARTUP_COST * 0.5);
 
             cost
         });
@@ -885,7 +895,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         inputrel,
         (*root).upper_targets[pg_sys::UpperRelationKind_UPPERREL_FINAL as usize],
         cost.rows.unwrap() as f64,
-        cost.connection_cost.unwrap(),
+        cost.startup_cost.unwrap(),
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
@@ -1493,13 +1503,13 @@ unsafe fn calculate_query_cost(
     query.retrieved_rows = Some(retrieved_rows as u64);
     cost.rows = Some(pg_sys::clamp_row_est(retrieved_rows * local_sel) as u64);
 
-    cost.connection_cost = cost
-        .connection_cost
+    cost.startup_cost = cost
+        .startup_cost
         .or(Some(DEFAULT_FDW_STARTUP_COST))
         .map(|c| (c + remote_qual_cost.startup + local_qual_cost.startup));
 
     cost.total_cost = Some(
-        (cost.connection_cost.unwrap()
+        (cost.startup_cost.unwrap()
             + (retrieved_rows
                 * (DEFAULT_FDW_TUPLE_COST + pg_sys::cpu_tuple_cost + local_qual_cost.per_tuple))),
     );

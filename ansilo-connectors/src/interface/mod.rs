@@ -232,7 +232,7 @@ pub struct OperationCost {
     /// The estimated average width of each row in bytes
     pub row_width: Option<u32>,
     /// The relative cost factor of opening the connection for this operation
-    pub connection_cost: Option<f64>,
+    pub startup_cost: Option<f64>,
     /// The relative cost factor of performing the operation
     pub total_cost: Option<f64>,
 }
@@ -241,13 +241,13 @@ impl OperationCost {
     pub fn new(
         rows: Option<u64>,
         row_width: Option<u32>,
-        connection_cost: Option<f64>,
+        startup_cost: Option<f64>,
         total_cost: Option<f64>,
     ) -> Self {
         Self {
             rows,
             row_width,
-            connection_cost,
+            startup_cost,
             total_cost,
         }
     }
@@ -255,7 +255,7 @@ impl OperationCost {
     pub fn default_to(&mut self, default: &Self) {
         self.rows = self.rows.or(default.rows);
         self.row_width = self.row_width.or(default.row_width);
-        self.connection_cost = self.connection_cost.or(default.connection_cost);
+        self.startup_cost = self.startup_cost.or(default.startup_cost);
         self.total_cost = self.total_cost.or(default.total_cost);
     }
 }
