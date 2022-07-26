@@ -40,17 +40,13 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn create_base_select(
-        connection: &MemoryConnection,
+        _connection: &MemoryConnection,
         _conf: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-        entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
+        source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)> {
-        let select = sql::Select::new(sql::entity(
-            entity.conf.id.as_str(),
-            entity.version_id.as_str(),
-        ));
-        let cost = Self::estimate_size(connection, entity).unwrap();
-        let costs = OperationCost::new(cost.rows, None, None, None);
-        Ok((costs, select))
+        let select = sql::Select::new(source.clone());
+
+        Ok((OperationCost::default(), select))
     }
 
     fn apply_select_operation(

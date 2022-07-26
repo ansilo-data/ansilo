@@ -160,14 +160,16 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         })
     }
 
-    fn create_select(&mut self, entity: &EntityVersionIdentifier) -> Result<QueryOperationResult> {
+    fn create_select(&mut self, source: &sqlil::EntitySource) -> Result<QueryOperationResult> {
+        if self.entities.find(&source.entity).is_none() {
+            bail!("Failed to find entity with id");
+        }
+
         self.connect()?;
         let (cost, select) = TConnector::TQueryPlanner::create_base_select(
             self.connection.get()?,
             &self.entities,
-            self.entities
-                .find(entity)
-                .context("Failed to find entity with id")?,
+            source,
         )?;
 
         self.query = FdwQueryState::PlanningSelect(select);
@@ -341,7 +343,10 @@ mod tests {
 
     use super::*;
 
-    fn create_memory_connection_pool() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionPool) {
+    fn create_memory_connection_pool() -> (
+        ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+        MemoryConnectionPool,
+    ) {
         let mut conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -429,19 +434,14 @@ mod tests {
 
         let res = client
             .send(ClientMessage::Select(ClientSelectMessage::Create(
-                sqlil::entity("people", "1.0"),
+                sqlil::source("people", "1.0", "people"),
             )))
             .unwrap();
 
         assert_eq!(
             res,
             ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::new(
-                    Some(3),
-                    None,
-                    None,
-                    None
-                ))
+                QueryOperationResult::PerformedRemotely(OperationCost::default())
             ))
         );
 
@@ -449,7 +449,7 @@ mod tests {
             .send(ClientMessage::Select(ClientSelectMessage::Apply(
                 SelectQueryOperation::AddColumn((
                     "first_name".into(),
-                    sqlil::Expr::attr("people", "1.0", "first_name"),
+                    sqlil::Expr::attr("people", "first_name"),
                 )),
             )))
             .unwrap();
@@ -548,7 +548,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::Select(ClientSelectMessage::Create(
-                sqlil::entity("people", "1.0"),
+                sqlil::source("people", "1.0", "people"),
             )))
             .unwrap();
 
@@ -558,7 +558,7 @@ mod tests {
             .send(ClientMessage::Select(ClientSelectMessage::Apply(
                 SelectQueryOperation::AddColumn((
                     "first_name".into(),
-                    sqlil::Expr::attr("people", "1.0", "first_name"),
+                    sqlil::Expr::attr("people", "first_name"),
                 )),
             )))
             .unwrap();

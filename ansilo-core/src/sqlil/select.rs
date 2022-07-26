@@ -1,15 +1,19 @@
+use anyhow::{bail, Result};
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use super::expr::{EntityVersionIdentifier, Expr};
+use super::{
+    expr::{EntityVersionIdentifier, Expr},
+    EntitySource, Join, Ordering,
+};
 
-/// A SQLIL select query
+/// A query for retrieving rows from a data source
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct Select {
     /// The list of column expressions indexed by their aliases
     pub cols: Vec<(String, Expr)>,
     /// The source FROM expression
-    pub from: EntityVersionIdentifier,
+    pub from: EntitySource,
     /// The join clauses
     pub joins: Vec<Join>,
     /// The list of where clauses
@@ -25,7 +29,7 @@ pub struct Select {
 }
 
 impl Select {
-    pub fn new(from: EntityVersionIdentifier) -> Self {
+    pub fn new(from: EntitySource) -> Self {
         Self {
             cols: vec![],
             from,
@@ -38,6 +42,26 @@ impl Select {
         }
     }
 
+    /// Gets the source entity ID from the referenced alias
+    pub fn get_entity(&self, alias: &str) -> Result<&EntityVersionIdentifier> {
+        self.get_entity_source(alias).map(|s| &s.entity)
+    }
+
+    /// Gets the source entity from the referenced alias
+    pub fn get_entity_source(&self, alias: &str) -> Result<&EntitySource> {
+        if &self.from.alias == alias {
+            return Ok(&self.from);
+        }
+
+        for join in self.joins.iter() {
+            if &join.target.alias == alias {
+                return Ok(&join.target);
+            }
+        }
+
+        bail!("Failed to find alias \"{}\" in query", alias);
+    }
+
     /// Gets an iterator of all expressions in the query
     pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
         self.cols
@@ -47,117 +71,5 @@ impl Select {
             .chain(self.r#where.iter())
             .chain(self.group_bys.iter())
             .chain(self.order_bys.iter().map(|i| &i.expr))
-    }
-}
-
-/// A join clause
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
-pub struct Join {
-    /// Join type
-    pub r#type: JoinType,
-    /// The joined entity
-    pub target: EntityVersionIdentifier,
-    /// The joining conditions
-    pub conds: Vec<Expr>,
-}
-
-impl Join {
-    pub fn new(r#type: JoinType, target: EntityVersionIdentifier, conds: Vec<Expr>) -> Self {
-        Self {
-            r#type,
-            target,
-            conds,
-        }
-    }
-}
-
-/// Type of the join
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
-pub enum JoinType {
-    Inner,
-    Left,
-    Right,
-    Full,
-}
-
-impl JoinType {
-    /// Returns `true` if the join type is [`Inner`].
-    ///
-    /// [`Inner`]: JoinType::Inner
-    #[must_use]
-    pub fn is_inner(&self) -> bool {
-        matches!(self, Self::Inner)
-    }
-
-    /// Returns `true` if the join type is [`Left`].
-    ///
-    /// [`Left`]: JoinType::Left
-    #[must_use]
-    pub fn is_left(&self) -> bool {
-        matches!(self, Self::Left)
-    }
-
-    /// Returns `true` if the join type is [`Right`].
-    ///
-    /// [`Right`]: JoinType::Right
-    #[must_use]
-    pub fn is_right(&self) -> bool {
-        matches!(self, Self::Right)
-    }
-
-    /// Returns `true` if the join type is [`Full`].
-    ///
-    /// [`Full`]: JoinType::Full
-    #[must_use]
-    pub fn is_full(&self) -> bool {
-        matches!(self, Self::Full)
-    }
-}
-
-/// An ordering expression
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
-pub struct Ordering {
-    /// The type of ordering
-    pub r#type: OrderingType,
-    /// The ordering expression
-    pub expr: Expr,
-}
-
-impl Ordering {
-    pub fn new(r#type: OrderingType, expr: Expr) -> Self {
-        Self { r#type, expr }
-    }
-
-    pub fn asc(expr: Expr) -> Self {
-        Self::new(OrderingType::Asc, expr)
-    }
-
-    pub fn desc(expr: Expr) -> Self {
-        Self::new(OrderingType::Desc, expr)
-    }
-}
-
-/// Type of ordering
-#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize)]
-pub enum OrderingType {
-    Asc,
-    Desc,
-}
-
-impl OrderingType {
-    /// Returns `true` if the ordering type is [`Asc`].
-    ///
-    /// [`Asc`]: OrderingType::Asc
-    #[must_use]
-    pub fn is_asc(&self) -> bool {
-        matches!(self, Self::Asc)
-    }
-
-    /// Returns `true` if the ordering type is [`Desc`].
-    ///
-    /// [`Desc`]: OrderingType::Desc
-    #[must_use]
-    pub fn is_desc(&self) -> bool {
-        matches!(self, Self::Desc)
     }
 }

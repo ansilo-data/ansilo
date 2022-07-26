@@ -7,8 +7,7 @@ use crate::data::{DataType, DataValue};
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 #[serde(tag = "@type")]
 pub enum Expr {
-    EntityVersion(EntityVersionIdentifier),
-    EntityVersionAttribute(EntityVersionAttributeIdentifier),
+    Attribute(AttributeIdentifier),
     Constant(Constant),
     Parameter(Parameter),
     UnaryOp(UnaryOp),
@@ -42,18 +41,17 @@ impl EntityVersionIdentifier {
 
 /// A reference to an attribute from an entity version
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
-pub struct EntityVersionAttributeIdentifier {
-    /// The referenced entity version
-    #[serde(flatten)]
-    pub entity: EntityVersionIdentifier,
+pub struct AttributeIdentifier {
+    /// The referenced entity alias
+    pub entity_alias: String,
     /// The referenced attribute id
     pub attribute_id: String,
 }
 
-impl EntityVersionAttributeIdentifier {
-    pub fn new(entity: EntityVersionIdentifier, attribute_id: impl Into<String>) -> Self {
+impl AttributeIdentifier {
+    pub fn new(entity_alias: impl Into<String>, attribute_id: impl Into<String>) -> Self {
         Self {
-            entity,
+            entity_alias: entity_alias.into(),
             attribute_id: attribute_id.into(),
         }
     }
@@ -277,25 +275,13 @@ pub fn entity(entity_id: impl Into<String>, version: impl Into<String>) -> Entit
 }
 
 /// Constructurs a new entity attribute expression
-pub fn attr(
-    entity_id: impl Into<String>,
-    version: impl Into<String>,
-    attr_id: impl Into<String>,
-) -> EntityVersionAttributeIdentifier {
-    EntityVersionAttributeIdentifier::new(entity(entity_id, version), attr_id)
+pub fn attr(alias: impl Into<String>, attr_id: impl Into<String>) -> AttributeIdentifier {
+    AttributeIdentifier::new(alias, attr_id)
 }
 
 impl Expr {
-    pub fn entity(entity_id: impl Into<String>, version: impl Into<String>) -> Self {
-        Self::EntityVersion(entity(entity_id, version))
-    }
-
-    pub fn attr(
-        entity_id: impl Into<String>,
-        version: impl Into<String>,
-        attr_id: impl Into<String>,
-    ) -> Self {
-        Self::EntityVersionAttribute(attr(entity_id, version, attr_id))
+    pub fn attr(alias: impl Into<String>, attr_id: impl Into<String>) -> Self {
+        Self::Attribute(attr(alias, attr_id))
     }
 
     pub fn constant(val: DataValue) -> Self {
@@ -315,8 +301,7 @@ impl Expr {
             Expr::Cast(e) => e.expr.walk(cb),
             Expr::FunctionCall(e) => e.walk(cb),
             Expr::AggregateCall(e) => e.walk(cb),
-            Expr::EntityVersion(_) => {}
-            Expr::EntityVersionAttribute(_) => {}
+            Expr::Attribute(_) => {}
             Expr::Constant(_) => {}
             Expr::Parameter(_) => {}
         }

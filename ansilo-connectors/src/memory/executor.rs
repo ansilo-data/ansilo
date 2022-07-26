@@ -15,7 +15,7 @@ use itertools::Itertools;
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
-use super::{MemoryConnectionConfig, MemoryResultSet, MemoryConnectorEntitySourceConfig};
+use super::{MemoryConnectionConfig, MemoryConnectorEntitySourceConfig, MemoryResultSet};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MemoryQueryExecutor {
@@ -89,15 +89,15 @@ impl MemoryQueryExecutor {
         MemoryResultSet::new(self.cols()?, results)
     }
 
-    fn get_entity_data(&self, entity: &EntityVersionIdentifier) -> Result<&Vec<Vec<DataValue>>> {
+    fn get_entity_data(&self, s: &sqlil::EntitySource) -> Result<&Vec<Vec<DataValue>>> {
         self.data
-            .get_entity_id_data(entity)
+            .get_entity_id_data(&s.entity)
             .ok_or(Error::msg("Could not find entity"))
     }
 
     fn perform_join(
         &self,
-        source: &EntityVersionIdentifier,
+        source: &sqlil::EntitySource,
         join: &sqlil::Join,
         outer: &Vec<Vec<DataValue>>,
         inner: &Vec<Vec<DataValue>>,
@@ -137,7 +137,7 @@ impl MemoryQueryExecutor {
         }
 
         if join.r#type.is_left() || join.r#type.is_full() {
-            let nulls = self.get_attrs(&join.target)?.len();
+            let nulls = self.get_attrs(&join.target.entity)?.len();
             let nulls = iter::repeat(DataValue::Null)
                 .take(nulls)
                 .collect::<Vec<_>>();
@@ -151,7 +151,7 @@ impl MemoryQueryExecutor {
         }
 
         if join.r#type.is_right() || join.r#type.is_full() {
-            let nulls = self.get_attrs(source)?.len();
+            let nulls = self.get_attrs(&source.entity)?.len();
             let nulls = iter::repeat(DataValue::Null)
                 .take(nulls)
                 .collect::<Vec<_>>();
@@ -310,8 +310,7 @@ impl MemoryQueryExecutor {
 
     fn evaluate(&self, data: &DataContext, expr: &sqlil::Expr) -> Result<DataContext> {
         Ok(match expr {
-            sqlil::Expr::EntityVersion(_) => bail!("Cannot reference entity without attribute"),
-            sqlil::Expr::EntityVersionAttribute(a) => {
+            sqlil::Expr::Attribute(a) => {
                 let attr_idx = self.get_attr_index(a)?;
 
                 match data {
@@ -410,8 +409,7 @@ impl MemoryQueryExecutor {
 
     fn evaluate_type(&self, e: &sqlil::Expr) -> Result<DataType> {
         Ok(match e {
-            sqlil::Expr::EntityVersion(_) => bail!("Cannot reference entity without attribute"),
-            sqlil::Expr::EntityVersionAttribute(a) => self.get_attr(a)?.r#type.clone(),
+            sqlil::Expr::Attribute(a) => self.get_attr(a)?.r#type.clone(),
             sqlil::Expr::Constant(v) => (&v.value).into(),
             sqlil::Expr::Parameter(p) => p.r#type.clone(),
             sqlil::Expr::UnaryOp(_) => todo!(),
@@ -453,7 +451,10 @@ impl MemoryQueryExecutor {
         })
     }
 
-    fn get_conf(&self, e: &sqlil::EntityVersionIdentifier) -> Result<&EntitySource<MemoryConnectorEntitySourceConfig>> {
+    fn get_conf(
+        &self,
+        e: &sqlil::EntityVersionIdentifier,
+    ) -> Result<&EntitySource<MemoryConnectorEntitySourceConfig>> {
         let entity = self
             .entities
             .find(e)
@@ -467,27 +468,27 @@ impl MemoryQueryExecutor {
         Ok(&entity.version().attributes)
     }
 
-    fn get_attr(
-        &self,
-        a: &sqlil::EntityVersionAttributeIdentifier,
-    ) -> Result<&EntityAttributeConfig> {
-        self.get_attrs(&a.entity)?
+    fn get_attr(&self, a: &sqlil::AttributeIdentifier) -> Result<&EntityAttributeConfig> {
+        let entity = self.query.get_entity(&a.entity_alias)?;
+
+        self.get_attrs(entity)?
             .iter()
             .find(|i| i.id == a.attribute_id)
             .ok_or(Error::msg("Could not find attr"))
     }
 
-    fn get_attr_index(&self, a: &sqlil::EntityVersionAttributeIdentifier) -> Result<usize> {
+    fn get_attr_index(&self, a: &sqlil::AttributeIdentifier) -> Result<usize> {
         let pos: usize = [&self.query.from]
             .into_iter()
             .chain(self.query.joins.iter().map(|i| &i.target))
-            .take_while(|e| *e != &a.entity)
-            .map(|e| self.get_attrs(e).unwrap().len())
+            .take_while(|e| e.alias != a.entity_alias)
+            .map(|e| self.get_attrs(&e.entity).unwrap().len())
             .sum();
 
+        let entity = self.query.get_entity(&a.entity_alias)?;
         Ok(pos
             + self
-                .get_attrs(&a.entity)?
+                .get_attrs(entity)?
                 .iter()
                 .position(|i| i.id == a.attribute_id)
                 .ok_or(Error::msg("Could not find attr"))?)
@@ -598,7 +599,10 @@ mod tests {
 
     use super::*;
 
-    fn mock_data() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionConfig) {
+    fn mock_data() -> (
+        ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+        MemoryConnectionConfig,
+    ) {
         let mut conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -613,7 +617,7 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            MemoryConnectorEntitySourceConfig::default()
+            MemoryConnectorEntitySourceConfig::default(),
         ));
 
         entities.add(EntitySource::minimal(
@@ -627,7 +631,7 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            MemoryConnectorEntitySourceConfig::default()
+            MemoryConnectorEntitySourceConfig::default(),
         ));
 
         conf.set_data(
@@ -693,14 +697,14 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_all() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
 
         let executor = create_executor(select, HashMap::new());
@@ -741,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_invalid_entity() {
-        let select = sqlil::Select::new(sqlil::entity("invalid", "1.0"));
+        let select = sqlil::Select::new(sqlil::source("invalid", "1.0", "i"));
 
         let executor = create_executor(select, HashMap::new());
 
@@ -750,7 +754,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_invalid_version() {
-        let select = sqlil::Select::new(sqlil::entity("people", "invalid"));
+        let select = sqlil::Select::new(sqlil::source("people", "invalid", "i"));
 
         let executor = create_executor(select, HashMap::new());
 
@@ -759,7 +763,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_no_cols() {
-        let select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
 
         let executor = create_executor(select, HashMap::new());
 
@@ -773,10 +777,10 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_single_column() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
 
         let executor = create_executor(select, HashMap::new());
@@ -802,16 +806,16 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_where_equals() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
 
         select
             .r#where
             .push(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-                sqlil::Expr::attr("people", "1.0", "first_name"),
+                sqlil::Expr::attr("people", "first_name"),
                 sqlil::BinaryOpType::Equal,
                 sqlil::Expr::Constant(sqlil::Constant::new(DataValue::from("John"))),
             )));
@@ -835,10 +839,10 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_skip_row() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
 
         select.row_skip = 1;
@@ -864,10 +868,10 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_row_limit() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
 
         select.row_limit = Some(1);
@@ -890,19 +894,15 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_group_by_column_key() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
 
         select
             .group_bys
-            .push(sqlil::Expr::EntityVersionAttribute(sqlil::attr(
-                "people",
-                "1.0",
-                "first_name",
-            )));
+            .push(sqlil::Expr::Attribute(sqlil::attr("people", "first_name")));
 
         let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
@@ -925,10 +925,10 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_group_by_column_key_with_count() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "alias".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "count".to_string(),
@@ -937,11 +937,7 @@ mod tests {
 
         select
             .group_bys
-            .push(sqlil::Expr::EntityVersionAttribute(sqlil::attr(
-                "people",
-                "1.0",
-                "first_name",
-            )));
+            .push(sqlil::Expr::Attribute(sqlil::attr("people", "first_name")));
 
         let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
@@ -973,7 +969,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_count_implicit_group_by() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "count".to_string(),
             sqlil::Expr::AggregateCall(AggregateCall::Count),
@@ -994,13 +990,13 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_bin_op_concat() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "full_name".to_string(),
             sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-                sqlil::Expr::attr("people", "1.0", "first_name"),
+                sqlil::Expr::attr("people", "first_name"),
                 sqlil::BinaryOpType::Concat,
-                sqlil::Expr::attr("people", "1.0", "last_name"),
+                sqlil::Expr::attr("people", "last_name"),
             )),
         ));
 
@@ -1026,11 +1022,11 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_group_by_expr_key_with_count() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         let full_name = sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
             sqlil::BinaryOpType::Concat,
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
         select
             .cols
@@ -1076,21 +1072,19 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_order_by_single() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
 
-        select.order_bys.push(Ordering::asc(sqlil::Expr::attr(
-            "people",
-            "1.0",
-            "first_name",
-        )));
+        select
+            .order_bys
+            .push(Ordering::asc(sqlil::Expr::attr("people", "first_name")));
 
         let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
@@ -1129,21 +1123,19 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_order_by_single_desc() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
 
-        select.order_bys.push(Ordering::desc(sqlil::Expr::attr(
-            "people",
-            "1.0",
-            "first_name",
-        )));
+        select
+            .order_bys
+            .push(Ordering::desc(sqlil::Expr::attr("people", "first_name")));
 
         let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
@@ -1182,26 +1174,22 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_order_by_multiple() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
 
-        select.order_bys.push(Ordering::asc(sqlil::Expr::attr(
-            "people",
-            "1.0",
-            "first_name",
-        )));
-        select.order_bys.push(Ordering::desc(sqlil::Expr::attr(
-            "people",
-            "1.0",
-            "last_name",
-        )));
+        select
+            .order_bys
+            .push(Ordering::asc(sqlil::Expr::attr("people", "first_name")));
+        select
+            .order_bys
+            .push(Ordering::desc(sqlil::Expr::attr("people", "last_name")));
 
         let executor = create_executor(select, HashMap::new());
         let results = executor.run().unwrap();
@@ -1240,29 +1228,29 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_inner_join() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
 
         select.joins.push(sqlil::Join::new(
             sqlil::JoinType::Inner,
-            sqlil::entity("pets", "1.0"),
+            sqlil::source("pets", "1.0", "pets"),
             vec![sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-                sqlil::Expr::attr("people", "1.0", "id"),
+                sqlil::Expr::attr("people", "id"),
                 sqlil::BinaryOpType::Equal,
-                sqlil::Expr::attr("pets", "1.0", "owner_id"),
+                sqlil::Expr::attr("pets", "owner_id"),
             ))],
         ));
 
         select.cols.push((
             "owner_first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "owner_last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
         select.cols.push((
             "pet_name".to_string(),
-            sqlil::Expr::attr("pets", "1.0", "pet_name"),
+            sqlil::Expr::attr("pets", "pet_name"),
         ));
 
         let executor = create_executor(select, HashMap::new());
@@ -1309,29 +1297,29 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_left_join() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
 
         select.joins.push(sqlil::Join::new(
             sqlil::JoinType::Left,
-            sqlil::entity("pets", "1.0"),
+            sqlil::source("pets", "1.0", "pets"),
             vec![sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-                sqlil::Expr::attr("people", "1.0", "id"),
+                sqlil::Expr::attr("people", "id"),
                 sqlil::BinaryOpType::Equal,
-                sqlil::Expr::attr("pets", "1.0", "owner_id"),
+                sqlil::Expr::attr("pets", "owner_id"),
             ))],
         ));
 
         select.cols.push((
             "owner_first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "owner_last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
         select.cols.push((
             "pet_name".to_string(),
-            sqlil::Expr::attr("pets", "1.0", "pet_name"),
+            sqlil::Expr::attr("pets", "pet_name"),
         ));
 
         let executor = create_executor(select, HashMap::new());
@@ -1383,29 +1371,29 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_right_join() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
 
         select.joins.push(sqlil::Join::new(
             sqlil::JoinType::Right,
-            sqlil::entity("pets", "1.0"),
+            sqlil::source("pets", "1.0", "pets"),
             vec![sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-                sqlil::Expr::attr("people", "1.0", "id"),
+                sqlil::Expr::attr("people", "id"),
                 sqlil::BinaryOpType::Equal,
-                sqlil::Expr::attr("pets", "1.0", "owner_id"),
+                sqlil::Expr::attr("pets", "owner_id"),
             ))],
         ));
 
         select.cols.push((
             "owner_first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "owner_last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
         select.cols.push((
             "pet_name".to_string(),
-            sqlil::Expr::attr("pets", "1.0", "pet_name"),
+            sqlil::Expr::attr("pets", "pet_name"),
         ));
 
         let executor = create_executor(select, HashMap::new());
@@ -1457,29 +1445,29 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_full_join() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
 
         select.joins.push(sqlil::Join::new(
             sqlil::JoinType::Full,
-            sqlil::entity("pets", "1.0"),
+            sqlil::source("pets", "1.0", "pets"),
             vec![sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-                sqlil::Expr::attr("people", "1.0", "id"),
+                sqlil::Expr::attr("people", "id"),
                 sqlil::BinaryOpType::Equal,
-                sqlil::Expr::attr("pets", "1.0", "owner_id"),
+                sqlil::Expr::attr("pets", "owner_id"),
             ))],
         ));
 
         select.cols.push((
             "owner_first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "owner_last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
         select.cols.push((
             "pet_name".to_string(),
-            sqlil::Expr::attr("pets", "1.0", "pet_name"),
+            sqlil::Expr::attr("pets", "pet_name"),
         ));
 
         let executor = create_executor(select, HashMap::new());
@@ -1536,20 +1524,20 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_where_parameter() {
-        let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
         select.cols.push((
             "first_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
         ));
         select.cols.push((
             "last_name".to_string(),
-            sqlil::Expr::attr("people", "1.0", "last_name"),
+            sqlil::Expr::attr("people", "last_name"),
         ));
 
         select
             .r#where
             .push(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-                sqlil::Expr::attr("people", "1.0", "first_name"),
+                sqlil::Expr::attr("people", "first_name"),
                 sqlil::BinaryOpType::Equal,
                 sqlil::Expr::Parameter(sqlil::Parameter::new(
                     DataType::Utf8String(StringOptions::default()),

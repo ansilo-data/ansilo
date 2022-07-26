@@ -191,7 +191,7 @@ pub trait QueryPlanner {
     fn create_base_select(
         connection: &Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
-        entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)>;
 
     /// Adds the supplied expr to the query

@@ -48,20 +48,20 @@ fn test_memory_select_query_execution() {
 
     let connection = pool.acquire().unwrap();
 
-    let mut select = sqlil::Select::new(sqlil::entity("people", "1.0"));
+    let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
     select.cols.push((
         "first_name".to_string(),
-        sqlil::Expr::attr("people", "1.0", "first_name"),
+        sqlil::Expr::attr("people", "first_name"),
     ));
     select.cols.push((
         "last_name".to_string(),
-        sqlil::Expr::attr("people", "1.0", "last_name"),
+        sqlil::Expr::attr("people", "last_name"),
     ));
 
     select
         .r#where
         .push(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-            sqlil::Expr::attr("people", "1.0", "first_name"),
+            sqlil::Expr::attr("people", "first_name"),
             sqlil::BinaryOpType::Equal,
             sqlil::Expr::Constant(sqlil::Constant::new(DataValue::from("Gary"))),
         )));

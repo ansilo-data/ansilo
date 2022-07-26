@@ -2,7 +2,7 @@ pub use ansilo_connectors::interface::{
     OperationCost, QueryOperationResult, RowStructure, SelectQueryOperation, QueryInputStructure
 };
 
-use ansilo_core::sqlil::EntityVersionIdentifier;
+use ansilo_core::sqlil::{EntityVersionIdentifier, self};
 use bincode::{Decode, Encode};
 
 /// Protocol messages sent by postgres
@@ -53,7 +53,7 @@ impl AuthDataSource {
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ClientSelectMessage {
     /// Creates a select query for the supplied entity
-    Create(EntityVersionIdentifier),
+    Create(sqlil::EntitySource),
     /// Add a column to the select query
     Apply(SelectQueryOperation),
     /// Only perform the estimation and dont change the query

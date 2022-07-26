@@ -8,7 +8,7 @@ use std::{
 use ansilo_core::{
     data::DataValue,
     err::{anyhow, bail, Context, Error, Result},
-    sqlil::EntityVersionIdentifier,
+    sqlil::{EntityVersionIdentifier, self},
 };
 use ansilo_pg::fdw::{
     channel::IpcClientChannel,
@@ -27,7 +27,7 @@ pub struct FdwContext {
     /// The ID of the data source for this FDW connection
     pub data_source_id: String,
     /// The initial entity of fdw context
-    pub entity: EntityVersionIdentifier,
+    pub entity: sqlil::EntitySource,
     /// The current query handle writer
     pub query_writer: Option<QueryHandleWriter<FdwQueryHandle>>,
     /// The current result set reader
@@ -58,7 +58,7 @@ pub struct FdwResultSet {
 }
 
 impl FdwContext {
-    pub fn new(data_source_id: &str, entity: EntityVersionIdentifier) -> Self {
+    pub fn new(data_source_id: &str, entity: sqlil::EntitySource) -> Self {
         Self {
             connection: FdwConnection::Disconnected,
             data_source_id: data_source_id.into(),

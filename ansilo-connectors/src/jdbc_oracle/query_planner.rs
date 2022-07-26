@@ -61,13 +61,10 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     fn create_base_select(
         _connection: &JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
-        entity: &EntitySource<OracleJdbcEntitySourceConfig>,
+        source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)> {
         // TODO: costs
-        let select = sql::Select::new(sql::entity(
-            entity.conf.id.as_str(),
-            entity.version_id.as_str(),
-        ));
+        let select = sql::Select::new(source.clone());
         let costs = OperationCost::default();
         Ok((costs, select))
     }
