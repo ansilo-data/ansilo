@@ -503,7 +503,7 @@ mod tests {
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
         select.joins.push(sql::Join::new(
             sql::JoinType::Inner,
-            sql::source("other", "v1", "ither"),
+            sql::source("other", "v1", "other"),
             vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
                 sql::Expr::attr("entity", "attr1"),
                 sql::BinaryOpType::Equal,
