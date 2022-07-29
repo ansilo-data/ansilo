@@ -1,7 +1,130 @@
+use anyhow::{Context, Result};
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use super::expr::{EntityVersionIdentifier, Expr};
+use super::{
+    expr::{EntityVersionIdentifier, Expr},
+    Delete, Insert, Select, Update,
+};
+
+/// A query to be executed against a data source
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+pub enum Query {
+    Select(Select),
+    Insert(Insert),
+    Update(Update),
+    Delete(Delete),
+}
+
+impl Query {
+    /// Gets the entity sources from this query
+    pub fn get_entity_sources(&self) -> impl Iterator<Item = &EntitySource> {
+        match self {
+            Query::Select(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
+            Query::Insert(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
+            Query::Update(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
+            Query::Delete(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
+        }
+    }
+
+    /// Gets the source entity ID from the referenced alias
+    pub fn get_entity(&self, alias: &str) -> Result<&EntityVersionIdentifier> {
+        self.get_entity_source(alias).map(|s| &s.entity)
+    }
+
+    /// Gets the source entity from the referenced alias
+    pub fn get_entity_source(&self, alias: &str) -> Result<&EntitySource> {
+        self.get_entity_sources()
+            .find(|i| i.alias == alias)
+            .with_context(|| format!("Failed to find alias \"{}\" in query", alias))
+    }
+
+    /// Gets the expr's in the query
+    pub fn exprs(&self) -> impl Iterator<Item = &Expr> + '_ {
+        match self {
+            Query::Select(q) => q.exprs().collect::<Vec<_>>().into_iter(),
+            Query::Insert(q) => q.exprs().collect::<Vec<_>>().into_iter(),
+            Query::Update(q) => q.exprs().collect::<Vec<_>>().into_iter(),
+            Query::Delete(q) => q.exprs().collect::<Vec<_>>().into_iter(),
+        }
+    }
+
+    /// Get's the queries WHERE conditions
+    pub fn r#where(&self) -> &Vec<Expr> {
+        match self {
+            Query::Select(q) => &q.r#where,
+            Query::Update(q) => &q.r#where,
+            Query::Delete(q) => &q.r#where,
+            Query::Insert(_) => unimplemented!(),
+        }
+    }
+
+    /// Get's the queries orderings
+    pub fn orderings(&self) -> &Vec<Ordering> {
+        match self {
+            Query::Select(q) => &q.order_bys,
+            Query::Update(q) => &q.order_bys,
+            Query::Delete(q) => &q.order_bys,
+            Query::Insert(_) => unimplemented!(),
+        }
+    }
+
+    pub fn as_select(&self) -> Option<&Select> {
+        if let Self::Select(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_insert(&self) -> Option<&Insert> {
+        if let Self::Insert(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_update(&self) -> Option<&Update> {
+        if let Self::Update(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_delete(&self) -> Option<&Delete> {
+        if let Self::Delete(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+impl From<Select> for Query {
+    fn from(v: Select) -> Self {
+        Self::Select(v)
+    }
+}
+
+impl From<Insert> for Query {
+    fn from(v: Insert) -> Self {
+        Self::Insert(v)
+    }
+}
+
+impl From<Update> for Query {
+    fn from(v: Update) -> Self {
+        Self::Update(v)
+    }
+}
+
+impl From<Delete> for Query {
+    fn from(v: Delete) -> Self {
+        Self::Delete(v)
+    }
+}
 
 /// The referenced entity and it's associated alias
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]

@@ -195,7 +195,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         let connection = self.connection.get()?;
 
         let query =
-            TConnector::TQueryCompiler::compile_select(connection, &self.entities, select.clone())?;
+            TConnector::TQueryCompiler::compile_query(connection, &self.entities, select.clone().into())?;
         let handle = connection.prepare(query)?;
 
         let structure = handle.get_structure()?;
@@ -261,10 +261,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
     fn explain_select(&mut self, verbose: bool) -> Result<String> {
         let select = self.query.select()?;
 
-        let res = TConnector::TQueryPlanner::explain_select(
+        let res = TConnector::TQueryPlanner::explain_query(
             self.connection.get()?,
             &self.entities,
-            select,
+            &select.clone().into(),
             verbose,
         )?;
 

@@ -20,12 +20,17 @@ impl QueryCompiler for OracleJdbcQueryCompiler {
     type TQuery = JdbcQuery;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
-    fn compile_select(
+    fn compile_query(
         _con: &JdbcConnection,
         conf: &OracleJdbcConnectorEntityConfig,
-        select: sql::Select,
+        query: sql::Query,
     ) -> Result<JdbcQuery> {
-        Self::compile_select_query(conf, &select)
+        match query {
+            sql::Query::Select(select) => Self::compile_select_query(conf, &select),
+            sql::Query::Insert(_) => todo!(),
+            sql::Query::Update(_) => todo!(),
+            sql::Query::Delete(_) => todo!(),
+        }
     }
 }
 

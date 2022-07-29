@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import com.ansilo.connectors.data.JdbcFixedSizeDataType;
@@ -206,7 +207,11 @@ public class JdbcPreparedQuery {
             this.bindConstantParameters();
         }
 
-        var resultSet = new JdbcResultSet(this.preparedStatement.executeQuery());
+        var hasResultSet = this.preparedStatement.execute();
+
+        var resultSet =
+                new JdbcResultSet(hasResultSet ? this.preparedStatement.getResultSet() : null);
+
 
         // Reset parameter index for next execution
         this.paramIndex = 0;

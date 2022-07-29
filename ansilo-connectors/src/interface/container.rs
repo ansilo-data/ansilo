@@ -7,7 +7,10 @@ use ansilo_core::{
 
 use crate::{
     common::entity::ConnectorEntityConfig,
-    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
+    jdbc::{
+        JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet,
+        JdbcTransactionManager,
+    },
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector, OracleJdbcEntitySourceConfig},
     memory::{
         MemoryConnection, MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
@@ -15,7 +18,7 @@ use crate::{
     },
 };
 
-use super::{Connection, ConnectionPool, Connector, QueryHandle, ResultSet};
+use super::{Connection, ConnectionPool, Connector, QueryHandle, ResultSet, TransactionManager};
 
 #[derive(Debug, PartialEq)]
 pub enum Connectors {
@@ -50,6 +53,10 @@ pub enum ConnectionPools {
 pub enum Connections {
     Jdbc(JdbcConnection),
     Memory(MemoryConnection),
+}
+
+pub enum TransactionManagers {
+    Jdbc(JdbcTransactionManager),
 }
 
 pub enum Queries {
@@ -169,6 +176,7 @@ impl ConnectionPool for ConnectionPools {
 impl Connection for Connections {
     type TQuery = Queries;
     type TQueryHandle = QueryHandles;
+    type TTransactionManager = TransactionManagers;
 
     fn prepare(&self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
         Ok(match (self, query) {
@@ -176,6 +184,41 @@ impl Connection for Connections {
             (Connections::Memory(c), Queries::Memory(q)) => QueryHandles::Memory(c.prepare(q)?),
             (_, _) => bail!("Type mismatch between connection and query",),
         })
+    }
+
+    fn transaction_manager(&self) -> Option<Self::TTransactionManager> {
+        match self {
+            Connections::Jdbc(c) => c
+                .transaction_manager()
+                .map(|tm| TransactionManagers::Jdbc(tm)),
+            Connections::Memory(_) => None,
+        }
+    }
+}
+
+impl TransactionManager for TransactionManagers {
+    fn is_in_transaction(&self) -> Result<bool> {
+        match self {
+            TransactionManagers::Jdbc(t) => t.is_in_transaction(),
+        }
+    }
+
+    fn begin_transaction(&self) -> Result<()> {
+        match self {
+            TransactionManagers::Jdbc(t) => t.begin_transaction(),
+        }
+    }
+
+    fn rollback_transaction(&self) -> Result<()> {
+        match self {
+            TransactionManagers::Jdbc(t) => t.rollback_transaction(),
+        }
+    }
+
+    fn commit_transaction(&self) -> Result<()> {
+        match self {
+            TransactionManagers::Jdbc(t) => t.commit_transaction(),
+        }
     }
 }
 

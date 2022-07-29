@@ -42,6 +42,13 @@ impl Select {
         }
     }
 
+    /// Gets the entity sources from this query
+    pub fn get_entity_sources(&self) -> impl Iterator<Item = &EntitySource> {
+        [&self.from]
+            .into_iter()
+            .chain(self.joins.iter().map(|j| &j.target))
+    }
+
     /// Gets the source entity ID from the referenced alias
     pub fn get_entity(&self, alias: &str) -> Result<&EntityVersionIdentifier> {
         self.get_entity_source(alias).map(|s| &s.entity)

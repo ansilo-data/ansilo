@@ -9,7 +9,7 @@ use ansilo_core::{
     config::EntityAttributeConfig,
     data::{DataType, DataValue, StringOptions},
     err::{bail, Context, Error, Result},
-    sqlil::{self, EntityVersionIdentifier},
+    sqlil::{self},
 };
 use itertools::Itertools;
 
@@ -21,7 +21,7 @@ use super::{MemoryConnectionConfig, MemoryConnectorEntitySourceConfig, MemoryRes
 pub(crate) struct MemoryQueryExecutor {
     data: Arc<MemoryConnectionConfig>,
     entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-    query: sqlil::Select,
+    query: sqlil::Query,
     params: HashMap<u32, DataValue>,
 }
 
@@ -31,7 +31,7 @@ impl MemoryQueryExecutor {
     pub(crate) fn new(
         data: Arc<MemoryConnectionConfig>,
         entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-        query: sqlil::Select,
+        query: sqlil::Query,
         params: HashMap<u32, DataValue>,
     ) -> Self {
         Self {
@@ -43,10 +43,19 @@ impl MemoryQueryExecutor {
     }
 
     pub(crate) fn run(&self) -> Result<MemoryResultSet> {
-        let mut source = self.get_entity_data(&self.query.from)?.clone();
-        let mut source_entity = &self.query.from;
+        match &self.query {
+            sqlil::Query::Select(select) => self.run_select(select),
+            sqlil::Query::Insert(_) => todo!(),
+            sqlil::Query::Update(_) => todo!(),
+            sqlil::Query::Delete(_) => todo!(),
+        }
+    }
 
-        for join in self.query.joins.iter() {
+    fn run_select(&self, select: &sqlil::Select) -> Result<MemoryResultSet> {
+        let mut source = self.get_entity_data(&select.from)?.clone();
+        let mut source_entity = &select.from;
+
+        for join in select.joins.iter() {
             let inner = self.get_entity_data(&join.target)?;
 
             source = self.perform_join(source_entity, join, &source, inner)?;
@@ -78,11 +87,11 @@ impl MemoryQueryExecutor {
                 .try_collect()?
         };
 
-        if self.query.row_skip > 0 {
-            results = results.into_iter().skip(self.query.row_skip as _).collect();
+        if select.row_skip > 0 {
+            results = results.into_iter().skip(select.row_skip as _).collect();
         }
 
-        if let Some(limit) = self.query.row_limit {
+        if let Some(limit) = select.row_limit {
             results = results.into_iter().take(limit as _).collect();
         }
 
@@ -171,7 +180,7 @@ impl MemoryQueryExecutor {
         let mut res = true;
 
         let row = DataContext::Row(row.clone());
-        for cond in self.query.r#where.iter() {
+        for cond in self.query.r#where().iter() {
             let out = match self.evaluate(&row, cond)?.as_cell()? {
                 DataValue::Boolean(out) => out,
                 _ => false,
@@ -184,7 +193,17 @@ impl MemoryQueryExecutor {
     }
 
     fn project(&self, row: &Vec<DataValue>) -> Result<Vec<DataValue>> {
-        self.project_row(row, &self.query.cols.iter().map(|i| i.1.clone()).collect())
+        self.project_row(
+            row,
+            &self
+                .query
+                .as_select()
+                .unwrap()
+                .cols
+                .iter()
+                .map(|i| i.1.clone())
+                .collect(),
+        )
     }
 
     fn project_row(&self, row: &Vec<DataValue>, cols: &Vec<sqlil::Expr>) -> Result<Vec<DataValue>> {
@@ -199,9 +218,11 @@ impl MemoryQueryExecutor {
     }
 
     fn is_aggregated(&self) -> bool {
-        !self.query.group_bys.is_empty()
+        !self.query.as_select().unwrap().group_bys.is_empty()
             || self
                 .query
+                .as_select()
+                .unwrap()
                 .cols
                 .iter()
                 .any(|(_, i)| i.walk_any(|i| matches!(i, sqlil::Expr::AggregateCall(_))))
@@ -210,11 +231,11 @@ impl MemoryQueryExecutor {
     fn grouping_key(&self, row: &Vec<DataValue>) -> Result<Vec<DataValue>> {
         assert!(self.is_aggregated());
 
-        if self.query.group_bys.is_empty() {
+        if self.query.as_select().unwrap().group_bys.is_empty() {
             return Ok(vec![DataValue::Boolean(true)]);
         }
 
-        self.project_row(row, &self.query.group_bys)
+        self.project_row(row, &self.query.as_select().unwrap().group_bys)
     }
 
     fn group(&self, rows: Vec<Vec<DataValue>>) -> Result<Vec<Vec<Vec<DataValue>>>> {
@@ -238,7 +259,7 @@ impl MemoryQueryExecutor {
         let mut res = vec![];
 
         let group = DataContext::Group(group_rows.clone());
-        for (_, expr) in self.query.cols.iter() {
+        for (_, expr) in self.query.as_select().unwrap().cols.iter() {
             res.push(self.grouping_expr(expr, group_rows, &group)?);
         }
 
@@ -251,12 +272,14 @@ impl MemoryQueryExecutor {
         group_rows: &Vec<Vec<DataValue>>,
         group: &DataContext,
     ) -> Result<DataValue, Error> {
-        Ok(if self.query.group_bys.contains(expr) {
-            self.evaluate(&DataContext::Row(group_rows[0].clone()), expr)?
-                .as_cell()?
-        } else {
-            self.evaluate(group, expr)?.as_cell()?
-        })
+        Ok(
+            if self.query.as_select().unwrap().group_bys.contains(expr) {
+                self.evaluate(&DataContext::Row(group_rows[0].clone()), expr)?
+                    .as_cell()?
+            } else {
+                self.evaluate(group, expr)?.as_cell()?
+            },
+        )
     }
 
     fn sort<R: Clone, K: Fn(&R) -> Result<Vec<Ordered<DataValue>>>>(
@@ -264,7 +287,7 @@ impl MemoryQueryExecutor {
         rows: Vec<R>,
         key_fn: K,
     ) -> Result<Vec<R>> {
-        if self.query.order_bys.is_empty() {
+        if self.query.orderings().is_empty() {
             return Ok(rows.clone());
         }
 
@@ -279,12 +302,12 @@ impl MemoryQueryExecutor {
     }
 
     fn sort_key(&self, row: &Vec<DataValue>) -> Result<Vec<Ordered<DataValue>>> {
-        assert!(!self.query.order_bys.is_empty());
+        assert!(!self.query.orderings().is_empty());
 
         let row = DataContext::Row(row.clone());
         let mut keys = vec![];
 
-        for ordering in self.query.order_bys.iter() {
+        for ordering in self.query.orderings().iter() {
             let key = self.evaluate(&row, &ordering.expr)?.as_cell()?;
 
             keys.push(Ordered::new(ordering.r#type, key));
@@ -294,12 +317,12 @@ impl MemoryQueryExecutor {
     }
 
     fn group_sort_key(&self, group_rows: &Vec<Vec<DataValue>>) -> Result<Vec<Ordered<DataValue>>> {
-        assert!(!self.query.order_bys.is_empty());
+        assert!(!self.query.orderings().is_empty());
 
         let group = DataContext::Group(group_rows.clone());
         let mut keys = vec![];
 
-        for ordering in self.query.order_bys.iter() {
+        for ordering in self.query.orderings().iter() {
             let key = self.grouping_expr(&ordering.expr, group_rows, &group)?;
 
             keys.push(Ordered::new(ordering.r#type, key));
@@ -401,6 +424,8 @@ impl MemoryQueryExecutor {
 
     fn cols(&self) -> Result<Vec<(String, DataType)>> {
         self.query
+            .as_select()
+            .unwrap()
             .cols
             .iter()
             .map(|(s, e)| Ok((s.clone(), self.evaluate_type(e)?)))
@@ -478,9 +503,7 @@ impl MemoryQueryExecutor {
     }
 
     fn get_attr_index(&self, a: &sqlil::AttributeIdentifier) -> Result<usize> {
-        let pos: usize = [&self.query.from]
-            .into_iter()
-            .chain(self.query.joins.iter().map(|i| &i.target))
+        let pos: usize = self.query.get_entity_sources()
             .take_while(|e| e.alias != a.entity_alias)
             .map(|e| self.get_attrs(&e.entity).unwrap().len())
             .sum();
@@ -692,7 +715,7 @@ mod tests {
     ) -> MemoryQueryExecutor {
         let (entities, data) = mock_data();
 
-        MemoryQueryExecutor::new(Arc::new(data), entities, query, params)
+        MemoryQueryExecutor::new(Arc::new(data), entities, sqlil::Query::Select(query), params)
     }
 
     #[test]

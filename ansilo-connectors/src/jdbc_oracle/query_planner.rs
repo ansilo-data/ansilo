@@ -88,13 +88,64 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         }
     }
 
-    fn explain_select(
+    fn create_base_insert(
         connection: &Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
-        select: &sql::Select,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::Insert)> {
+        todo!()
+    }
+
+    fn create_base_update(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::Update)> {
+        todo!()
+    }
+
+    fn create_base_delete(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::Delete)> {
+        todo!()
+    }
+
+    fn apply_insert_operation(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        insert: &mut sql::Insert,
+        op: crate::interface::InsertQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        todo!()
+    }
+
+    fn apply_update_operation(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        update: &mut sql::Update,
+        op: crate::interface::UpdateQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        todo!()
+    }
+
+    fn apply_delete_operation(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        delete: &mut sql::Delete,
+        op: crate::interface::DeleteQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        todo!()
+    }
+
+    fn explain_query(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        query: &sql::Query,
         verbose: bool,
     ) -> Result<serde_json::Value> {
-        let compiled = OracleJdbcQueryCompiler::compile_select(connection, conf, select.clone())?;
+        let compiled = OracleJdbcQueryCompiler::compile_query(connection, conf, query.clone())?;
 
         Ok(if verbose {
             serde_json::to_value(compiled)

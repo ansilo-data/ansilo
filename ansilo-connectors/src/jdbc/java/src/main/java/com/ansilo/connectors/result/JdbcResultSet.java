@@ -76,11 +76,14 @@ public class JdbcResultSet {
      * @throws SQLException
      */
     public JdbcRowStructure getRowStructure() throws SQLException {
-        var metadata = this.resultSet.getMetaData();
         List<JdbcRowColumnInfo> cols = new ArrayList<>();
 
-        for (int i = 0; i < metadata.getColumnCount(); i++) {
-            cols.add(new JdbcRowColumnInfo(metadata.getColumnName(i + 1), this.dataTypes[i]));
+        if (this.resultSet != null) {
+            var metadata = this.resultSet.getMetaData();
+
+            for (int i = 0; i < metadata.getColumnCount(); i++) {
+                cols.add(new JdbcRowColumnInfo(metadata.getColumnName(i + 1), this.dataTypes[i]));
+            }
         }
 
         return new JdbcRowStructure(cols);
@@ -95,6 +98,11 @@ public class JdbcResultSet {
      * @throws Exception
      */
     public int read(ByteBuffer buff) throws Exception {
+        // If no result set present return EOF
+        if (this.resultSet == null) {
+            return 0;
+        }
+
         // We are transfering data within the name process across JNI
         // just use native-endianess
         // We will take care of endianess during serialisation when
@@ -162,14 +170,14 @@ public class JdbcResultSet {
 
                     if (read <= 0) {
                         // Write 0 read length which signals EOF
-                        buff.put((byte)0);
+                        buff.put((byte) 0);
                         this.currentStream.close();
                         this.currentStream = null;
                         this.columnIndex++;
                         break;
                     } else {
                         // Write the actual read length
-                        buff.put((byte)read);
+                        buff.put((byte) read);
                         // Copy the read buffer into the
                         buff.put(this.readBuff, 0, read);
 
@@ -215,6 +223,10 @@ public class JdbcResultSet {
     }
 
     private JdbcDataType[] getDataTypes() throws SQLException {
+        if (this.resultSet == null) {
+            return new JdbcDataType[0];
+        }
+
         var metadata = this.resultSet.getMetaData();
         JdbcDataType[] dataTypes = new JdbcDataType[metadata.getColumnCount()];
 

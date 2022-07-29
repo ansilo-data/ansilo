@@ -41,11 +41,27 @@ public class JdbcResultSetTest {
     }
 
     @Test
+    void testGetRowStructureNoResultSet() throws SQLException {
+        var resultSet = new JdbcResultSet(null);
+        var rowStructure = resultSet.getRowStructure();
+
+        assertEquals(0, rowStructure.getCols().size());
+    }
+
+    @Test
     void readNoColumns() throws Exception {
         when(this.innerResultSetMetadata.getColumnCount()).thenReturn(0);
 
         var buff = ByteBuffer.allocate(1024);
         int read = new JdbcResultSet(this.innerResultSet).read(buff);
+
+        assertEquals(0, read);
+    }
+
+    @Test
+    void readNoResultSet() throws Exception {
+        var buff = ByteBuffer.allocate(1024);
+        int read = new JdbcResultSet(null).read(buff);
 
         assertEquals(0, read);
     }

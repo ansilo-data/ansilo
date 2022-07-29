@@ -55,6 +55,34 @@ public class JdbcConnection {
     }
 
     /**
+     * Returns whether this connection is currently within a transaction.
+     */
+    public boolean isInTransaction() throws SQLException {
+        return this.connection.getAutoCommit() == false;
+    }
+
+    /**
+     * Starts a new transaction
+     */
+    public void beginTransaction() throws SQLException {
+        this.connection.setAutoCommit(false);
+    }
+
+    /**
+     * Rolls back the current transaction
+     */
+    public void rollBackTransaction() throws SQLException {
+        this.connection.rollback();
+    }
+
+    /**
+     * Commits the current transaction
+     */
+    public void commitTransaction() throws SQLException {
+        this.connection.commit();
+    }
+    
+    /**
      * Checks if the connection is valid
      * 
      * @throws SQLException

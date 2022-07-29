@@ -16,13 +16,13 @@ use super::{executor::MemoryQueryExecutor, MemoryConnectionConfig, MemoryResultS
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MemoryQuery {
-    pub select: sqlil::Select,
+    pub query: sqlil::Query,
     pub params: Vec<(u32, DataType)>,
 }
 
 impl MemoryQuery {
-    pub fn new(select: sqlil::Select, params: Vec<(u32, DataType)>) -> Self {
-        Self { select, params }
+    pub fn new(query: sqlil::Query, params: Vec<(u32, DataType)>) -> Self {
+        Self { query, params }
     }
 }
 
@@ -90,7 +90,7 @@ impl QueryHandle for MemoryQueryHandle {
         let executor = MemoryQueryExecutor::new(
             Arc::clone(&self.data),
             self.entities.clone(),
-            self.query.select.clone(),
+            self.query.query.clone(),
             params,
         );
 

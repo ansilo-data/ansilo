@@ -37,7 +37,8 @@ public class JdbcPreparedQueryTest {
         this.mockResultSetMetadata = mock(ResultSetMetaData.class);
         this.innerParams = new ArrayList<>();
 
-        when(this.innerStatement.executeQuery()).thenReturn(this.mockResultSet);
+        when(this.innerStatement.execute()).thenReturn(true);
+        when(this.innerStatement.getResultSet()).thenReturn(this.mockResultSet);
         when(this.mockResultSet.getMetaData()).thenReturn(this.mockResultSetMetadata);
     }
 
@@ -253,7 +254,8 @@ public class JdbcPreparedQueryTest {
     void executeWithoutParams() throws Exception {
         this.initPreparedQuery();
         var resultSet = this.preparedQuery.execute();
-        verify(this.innerStatement, times(1)).executeQuery();
+        verify(this.innerStatement, times(1)).execute();
+        verify(this.innerStatement, times(1)).getResultSet();
         assertInstanceOf(JdbcResultSet.class, resultSet);
     }
 
@@ -265,7 +267,8 @@ public class JdbcPreparedQueryTest {
         assertThrows(SQLException.class, () -> {
             this.preparedQuery.execute();
         });
-        verify(this.innerStatement, times(0)).executeQuery();
+        verify(this.innerStatement, times(0)).execute();
+        verify(this.innerStatement, times(0)).getResultSet();
     }
 
     @Test
@@ -287,7 +290,8 @@ public class JdbcPreparedQueryTest {
         assertThrows(SQLException.class, () -> {
             this.preparedQuery.execute();
         });
-        verify(this.innerStatement, times(0)).executeQuery();
+        verify(this.innerStatement, times(0)).execute();
+        verify(this.innerStatement, times(0)).getResultSet();
     }
 
     @Test
@@ -306,7 +310,8 @@ public class JdbcPreparedQueryTest {
         verify(this.innerStatement, times(1)).setInt(1, 123);
 
         this.preparedQuery.execute();
-        verify(this.innerStatement, times(1)).executeQuery();
+        verify(this.innerStatement, times(1)).execute();
+        verify(this.innerStatement, times(1)).getResultSet();
     }
 
     @Test
@@ -329,7 +334,8 @@ public class JdbcPreparedQueryTest {
         }
 
         verify(this.innerStatement, times(3)).setInt(1, 123);
-        verify(this.innerStatement, times(3)).executeQuery();
+        verify(this.innerStatement, times(3)).execute();
+        verify(this.innerStatement, times(3)).getResultSet();
     }
 
     @Test
@@ -397,6 +403,19 @@ public class JdbcPreparedQueryTest {
         verify(this.innerStatement, times(1)).setInt(1, 123);
         verify(this.innerStatement, times(1)).setInt(2, 888);
         verify(this.innerStatement, times(1)).setInt(3, 789);
+    }
+
+    @Test
+    void executeNoResultSet() throws Exception {
+        this.innerStatement = mock(PreparedStatement.class);
+        when(this.innerStatement.execute()).thenReturn(false);
+
+        this.preparedQuery = new JdbcPreparedQuery(this.innerStatement, this.innerParams);
+
+        var resultSet = this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).execute();
+        verify(this.innerStatement, times(0)).getResultSet();
+        assertInstanceOf(JdbcResultSet.class, resultSet);
     }
 
     private ByteBuffer newByteBuffer(int capacity) {

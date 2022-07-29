@@ -41,6 +41,7 @@ pub struct MemoryConnection(pub Arc<MemoryConnectionConfig>, ConnectorEntityConf
 impl Connection for MemoryConnection {
     type TQuery = MemoryQuery;
     type TQueryHandle = MemoryQueryHandle;
+    type TTransactionManager = ();
 
     fn prepare(&self, query: MemoryQuery) -> Result<MemoryQueryHandle> {
         Ok(MemoryQueryHandle::new(
@@ -48,5 +49,9 @@ impl Connection for MemoryConnection {
             Arc::clone(&self.0),
             self.1.clone(),
         ))
+    }
+
+    fn transaction_manager(&self) -> Option<Self::TTransactionManager> {
+        None
     }
 }

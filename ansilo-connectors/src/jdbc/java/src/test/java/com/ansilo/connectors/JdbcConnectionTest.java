@@ -42,6 +42,36 @@ public class JdbcConnectionTest {
     }
 
     @Test
+    void testIsInTransaction() throws Exception {
+        when(this.innerConnection.getAutoCommit()).thenReturn(true, false);
+
+        assertEquals(false, this.connection.isInTransaction());
+        assertEquals(true, this.connection.isInTransaction());
+
+        verify(this.innerConnection, times(2)).getAutoCommit();
+    }
+
+    @Test
+    void testBeginTransaction() throws Exception {
+        this.connection.beginTransaction();
+        verify(this.innerConnection, times(1)).setAutoCommit(false);
+    }
+
+    @Test
+    void testCommitTransaction() throws Exception {
+        this.connection.commitTransaction();
+
+        verify(this.innerConnection, times(1)).commit();
+    }
+
+    @Test
+    void testRollBackTransaction() throws Exception {
+        this.connection.rollBackTransaction();
+
+        verify(this.innerConnection, times(1)).rollback();
+    }
+
+    @Test
     void testIsValid() throws Exception {
         when(this.connection.isValid(10)).thenReturn(true);
 

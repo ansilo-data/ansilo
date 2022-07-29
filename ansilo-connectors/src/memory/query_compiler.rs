@@ -11,14 +11,14 @@ impl QueryCompiler for MemoryQueryCompiler {
     type TQuery = MemoryQuery;
     type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
-    fn compile_select(
+    fn compile_query(
         _con: &MemoryConnection,
         _conf: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-        select: sql::Select,
+        query: sql::Query,
     ) -> Result<MemoryQuery> {
         let mut params = vec![];
 
-        select.exprs().for_each(|e| {
+        query.exprs().for_each(|e| {
             e.walk(&mut |e| {
                 if let sql::Expr::Parameter(p) = e {
                     params.push((p.id, p.r#type.clone()))
@@ -26,6 +26,6 @@ impl QueryCompiler for MemoryQueryCompiler {
             })
         });
 
-        Ok(MemoryQuery::new(select, params))
+        Ok(MemoryQuery::new(query, params))
     }
 }
