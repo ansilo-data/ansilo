@@ -154,8 +154,8 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             ClientSelectMessage::Apply(op) => {
                 ServerSelectMessage::Result(self.apply_select_operation(op)?)
             }
-            ClientSelectMessage::Estimate(op) => {
-                ServerSelectMessage::Result(self.estimate_select_operation(op)?)
+            ClientSelectMessage::Explain(verbose) => {
+                ServerSelectMessage::ExplainResult(self.explain_select(verbose)?)
             }
         })
     }
@@ -184,22 +184,6 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             self.connection.get()?,
             &self.entities,
             select,
-            op,
-        )?;
-
-        Ok(res)
-    }
-
-    fn estimate_select_operation(
-        &mut self,
-        op: SelectQueryOperation,
-    ) -> Result<QueryOperationResult> {
-        let select = self.query.select()?;
-
-        let res = TConnector::TQueryPlanner::apply_select_operation(
-            self.connection.get()?,
-            &self.entities,
-            &mut select.clone(),
             op,
         )?;
 
@@ -272,6 +256,21 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         };
 
         Ok(())
+    }
+
+    fn explain_select(&mut self, verbose: bool) -> Result<String> {
+        let select = self.query.select()?;
+
+        let res = TConnector::TQueryPlanner::explain_select(
+            self.connection.get()?,
+            &self.entities,
+            select,
+            verbose,
+        )?;
+
+        let json = serde_json::to_string(&res).context("Failed to encode explain state to JSON")?;
+
+        Ok(json)
     }
 }
 
@@ -461,19 +460,6 @@ mod tests {
             ))
         );
 
-        let res = client
-            .send(ClientMessage::Select(ClientSelectMessage::Estimate(
-                SelectQueryOperation::SetRowOffset(5),
-            )))
-            .unwrap();
-
-        assert_eq!(
-            res,
-            ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
-        );
-
         let res = client.send(ClientMessage::Prepare).unwrap();
         assert_eq!(
             res,
@@ -607,6 +593,56 @@ mod tests {
             let res = client.send(ClientMessage::RestartQuery).unwrap();
             assert_eq!(res, ServerMessage::QueryRestarted);
         }
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_explain_select() {
+        let (thread, mut client) = create_mock_connection("connection_select");
+
+        let res = client
+            .send(ClientMessage::Select(ClientSelectMessage::Create(
+                sqlil::source("people", "1.0", "people"),
+            )))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Select(ServerSelectMessage::Result(
+                QueryOperationResult::PerformedRemotely(OperationCost::default())
+            ))
+        );
+
+        let res = client
+            .send(ClientMessage::Select(ClientSelectMessage::Apply(
+                SelectQueryOperation::AddColumn((
+                    "first_name".into(),
+                    sqlil::Expr::attr("people", "first_name"),
+                )),
+            )))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Select(ServerSelectMessage::Result(
+                QueryOperationResult::PerformedRemotely(OperationCost::default())
+            ))
+        );
+
+        let res = client
+            .send(ClientMessage::Select(ClientSelectMessage::Explain(
+                true,
+            )))
+            .unwrap();
+
+        let json = match res {
+            ServerMessage::Select(ServerSelectMessage::ExplainResult(res)) => res,
+            _ => panic!("Unexpected response from server: {:?}", res),
+        };
+
+        let _parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();

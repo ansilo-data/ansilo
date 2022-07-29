@@ -5,10 +5,14 @@ use ansilo_core::{
 
 use crate::{
     common::entity::{ConnectorEntityConfig, EntitySource},
-    interface::{OperationCost, QueryOperationResult, QueryPlanner, SelectQueryOperation},
+    interface::{
+        OperationCost, QueryCompiler, QueryOperationResult, QueryPlanner, SelectQueryOperation,
+    },
 };
 
-use super::{MemoryConnection, MemoryConnectorEntitySourceConfig, MemoryQuery};
+use super::{
+    MemoryConnection, MemoryConnectorEntitySourceConfig, MemoryQuery, MemoryQueryCompiler,
+};
 
 pub struct MemoryQueryPlanner {}
 
@@ -66,6 +70,21 @@ impl QueryPlanner for MemoryQueryPlanner {
             SelectQueryOperation::SetRowLimit(limit) => Self::set_row_limit(select, limit),
             SelectQueryOperation::SetRowOffset(offset) => Self::set_rows_to_skip(select, offset),
         }
+    }
+
+    fn explain_select(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        select: &sql::Select,
+        verbose: bool,
+    ) -> Result<serde_json::Value> {
+        let compiled = MemoryQueryCompiler::compile_select(connection, conf, select.clone())?;
+
+        Ok(if verbose {
+            serde_json::to_value(compiled)
+        } else {
+            serde_json::to_value(compiled.select)
+        }?)
     }
 }
 

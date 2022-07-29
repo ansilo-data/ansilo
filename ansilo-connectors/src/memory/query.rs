@@ -5,6 +5,7 @@ use ansilo_core::{
     err::{bail, Context, Result},
     sqlil,
 };
+use serde::Serialize;
 
 use crate::{
     common::{data::DataReader, entity::ConnectorEntityConfig},
@@ -13,7 +14,7 @@ use crate::{
 
 use super::{executor::MemoryQueryExecutor, MemoryConnectionConfig, MemoryResultSet, MemoryConnectorEntitySourceConfig};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MemoryQuery {
     pub select: sqlil::Select,
     pub params: Vec<(u32, DataType)>,

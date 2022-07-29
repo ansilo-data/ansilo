@@ -13,7 +13,13 @@ mod tests {
 
     use super::*;
 
-    use crate::sqlil::test;
+    use crate::{
+        fdw::test::{
+            query::{execute_query, explain_query_verbose},
+            server::start_fdw_server,
+        },
+        sqlil::test,
+    };
     use ansilo_connectors::{
         common::entity::{ConnectorEntityConfig, EntitySource},
         interface::{container::ConnectionPools, Connector, OperationCost},
@@ -33,10 +39,7 @@ mod tests {
     use serde::{de::DeserializeOwned, Serialize};
     use serde_json::json;
 
-    fn create_memory_connection_pool() -> (
-        ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-        MemoryConnectionPool,
-    ) {
+    fn create_memory_connection_pool() -> ConnectionPools {
         let mut conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -151,20 +154,7 @@ mod tests {
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
             .unwrap();
 
-        (entities, pool)
-    }
-
-    fn start_fdw_server(socket_path: impl Into<String>) -> FdwServer {
-        let (entities, pool) = create_memory_connection_pool();
-        let pool = ConnectionPools::Memory(pool, entities);
-        let path = PathBuf::from(socket_path.into());
-        fs::create_dir_all(path.parent().unwrap().clone()).unwrap();
-
-        let server =
-            FdwServer::start(path, [("memory".to_string(), pool)].into_iter().collect()).unwrap();
-        thread::sleep(Duration::from_millis(10));
-
-        server
+        ConnectionPools::Memory(pool, entities)
     }
 
     fn setup_db(socket_path: impl Into<String>) {
@@ -206,48 +196,8 @@ mod tests {
     fn setup_test(test_name: impl Into<String>) {
         let test_name = test_name.into();
         let sock_path = format!("/tmp/ansilo/fdw_server/{test_name}");
-        start_fdw_server(sock_path.clone());
+        start_fdw_server(create_memory_connection_pool(), sock_path.clone());
         setup_db(sock_path);
-    }
-
-    fn execute_query<F: Fn(SpiHeapTupleData) -> R, R: DeserializeOwned + Serialize + Clone>(
-        query: impl Into<String>,
-        f: F,
-    ) -> Vec<R> {
-        let query = query.into();
-        let json = Spi::connect(|mut client| {
-            let res = client
-                .select(query.as_str(), None, None)
-                .map(f)
-                .collect::<Vec<R>>();
-            let res = serde_json::to_string(&res).unwrap();
-
-            Ok(Some(res))
-        })
-        .unwrap();
-
-        serde_json::from_str(json.as_str()).unwrap()
-    }
-
-    fn explain_query(query: impl Into<String>) -> serde_json::Value {
-        let query = query.into();
-        let json = Spi::connect(|mut client| {
-            let table = client
-                .update(
-                    &format!("EXPLAIN (format json, verbose true) {}", query.as_str()),
-                    None,
-                    None,
-                )
-                .first();
-            Ok(Some(
-                table
-                    .get_one::<Json>()
-                    .expect("failed to get json EXPLAIN result"),
-            ))
-        })
-        .unwrap();
-
-        json.0.as_array().take().unwrap().get(0).unwrap().clone()
     }
 
     macro_rules! assert_query_plan_expected {
@@ -263,7 +213,7 @@ mod tests {
         let query = json["SQL"].as_str().unwrap().to_string();
         let expected_plan = json["Expected"].clone();
 
-        let actual_plan = explain_query(query);
+        let actual_plan = explain_query_verbose(query);
 
         assert_json_include!(actual: actual_plan, expected: expected_plan)
     }
@@ -424,7 +374,7 @@ mod tests {
         // Result order is unspecified
         results.sort();
         expected.sort();
-        
+
         assert_eq!(results, expected);
     }
 

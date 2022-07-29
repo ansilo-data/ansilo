@@ -9,6 +9,7 @@ use jni::{
     signature::{JavaType, Primitive},
     sys::jmethodID,
 };
+use serde::Serialize;
 
 use crate::{
     common::data::DataWriter,
@@ -18,7 +19,7 @@ use crate::{
 use super::{JdbcDataType, JdbcResultSet, Jvm};
 
 /// JDBC query
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct JdbcQuery {
     /// The query (likely SQL) as a string
     pub query: String,
@@ -27,7 +28,7 @@ pub struct JdbcQuery {
 }
 
 /// JDBC query param
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum JdbcQueryParam {
     /// A dynamic query parameter that can modified for every query execution
     Dynamic(u32, DataType),

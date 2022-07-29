@@ -10,8 +10,8 @@ use crate::{
         entity::{ConnectorEntityConfig, EntitySource},
     },
     interface::{
-        Connection, OperationCost, QueryHandle, QueryOperationResult,
-        QueryPlanner, SelectQueryOperation,
+        Connection, OperationCost, QueryCompiler, QueryHandle, QueryOperationResult, QueryPlanner,
+        SelectQueryOperation,
     },
     jdbc::{JdbcConnection, JdbcQuery},
 };
@@ -87,6 +87,21 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
             SelectQueryOperation::SetRowOffset(offset) => Self::set_rows_to_skip(select, offset),
         }
     }
+
+    fn explain_select(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        select: &sql::Select,
+        verbose: bool,
+    ) -> Result<serde_json::Value> {
+        let compiled = OracleJdbcQueryCompiler::compile_select(connection, conf, select.clone())?;
+
+        Ok(if verbose {
+            serde_json::to_value(compiled)
+        } else {
+            serde_json::to_value(compiled.query)
+        }?)
+    }
 }
 
 impl OracleJdbcQueryPlanner {
@@ -97,22 +112,30 @@ impl OracleJdbcQueryPlanner {
     ) -> Result<QueryOperationResult> {
         select.cols.push((alias, expr));
         // TODO: costs
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::default()))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn add_where_clause(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
         select.r#where.push(expr);
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::default()))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
         select.joins.push(join);
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::default()))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn add_group_by(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
         select.group_bys.push(expr);
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::default()))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn add_order_by(
@@ -120,17 +143,23 @@ impl OracleJdbcQueryPlanner {
         ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
         select.order_bys.push(ordering);
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::default()))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn set_row_limit(select: &mut sql::Select, row_limit: u64) -> Result<QueryOperationResult> {
         select.row_limit = Some(row_limit);
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::default()))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 
     fn set_rows_to_skip(select: &mut sql::Select, row_skip: u64) -> Result<QueryOperationResult> {
         select.row_skip = row_skip;
-        Ok(QueryOperationResult::PerformedRemotely(OperationCost::default()))
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
     }
 }
 

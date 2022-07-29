@@ -201,6 +201,14 @@ pub trait QueryPlanner {
         select: &mut sql::Select,
         op: SelectQueryOperation,
     ) -> Result<QueryOperationResult>;
+
+    /// Returns a JSON representation of the query state used for debugging
+    fn explain_select(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        select: &sql::Select,
+        verbose: bool,
+    ) -> Result<serde_json::Value>;
 }
 
 /// The query compiler compiles SQLIL queries into a format that can be executed by the connector

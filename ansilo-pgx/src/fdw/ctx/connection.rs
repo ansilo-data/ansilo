@@ -181,6 +181,22 @@ impl FdwContext {
         Ok(())
     }
 
+    pub fn explain_query(&mut self, verbose: bool) -> Result<serde_json::Value> {
+        let res = self
+            .send(ClientMessage::Select(ClientSelectMessage::Explain(verbose)))
+            .unwrap();
+
+        let json = match res {
+            ServerMessage::Select(ServerSelectMessage::ExplainResult(result)) => result,
+            _ => return Err(unexpected_response(res).context("Applying query op")),
+        };
+
+        let parsed: serde_json::Value = serde_json::from_str(&json)
+            .with_context(|| format!("Failed to parse JSON from explain result: {:?}", json))?;
+
+        Ok(parsed)
+    }
+
     pub fn disconnect(&mut self) -> Result<()> {
         self.connection = self.connection.disconnect()?;
 

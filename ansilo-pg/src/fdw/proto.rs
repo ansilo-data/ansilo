@@ -56,8 +56,9 @@ pub enum ClientSelectMessage {
     Create(sqlil::EntitySource),
     /// Add a column to the select query
     Apply(SelectQueryOperation),
-    /// Only perform the estimation and dont change the query
-    Estimate(SelectQueryOperation),
+    /// Returns an explaination of the current query state for debugging purposes in JSON encoding
+    /// The boolean flag determines if a more vebose output is requested
+    Explain(bool)
 }
 
 /// Protocol messages sent by ansilo
@@ -89,4 +90,6 @@ pub enum ServerMessage {
 pub enum ServerSelectMessage {
     /// The result of the query operation
     Result(QueryOperationResult),
+    /// The result of the query explaination as a JSON encoded string
+    ExplainResult(String)
 }
