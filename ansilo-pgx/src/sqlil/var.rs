@@ -4,7 +4,10 @@ use ansilo_core::{
 };
 use pgx::{pg_schema, pg_sys};
 
-use crate::{fdw::ctx::{FdwContext, PlannerContext}, util::string::parse_to_owned_utf8_string};
+use crate::{
+    fdw::ctx::{FdwContext, PlannerContext},
+    util::string::parse_to_owned_utf8_string,
+};
 
 use super::{
     datum::from_pg_type, table::parse_entity_version_id_from_foreign_table, ConversionContext,
@@ -29,15 +32,11 @@ pub(super) unsafe fn convert_var(
 
         // If the var node references of the foreign entities we append it a attribute of that entity
         let rte = pg_sys::planner_rt_fetch((*node).varno, planner.root() as *mut _);
-        let entity = parse_entity_version_id_from_foreign_table((*rte).relid)?;
+        let alias = ctx.register_alias((*node).varno);
         let attr_id =
             parse_to_owned_utf8_string(pg_sys::get_attname((*rte).relid, (*node).varattno, false))?;
 
-        Ok(sqlil::Expr::attr(
-            entity.entity_id,
-            entity.version_id,
-            attr_id,
-        ))
+        Ok(sqlil::Expr::attr(alias.clone(), attr_id))
     } else {
         // The input will be treated like a parameter in the query
         let r#type = from_pg_type((*node).vartype).context("Failed to determine type of column")?;
@@ -72,7 +71,7 @@ mod tests {
 
         let expr = test::convert_simple_expr("SELECT tab.col FROM tab").unwrap();
 
-        assert_eq!(expr, sqlil::Expr::attr("tab", "latest", "col"));
+        assert_eq!(expr, sqlil::Expr::attr("t1", "col"));
     }
 
     #[pg_test]
@@ -90,6 +89,6 @@ mod tests {
 
         let expr = test::convert_simple_expr(r#"SELECT tab.col FROM "tab:1.0" as tab"#).unwrap();
 
-        assert_eq!(expr, sqlil::Expr::attr("tab", "1.0", "col"));
+        assert_eq!(expr, sqlil::Expr::attr("t1", "col"));
     }
 }

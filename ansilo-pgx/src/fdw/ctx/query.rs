@@ -14,6 +14,8 @@ pub struct FdwQueryContext {
     pub q: FdwQueryType,
     /// The base entity size estimation
     pub base_cost: OperationCost,
+    /// The base relation relid
+    pub base_relid: pg_sys::Oid,
     /// The estimate of the number of rows returned by the query
     /// before any local conditions are checked
     pub retrieved_rows: Option<u64>,
@@ -28,18 +30,26 @@ pub struct FdwQueryContext {
 }
 
 impl FdwQueryContext {
-    pub fn select(base_cost: OperationCost) -> Self {
+    pub fn select(base_relid: pg_sys::Oid, base_cost: OperationCost) -> Self {
+        let mut cvt = ConversionContext::new();
+        cvt.register_alias(base_relid);
+
         let retrieved_rows = base_cost.rows;
 
         Self {
             q: FdwQueryType::Select(FdwSelectQuery::default()),
             base_cost,
+            base_relid,
             retrieved_rows,
             local_conds: vec![],
             remote_conds: vec![],
-            cvt: ConversionContext::new(),
-            cost_fns: vec![]
+            cvt,
+            cost_fns: vec![],
         }
+    }
+
+    pub fn base_rel_alias(&self) -> &str {
+        self.cvt.get_alias(self.base_relid).unwrap()
     }
 
     pub fn as_select(&self) -> Option<&FdwSelectQuery> {

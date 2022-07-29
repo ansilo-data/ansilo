@@ -7,6 +7,7 @@ use super::expr::{EntityVersionIdentifier, Expr};
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct EntitySource {
     /// The source entity
+    #[serde(flatten)]
     pub entity: EntityVersionIdentifier,
     /// The alias of the source, referenced in expressions
     pub alias: String,

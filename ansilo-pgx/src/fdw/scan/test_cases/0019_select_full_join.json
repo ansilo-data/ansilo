@@ -23,23 +23,22 @@
                             {
                                 "@type": "BinaryOp",
                                 "left": {
-                                    "@type": "EntityVersionAttribute",
+                                    "@type": "Attribute",
                                     "attribute_id": "owner_id",
-                                    "entity_id": "pets",
-                                    "version_id": "1.0"
+                                    "entity_alias": "t2"
                                 },
                                 "right": {
-                                    "@type": "EntityVersionAttribute",
+                                    "@type": "Attribute",
                                     "attribute_id": "id",
-                                    "entity_id": "people",
-                                    "version_id": "1.0"
+                                    "entity_alias": "t1"
                                 },
                                 "type": "Equal"
                             }
                         ],
                         "target": {
                             "entity_id": "pets",
-                            "version_id": "1.0"
+                            "version_id": "1.0",
+                            "alias": "t2"
                         },
                         "type": "Full"
                     }
@@ -48,10 +47,9 @@
                     "AddColumn": {
                         "0": "c0",
                         "1": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "id",
-                            "entity_id": "people",
-                            "version_id": "1.0"
+                            "entity_alias": "t1"
                         }
                     }
                 },
@@ -59,10 +57,9 @@
                     "AddColumn": {
                         "0": "c1",
                         "1": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "first_name",
-                            "entity_id": "people",
-                            "version_id": "1.0"
+                            "entity_alias": "t1"
                         }
                     }
                 },
@@ -70,10 +67,9 @@
                     "AddColumn": {
                         "0": "c2",
                         "1": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "last_name",
-                            "entity_id": "people",
-                            "version_id": "1.0"
+                            "entity_alias": "t1"
                         }
                     }
                 },
@@ -81,10 +77,9 @@
                     "AddColumn": {
                         "0": "c3",
                         "1": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "id",
-                            "entity_id": "pets",
-                            "version_id": "1.0"
+                            "entity_alias": "t2"
                         }
                     }
                 },
@@ -92,10 +87,9 @@
                     "AddColumn": {
                         "0": "c4",
                         "1": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "owner_id",
-                            "entity_id": "pets",
-                            "version_id": "1.0"
+                            "entity_alias": "t2"
                         }
                     }
                 },
@@ -103,10 +97,9 @@
                     "AddColumn": {
                         "0": "c5",
                         "1": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "pet_name",
-                            "entity_id": "pets",
-                            "version_id": "1.0"
+                            "entity_alias": "t2"
                         }
                     }
                 }

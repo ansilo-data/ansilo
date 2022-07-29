@@ -65,7 +65,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     base_cost.rows = base_cost.rows.or(Some(DEFAULT_ROW_VOLUME));
 
     // We have to evaluate the possibility and costs of pushing down the restriction clauses
-    let mut query = FdwQueryContext::select(base_cost.clone());
+    let mut query = FdwQueryContext::select((*baserel).relid, base_cost.clone());
 
     let baserel_conds = PgList::<RestrictInfo>::from_pg((*baserel).baserestrictinfo);
     apply_query_conds(
@@ -333,16 +333,26 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         return;
     }
 
+    let target_alias = join_query.cvt.register_alias(inner_query.base_relid);
     let join_op = SelectQueryOperation::AddJoin(sqlil::Join::new(
         join_type,
-        inner_ctx.entity.clone(),
+        sqlil::EntitySource::new(inner_ctx.entity.clone(), target_alias),
         join_clauses,
     ));
 
     // Apply the join before the conditions
-    inner_ops.insert(0, join_op.clone());
+    apply_query_operations(&mut outer_ctx, &mut join_query, vec![join_op.clone()]);
 
-    apply_query_operations(&mut outer_ctx, &mut join_query, inner_ops);
+    // Apply the base conditions of the inner query to the join query
+    // It is important we redo the mapping of RestrictInfo's to sqlil expr's
+    // as any query parameters, table aliases could be different when merged
+    // into the join query.
+    apply_query_conds(
+        &mut outer_ctx,
+        &mut join_query,
+        &planner,
+        inner_query.remote_conds.clone(),
+    );
 
     /// If we failed to push down the join then dont generate the path
     if !join_query
@@ -353,11 +363,6 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     {
         return;
     }
-
-    // Copy across remote conds from inner ctx
-    join_query
-        .remote_conds
-        .append(&mut inner_query.remote_conds.clone());
 
     // If retrieved rows is not calculated by the data source we
     // estimate it here
@@ -1353,7 +1358,7 @@ unsafe fn restore_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
     let select = query.as_select().unwrap();
 
     // Initialise a new select query
-    ctx.create_select().unwrap();
+    ctx.create_select(query.base_rel_alias()).unwrap();
 
     // We have already applied these ops to the query before but not on the
     // remote side

@@ -1,8 +1,14 @@
+use std::collections::HashMap;
+
 use pgx::pg_sys::{self, Node};
 
 /// Mapping data that is accrued while converting pg expr's to sqlil
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConversionContext {
+    /// Query table relid's to alias mappings
+    /// We record the aliases for any relations within the query here
+    aliases: HashMap<pg_sys::Oid, String>,
+
     /// Query parameter mappings
     /// Postgres query params (paramkind, paramid) to SQLIL parameter id's
     params: Vec<(*mut Node, u32)>,
@@ -10,7 +16,25 @@ pub struct ConversionContext {
 
 impl ConversionContext {
     pub fn new() -> Self {
-        Self { params: vec![] }
+        Self {
+            aliases: HashMap::new(),
+            params: vec![],
+        }
+    }
+
+    /// Gets a unique table alias for the supplied relid
+    pub(crate) fn register_alias(&mut self, relid: pg_sys::Oid) -> &str {
+        if !self.aliases.contains_key(&relid) {
+            self.aliases
+                .insert(relid, format!("t{}", self.aliases.len() + 1));
+        }
+
+        self.aliases.get(&relid).unwrap()
+    }
+
+    /// Gets a unique table alias for the supplied relid
+    pub(crate) fn get_alias(&self, relid: pg_sys::Oid) -> Option<&str> {
+        self.aliases.get(&relid).map(|i| i.as_str())
     }
 
     /// Registers a new param or retrieves the existing param associated to the supplied node
@@ -47,6 +71,25 @@ mod tests {
     use pgx::*;
 
     use super::*;
+
+    #[pg_test]
+    fn test_sqlil_ctx_conversion_register_alias() {
+        let mut ctx = ConversionContext::new();
+
+        unsafe {
+            let res = ctx.register_alias(1);
+            assert_eq!(res, "t1");
+
+            let res = ctx.register_alias(2);
+            assert_eq!(res, "t2");
+
+            let res = ctx.register_alias(1);
+            assert_eq!(res, "t1");
+
+            let res = ctx.register_alias(5);
+            assert_eq!(res, "t3");
+        }
+    }
 
     #[pg_test]
     fn test_sqlil_ctx_conversion_register_param() {

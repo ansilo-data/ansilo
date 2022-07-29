@@ -8,7 +8,7 @@ use std::{
 use ansilo_core::{
     data::DataValue,
     err::{anyhow, bail, Context, Error, Result},
-    sqlil::{EntityVersionIdentifier, self},
+    sqlil,
 };
 use ansilo_pg::fdw::{
     channel::IpcClientChannel,
@@ -27,7 +27,7 @@ pub struct FdwContext {
     /// The ID of the data source for this FDW connection
     pub data_source_id: String,
     /// The initial entity of fdw context
-    pub entity: sqlil::EntitySource,
+    pub entity: sqlil::EntityVersionIdentifier,
     /// The current query handle writer
     pub query_writer: Option<QueryHandleWriter<FdwQueryHandle>>,
     /// The current result set reader
@@ -58,7 +58,7 @@ pub struct FdwResultSet {
 }
 
 impl FdwContext {
-    pub fn new(data_source_id: &str, entity: sqlil::EntitySource) -> Self {
+    pub fn new(data_source_id: &str, entity: sqlil::EntityVersionIdentifier) -> Self {
         Self {
             connection: FdwConnection::Disconnected,
             data_source_id: data_source_id.into(),
@@ -83,8 +83,9 @@ impl FdwContext {
     }
 
     pub fn estimate_size(&mut self) -> Result<OperationCost> {
-        let entity = self.entity.clone();
-        let res = self.send(ClientMessage::EstimateSize(entity)).unwrap();
+        let res = self
+            .send(ClientMessage::EstimateSize(self.entity.clone()))
+            .unwrap();
 
         let base_cost = match res {
             ServerMessage::EstimatedSizeResult(e) => e,
@@ -94,10 +95,10 @@ impl FdwContext {
         Ok(base_cost)
     }
 
-    pub fn create_select(&mut self) -> Result<OperationCost> {
+    pub fn create_select(&mut self, alias: &str) -> Result<OperationCost> {
         let res = self
             .send(ClientMessage::Select(ClientSelectMessage::Create(
-                self.entity.clone(),
+                sqlil::EntitySource::new(self.entity.clone(), alias),
             )))
             .unwrap();
 

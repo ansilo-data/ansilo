@@ -319,7 +319,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_scan_select_all_explain_where_remote_cond() {
+    fn test_fdw_scan_select_all_where_remote_cond_explain() {
         assert_query_plan_expected!("test_cases/0002_select_all_where_remote_cond.json");
     }
 
@@ -341,7 +341,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_scan_select_all_explain_where_local_cond() {
+    fn test_fdw_scan_select_all_where_local_cond_explain() {
         assert_query_plan_expected!("test_cases/0003_select_all_where_local_cond.json");
     }
 

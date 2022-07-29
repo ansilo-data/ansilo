@@ -21,23 +21,22 @@
                             {
                                 "@type": "BinaryOp",
                                 "left": {
-                                    "@type": "EntityVersionAttribute",
+                                    "@type": "Attribute",
                                     "attribute_id": "id",
-                                    "entity_id": "people",
-                                    "version_id": "1.0"
+                                    "entity_alias": "t1"
                                 },
                                 "right": {
-                                    "@type": "EntityVersionAttribute",
+                                    "@type": "Attribute",
                                     "attribute_id": "owner_id",
-                                    "entity_id": "pets",
-                                    "version_id": "1.0"
+                                    "entity_alias": "t2"
                                 },
                                 "type": "Equal"
                             }
                         ],
                         "target": {
                             "entity_id": "pets",
-                            "version_id": "1.0"
+                            "version_id": "1.0",
+                            "alias": "t2"
                         },
                         "type": "Inner"
                     }
@@ -46,10 +45,9 @@
                     "AddWhere": {
                         "@type": "BinaryOp",
                         "left": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "pet_name",
-                            "entity_id": "pets",
-                            "version_id": "1.0"
+                            "entity_alias": "t2"
                         },
                         "right": {
                             "@type": "Constant",
@@ -66,18 +64,16 @@
                 },
                 {
                     "AddGroupBy": {
-                        "@type": "EntityVersionAttribute",
+                        "@type": "Attribute",
                         "attribute_id": "first_name",
-                        "entity_id": "people",
-                        "version_id": "1.0"
+                        "entity_alias": "t1"
                     }
                 },
                 {
                     "AddGroupBy": {
-                        "@type": "EntityVersionAttribute",
+                        "@type": "Attribute",
                         "attribute_id": "last_name",
-                        "entity_id": "people",
-                        "version_id": "1.0"
+                        "entity_alias": "t1"
                     }
                 },
                 {
@@ -96,10 +92,9 @@
                     "AddColumn": {
                         "0": "c1",
                         "1": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "first_name",
-                            "entity_id": "people",
-                            "version_id": "1.0"
+                            "entity_alias": "t1"
                         }
                     }
                 },
@@ -107,10 +102,9 @@
                     "AddColumn": {
                         "0": "c2",
                         "1": {
-                            "@type": "EntityVersionAttribute",
+                            "@type": "Attribute",
                             "attribute_id": "last_name",
-                            "entity_id": "people",
-                            "version_id": "1.0"
+                            "entity_alias": "t1"
                         }
                     }
                 },
