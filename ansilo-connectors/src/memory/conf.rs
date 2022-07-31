@@ -3,7 +3,8 @@ use std::{collections::HashMap, sync::RwLock};
 use ansilo_core::data::DataValue;
 use serde::{Deserialize, Serialize};
 
-/// The connection config for the Oracle JDBC driver
+/// The in-memory data store config, all data is stored in the data structure
+/// below
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MemoryConnectionConfig {
     /// The in-memory data queried by the connector

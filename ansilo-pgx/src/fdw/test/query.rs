@@ -9,7 +9,7 @@ pub(crate) fn execute_query<
     f: F,
 ) -> Vec<R> {
     let query = query.into();
-    let json = Spi::connect(|mut client| {
+    let json = Spi::connect(|client| {
         let res = client
             .select(query.as_str(), None, None)
             .map(f)

@@ -76,19 +76,17 @@ mod tests {
     fn test_sqlil_ctx_conversion_register_alias() {
         let mut ctx = ConversionContext::new();
 
-        unsafe {
-            let res = ctx.register_alias(1);
-            assert_eq!(res, "t1");
+        let res = ctx.register_alias(1);
+        assert_eq!(res, "t1");
 
-            let res = ctx.register_alias(2);
-            assert_eq!(res, "t2");
+        let res = ctx.register_alias(2);
+        assert_eq!(res, "t2");
 
-            let res = ctx.register_alias(1);
-            assert_eq!(res, "t1");
+        let res = ctx.register_alias(1);
+        assert_eq!(res, "t1");
 
-            let res = ctx.register_alias(5);
-            assert_eq!(res, "t3");
-        }
+        let res = ctx.register_alias(5);
+        assert_eq!(res, "t3");
     }
 
     #[pg_test]

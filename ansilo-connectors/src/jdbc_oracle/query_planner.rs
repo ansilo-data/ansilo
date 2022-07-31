@@ -1,5 +1,5 @@
 use ansilo_core::{
-    data::DataValue,
+    data::{DataType, DataValue, StringOptions},
     err::{bail, Context, Result},
     sqlil as sql,
 };
@@ -51,6 +51,18 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         };
 
         Ok(OperationCost::new(Some(num_rows as _), None, None, None))
+    }
+
+    fn get_row_id_exprs(
+        _connection: &JdbcConnection,
+        _conf: &OracleJdbcConnectorEntityConfig,
+        _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<Vec<(sql::Expr, DataType)>> {
+        Ok(vec![(
+            sql::Expr::attr(source.alias.clone(), "ROWID"),
+            DataType::Utf8String(StringOptions::default()),
+        )])
     }
 
     fn create_base_select(
@@ -194,23 +206,17 @@ impl OracleJdbcQueryPlanner {
         alias: String,
     ) -> Result<QueryOperationResult> {
         select.cols.push((alias, expr));
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_where(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
         select.r#where.push(expr);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
         select.joins.push(join);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_group_by(
@@ -218,9 +224,7 @@ impl OracleJdbcQueryPlanner {
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
         select.group_bys.push(expr);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_ordering(
@@ -228,9 +232,7 @@ impl OracleJdbcQueryPlanner {
         ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
         select.order_bys.push(ordering);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_set_row_limit(
@@ -238,9 +240,7 @@ impl OracleJdbcQueryPlanner {
         row_limit: u64,
     ) -> Result<QueryOperationResult> {
         select.row_limit = Some(row_limit);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_set_rows_to_skip(
@@ -248,9 +248,7 @@ impl OracleJdbcQueryPlanner {
         row_skip: u64,
     ) -> Result<QueryOperationResult> {
         select.row_skip = row_skip;
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn insert_add_col(
@@ -259,9 +257,7 @@ impl OracleJdbcQueryPlanner {
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
         insert.cols.push((col, expr));
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn update_add_set(
@@ -270,23 +266,17 @@ impl OracleJdbcQueryPlanner {
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
         update.cols.push((col, expr));
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn update_add_where(update: &mut sql::Update, cond: sql::Expr) -> Result<QueryOperationResult> {
         update.r#where.push(cond);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn delete_add_where(delete: &mut sql::Delete, cond: sql::Expr) -> Result<QueryOperationResult> {
         delete.r#where.push(cond);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 }
 

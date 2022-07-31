@@ -12,6 +12,7 @@ use ansilo_connectors::{
     interface::*,
 };
 use ansilo_core::{
+    data::DataType,
     err::{bail, Context, Result},
     sqlil::{self, EntityVersionIdentifier},
 };
@@ -19,11 +20,7 @@ use ansilo_logging::warn;
 
 use super::{
     channel::IpcServerChannel,
-    proto::{
-        ClientDeleteMessage, ClientInsertMessage, ClientMessage, ClientSelectMessage,
-        ClientUpdateMessage, ServerDeleteMessage, ServerInsertMessage, ServerMessage,
-        ServerSelectMessage, ServerUpdateMessage,
-    },
+    proto::{ClientMessage, ServerMessage},
 };
 
 /// A single connection from the FDW
@@ -99,17 +96,14 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             ClientMessage::EstimateSize(entity) => {
                 ServerMessage::EstimatedSizeResult(self.estimate_size(&entity)?)
             }
-            ClientMessage::Select(select) => {
-                ServerMessage::Select(self.handle_select_message(select)?)
+            ClientMessage::Create(entity, query_type) => {
+                ServerMessage::QueryCreated(self.create_query(&entity, query_type)?)
             }
-            ClientMessage::Insert(insert) => {
-                ServerMessage::Insert(self.handle_insert_message(insert)?)
+            ClientMessage::Apply(op) => {
+                ServerMessage::OperationResult(self.apply_query_operation(op)?)
             }
-            ClientMessage::Update(update) => {
-                ServerMessage::Update(self.handle_update_message(update)?)
-            }
-            ClientMessage::Delete(delete) => {
-                ServerMessage::Delete(self.handle_delete_message(delete)?)
+            ClientMessage::GetRowIds(entity) => {
+                ServerMessage::RowIds(self.get_row_id_exprs(&entity)?)
             }
             ClientMessage::Explain(verbose) => {
                 ServerMessage::ExplainResult(self.explain_query(verbose)?)
@@ -143,8 +137,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
     }
 
     fn connect(&mut self) -> Result<()> {
-        let con = self.pool.acquire()?;
-        self.connection = FdwConnectionState::Connected(con);
+        if let FdwConnectionState::New = &self.connection {
+            let con = self.pool.acquire()?;
+            self.connection = FdwConnectionState::Connected(con);
+        }
 
         Ok(())
     }
@@ -157,32 +153,32 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         )?)
     }
 
-    fn handle_select_message(
+    fn create_query(
         &mut self,
-        select: ClientSelectMessage,
-    ) -> Result<ServerSelectMessage> {
-        Ok(match select {
-            ClientSelectMessage::Create(entity) => {
-                ServerSelectMessage::Result(self.create_select(&entity)?)
-            }
-            ClientSelectMessage::Apply(op) => {
-                ServerSelectMessage::Result(self.apply_select_operation(op)?)
-            }
-        })
-    }
-
-    fn create_select(&mut self, source: &sqlil::EntitySource) -> Result<QueryOperationResult> {
+        source: &sqlil::EntitySource,
+        r#type: sqlil::QueryType,
+    ) -> Result<OperationCost> {
         self.connect()?;
-        let (cost, select) = TConnector::TQueryPlanner::create_base_select(
+        let (cost, query) = TConnector::TQueryPlanner::create_base_query(
             self.connection.get()?,
             &self.entities,
             Self::get_entity_config(&self.entities, &source.entity)?,
             source,
+            r#type,
         )?;
 
-        self.query = FdwQueryState::Planning(select.into());
+        self.query = FdwQueryState::Planning(query);
 
-        Ok(QueryOperationResult::PerformedRemotely(cost))
+        Ok(cost)
+    }
+
+    fn apply_query_operation(&mut self, op: QueryOperation) -> Result<QueryOperationResult> {
+        match op {
+            QueryOperation::Select(op) => self.apply_select_operation(op),
+            QueryOperation::Insert(op) => self.apply_insert_operation(op),
+            QueryOperation::Update(op) => self.apply_update_operation(op),
+            QueryOperation::Delete(op) => self.apply_delete_operation(op),
+        }
     }
 
     fn apply_select_operation(&mut self, op: SelectQueryOperation) -> Result<QueryOperationResult> {
@@ -202,34 +198,6 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(res)
     }
 
-    fn handle_insert_message(
-        &mut self,
-        insert: ClientInsertMessage,
-    ) -> Result<ServerInsertMessage> {
-        Ok(match insert {
-            ClientInsertMessage::Create(entity) => {
-                ServerInsertMessage::Result(self.create_insert(&entity)?)
-            }
-            ClientInsertMessage::Apply(op) => {
-                ServerInsertMessage::Result(self.apply_insert_operation(op)?)
-            }
-        })
-    }
-
-    fn create_insert(&mut self, target: &sqlil::EntitySource) -> Result<QueryOperationResult> {
-        self.connect()?;
-        let (cost, insert) = TConnector::TQueryPlanner::create_base_insert(
-            self.connection.get()?,
-            &self.entities,
-            Self::get_entity_config(&self.entities, &target.entity)?,
-            target,
-        )?;
-
-        self.query = FdwQueryState::Planning(insert.into());
-
-        Ok(QueryOperationResult::PerformedRemotely(cost))
-    }
-
     fn apply_insert_operation(&mut self, op: InsertQueryOperation) -> Result<QueryOperationResult> {
         let insert = self
             .query
@@ -245,34 +213,6 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         )?;
 
         Ok(res)
-    }
-
-    fn handle_update_message(
-        &mut self,
-        update: ClientUpdateMessage,
-    ) -> Result<ServerUpdateMessage> {
-        Ok(match update {
-            ClientUpdateMessage::Create(entity) => {
-                ServerUpdateMessage::Result(self.create_update(&entity)?)
-            }
-            ClientUpdateMessage::Apply(op) => {
-                ServerUpdateMessage::Result(self.apply_update_operation(op)?)
-            }
-        })
-    }
-
-    fn create_update(&mut self, target: &sqlil::EntitySource) -> Result<QueryOperationResult> {
-        self.connect()?;
-        let (cost, update) = TConnector::TQueryPlanner::create_base_update(
-            self.connection.get()?,
-            &self.entities,
-            Self::get_entity_config(&self.entities, &target.entity)?,
-            target,
-        )?;
-
-        self.query = FdwQueryState::Planning(update.into());
-
-        Ok(QueryOperationResult::PerformedRemotely(cost))
     }
 
     fn apply_update_operation(&mut self, op: UpdateQueryOperation) -> Result<QueryOperationResult> {
@@ -292,34 +232,6 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(res)
     }
 
-    fn handle_delete_message(
-        &mut self,
-        delete: ClientDeleteMessage,
-    ) -> Result<ServerDeleteMessage> {
-        Ok(match delete {
-            ClientDeleteMessage::Create(entity) => {
-                ServerDeleteMessage::Result(self.create_delete(&entity)?)
-            }
-            ClientDeleteMessage::Apply(op) => {
-                ServerDeleteMessage::Result(self.apply_delete_operation(op)?)
-            }
-        })
-    }
-
-    fn create_delete(&mut self, target: &sqlil::EntitySource) -> Result<QueryOperationResult> {
-        self.connect()?;
-        let (cost, delete) = TConnector::TQueryPlanner::create_base_delete(
-            self.connection.get()?,
-            &self.entities,
-            Self::get_entity_config(&self.entities, &target.entity)?,
-            target,
-        )?;
-
-        self.query = FdwQueryState::Planning(delete.into());
-
-        Ok(QueryOperationResult::PerformedRemotely(cost))
-    }
-
     fn apply_delete_operation(&mut self, op: DeleteQueryOperation) -> Result<QueryOperationResult> {
         let delete = self
             .query
@@ -332,6 +244,21 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             &self.entities,
             delete,
             op,
+        )?;
+
+        Ok(res)
+    }
+
+    fn get_row_id_exprs(
+        &mut self,
+        source: &sqlil::EntitySource,
+    ) -> Result<Vec<(sqlil::Expr, DataType)>> {
+        self.connect()?;
+        let res = TConnector::TQueryPlanner::get_row_id_exprs(
+            self.connection.get()?,
+            &self.entities,
+            Self::get_entity_config(&self.entities, &source.entity)?,
+            source,
         )?;
 
         Ok(res)
@@ -594,32 +521,27 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_select");
 
         let res = client
-            .send(ClientMessage::Select(ClientSelectMessage::Create(
+            .send(ClientMessage::Create(
                 sqlil::source("people", "1.0", "people"),
-            )))
+                sqlil::QueryType::Select,
+            ))
             .unwrap();
 
-        assert_eq!(
-            res,
-            ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
-        );
+        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
 
         let res = client
-            .send(ClientMessage::Select(ClientSelectMessage::Apply(
+            .send(ClientMessage::Apply(
                 SelectQueryOperation::AddColumn((
                     "first_name".into(),
                     sqlil::Expr::attr("people", "first_name"),
-                )),
-            )))
+                ))
+                .into(),
+            ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
+            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
         );
 
         let res = client.send(ClientMessage::Prepare).unwrap();
@@ -695,27 +617,27 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_select");
 
         let res = client
-            .send(ClientMessage::Select(ClientSelectMessage::Create(
+            .send(ClientMessage::Create(
                 sqlil::source("people", "1.0", "people"),
-            )))
+                sqlil::QueryType::Select,
+            ))
             .unwrap();
 
-        assert!(matches!(res, ServerMessage::Select(_)));
+        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
 
         let res = client
-            .send(ClientMessage::Select(ClientSelectMessage::Apply(
+            .send(ClientMessage::Apply(
                 SelectQueryOperation::AddColumn((
                     "first_name".into(),
                     sqlil::Expr::attr("people", "first_name"),
-                )),
-            )))
+                ))
+                .into(),
+            ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
+            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
         );
 
         let res = client.send(ClientMessage::Prepare).unwrap();
@@ -765,32 +687,27 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_select_explain");
 
         let res = client
-            .send(ClientMessage::Select(ClientSelectMessage::Create(
+            .send(ClientMessage::Create(
                 sqlil::source("people", "1.0", "people"),
-            )))
+                sqlil::QueryType::Select,
+            ))
             .unwrap();
 
-        assert_eq!(
-            res,
-            ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
-        );
+        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
 
         let res = client
-            .send(ClientMessage::Select(ClientSelectMessage::Apply(
+            .send(ClientMessage::Apply(
                 SelectQueryOperation::AddColumn((
                     "first_name".into(),
                     sqlil::Expr::attr("people", "first_name"),
-                )),
-            )))
+                ))
+                .into(),
+            ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
+            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
         );
 
         let res = client.send(ClientMessage::Explain(true)).unwrap();
@@ -811,41 +728,42 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_insert");
 
         let res = client
-            .send(ClientMessage::Insert(ClientInsertMessage::Create(
+            .send(ClientMessage::Create(
                 sqlil::source("people", "1.0", "people"),
-            )))
+                sqlil::QueryType::Insert,
+            ))
             .unwrap();
 
-        assert_eq!(
-            res,
-            ServerMessage::Insert(ServerInsertMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
-        );
+        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
 
         let res = client
-            .send(ClientMessage::Insert(ClientInsertMessage::Apply(
+            .send(ClientMessage::Apply(
                 InsertQueryOperation::AddColumn((
                     "first_name".into(),
                     sqlil::Expr::constant(DataValue::from("New")),
-                )),
-            )))
-            .unwrap();
-
-        let res = client
-            .send(ClientMessage::Insert(ClientInsertMessage::Apply(
-                InsertQueryOperation::AddColumn((
-                    "last_name".into(),
-                    sqlil::Expr::constant(DataValue::from("Man")),
-                )),
-            )))
+                ))
+                .into(),
+            ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::Insert(ServerInsertMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
+            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
+        );
+
+        let res = client
+            .send(ClientMessage::Apply(
+                InsertQueryOperation::AddColumn((
+                    "last_name".into(),
+                    sqlil::Expr::constant(DataValue::from("Man")),
+                ))
+                .into(),
             ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
         );
 
         let res = client.send(ClientMessage::Prepare).unwrap();
@@ -876,32 +794,27 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_update");
 
         let res = client
-            .send(ClientMessage::Update(ClientUpdateMessage::Create(
+            .send(ClientMessage::Create(
                 sqlil::source("people", "1.0", "people"),
-            )))
+                sqlil::QueryType::Update,
+            ))
             .unwrap();
 
-        assert_eq!(
-            res,
-            ServerMessage::Update(ServerUpdateMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
-        );
+        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
 
         let res = client
-            .send(ClientMessage::Update(ClientUpdateMessage::Apply(
+            .send(ClientMessage::Apply(
                 UpdateQueryOperation::AddSet((
                     "first_name".into(),
                     sqlil::Expr::constant(DataValue::from("Updated")),
-                )),
-            )))
+                ))
+                .into(),
+            ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::Update(ServerUpdateMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
+            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
         );
 
         let res = client.send(ClientMessage::Prepare).unwrap();
@@ -936,33 +849,28 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_delete");
 
         let res = client
-            .send(ClientMessage::Delete(ClientDeleteMessage::Create(
+            .send(ClientMessage::Create(
                 sqlil::source("people", "1.0", "people"),
-            )))
+                sqlil::QueryType::Delete,
+            ))
             .unwrap();
 
-        assert_eq!(
-            res,
-            ServerMessage::Delete(ServerDeleteMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
-        );
+        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
 
         let res = client
-            .send(ClientMessage::Delete(ClientDeleteMessage::Apply(
+            .send(ClientMessage::Apply(
                 DeleteQueryOperation::AddWhere(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
                     sqlil::Expr::attr("people", "first_name"),
                     sqlil::BinaryOpType::Equal,
                     sqlil::Expr::constant(DataValue::from("John")),
-                ))),
-            )))
+                )))
+                .into(),
+            ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::Delete(ServerDeleteMessage::Result(
-                QueryOperationResult::PerformedRemotely(OperationCost::default())
-            ))
+            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
         );
 
         let res = client.send(ClientMessage::Prepare).unwrap();
@@ -989,5 +897,27 @@ mod tests {
                 );
             })
             .unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_get_row_ids_exprs() {
+        let (thread, mut client) = create_mock_connection("connection_get_row_ids");
+
+        let res = client
+            .send(ClientMessage::GetRowIds(sqlil::source(
+                "people", "1.0", "people",
+            )))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::RowIds(vec![(
+                sqlil::Expr::attr("people", "ROWIDX"),
+                DataType::UInt64
+            )])
+        );
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
     }
 }

@@ -14,6 +14,20 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     target_rte: *mut RangeTblEntry,
     target_relation: Relation,
 ) {
+    let var = pg_sys::makeVar(
+        rtindex,
+        pg_sys::SelfItemPointerAttributeNumber as _,
+        pg_sys::TIDOID,
+        -1,
+        pg_sys::InvalidOid,
+        0,
+    );
+
+    pg_sys::add_row_identity_var(root, var, rtindex, cstr::cstr!("ctid").as_ptr());
+}
+
+#[pg_guard]
+pub unsafe extern "C" fn is_foreign_rel_updatable(rel: Relation) -> ::std::os::raw::c_int {
     unimplemented!()
 }
 
@@ -102,10 +116,7 @@ pub unsafe extern "C" fn begin_foreign_insert(
 pub unsafe extern "C" fn end_foreign_insert(estate: *mut EState, rinfo: *mut ResultRelInfo) {
     unimplemented!()
 }
-#[pg_guard]
-pub unsafe extern "C" fn is_foreign_rel_updatable(rel: Relation) -> ::std::os::raw::c_int {
-    unimplemented!()
-}
+
 #[pg_guard]
 pub unsafe extern "C" fn plan_direct_modify(
     root: *mut PlannerInfo,

@@ -6,7 +6,7 @@ use std::{
 };
 
 use ansilo_core::{
-    data::DataValue,
+    data::{DataType, DataValue},
     err::{anyhow, bail, Context, Error, Result},
     sqlil,
 };
@@ -14,9 +14,8 @@ use ansilo_pg::fdw::{
     channel::IpcClientChannel,
     data::{QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
     proto::{
-        AuthDataSource, ClientMessage, ClientSelectMessage, OperationCost, QueryInputStructure,
-        QueryOperationResult, RowStructure, SelectQueryOperation, ServerMessage,
-        ServerSelectMessage,
+        AuthDataSource, ClientMessage, OperationCost, QueryInputStructure, QueryOperation,
+        QueryOperationResult, RowStructure, ServerMessage,
     },
 };
 
@@ -95,37 +94,47 @@ impl FdwContext {
         Ok(base_cost)
     }
 
-    pub fn create_select(&mut self, alias: &str) -> Result<OperationCost> {
+    pub fn create_query(&mut self, alias: &str, r#type: sqlil::QueryType) -> Result<OperationCost> {
         let res = self
-            .send(ClientMessage::Select(ClientSelectMessage::Create(
+            .send(ClientMessage::Create(
                 sqlil::EntitySource::new(self.entity.clone(), alias),
-            )))
+                r#type,
+            ))
             .unwrap();
 
         let cost = match res {
-            ServerMessage::Select(ServerSelectMessage::Result(
-                QueryOperationResult::PerformedRemotely(cost),
-            )) => cost,
+            ServerMessage::QueryCreated(cost) => cost,
             _ => return Err(unexpected_response(res).context("Creating select")),
         };
 
         Ok(cost)
     }
 
-    pub fn apply_query_op(
-        &mut self,
-        query_op: SelectQueryOperation,
-    ) -> Result<QueryOperationResult> {
-        let res = self
-            .send(ClientMessage::Select(ClientSelectMessage::Apply(query_op)))
-            .unwrap();
+    pub fn apply_query_op(&mut self, query_op: QueryOperation) -> Result<QueryOperationResult> {
+        let res = self.send(ClientMessage::Apply(query_op)).unwrap();
 
         let result = match res {
-            ServerMessage::Select(ServerSelectMessage::Result(result)) => result,
+            ServerMessage::OperationResult(result) => result,
             _ => return Err(unexpected_response(res).context("Applying query op")),
         };
 
         Ok(result)
+    }
+
+    pub fn get_row_id_exprs(&mut self, alias: &str) -> Result<Vec<(sqlil::Expr, DataType)>> {
+        let res = self
+            .send(ClientMessage::GetRowIds(sqlil::EntitySource::new(
+                self.entity.clone(),
+                alias,
+            )))
+            .unwrap();
+
+        let row_ids = match res {
+            ServerMessage::RowIds(e) => e,
+            _ => return Err(unexpected_response(res).context("Get Row IDs")),
+        };
+
+        Ok(row_ids)
     }
 
     pub fn prepare_query(&mut self) -> Result<QueryInputStructure> {
@@ -182,13 +191,11 @@ impl FdwContext {
     }
 
     pub fn explain_query(&mut self, verbose: bool) -> Result<serde_json::Value> {
-        let res = self
-            .send(ClientMessage::Select(ClientSelectMessage::Explain(verbose)))
-            .unwrap();
+        let res = self.send(ClientMessage::Explain(verbose)).unwrap();
 
         let json = match res {
-            ServerMessage::Select(ServerSelectMessage::ExplainResult(result)) => result,
-            _ => return Err(unexpected_response(res).context("Applying query op")),
+            ServerMessage::ExplainResult(result) => result,
+            _ => return Err(unexpected_response(res).context("Explain query")),
         };
 
         let parsed: serde_json::Value = serde_json::from_str(&json)

@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    datum::from_pg_type, table::parse_entity_version_id_from_foreign_table, ConversionContext,
+    datum::from_pg_type, ConversionContext,
 };
 
 pub(super) unsafe fn convert_var(
@@ -27,7 +27,7 @@ pub(super) unsafe fn convert_var(
 
     if pg_sys::bms_is_member((*node).varno as _, (*rel).relids) && (*node).varlevelsup == 0 {
         if (*node).varattno == 0 {
-            panic!("Returning entire rows as experssions is currently not supported");
+            bail!("Returning entire rows as experssions is currently not supported");
         }
 
         // If the var node references of the foreign entities we append it a attribute of that entity

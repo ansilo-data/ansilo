@@ -101,7 +101,7 @@ mod tests {
         let results = explain_query(r#"SELECT * FROM "dummy:1.0""#);
 
         assert_eq!(
-            results["Plan"]["Remote Query"]
+            results["Plan"]["Remote Query"]["Select"]
                 .as_object()
                 .unwrap()
                 .keys()
@@ -133,7 +133,7 @@ mod tests {
                 .keys()
                 .map(|i| i.as_str())
                 .collect::<Vec<&str>>(),
-            vec!["params", "select"]
+            vec!["params", "query"]
         );
     }
 }

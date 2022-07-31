@@ -16,7 +16,26 @@ pub enum Query {
     Delete(Delete),
 }
 
+/// The type of queries supported
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize)]
+pub enum QueryType {
+    Select,
+    Insert,
+    Update,
+    Delete,
+}
+
 impl Query {
+    /// Gets the type of the query
+    pub fn r#type(&self) -> QueryType {
+        match self {
+            Query::Select(_) => QueryType::Select,
+            Query::Insert(_) => QueryType::Insert,
+            Query::Update(_) => QueryType::Update,
+            Query::Delete(_) => QueryType::Delete,
+        }
+    }
+
     /// Gets the entity sources from this query
     pub fn get_entity_sources(&self) -> impl Iterator<Item = &EntitySource> {
         match self {

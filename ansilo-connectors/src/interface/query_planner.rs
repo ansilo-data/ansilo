@@ -1,4 +1,7 @@
-use ansilo_core::{err::Result, sqlil as sql};
+use ansilo_core::{
+    err::Result,
+    sqlil::{self as sql}, data::DataType,
+};
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +20,35 @@ pub trait QueryPlanner {
         connection: &Self::TConnection,
         entity: &EntitySource<Self::TEntitySourceConfig>,
     ) -> Result<OperationCost>;
+
+    /// Gets expressions for the primary key/row ID of the supplied entity
+    /// This is called for performing updates/deletes to existing rows.
+    fn get_row_id_exprs(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<Vec<(sql::Expr, DataType)>>;
+
+    /// Creates a query of the specified type
+    fn create_base_query(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+        r#type: sql::QueryType,
+    ) -> Result<(OperationCost, sql::Query)> {
+        match r#type {
+            sql::QueryType::Select => Self::create_base_select(connection, conf, entity, source)
+                .map(|(op, q)| (op, q.into())),
+            sql::QueryType::Insert => Self::create_base_insert(connection, conf, entity, source)
+                .map(|(op, q)| (op, q.into())),
+            sql::QueryType::Update => Self::create_base_update(connection, conf, entity, source)
+                .map(|(op, q)| (op, q.into())),
+            sql::QueryType::Delete => Self::create_base_delete(connection, conf, entity, source)
+                .map(|(op, q)| (op, q.into())),
+        }
+    }
 
     /// Creates a base query to select all rows of the entity
     fn create_base_select(
@@ -91,11 +123,44 @@ pub trait QueryPlanner {
     ) -> Result<serde_json::Value>;
 }
 
+/// An operation to apply to the current state of a query
+#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
+pub enum QueryOperation {
+    Select(SelectQueryOperation),
+    Insert(InsertQueryOperation),
+    Update(UpdateQueryOperation),
+    Delete(DeleteQueryOperation),
+}
+
+impl From<SelectQueryOperation> for QueryOperation {
+    fn from(op: SelectQueryOperation) -> Self {
+        Self::Select(op)
+    }
+}
+
+impl From<InsertQueryOperation> for QueryOperation {
+    fn from(op: InsertQueryOperation) -> Self {
+        Self::Insert(op)
+    }
+}
+
+impl From<UpdateQueryOperation> for QueryOperation {
+    fn from(op: UpdateQueryOperation) -> Self {
+        Self::Update(op)
+    }
+}
+
+impl From<DeleteQueryOperation> for QueryOperation {
+    fn from(op: DeleteQueryOperation) -> Self {
+        Self::Delete(op)
+    }
+}
+
 /// A cost estimate for a query operation
 #[derive(Debug, Clone, PartialEq, Encode, Decode)]
 pub enum QueryOperationResult {
-    PerformedRemotely(OperationCost),
-    PerformedLocally,
+    Ok(OperationCost),
+    Unsupported,
 }
 
 /// Select planning operations

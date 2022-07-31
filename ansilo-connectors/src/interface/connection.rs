@@ -42,6 +42,8 @@ pub trait TransactionManager {
     // TODO[low]: implement support for 2PC
 }
 
+/// Allow connectors which do not support transactions to use the unit type
+/// in its place
 impl TransactionManager for () {
     fn is_in_transaction(&self) -> Result<bool> {
         unimplemented!()

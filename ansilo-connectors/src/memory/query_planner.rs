@@ -1,4 +1,5 @@
 use ansilo_core::{
+    data::DataType,
     err::{Error, Result},
     sqlil as sql,
 };
@@ -41,6 +42,18 @@ impl QueryPlanner for MemoryQueryPlanner {
             None,
             None,
         ))
+    }
+
+    fn get_row_id_exprs(
+        connection: &Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<Vec<(sql::Expr, DataType)>> {
+        Ok(vec![(
+            sql::Expr::attr(source.alias.clone(), "ROWIDX"),
+            DataType::UInt64,
+        )])
     }
 
     fn create_base_select(
@@ -160,23 +173,17 @@ impl MemoryQueryPlanner {
         alias: String,
     ) -> Result<QueryOperationResult> {
         select.cols.push((alias, expr));
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_where(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
         select.r#where.push(expr);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
         select.joins.push(join);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_group_by(
@@ -184,9 +191,7 @@ impl MemoryQueryPlanner {
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
         select.group_bys.push(expr);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_ordering(
@@ -194,9 +199,7 @@ impl MemoryQueryPlanner {
         ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
         select.order_bys.push(ordering);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_set_row_limit(
@@ -204,9 +207,7 @@ impl MemoryQueryPlanner {
         row_limit: u64,
     ) -> Result<QueryOperationResult> {
         select.row_limit = Some(row_limit);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_set_rows_to_skip(
@@ -214,9 +215,7 @@ impl MemoryQueryPlanner {
         row_skip: u64,
     ) -> Result<QueryOperationResult> {
         select.row_skip = row_skip;
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn insert_add_col(
@@ -225,9 +224,7 @@ impl MemoryQueryPlanner {
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
         insert.cols.push((col, expr));
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn update_add_set(
@@ -236,22 +233,16 @@ impl MemoryQueryPlanner {
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
         update.cols.push((col, expr));
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn update_add_where(update: &mut sql::Update, cond: sql::Expr) -> Result<QueryOperationResult> {
         update.r#where.push(cond);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn delete_add_where(delete: &mut sql::Delete, cond: sql::Expr) -> Result<QueryOperationResult> {
         delete.r#where.push(cond);
-        Ok(QueryOperationResult::PerformedRemotely(
-            OperationCost::default(),
-        ))
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 }

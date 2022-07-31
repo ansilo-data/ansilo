@@ -1,7 +1,10 @@
 use std::{collections::HashMap, rc::Rc};
 
 use ansilo_core::sqlil;
-use ansilo_pg::fdw::proto::{OperationCost, RowStructure, SelectQueryOperation};
+use ansilo_pg::fdw::proto::{
+    DeleteQueryOperation, InsertQueryOperation, OperationCost, RowStructure, SelectQueryOperation,
+    UpdateQueryOperation,
+};
 use pgx::pg_sys::{self, RestrictInfo};
 use serde::{Deserialize, Serialize};
 
@@ -55,12 +58,14 @@ impl FdwQueryContext {
     pub fn as_select(&self) -> Option<&FdwSelectQuery> {
         match &self.q {
             FdwQueryType::Select(q) => Some(q),
+            _ => None
         }
     }
 
     pub fn as_select_mut(&mut self) -> Option<&mut FdwSelectQuery> {
         match &mut self.q {
             FdwQueryType::Select(q) => Some(q),
+            _ => None
         }
     }
 
@@ -72,11 +77,14 @@ impl FdwQueryContext {
 #[derive(Debug, Clone, PartialEq)]
 pub enum FdwQueryType {
     Select(FdwSelectQuery),
+    Insert(FdwInsertQuery),
+    Update(FdwUpdateQuery),
+    Delete(FdwDeleteQuery),
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct FdwSelectQuery {
-    /// The conditions which are able to be pushed down to the remote
+    /// The operations which are able to be pushed down to the remote
     pub remote_ops: Vec<SelectQueryOperation>,
     /// The current column alias counter
     col_num: u32,
@@ -92,6 +100,24 @@ impl FdwSelectQuery {
     pub(crate) fn new_column(&mut self, expr: sqlil::Expr) -> SelectQueryOperation {
         SelectQueryOperation::AddColumn((self.new_column_alias(), expr))
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct FdwInsertQuery {
+    /// The operations applied to the insert query
+    pub remote_ops: Vec<InsertQueryOperation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct FdwUpdateQuery {
+    /// The operations applied to the update query
+    pub remote_ops: Vec<UpdateQueryOperation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct FdwDeleteQuery {
+    /// The operations applied to the delete query
+    pub remote_ops: Vec<DeleteQueryOperation>,
 }
 
 /// Context storage for the FDW stored in the fdw_private field

@@ -8,9 +8,8 @@ use ansilo_core::{
 use ansilo_pg::fdw::{
     data::DataWriter,
     proto::{
-        ClientMessage, ClientSelectMessage, OperationCost, QueryInputStructure,
-        QueryOperationResult, RowStructure, SelectQueryOperation, ServerMessage,
-        ServerSelectMessage,
+        ClientMessage, OperationCost, QueryInputStructure, QueryOperationResult, RowStructure,
+        SelectQueryOperation, ServerMessage,
     },
 };
 use pgx::{
@@ -26,8 +25,9 @@ use pgx::{
 use crate::{
     fdw::{common, ctx::*},
     sqlil::{
-        convert, convert_list, from_datum, into_datum, parse_entity_version_id_from_foreign_table,
-        parse_entity_version_id_from_rel, ConversionContext,
+        convert, convert_list, from_datum, into_datum, into_pg_type,
+        parse_entity_version_id_from_foreign_table, parse_entity_version_id_from_rel,
+        ConversionContext,
     },
     util::list::vec_to_pg_list,
 };
@@ -1023,21 +1023,58 @@ pub unsafe extern "C" fn get_foreign_plan(
             continue;
         }
 
-        let expr = match convert(col as *mut _, &mut query.cvt, &planner, &ctx) {
-            Ok(expr) => expr,
-            Err(err) => {
-                panic!("Failed to push down column required for local condition evaluation: {err}");
-            }
+        // If this is a ctid var, resolve to row ID expressions
+        let exprs = if (*(col as *mut pg_sys::Var)).varattno
+            == pg_sys::SelfItemPointerAttributeNumber as i16
+        {
+            let col = col as *mut pg_sys::Var;
+            let rte = pg_sys::planner_rt_fetch((*col).varno, planner.root() as *mut _);
+            let alias = query.cvt.register_alias((*col).varno);
+
+            let row_ids = match ctx.get_row_id_exprs(alias) {
+                Ok(r) => r,
+                Err(err) => panic!("Failed to get row ID's for table: {err}"),
+            };
+
+            row_ids
+                .into_iter()
+                .map(|(expr, r#type)| {
+                    (
+                        expr,
+                        pg_sys::makeVar(
+                            (*col).varno,
+                            pg_sys::SelfItemPointerAttributeNumber as _,
+                            into_pg_type(&r#type).unwrap(),
+                            -1,
+                            pg_sys::InvalidOid,
+                            0,
+                        ) as *mut Node,
+                    )
+                })
+                .collect::<Vec<_>>()
+        } else {
+            let expr = match convert(col as *mut _, &mut query.cvt, &planner, &ctx) {
+                Ok(expr) => expr,
+                Err(err) => {
+                    panic!(
+                        "Failed to push down column required for local condition evaluation: {err}"
+                    );
+                }
+            };
+
+            vec![(expr, col)]
         };
 
-        let col_alias = query.as_select_mut().unwrap().new_column_alias();
-        let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
+        for (expr, col) in exprs {
+            let col_alias = query.as_select_mut().unwrap().new_column_alias();
+            let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
 
-        if apply_query_operation(&mut ctx, query.as_select_mut().unwrap(), query_op).is_none() {
-            panic!("Failed to push down column required for local condition evaluation: rejected by remote");
+            if apply_query_operation(&mut ctx, query.as_select_mut().unwrap(), query_op).is_none() {
+                panic!("Failed to push down column required for local condition evaluation: rejected by remote");
+            }
+
+            fdw_scan_list.push(col as *mut _);
         }
-
-        fdw_scan_list.push(col as *mut _);
     }
 
     // Convert expr nodes to target entry list
@@ -1358,13 +1395,14 @@ unsafe fn restore_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
     let select = query.as_select().unwrap();
 
     // Initialise a new select query
-    ctx.create_select(query.base_rel_alias()).unwrap();
+    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Select)
+        .unwrap();
 
     // We have already applied these ops to the query before but not on the
     // remote side
     // TODO: optimise so we dont perform duplicate work
     for query_op in select.remote_ops.iter() {
-        ctx.apply_query_op(query_op.clone()).unwrap();
+        ctx.apply_query_op(query_op.clone().into()).unwrap();
     }
 }
 
@@ -1398,14 +1436,14 @@ fn apply_query_operation(
     select: &mut FdwSelectQuery,
     query_op: SelectQueryOperation,
 ) -> Option<OperationCost> {
-    let result = ctx.apply_query_op(query_op.clone()).unwrap();
+    let result = ctx.apply_query_op(query_op.clone().into()).unwrap();
 
     match result {
-        QueryOperationResult::PerformedRemotely(cost) => {
+        QueryOperationResult::Ok(cost) => {
             select.remote_ops.push(query_op);
             Some(cost)
         }
-        QueryOperationResult::PerformedLocally => None,
+        QueryOperationResult::Unsupported => None,
     }
 }
 
