@@ -7,7 +7,9 @@ use crate::{
     interface::{Connection, ConnectionPool},
 };
 
-use super::{MemoryConnectionConfig, MemoryQuery, MemoryQueryHandle, MemoryConnectorEntitySourceConfig};
+use super::{
+    MemoryConnectionConfig, MemoryConnectorEntitySourceConfig, MemoryQuery, MemoryQueryHandle,
+};
 
 /// Implementation for opening JDBC connections
 #[derive(Clone)]
@@ -17,11 +19,18 @@ pub struct MemoryConnectionPool {
 }
 
 impl MemoryConnectionPool {
-    pub fn new(conf: MemoryConnectionConfig, entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>) -> Result<Self> {
+    pub fn new(
+        conf: MemoryConnectionConfig,
+        entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+    ) -> Result<Self> {
         Ok(Self {
             conf: Arc::new(conf),
             entities,
         })
+    }
+
+    pub fn conf(&self) -> Arc<MemoryConnectionConfig> {
+        Arc::clone(&self.conf)
     }
 }
 
@@ -36,7 +45,10 @@ impl ConnectionPool for MemoryConnectionPool {
     }
 }
 
-pub struct MemoryConnection(pub Arc<MemoryConnectionConfig>, ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>);
+pub struct MemoryConnection(
+    pub Arc<MemoryConnectionConfig>,
+    ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+);
 
 impl Connection for MemoryConnection {
     type TQuery = MemoryQuery;

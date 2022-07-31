@@ -226,7 +226,7 @@ mod tests {
     use super::*;
 
     fn create_memory_connection_pool() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionPool) {
-        let mut conf = MemoryConnectionConfig::new();
+        let conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
         entities.add(EntitySource::minimal(

@@ -174,6 +174,16 @@ pub enum InsertQueryOperation {
     AddColumn((String, sql::Expr)),
 }
 
+impl InsertQueryOperation {
+    /// Returns `true` if the insert query operation is [`AddColumn`].
+    ///
+    /// [`AddColumn`]: InsertQueryOperation::AddColumn
+    #[must_use]
+    pub fn is_add_column(&self) -> bool {
+        matches!(self, Self::AddColumn(..))
+    }
+}
+
 /// Update planning operations
 #[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
 pub enum UpdateQueryOperation {
@@ -181,10 +191,38 @@ pub enum UpdateQueryOperation {
     AddWhere(sql::Expr),
 }
 
+impl UpdateQueryOperation {
+    /// Returns `true` if the update query operation is [`AddSet`].
+    ///
+    /// [`AddSet`]: UpdateQueryOperation::AddSet
+    #[must_use]
+    pub fn is_add_set(&self) -> bool {
+        matches!(self, Self::AddSet(..))
+    }
+
+    /// Returns `true` if the update query operation is [`AddWhere`].
+    ///
+    /// [`AddWhere`]: UpdateQueryOperation::AddWhere
+    #[must_use]
+    pub fn is_add_where(&self) -> bool {
+        matches!(self, Self::AddWhere(..))
+    }
+}
+
 /// Delete planning operations
 #[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
 pub enum DeleteQueryOperation {
     AddWhere(sql::Expr),
+}
+
+impl DeleteQueryOperation {
+    /// Returns `true` if the delete query operation is [`AddWhere`].
+    ///
+    /// [`AddWhere`]: DeleteQueryOperation::AddWhere
+    #[must_use]
+    pub fn is_add_where(&self) -> bool {
+        matches!(self, Self::AddWhere(..))
+    }
 }
 
 /// A cost estimate for a query operation

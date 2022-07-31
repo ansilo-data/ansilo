@@ -6,7 +6,8 @@ use ansilo_core::{
 use crate::{
     common::entity::{ConnectorEntityConfig, EntitySource},
     interface::{
-        OperationCost, QueryCompiler, QueryOperationResult, QueryPlanner, SelectQueryOperation,
+        DeleteQueryOperation, InsertQueryOperation, OperationCost, QueryCompiler,
+        QueryOperationResult, QueryPlanner, SelectQueryOperation, UpdateQueryOperation,
     },
 };
 
@@ -43,14 +44,40 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn create_base_select(
-        _connection: &MemoryConnection,
-        _conf: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-        _entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)> {
         let select = sql::Select::new(source.clone());
-
         Ok((OperationCost::default(), select))
+    }
+
+    fn create_base_insert(
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::Insert)> {
+        Ok((OperationCost::default(), sql::Insert::new(source.clone())))
+    }
+
+    fn create_base_update(
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::Update)> {
+        Ok((OperationCost::default(), sql::Update::new(source.clone())))
+    }
+
+    fn create_base_delete(
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::Delete)> {
+        Ok((OperationCost::default(), sql::Delete::new(source.clone())))
     }
 
     fn apply_select_operation(
@@ -61,69 +88,53 @@ impl QueryPlanner for MemoryQueryPlanner {
     ) -> Result<QueryOperationResult> {
         match op {
             SelectQueryOperation::AddColumn((alias, expr)) => {
-                Self::add_col_expr(select, expr, alias)
+                Self::select_add_col(select, expr, alias)
             }
-            SelectQueryOperation::AddWhere(expr) => Self::add_where_clause(select, expr),
-            SelectQueryOperation::AddJoin(join) => Self::add_join(select, join),
-            SelectQueryOperation::AddGroupBy(expr) => Self::add_group_by(select, expr),
-            SelectQueryOperation::AddOrderBy(ordering) => Self::add_order_by(select, ordering),
-            SelectQueryOperation::SetRowLimit(limit) => Self::set_row_limit(select, limit),
-            SelectQueryOperation::SetRowOffset(offset) => Self::set_rows_to_skip(select, offset),
+            SelectQueryOperation::AddWhere(expr) => Self::select_add_where(select, expr),
+            SelectQueryOperation::AddJoin(join) => Self::select_add_join(select, join),
+            SelectQueryOperation::AddGroupBy(expr) => Self::select_add_group_by(select, expr),
+            SelectQueryOperation::AddOrderBy(ordering) => {
+                Self::select_add_ordering(select, ordering)
+            }
+            SelectQueryOperation::SetRowLimit(limit) => Self::select_set_row_limit(select, limit),
+            SelectQueryOperation::SetRowOffset(offset) => {
+                Self::select_set_rows_to_skip(select, offset)
+            }
         }
     }
 
-    fn create_base_insert(
-        _connection: &Self::TConnection,
-        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
-        _entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
-        source: &sql::EntitySource,
-    ) -> Result<(OperationCost, sql::Insert)> {
-        todo!()
-    }
-
-    fn create_base_update(
-        _connection: &Self::TConnection,
-        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
-        _entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
-        source: &sql::EntitySource,
-    ) -> Result<(OperationCost, sql::Update)> {
-        todo!()
-    }
-
-    fn create_base_delete(
-        _connection: &Self::TConnection,
-        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
-        _entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
-        source: &sql::EntitySource,
-    ) -> Result<(OperationCost, sql::Delete)> {
-        todo!()
-    }
-
     fn apply_insert_operation(
-        connection: &Self::TConnection,
-        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         insert: &mut sql::Insert,
-        op: crate::interface::InsertQueryOperation,
+        op: InsertQueryOperation,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        match op {
+            InsertQueryOperation::AddColumn((col, expr)) => Self::insert_add_col(insert, col, expr),
+        }
     }
 
     fn apply_update_operation(
-        connection: &Self::TConnection,
-        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         update: &mut sql::Update,
-        op: crate::interface::UpdateQueryOperation,
+        op: UpdateQueryOperation,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        match op {
+            UpdateQueryOperation::AddSet((col, expr)) => Self::update_add_set(update, col, expr),
+            UpdateQueryOperation::AddWhere(cond) => Self::update_add_where(update, cond),
+        }
     }
 
     fn apply_delete_operation(
-        connection: &Self::TConnection,
-        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         delete: &mut sql::Delete,
-        op: crate::interface::DeleteQueryOperation,
+        op: DeleteQueryOperation,
     ) -> Result<QueryOperationResult> {
-        todo!()
+        match op {
+            DeleteQueryOperation::AddWhere(cond) => Self::delete_add_where(delete, cond),
+        }
     }
 
     fn explain_query(
@@ -143,7 +154,7 @@ impl QueryPlanner for MemoryQueryPlanner {
 }
 
 impl MemoryQueryPlanner {
-    fn add_col_expr(
+    fn select_add_col(
         select: &mut sql::Select,
         expr: sql::Expr,
         alias: String,
@@ -154,28 +165,31 @@ impl MemoryQueryPlanner {
         ))
     }
 
-    fn add_where_clause(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
+    fn select_add_where(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
         select.r#where.push(expr);
         Ok(QueryOperationResult::PerformedRemotely(
             OperationCost::default(),
         ))
     }
 
-    fn add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
+    fn select_add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
         select.joins.push(join);
         Ok(QueryOperationResult::PerformedRemotely(
             OperationCost::default(),
         ))
     }
 
-    fn add_group_by(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
+    fn select_add_group_by(
+        select: &mut sql::Select,
+        expr: sql::Expr,
+    ) -> Result<QueryOperationResult> {
         select.group_bys.push(expr);
         Ok(QueryOperationResult::PerformedRemotely(
             OperationCost::default(),
         ))
     }
 
-    fn add_order_by(
+    fn select_add_ordering(
         select: &mut sql::Select,
         ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
@@ -185,15 +199,57 @@ impl MemoryQueryPlanner {
         ))
     }
 
-    fn set_row_limit(select: &mut sql::Select, row_limit: u64) -> Result<QueryOperationResult> {
+    fn select_set_row_limit(
+        select: &mut sql::Select,
+        row_limit: u64,
+    ) -> Result<QueryOperationResult> {
         select.row_limit = Some(row_limit);
         Ok(QueryOperationResult::PerformedRemotely(
             OperationCost::default(),
         ))
     }
 
-    fn set_rows_to_skip(select: &mut sql::Select, row_skip: u64) -> Result<QueryOperationResult> {
+    fn select_set_rows_to_skip(
+        select: &mut sql::Select,
+        row_skip: u64,
+    ) -> Result<QueryOperationResult> {
         select.row_skip = row_skip;
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
+    }
+
+    fn insert_add_col(
+        insert: &mut sql::Insert,
+        col: String,
+        expr: sql::Expr,
+    ) -> Result<QueryOperationResult> {
+        insert.cols.push((col, expr));
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
+    }
+
+    fn update_add_set(
+        update: &mut sql::Update,
+        col: String,
+        expr: sql::Expr,
+    ) -> Result<QueryOperationResult> {
+        update.cols.push((col, expr));
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
+    }
+
+    fn update_add_where(update: &mut sql::Update, cond: sql::Expr) -> Result<QueryOperationResult> {
+        update.r#where.push(cond);
+        Ok(QueryOperationResult::PerformedRemotely(
+            OperationCost::default(),
+        ))
+    }
+
+    fn delete_add_where(delete: &mut sql::Delete, cond: sql::Expr) -> Result<QueryOperationResult> {
+        delete.r#where.push(cond);
         Ok(QueryOperationResult::PerformedRemotely(
             OperationCost::default(),
         ))

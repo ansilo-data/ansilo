@@ -90,6 +90,38 @@ impl Query {
             None
         }
     }
+
+    pub fn as_select_mut(&mut self) -> Option<&mut Select> {
+        if let Self::Select(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_insert_mut(&mut self) -> Option<&mut Insert> {
+        if let Self::Insert(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_update_mut(&mut self) -> Option<&mut Update> {
+        if let Self::Update(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_delete_mut(&mut self) -> Option<&mut Delete> {
+        if let Self::Delete(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 impl From<Select> for Query {

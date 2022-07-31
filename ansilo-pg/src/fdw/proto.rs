@@ -1,8 +1,11 @@
+use ansilo_connectors::interface::{
+    DeleteQueryOperation, InsertQueryOperation, UpdateQueryOperation,
+};
 pub use ansilo_connectors::interface::{
-    OperationCost, QueryOperationResult, RowStructure, SelectQueryOperation, QueryInputStructure
+    OperationCost, QueryInputStructure, QueryOperationResult, RowStructure, SelectQueryOperation,
 };
 
-use ansilo_core::sqlil::{EntityVersionIdentifier, self};
+use ansilo_core::sqlil::{self, EntityVersionIdentifier};
 use bincode::{Decode, Encode};
 
 /// Protocol messages sent by postgres
@@ -14,6 +17,15 @@ pub enum ClientMessage {
     EstimateSize(EntityVersionIdentifier),
     /// Operations for a SELECT query
     Select(ClientSelectMessage),
+    /// Operations for an INSERT query
+    Insert(ClientInsertMessage),
+    /// Operations for an UPDATE query
+    Update(ClientUpdateMessage),
+    /// Operations for a DELETE query
+    Delete(ClientDeleteMessage),
+    /// Returns an explaination of the current query state for debugging purposes in JSON encoding
+    /// The boolean flag determines if a more vebose output is requested
+    Explain(bool),
     /// Prepares the current query
     Prepare,
     /// Write params to query
@@ -23,7 +35,7 @@ pub enum ClientMessage {
     Execute,
     /// Read up to the supplied number of bytes from the query
     Read(u32),
-    /// Discard the current result set and ready the query for new params and execution 
+    /// Discard the current result set and ready the query for new params and execution
     RestartQuery,
     /// Instruct the server to close the connection
     Close,
@@ -54,11 +66,35 @@ impl AuthDataSource {
 pub enum ClientSelectMessage {
     /// Creates a select query for the supplied entity
     Create(sqlil::EntitySource),
-    /// Add a column to the select query
+    /// Applys the supplied operation to the select query
     Apply(SelectQueryOperation),
-    /// Returns an explaination of the current query state for debugging purposes in JSON encoding
-    /// The boolean flag determines if a more vebose output is requested
-    Explain(bool)
+}
+
+/// Operations for an INSERT query sent from postgres
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub enum ClientInsertMessage {
+    /// Creates an insert query for the supplied entity
+    Create(sqlil::EntitySource),
+    /// Applys the supplied operation to the insert query
+    Apply(InsertQueryOperation),
+}
+
+/// Operations for an UPDATE query sent from postgres
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub enum ClientUpdateMessage {
+    /// Creates an update query for the supplied entity
+    Create(sqlil::EntitySource),
+    /// Applys the supplied operation to the update query
+    Apply(UpdateQueryOperation),
+}
+
+/// Operations for a DELETE query sent from postgres
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub enum ClientDeleteMessage {
+    /// Creates a DELETE query for the supplied entity
+    Create(sqlil::EntitySource),
+    /// Applys the supplied operation to the delete query
+    Apply(DeleteQueryOperation),
 }
 
 /// Protocol messages sent by ansilo
@@ -70,6 +106,14 @@ pub enum ServerMessage {
     EstimatedSizeResult(OperationCost),
     /// Select query specific message
     Select(ServerSelectMessage),
+    /// Insert query specific message
+    Insert(ServerInsertMessage),
+    /// Update query specific message
+    Update(ServerUpdateMessage),
+    /// Delete query specific message
+    Delete(ServerDeleteMessage),
+    /// The result of the query explaination as a JSON encoded string
+    ExplainResult(String),
     /// The query was prepared
     QueryPrepared(QueryInputStructure),
     /// Query params written
@@ -90,6 +134,25 @@ pub enum ServerMessage {
 pub enum ServerSelectMessage {
     /// The result of the query operation
     Result(QueryOperationResult),
-    /// The result of the query explaination as a JSON encoded string
-    ExplainResult(String)
+}
+
+/// Results for operations on INSERT queries from ansilo
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub enum ServerInsertMessage {
+    /// The result of the query operation
+    Result(QueryOperationResult),
+}
+
+/// Results for operations on UPDATE queries from ansilo
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub enum ServerUpdateMessage {
+    /// The result of the query operation
+    Result(QueryOperationResult),
+}
+
+/// Results for operations on DELETE queries from ansilo
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub enum ServerDeleteMessage {
+    /// The result of the query operation
+    Result(QueryOperationResult),
 }
