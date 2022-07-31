@@ -17,7 +17,7 @@ use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
 use super::{MemoryConnectionConfig, MemoryConnectorEntitySourceConfig, MemoryResultSet};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub(crate) struct MemoryQueryExecutor {
     data: Arc<MemoryConnectionConfig>,
     entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
@@ -45,20 +45,20 @@ impl MemoryQueryExecutor {
     pub(crate) fn run(&self) -> Result<MemoryResultSet> {
         match &self.query {
             sqlil::Query::Select(select) => self.run_select(select),
-            sqlil::Query::Insert(_) => todo!(),
-            sqlil::Query::Update(_) => todo!(),
-            sqlil::Query::Delete(_) => todo!(),
+            sqlil::Query::Insert(insert) => self.run_insert(insert),
+            sqlil::Query::Update(update) => self.run_update(update),
+            sqlil::Query::Delete(delete) => self.run_delete(delete),
         }
     }
 
     fn run_select(&self, select: &sqlil::Select) -> Result<MemoryResultSet> {
-        let mut source = self.get_entity_data(&select.from)?.clone();
+        let mut source = self.get_entity_data(&select.from)?;
         let mut source_entity = &select.from;
 
         for join in select.joins.iter() {
             let inner = self.get_entity_data(&join.target)?;
 
-            source = self.perform_join(source_entity, join, &source, inner)?;
+            source = self.perform_join(source_entity, join, &source, &inner)?;
             source_entity = &join.target;
         }
 
@@ -98,10 +98,99 @@ impl MemoryQueryExecutor {
         MemoryResultSet::new(self.cols()?, results)
     }
 
-    fn get_entity_data(&self, s: &sqlil::EntitySource) -> Result<&Vec<Vec<DataValue>>> {
+    fn run_insert(&self, insert: &sqlil::Insert) -> Result<MemoryResultSet> {
+        self.update_entity_data(&insert.target, |rows| {
+            let attrs = self.get_attrs(&insert.target.entity)?;
+            let ctx = DataContext::Cell(DataValue::Null);
+
+            let row = attrs
+                .iter()
+                .map(|a| {
+                    (
+                        &a.r#type,
+                        insert.cols.iter().find(|(attr, _)| attr == &a.id),
+                    )
+                })
+                .map(|(t, a)| (t, a.map(|(_, expr)| self.evaluate(&ctx, expr))))
+                .map(|(t, a)| (t, a.unwrap_or(Ok(DataContext::Cell(DataValue::Null)))))
+                .map(|(t, a)| (t, a.and_then(|a| a.as_cell())))
+                .map(|(t, a)| a.and_then(|a| a.try_coerce_into(t)))
+                .collect::<Result<Vec<_>>>()?;
+
+            rows.push(row);
+
+            Ok(())
+        })?;
+
+        Ok(MemoryResultSet::empty())
+    }
+
+    fn run_update(&self, update: &sqlil::Update) -> Result<MemoryResultSet> {
+        self.update_entity_data(&update.target, |rows| {
+            let attrs = self.get_attrs(&update.target.entity)?;
+
+            for row in rows.iter_mut() {
+                if !self.satisfies_where(row)? {
+                    continue;
+                }
+
+                let ctx = DataContext::Row(row.clone());
+
+                for (attr, expr) in update.cols.iter() {
+                    let pos = attrs
+                        .iter()
+                        .position(|a| &a.id == attr)
+                        .ok_or(Error::msg("Unknown attr"))?;
+
+                    row[pos] = self
+                        .evaluate(&ctx, expr)?
+                        .as_cell()?
+                        .try_coerce_into(&attrs[pos].r#type)?;
+                }
+            }
+
+            Ok(())
+        })?;
+
+        Ok(MemoryResultSet::empty())
+    }
+
+    fn run_delete(&self, delete: &sqlil::Delete) -> Result<MemoryResultSet> {
+        self.update_entity_data(&delete.target, |rows| {
+            let mut i = 0;
+
+            while i < rows.len() {
+                if self.satisfies_where(&rows[i])? {
+                    rows.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+
+            Ok(())
+        })?;
+
+        Ok(MemoryResultSet::empty())
+    }
+
+    fn get_entity_data(&self, s: &sqlil::EntitySource) -> Result<Vec<Vec<DataValue>>> {
         self.data
-            .get_entity_id_data(&s.entity)
+            .with_data(&s.entity.entity_id, &s.entity.version_id, |rows| {
+                rows.clone()
+            })
             .ok_or(Error::msg("Could not find entity"))
+    }
+
+    fn update_entity_data(
+        &self,
+        s: &sqlil::EntitySource,
+        cb: impl FnOnce(&mut Vec<Vec<DataValue>>) -> Result<()>,
+    ) -> Result<()> {
+        self.data
+            .with_data_mut(&s.entity.entity_id, &s.entity.version_id, move |rows| {
+                cb(rows)
+            })
+            .ok_or(Error::msg("Could not find entity"))?
     }
 
     fn perform_join(
@@ -287,7 +376,7 @@ impl MemoryQueryExecutor {
         rows: Vec<R>,
         key_fn: K,
     ) -> Result<Vec<R>> {
-        if self.query.orderings().is_empty() {
+        if self.query.as_select().unwrap().order_bys.is_empty() {
             return Ok(rows.clone());
         }
 
@@ -302,12 +391,12 @@ impl MemoryQueryExecutor {
     }
 
     fn sort_key(&self, row: &Vec<DataValue>) -> Result<Vec<Ordered<DataValue>>> {
-        assert!(!self.query.orderings().is_empty());
+        assert!(!self.query.as_select().unwrap().order_bys.is_empty());
 
         let row = DataContext::Row(row.clone());
         let mut keys = vec![];
 
-        for ordering in self.query.orderings().iter() {
+        for ordering in self.query.as_select().unwrap().order_bys.iter() {
             let key = self.evaluate(&row, &ordering.expr)?.as_cell()?;
 
             keys.push(Ordered::new(ordering.r#type, key));
@@ -317,12 +406,12 @@ impl MemoryQueryExecutor {
     }
 
     fn group_sort_key(&self, group_rows: &Vec<Vec<DataValue>>) -> Result<Vec<Ordered<DataValue>>> {
-        assert!(!self.query.orderings().is_empty());
+        assert!(!self.query.as_select().unwrap().order_bys.is_empty());
 
         let group = DataContext::Group(group_rows.clone());
         let mut keys = vec![];
 
-        for ordering in self.query.orderings().iter() {
+        for ordering in self.query.as_select().unwrap().order_bys.iter() {
             let key = self.grouping_expr(&ordering.expr, group_rows, &group)?;
 
             keys.push(Ordered::new(ordering.r#type, key));
@@ -503,7 +592,9 @@ impl MemoryQueryExecutor {
     }
 
     fn get_attr_index(&self, a: &sqlil::AttributeIdentifier) -> Result<usize> {
-        let pos: usize = self.query.get_entity_sources()
+        let pos: usize = self
+            .query
+            .get_entity_sources()
             .take_while(|e| e.alias != a.entity_alias)
             .map(|e| self.get_attrs(&e.entity).unwrap().len())
             .sum();
@@ -626,7 +717,7 @@ mod tests {
         ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
         MemoryConnectionConfig,
     ) {
-        let mut conf = MemoryConnectionConfig::new();
+        let conf = MemoryConnectionConfig::new();
         let mut entities = ConnectorEntityConfig::new();
 
         entities.add(EntitySource::minimal(
@@ -710,12 +801,12 @@ mod tests {
     }
 
     fn create_executor(
-        query: sqlil::Select,
+        query: impl Into<sqlil::Query>,
         params: HashMap<u32, DataValue>,
     ) -> MemoryQueryExecutor {
         let (entities, data) = mock_data();
 
-        MemoryQueryExecutor::new(Arc::new(data), entities, sqlil::Query::Select(query), params)
+        MemoryQueryExecutor::new(Arc::new(data), entities, query.into(), params)
     }
 
     #[test]
@@ -1597,5 +1688,195 @@ mod tests {
             )
             .unwrap()
         )
+    }
+
+    #[test]
+    fn test_memory_connector_executor_insert_empty_row() {
+        let insert = sqlil::Insert::new(sqlil::source("people", "1.0", "people"));
+
+        let executor = create_executor(insert, HashMap::new());
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(results, MemoryResultSet::empty());
+
+        executor
+            .data
+            .with_data("people", "1.0", |data| {
+                assert_eq!(
+                    data.iter().last().unwrap(),
+                    &vec![DataValue::Null, DataValue::Null, DataValue::Null]
+                );
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_memory_connector_executor_insert_row_with_values_row() {
+        let mut insert = sqlil::Insert::new(sqlil::source("people", "1.0", "people"));
+
+        insert
+            .cols
+            .push(("id".into(), sqlil::Expr::constant(DataValue::UInt32(123))));
+        insert.cols.push((
+            "first_name".into(),
+            sqlil::Expr::constant(DataValue::from("New")),
+        ));
+        insert.cols.push((
+            "last_name".into(),
+            sqlil::Expr::constant(DataValue::from("Man")),
+        ));
+
+        let executor = create_executor(insert, HashMap::new());
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(results, MemoryResultSet::empty());
+
+        executor
+            .data
+            .with_data("people", "1.0", |data| {
+                assert_eq!(
+                    data.iter().last().unwrap(),
+                    &vec![
+                        DataValue::UInt32(123),
+                        DataValue::from("New"),
+                        DataValue::from("Man")
+                    ]
+                );
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_memory_connector_executor_update_no_set() {
+        let update = sqlil::Update::new(sqlil::source("people", "1.0", "people"));
+
+        let executor = create_executor(update, HashMap::new());
+        let orig_data = executor
+            .data
+            .with_data("people", "1.0", |data| data.clone())
+            .unwrap();
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(results, MemoryResultSet::empty());
+
+        executor
+            .data
+            .with_data("people", "1.0", |data| {
+                assert_eq!(data, &orig_data);
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_memory_connector_executor_update_all_rows() {
+        let mut update = sqlil::Update::new(sqlil::source("people", "1.0", "people"));
+
+        update.cols.push((
+            "first_name".into(),
+            sqlil::Expr::constant(DataValue::from("New")),
+        ));
+
+        let executor = create_executor(update, HashMap::new());
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(results, MemoryResultSet::empty());
+
+        executor
+            .data
+            .with_data("people", "1.0", |data| {
+                assert!(data.into_iter().all(|r| r[1] == DataValue::from("New")))
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_memory_connector_executor_update_where() {
+        let mut update = sqlil::Update::new(sqlil::source("people", "1.0", "people"));
+
+        update.cols.push((
+            "first_name".into(),
+            sqlil::Expr::constant(DataValue::from("New")),
+        ));
+
+        update
+            .r#where
+            .push(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                sqlil::Expr::attr("people", "id"),
+                sqlil::BinaryOpType::Equal,
+                sqlil::Expr::constant(DataValue::UInt32(1)),
+            )));
+
+        let executor = create_executor(update, HashMap::new());
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(results, MemoryResultSet::empty());
+
+        executor
+            .data
+            .with_data("people", "1.0", |data| {
+                assert_eq!(
+                    data.into_iter()
+                        .map(|row| row[1].clone())
+                        .collect::<Vec<_>>(),
+                    vec![
+                        DataValue::from("New"),
+                        DataValue::from("John"),
+                        DataValue::from("Mary"),
+                    ]
+                );
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_memory_connector_executor_delete_all() {
+        let delete = sqlil::Delete::new(sqlil::source("people", "1.0", "people"));
+
+        let executor = create_executor(delete, HashMap::new());
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(results, MemoryResultSet::empty());
+
+        executor
+            .data
+            .with_data("people", "1.0", |data| {
+                assert_eq!(data, &Vec::<Vec<_>>::new());
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_memory_connector_executor_delete_where() {
+        let mut delete = sqlil::Delete::new(sqlil::source("people", "1.0", "people"));
+
+        delete
+            .r#where
+            .push(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                sqlil::Expr::attr("people", "id"),
+                sqlil::BinaryOpType::Equal,
+                sqlil::Expr::constant(DataValue::UInt32(1)),
+            )));
+
+        let executor = create_executor(delete, HashMap::new());
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(results, MemoryResultSet::empty());
+
+        executor
+            .data
+            .with_data("people", "1.0", |data| {
+                assert_eq!(
+                    data.into_iter().map(|r| r[0].clone()).collect::<Vec<_>>(),
+                    vec![DataValue::UInt32(2), DataValue::UInt32(3)]
+                )
+            })
+            .unwrap();
     }
 }

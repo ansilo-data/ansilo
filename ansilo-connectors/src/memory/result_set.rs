@@ -32,6 +32,14 @@ impl MemoryResultSet {
 
         Ok(Self { cols, data, buff })
     }
+
+    pub fn empty() -> Self {
+        Self {
+            cols: vec![],
+            data: vec![],
+            buff: Cursor::new(vec![]),
+        }
+    }
 }
 
 impl ResultSet for MemoryResultSet {

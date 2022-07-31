@@ -22,6 +22,7 @@ pub trait QueryPlanner {
     fn create_base_select(
         connection: &Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)>;
 
@@ -29,6 +30,7 @@ pub trait QueryPlanner {
     fn create_base_insert(
         connection: &Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Insert)>;
 
@@ -36,6 +38,7 @@ pub trait QueryPlanner {
     fn create_base_update(
         connection: &Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Update)>;
 
@@ -43,6 +46,7 @@ pub trait QueryPlanner {
     fn create_base_delete(
         connection: &Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Delete)>;
 
@@ -175,18 +179,12 @@ pub enum InsertQueryOperation {
 pub enum UpdateQueryOperation {
     AddSet((String, sql::Expr)),
     AddWhere(sql::Expr),
-    AddOrderBy(sql::Ordering),
-    SetRowLimit(u64),
-    SetRowOffset(u64),
 }
 
 /// Delete planning operations
 #[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
 pub enum DeleteQueryOperation {
     AddWhere(sql::Expr),
-    AddOrderBy(sql::Ordering),
-    SetRowLimit(u64),
-    SetRowOffset(u64),
 }
 
 /// A cost estimate for a query operation

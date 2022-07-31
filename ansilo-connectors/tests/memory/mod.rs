@@ -10,7 +10,7 @@ use ansilo_core::{
 };
 
 fn mock_data() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionConfig) {
-    let mut conf = MemoryConnectionConfig::new();
+    let conf = MemoryConnectionConfig::new();
     let mut entities = ConnectorEntityConfig::new();
 
     entities.add(EntitySource::minimal(

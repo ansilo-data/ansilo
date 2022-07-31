@@ -2,7 +2,7 @@ use std::{collections::HashMap, io, sync::Arc};
 
 use ansilo_core::{
     data::DataType,
-    err::{bail, Context, Result},
+    err::{Context, Result},
     sqlil,
 };
 use serde::Serialize;

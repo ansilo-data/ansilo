@@ -33,9 +33,8 @@ impl QueryPlanner for MemoryQueryPlanner {
             Some(
                 connection
                     .0
-                    .get_entity_data(entity)
-                    .ok_or(Error::msg("Could not find entity"))?
-                    .len() as _,
+                    .with_data(&entity.conf.id, &entity.version_id, |rows| rows.len())
+                    .ok_or(Error::msg("Could not find entity"))? as _,
             ),
             None,
             None,
@@ -46,6 +45,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     fn create_base_select(
         _connection: &MemoryConnection,
         _conf: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+        _entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)> {
         let select = sql::Select::new(source.clone());
@@ -73,24 +73,27 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn create_base_insert(
-        connection: &Self::TConnection,
-        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Insert)> {
         todo!()
     }
 
     fn create_base_update(
-        connection: &Self::TConnection,
-        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Update)> {
         todo!()
     }
 
     fn create_base_delete(
-        connection: &Self::TConnection,
-        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _connection: &Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Delete)> {
         todo!()

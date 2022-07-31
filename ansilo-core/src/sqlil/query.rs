@@ -59,16 +59,6 @@ impl Query {
         }
     }
 
-    /// Get's the queries orderings
-    pub fn orderings(&self) -> &Vec<Ordering> {
-        match self {
-            Query::Select(q) => &q.order_bys,
-            Query::Update(q) => &q.order_bys,
-            Query::Delete(q) => &q.order_bys,
-            Query::Insert(_) => unimplemented!(),
-        }
-    }
-
     pub fn as_select(&self) -> Option<&Select> {
         if let Self::Select(v) = self {
             Some(v)

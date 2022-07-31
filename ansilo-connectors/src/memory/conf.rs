@@ -1,70 +1,80 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::RwLock};
 
-use ansilo_core::{data::DataValue, sqlil::EntityVersionIdentifier};
+use ansilo_core::data::DataValue;
 use serde::{Deserialize, Serialize};
 
-use crate::common::entity::EntitySource;
-
-use super::MemoryConnectorEntitySourceConfig;
-
 /// The connection config for the Oracle JDBC driver
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MemoryConnectionConfig {
     /// The in-memory data queried by the connector
     /// This 2D tabular data keyed by the respective the string "{entity_id}-{version_id}"
-    data: HashMap<String, Vec<Vec<DataValue>>>,
+    data: RwLock<HashMap<String, Vec<Vec<DataValue>>>>,
 }
 
 impl MemoryConnectionConfig {
     pub fn new() -> Self {
         Self {
-            data: HashMap::new(),
+            data: RwLock::new(HashMap::new()),
         }
     }
 
     pub fn set_data(
-        &mut self,
-        entity_id: impl Into<String>,
-        version_id: impl Into<String>,
-        data: Vec<Vec<DataValue>>,
-    ) {
-        self.data
-            .insert(format!("{}-{}", entity_id.into(), version_id.into()), data);
-    }
-
-    pub fn get_data(
         &self,
         entity_id: impl Into<String>,
         version_id: impl Into<String>,
-    ) -> Option<&Vec<Vec<DataValue>>> {
-        self.data
-            .get(&format!("{}-{}", entity_id.into(), version_id.into()))
+        rows: Vec<Vec<DataValue>>,
+    ) {
+        let mut data = self.data.write().unwrap();
+        data.insert(format!("{}-{}", entity_id.into(), version_id.into()), rows);
     }
 
-    pub fn get_entity_data(&self, entity: &EntitySource<MemoryConnectorEntitySourceConfig>) -> Option<&Vec<Vec<DataValue>>> {
-        self.get_data(&entity.conf.id, &entity.version_id)
+    pub fn with_data_mut<F: FnOnce(&mut Vec<Vec<DataValue>>) -> R, R>(
+        &self,
+        entity_id: impl Into<String>,
+        version_id: impl Into<String>,
+        cb: F,
+    ) -> Option<R> {
+        let mut data = self.data.write().unwrap();
+        let rows = data.get_mut(&format!("{}-{}", entity_id.into(), version_id.into()))?;
+
+        Some(cb(rows))
     }
 
-    pub fn get_entity_id_data(&self, entity: &EntityVersionIdentifier) -> Option<&Vec<Vec<DataValue>>> {
-        self.get_data(&entity.entity_id, &entity.version_id)
+    pub fn with_data<F: FnOnce(&Vec<Vec<DataValue>>) -> R, R>(
+        &self,
+        entity_id: impl Into<String>,
+        version_id: impl Into<String>,
+        cb: F,
+    ) -> Option<R> {
+        let data = self.data.read().unwrap();
+        let rows = data.get(&format!("{}-{}", entity_id.into(), version_id.into()))?;
+
+        Some(cb(rows))
+    }
+}
+
+impl Clone for MemoryConnectionConfig {
+    fn clone(&self) -> Self {
+        Self {
+            data: RwLock::new(self.data.read().unwrap().clone()),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::sqlil;
-
     use super::*;
 
     #[test]
     fn test_memory_connector_connection_config() {
-        let mut conf = MemoryConnectionConfig::new();
+        let conf = MemoryConnectionConfig::new();
 
         conf.set_data("a", "1.0", vec![vec![DataValue::Null]]);
-        
-        assert_eq!(conf.get_data("a", "1.0"), Some(&vec![vec![DataValue::Null]]));
-        assert_eq!(conf.get_entity_id_data(&sqlil::entity("a", "1.0")), Some(&vec![vec![DataValue::Null]]));
-        assert_eq!(conf.get_data("a", "2.0"), None);
-        assert_eq!(conf.get_data("b", "1.0"), None);
+
+        let rows = conf.with_data("a", "1.0", |data| data.clone());
+
+        assert_eq!(rows, Some(vec![vec![DataValue::Null]]));
+
+        assert!(conf.with_data("a", "2.0", |_| ()).is_none());
     }
 }

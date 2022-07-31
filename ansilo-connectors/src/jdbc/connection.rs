@@ -312,7 +312,7 @@ mod tests {
 
     use crate::{
         interface::{QueryHandle, QueryInputStructure},
-        jdbc::{JdbcConnectionPoolConfig, JdbcQueryParam}, common::data::{DataReader, ResultSetReader},
+        jdbc::{JdbcConnectionPoolConfig, JdbcQueryParam}, common::data::{ResultSetReader},
     };
 
     use super::*;
