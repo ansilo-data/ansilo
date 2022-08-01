@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 use pgx::{pg_sys::List, *};
 
-use super::{FdwContext, FdwQueryContext, FdwScanContext, PlannerContext};
+use super::{FdwContext, FdwQueryContext, FdwScanContext, PlannerContext, FdwModifyContext};
 
 /// Converts the supplied context data to a pointer suitable
 /// to be stored in fdw_private fields
@@ -93,4 +93,35 @@ pub(crate) unsafe fn from_fdw_private_scan(
     let scan = PgBox::<FdwScanContext>::from_pg(list.get_ptr(2).unwrap() as *mut _);
 
     (ctx, query, scan)
+}
+
+pub(crate) unsafe fn into_fdw_private_modify(
+    ctx: PgBox<FdwContext>,
+    query: PgBox<FdwQueryContext>,
+    modify: FdwModifyContext,
+) -> *mut List {
+    let mut list = PgList::<c_void>::new();
+
+    list.push(ctx.into_pg() as *mut _);
+    list.push(PgBox::new(query).into_pg() as *mut _);
+    list.push(PgBox::new(modify).into_pg() as *mut _);
+
+    list.into_pg()
+}
+
+pub(crate) unsafe fn from_fdw_private_modify(
+    list: *mut List,
+) -> (
+    PgBox<FdwContext, AllocatedByPostgres>,
+    PgBox<FdwQueryContext, AllocatedByPostgres>,
+    PgBox<FdwModifyContext, AllocatedByPostgres>,
+) {
+    let list = PgList::<c_void>::from_pg(list);
+    assert!(list.len() == 3);
+
+    let ctx = PgBox::<FdwContext>::from_pg(list.get_ptr(0).unwrap() as *mut _);
+    let query = PgBox::<FdwQueryContext>::from_pg(list.get_ptr(1).unwrap() as *mut _);
+    let modify = PgBox::<FdwModifyContext>::from_pg(list.get_ptr(2).unwrap() as *mut _);
+
+    (ctx, query, modify)
 }

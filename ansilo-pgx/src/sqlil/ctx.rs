@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ptr};
 
+use itertools::Itertools;
 use pgx::pg_sys::{self, Node};
 
 /// Mapping data that is accrued while converting pg expr's to sqlil
@@ -52,10 +53,24 @@ impl ConversionContext {
         }
     }
 
-    pub fn param_nodes(&self) -> Vec<*mut Node> {
-        self.params.iter().map(|(i, _)| *i).collect()
+    /// Creates a new parameter (not associated to a node)
+    pub(crate) fn create_param(&mut self) -> u32 {
+        let param_id = (self.params.len() + 1) as u32;
+        self.params.push((ptr::null_mut(), param_id));
+        param_id
     }
 
+    /// Gets all registered nodes bound to a parameter
+    pub fn param_nodes(&self) -> Vec<*mut Node> {
+        self.params
+            .iter()
+            .map(|(i, _)| *i)
+            .filter(|i| !i.is_null())
+            .unique()
+            .collect()
+    }
+
+    /// Gets the param id's associated to the supplied node
     pub unsafe fn param_ids(&self, node: *mut Node) -> Vec<u32> {
         self.params
             .iter()

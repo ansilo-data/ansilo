@@ -29,7 +29,7 @@ use crate::{
         parse_entity_version_id_from_foreign_table, parse_entity_version_id_from_rel,
         ConversionContext,
     },
-    util::list::vec_to_pg_list,
+    util::{list::vec_to_pg_list, table::PgTable},
 };
 
 /// Default cost values in case they cant be estimated
@@ -999,7 +999,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     };
 
     // First, pull out all cols/aggrefs required for the query (tlist, local conds and target expr's)
-    let required_cols = pull_vars(
+    let mut required_cols = pull_vars(
         result_tlist
             .iter_ptr()
             .map(|i| (*i).expr as *mut Node)
@@ -1013,6 +1013,22 @@ pub unsafe extern "C" fn get_foreign_plan(
             .chain(PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs).iter_ptr())
             .chain(PgList::<Node>::from_pg(fdw_recheck_quals).iter_ptr()),
     );
+
+    // If we find whole-row references we resolve those down to the columns in the base tables
+    for rte in return_whole_rows(root, &mut required_cols) {
+        let rel = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
+
+        for att in rel.attrs() {
+            required_cols.push(pg_sys::makeVar(
+                att.attrelid,
+                att.attnum,
+                att.atttypid,
+                att.atttypmod,
+                att.attnum as _,
+                0,
+            ) as *mut Node);
+        }
+    }
 
     for col in required_cols {
         // If we already have added this col for selection, skip it
@@ -1028,7 +1044,7 @@ pub unsafe extern "C" fn get_foreign_plan(
             == pg_sys::SelfItemPointerAttributeNumber as i16
         {
             let col = col as *mut pg_sys::Var;
-            let rte = pg_sys::planner_rt_fetch((*col).varno, planner.root() as *mut _);
+            let rte = pg_sys::planner_rt_fetch((*col).varno, root);
             let alias = query.cvt.register_alias((*col).varno);
 
             let row_ids = match ctx.get_row_id_exprs(alias) {
@@ -1038,12 +1054,13 @@ pub unsafe extern "C" fn get_foreign_plan(
 
             row_ids
                 .into_iter()
-                .map(|(expr, r#type)| {
+                .enumerate()
+                .map(|(idx, (expr, r#type))| {
                     (
                         expr,
                         pg_sys::makeVar(
                             (*col).varno,
-                            pg_sys::SelfItemPointerAttributeNumber as _,
+                            -100 - (idx as i16),
                             into_pg_type(&r#type).unwrap(),
                             -1,
                             pg_sys::InvalidOid,
@@ -1102,6 +1119,23 @@ pub unsafe extern "C" fn get_foreign_plan(
         fdw_recheck_quals,
         outer_plan,
     )
+}
+
+unsafe fn return_whole_rows(
+    root: *mut PlannerInfo,
+    required_cols: &mut Vec<*mut Node>,
+) -> Vec<*mut pg_sys::RangeTblEntry> {
+    let (whole_rows, cols) = required_cols
+        .iter()
+        .partition(|c| (*((**c) as *mut pg_sys::Var)).varattno == 0);
+
+    *required_cols = cols;
+
+    whole_rows
+        .into_iter()
+        .map(|r| (*(r as *mut pg_sys::Var)).varno)
+        .map(|varno| pg_sys::planner_rt_fetch(varno, root))
+        .collect()
 }
 
 /// Retrieves all vars (columns) and aggref's from the supplied node iterator

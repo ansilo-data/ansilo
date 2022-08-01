@@ -33,14 +33,14 @@ pub struct FdwQueryContext {
 }
 
 impl FdwQueryContext {
-    pub fn select(base_relid: pg_sys::Oid, base_cost: OperationCost) -> Self {
+    pub fn new(base_relid: pg_sys::Oid, query: FdwQueryType, base_cost: OperationCost) -> Self {
         let mut cvt = ConversionContext::new();
         cvt.register_alias(base_relid);
 
         let retrieved_rows = base_cost.rows;
 
         Self {
-            q: FdwQueryType::Select(FdwSelectQuery::default()),
+            q: query,
             base_cost,
             base_relid,
             retrieved_rows,
@@ -49,6 +49,14 @@ impl FdwQueryContext {
             cvt,
             cost_fns: vec![],
         }
+    }
+
+    pub fn select(base_relid: pg_sys::Oid, base_cost: OperationCost) -> Self {
+        Self::new(base_relid, FdwQueryType::Select(FdwSelectQuery::default()), base_cost)
+    }
+
+    pub fn insert(base_relid: pg_sys::Oid) -> Self {
+        Self::new(base_relid, FdwQueryType::Insert(FdwInsertQuery::default()), OperationCost::default())
     }
 
     pub fn base_rel_alias(&self) -> &str {
@@ -135,6 +143,19 @@ impl FdwScanContext {
         Self {
             param_exprs: None,
             row_structure: None,
+        }
+    }
+}
+
+/// Context storage for the FDW stored in the fdw_private field
+#[derive(Clone)]
+pub struct FdwModifyContext {
+    
+}
+
+impl FdwModifyContext {
+    pub fn new() -> Self {
+        Self {
         }
     }
 }

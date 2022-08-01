@@ -22,6 +22,7 @@ serde = "1.0"
 serde_json = "1.0"
 time = "0.3"
 pgx = "=0.5.0-beta.0"
+itertools = "0.10"
 
 [dev-dependencies]
 ansilo-connectors = { path = "../ansilo-connectors" }

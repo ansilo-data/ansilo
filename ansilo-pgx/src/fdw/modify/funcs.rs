@@ -1,3 +1,5 @@
+use ansilo_core::sqlil;
+use ansilo_pg::fdw::proto::*;
 use pgx::{
     pg_sys::{
         DropBehavior, EState, ExecRowMark, ForeignScanState, Index, List, LockClauseStrength,
@@ -7,6 +9,15 @@ use pgx::{
     *,
 };
 
+use crate::{
+    fdw::{
+        common,
+        ctx::{FdwContext, FdwQueryContext},
+    },
+    sqlil::from_pg_type,
+    util::table::PgTable,
+};
+
 #[pg_guard]
 pub unsafe extern "C" fn add_foreign_update_targets(
     root: *mut PlannerInfo,
@@ -14,6 +25,8 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     target_rte: *mut RangeTblEntry,
     target_relation: Relation,
 ) {
+    // Add a var for with varattno as SelfItemPointerAttributeNumber to the tlist
+    // This is picked up in get_foreign_plan and mapped to row ID expressions from the data source
     let var = pg_sys::makeVar(
         rtindex,
         pg_sys::SelfItemPointerAttributeNumber as _,
@@ -38,7 +51,54 @@ pub unsafe extern "C" fn plan_foreign_modify(
     result_relation: Index,
     subplan_index: ::std::os::raw::c_int,
 ) -> *mut List {
-    unimplemented!()
+    let rte = pg_sys::planner_rt_fetch(result_relation, root);
+
+    let table = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
+
+    // Currently we do not support WITH CHECK OPTION
+    if !(*plan).withCheckOptionLists.is_null() {
+        panic!("WITH CHECK OPTION is currently not supported");
+    }
+
+    if !(*plan).returningLists.is_null() {
+        panic!("RETURNING clauses are currently not supported");
+    }
+
+    if !(*plan).onConflictAction != pg_sys::OnConflictAction_ONCONFLICT_NONE {
+        panic!("ON CONFLICT clause is currently not supported");
+    }
+
+    let mut ctx = common::connect(table.rd_id);
+
+    match (*plan).operation {
+        pg_sys::CmdType_CMD_INSERT => plan_foreign_insert(ctx, root, plan, table),
+        // pg_sys::CmdType_CMD_UPDATE => plan_foreign_update(ctx, root, plan, table),
+        // pg_sys::CmdType_CMD_DELETE => plan_foreign_delete(ctx, root, plan, table),
+        _ => panic!("Unexpected operation: {}", (*plan).operation),
+    }
+}
+
+fn plan_foreign_insert(
+    ctx: PgBox<FdwContext>,
+    root: *mut PlannerInfo,
+    plan: *mut ModifyTable,
+    table: PgTable,
+) -> *mut List {
+    let mut query = FdwQueryContext::insert(table.rd_id);
+
+    // Create an insert query to insert a single row
+    // Add parameters for each column to insert
+    for att in table.attrs() {
+        let col_name = att.name().to_string();
+        let data_type = from_pg_type(att.atttypid as _).unwrap();
+
+        let op = InsertQueryOperation::AddColumn((
+            col_name,
+            sqlil::Expr::Parameter(sqlil::Parameter::new(data_type, query.cvt.create_param())),
+        ));
+    }
+
+    todo!()
 }
 
 #[pg_guard]
@@ -124,7 +184,8 @@ pub unsafe extern "C" fn plan_direct_modify(
     result_relation: Index,
     subplan_index: ::std::os::raw::c_int,
 ) -> bool {
-    unimplemented!()
+    // TODO
+    return false;
 }
 
 #[pg_guard]
