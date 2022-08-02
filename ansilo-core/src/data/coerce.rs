@@ -110,56 +110,55 @@ impl DataValue {
     fn try_coerce_uint32(data: u32, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::UInt32 => Self::UInt32(data),
-            DataType::Int32 => {
-                if data < i32::MAX as _ {
-                    DataValue::Int32(data as i32)
-                } else {
-                    bail!("Failed to convert from type 'uint32' to 'int32': expecting value <= {}, found {data}", i32::MAX)
-                }
-            }
-            _ => bail!("No type coercion exists from type 'uint32' to {:?}", r#type),
+            DataType::Int32 if data < i32::MAX as _ => DataValue::Int32(data as i32),
+            DataType::Int64 => Self::Int64(data as _),
+            _ => bail!(
+                "No type coercion exists from type 'uint32' ({}) to {:?}",
+                data,
+                r#type
+            ),
         })
     }
 
     fn try_coerce_int32(data: i32, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Int32 => Self::Int32(data),
-            DataType::UInt32 => {
-                if data >= 0 {
-                    DataValue::UInt32(data as u32)
-                } else {
-                    bail!("Failed to convert from type 'int32' to 'uint32': expecting value >= 0, found {data}")
-                }
-            }
-            _ => bail!("No type coercion exists from type 'int32' to {:?}", r#type),
+            DataType::UInt32 if data >= 0 => DataValue::UInt32(data as u32),
+            _ => bail!(
+                "No type coercion exists from type 'int32' ({}) to {:?}",
+                data,
+                r#type
+            ),
         })
     }
 
     fn try_coerce_uint64(data: u64, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::UInt64 => Self::UInt64(data),
-            DataType::Int64 => {
-                if data < i64::MAX as _ {
-                    DataValue::Int64(data as i64)
-                } else {
-                    bail!("Failed to convert from type 'uint64' to 'int64': expecting value <= {}, found {data}", i64::MAX)
-                }
-            }
-            _ => bail!("No type coercion exists from type 'uint64' to {:?}", r#type),
+            DataType::Int64 if data < i64::MAX as _ => DataValue::Int64(data as i64),
+            _ => bail!(
+                "No type coercion exists from type 'uint64' ({}) to {:?}",
+                data,
+                r#type
+            ),
         })
     }
 
     fn try_coerce_int64(data: i64, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Int64 => Self::Int64(data),
-            DataType::UInt64 => {
-                if data >= 0 {
-                    DataValue::UInt64(data as u64)
-                } else {
-                    bail!("Failed to convert from type 'int64' to 'uint64': expecting value >= 0, found {data}")
-                }
+            DataType::UInt64 if data >= 0 => DataValue::UInt64(data as u64),
+            DataType::Int32 if data >= i32::MIN as _ && data <= i32::MAX as _ => {
+                Self::Int32(data as i32)
             }
-            _ => bail!("No type coercion exists from type 'int64' to {:?}", r#type),
+            DataType::UInt32 if data >= 0 && data <= u32::MAX as _ => {
+                Self::UInt32(data as u32)
+            }
+            _ => bail!(
+                "No type coercion exists from type 'int64' ({}) to {:?}",
+                data,
+                r#type
+            ),
         })
     }
 }
@@ -312,6 +311,12 @@ mod tests {
                 .unwrap(),
             DataValue::Int32(1234)
         );
+        assert_eq!(
+            DataValue::UInt32(u32::MAX)
+                .try_coerce_into(&DataType::Int64)
+                .unwrap(),
+            DataValue::Int64(u32::MAX as _)
+        );
 
         DataValue::UInt32(u32::MAX)
             .try_coerce_into(&DataType::Int32)
@@ -354,9 +359,33 @@ mod tests {
                 .unwrap(),
             DataValue::UInt64(1234)
         );
+        assert_eq!(
+            DataValue::Int64(1234)
+                .try_coerce_into(&DataType::UInt32)
+                .unwrap(),
+            DataValue::UInt32(1234)
+        );
+        assert_eq!(
+            DataValue::Int64(1234)
+                .try_coerce_into(&DataType::Int32)
+                .unwrap(),
+            DataValue::Int32(1234)
+        );
 
         DataValue::Int64(-1)
             .try_coerce_into(&DataType::UInt64)
+            .unwrap_err();
+        DataValue::Int64(-1)
+            .try_coerce_into(&DataType::UInt32)
+            .unwrap_err();
+        DataValue::Int64(i64::MAX)
+            .try_coerce_into(&DataType::UInt32)
+            .unwrap_err();
+        DataValue::Int64(i64::MIN)
+            .try_coerce_into(&DataType::Int32)
+            .unwrap_err();
+        DataValue::Int64(i64::MAX)
+            .try_coerce_into(&DataType::Int32)
             .unwrap_err();
     }
 }

@@ -77,6 +77,20 @@ impl FdwQueryContext {
         }
     }
 
+    pub fn as_insert(&self) -> Option<&FdwInsertQuery> {
+        match &self.q {
+            FdwQueryType::Insert(q) => Some(q),
+            _ => None
+        }
+    }
+
+    pub fn as_insert_mut(&mut self) -> Option<&mut FdwInsertQuery> {
+        match &mut self.q {
+            FdwQueryType::Insert(q) => Some(q),
+            _ => None
+        }
+    }
+
     pub fn add_cost(&mut self, cb: impl Fn(&Self, OperationCost) -> OperationCost + 'static) {
         self.cost_fns.push(Rc::new(cb));
     }
@@ -114,6 +128,8 @@ impl FdwSelectQuery {
 pub struct FdwInsertQuery {
     /// The operations applied to the insert query
     pub remote_ops: Vec<InsertQueryOperation>,
+    /// The list of query parameters and their respective pg type oid's for insert query
+    pub params: Vec<(sqlil::Parameter, pg_sys::Oid)>
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

@@ -86,7 +86,10 @@ where
                     self.write(&[1])?;
                     self.write(&val.to_ne_bytes())?;
                 }
-                (None | Some(DataType::Int64), DataValue::Int64(val)) => todo!(),
+                (None | Some(DataType::Int64), DataValue::Int64(val)) => {
+                    self.write(&[1])?;
+                    self.write(&val.to_ne_bytes())?;
+                },
                 (None | Some(DataType::UInt64), DataValue::UInt64(val)) => {
                     self.write(&[1])?;
                     self.write(&val.to_ne_bytes())?;
@@ -380,6 +383,24 @@ mod tests {
                 vec![3u8],                 // chunk length
                 "abc".as_bytes().to_vec(), // data
                 vec![0u8],                 // eof
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_int64() {
+        let mut writer = create_data_writer(Some(vec![DataType::Int64]));
+
+        writer.write_data_value(DataValue::Int64(1234)).unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                       // not null
+                1234_i64.to_ne_bytes().to_vec(), // data
             ]
             .concat()
         )

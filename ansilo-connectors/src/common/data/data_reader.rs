@@ -69,7 +69,7 @@ where
                 DataType::UInt16 => todo!(),
                 DataType::Int32 => DataValue::Int32(i32::from_ne_bytes(self.read_exact::<4>()?)),
                 DataType::UInt32 => DataValue::UInt32(u32::from_ne_bytes(self.read_exact::<4>()?)),
-                DataType::Int64 => todo!(),
+                DataType::Int64 => DataValue::Int64(i64::from_ne_bytes(self.read_exact::<8>()?)),
                 DataType::UInt64 => DataValue::UInt64(u64::from_ne_bytes(self.read_exact::<8>()?)),
                 DataType::Float32 => todo!(),
                 DataType::Float64 => todo!(),
@@ -307,6 +307,24 @@ mod tests {
         assert_eq!(
             res.read_data_value().unwrap(),
             Some(DataValue::Utf8String("123".as_bytes().to_vec()))
+        );
+        assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_reader_int64() {
+        let mut res = create_data_reader(
+            vec![DataType::Int64],
+            [
+                vec![1u8],                       // not null
+                1234_i64.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::Int64(1234))
         );
         assert_eq!(res.read_data_value().unwrap(), None);
     }

@@ -97,7 +97,7 @@ pub(crate) unsafe fn from_fdw_private_scan(
 
 pub(crate) unsafe fn into_fdw_private_modify(
     ctx: PgBox<FdwContext>,
-    query: PgBox<FdwQueryContext>,
+    query: FdwQueryContext,
     modify: FdwModifyContext,
 ) -> *mut List {
     let mut list = PgList::<c_void>::new();

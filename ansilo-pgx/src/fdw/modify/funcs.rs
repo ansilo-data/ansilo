@@ -1,4 +1,4 @@
-use ansilo_core::sqlil;
+use ansilo_core::{data::DataValue, sqlil};
 use ansilo_pg::fdw::proto::*;
 use pgx::{
     pg_sys::{
@@ -12,10 +12,13 @@ use pgx::{
 use crate::{
     fdw::{
         common,
-        ctx::{FdwContext, FdwQueryContext},
+        ctx::{
+            from_fdw_private_modify, into_fdw_private_modify, FdwContext, FdwModifyContext,
+            FdwQueryContext, FdwQueryType,
+        },
     },
-    sqlil::from_pg_type,
-    util::table::PgTable,
+    sqlil::{from_datum, from_pg_type},
+    util::{table::PgTable, tuple::slot_get_attr},
 };
 
 #[pg_guard]
@@ -41,7 +44,10 @@ pub unsafe extern "C" fn add_foreign_update_targets(
 
 #[pg_guard]
 pub unsafe extern "C" fn is_foreign_rel_updatable(rel: Relation) -> ::std::os::raw::c_int {
-    unimplemented!()
+    // TODO: Determine from data source
+    (1 << pg_sys::CmdType_CMD_INSERT)
+        | (1 << pg_sys::CmdType_CMD_UPDATE)
+        | (1 << pg_sys::CmdType_CMD_DELETE)
 }
 
 #[pg_guard]
@@ -64,41 +70,61 @@ pub unsafe extern "C" fn plan_foreign_modify(
         panic!("RETURNING clauses are currently not supported");
     }
 
-    if !(*plan).onConflictAction != pg_sys::OnConflictAction_ONCONFLICT_NONE {
+    if (*plan).onConflictAction != pg_sys::OnConflictAction_ONCONFLICT_NONE {
         panic!("ON CONFLICT clause is currently not supported");
     }
 
+    // TODO: See how we can avoid having multipe connections to ansilo within the same plan tree
+    // This will be vital once we start dealing with foreign locking or transactions
     let mut ctx = common::connect(table.rd_id);
 
-    match (*plan).operation {
-        pg_sys::CmdType_CMD_INSERT => plan_foreign_insert(ctx, root, plan, table),
+    let query = match (*plan).operation {
+        pg_sys::CmdType_CMD_INSERT => plan_foreign_insert(&mut ctx, root, plan, table),
         // pg_sys::CmdType_CMD_UPDATE => plan_foreign_update(ctx, root, plan, table),
         // pg_sys::CmdType_CMD_DELETE => plan_foreign_delete(ctx, root, plan, table),
         _ => panic!("Unexpected operation: {}", (*plan).operation),
-    }
+    };
+
+    into_fdw_private_modify(ctx, query, FdwModifyContext::new())
 }
 
 fn plan_foreign_insert(
-    ctx: PgBox<FdwContext>,
+    ctx: &mut PgBox<FdwContext>,
     root: *mut PlannerInfo,
     plan: *mut ModifyTable,
     table: PgTable,
-) -> *mut List {
+) -> FdwQueryContext {
     let mut query = FdwQueryContext::insert(table.rd_id);
 
     // Create an insert query to insert a single row
-    // Add parameters for each column to insert
+    ctx.create_query(
+        query.cvt.register_alias(table.relid()),
+        sqlil::QueryType::Insert,
+    )
+    .unwrap();
+
+    // Add a parameter for each column
     for att in table.attrs() {
         let col_name = att.name().to_string();
-        let data_type = from_pg_type(att.atttypid as _).unwrap();
+        let att_type = att.atttypid;
+        let data_type = from_pg_type(att_type as _).unwrap();
+        let param = sqlil::Parameter::new(data_type, query.cvt.create_param());
 
-        let op = InsertQueryOperation::AddColumn((
-            col_name,
-            sqlil::Expr::Parameter(sqlil::Parameter::new(data_type, query.cvt.create_param())),
-        ));
+        let op = InsertQueryOperation::AddColumn((col_name, sqlil::Expr::Parameter(param.clone())));
+
+        match ctx.apply_query_op(op.clone().into()).unwrap() {
+            QueryOperationResult::Ok(_) => {}
+            QueryOperationResult::Unsupported => {
+                panic!("Failed to create insert query on data source: unsupported")
+            }
+        }
+
+        let insert = query.as_insert_mut().unwrap();
+        insert.remote_ops.push(op);
+        insert.params.push((param, att_type));
     }
 
-    todo!()
+    query
 }
 
 #[pg_guard]
@@ -109,7 +135,27 @@ pub unsafe extern "C" fn begin_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     eflags: ::std::os::raw::c_int,
 ) {
-    unimplemented!()
+    let (mut ctx, _query, _state) = from_fdw_private_modify(fdw_private);
+
+    ctx.prepare_query().unwrap();
+
+    (*rinfo).ri_FdwState = fdw_private as *mut _;
+}
+
+#[pg_guard]
+pub unsafe extern "C" fn get_foreign_modify_batch_size(
+    rinfo: *mut ResultRelInfo,
+) -> ::std::os::raw::c_int {
+    // TODO: Determine from data source
+    return 1;
+}
+
+#[pg_guard]
+pub unsafe extern "C" fn begin_foreign_insert(
+    mtstate: *mut ModifyTableState,
+    rinfo: *mut ResultRelInfo,
+) {
+    // not used as initialisation occurs in begin_foreign_modify
 }
 
 #[pg_guard]
@@ -119,7 +165,33 @@ pub unsafe extern "C" fn exec_foreign_insert(
     slot: *mut TupleTableSlot,
     plan_slot: *mut TupleTableSlot,
 ) -> *mut TupleTableSlot {
-    unimplemented!()
+    let (mut ctx, query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let insert = query.as_insert().unwrap();
+    let mut query_input = vec![];
+
+    for (idx, (param, type_oid)) in insert.params.iter().enumerate() {
+        let (is_null, datum) = slot_get_attr(slot, idx);
+
+        if is_null {
+            query_input.push(DataValue::Null);
+        } else {
+            let data_val = from_datum(*type_oid, datum).unwrap();
+            debug_assert_eq!(&data_val.r#type(), &param.r#type);
+
+            query_input.push(data_val);
+        }
+    }
+
+    ctx.write_query_input(query_input).unwrap();
+    ctx.execute_query().unwrap();
+    ctx.restart_query().unwrap();
+
+    slot
+}
+
+#[pg_guard]
+pub unsafe extern "C" fn end_foreign_insert(estate: *mut EState, rinfo: *mut ResultRelInfo) {
+    // not used as clean up occurs in end_foreign_modify
 }
 
 #[pg_guard]
@@ -130,13 +202,7 @@ pub unsafe extern "C" fn exec_foreign_batch_insert(
     plan_slots: *mut *mut TupleTableSlot,
     num_slots: *mut ::std::os::raw::c_int,
 ) -> *mut *mut TupleTableSlot {
-    unimplemented!()
-}
-
-#[pg_guard]
-pub unsafe extern "C" fn get_foreign_modify_batch_size(
-    rinfo: *mut ResultRelInfo,
-) -> ::std::os::raw::c_int {
+    // TODO:
     unimplemented!()
 }
 
@@ -162,19 +228,13 @@ pub unsafe extern "C" fn exec_foreign_delete(
 
 #[pg_guard]
 pub unsafe extern "C" fn end_foreign_modify(estate: *mut EState, rinfo: *mut ResultRelInfo) {
-    unimplemented!()
-}
-#[pg_guard]
-pub unsafe extern "C" fn begin_foreign_insert(
-    mtstate: *mut ModifyTableState,
-    rinfo: *mut ResultRelInfo,
-) {
-    unimplemented!()
-}
+    if (*rinfo).ri_FdwState.is_null() {
+        return;
+    }
 
-#[pg_guard]
-pub unsafe extern "C" fn end_foreign_insert(estate: *mut EState, rinfo: *mut ResultRelInfo) {
-    unimplemented!()
+    let (mut ctx, _query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+
+    ctx.disconnect().unwrap();
 }
 
 #[pg_guard]
