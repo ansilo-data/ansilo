@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use ansilo_core::sqlil;
+use ansilo_core::{sqlil, data::DataType};
 use ansilo_pg::fdw::proto::{
     DeleteQueryOperation, InsertQueryOperation, OperationCost, RowStructure, SelectQueryOperation,
     UpdateQueryOperation,
@@ -59,6 +59,14 @@ impl FdwQueryContext {
         Self::new(base_relid, FdwQueryType::Insert(FdwInsertQuery::default()), OperationCost::default())
     }
 
+    pub fn update(base_relid: pg_sys::Oid) -> Self {
+        Self::new(base_relid, FdwQueryType::Update(FdwUpdateQuery::default()), OperationCost::default())
+    }
+
+    pub fn delete(base_relid: pg_sys::Oid) -> Self {
+        Self::new(base_relid, FdwQueryType::Delete(FdwDeleteQuery::default()), OperationCost::default())
+    }
+
     pub fn base_rel_alias(&self) -> &str {
         self.cvt.get_alias(self.base_relid).unwrap()
     }
@@ -89,6 +97,39 @@ impl FdwQueryContext {
             FdwQueryType::Insert(q) => Some(q),
             _ => None
         }
+    }
+
+    pub fn as_update(&self) -> Option<&FdwUpdateQuery> {
+        match &self.q {
+            FdwQueryType::Update(q) => Some(q),
+            _ => None
+        }
+    }
+
+    pub fn as_update_mut(&mut self) -> Option<&mut FdwUpdateQuery> {
+        match &mut self.q {
+            FdwQueryType::Update(q) => Some(q),
+            _ => None
+        }
+    }
+
+    pub fn as_delete(&self) -> Option<&FdwDeleteQuery> {
+        match &self.q {
+            FdwQueryType::Delete(q) => Some(q),
+            _ => None
+        }
+    }
+
+    pub fn as_delete_mut(&mut self) -> Option<&mut FdwDeleteQuery> {
+        match &mut self.q {
+            FdwQueryType::Delete(q) => Some(q),
+            _ => None
+        }
+    }
+
+    /// Creates a new parameter (not associated to a node)
+    pub(crate) fn create_param(&mut self, r#type: DataType) -> sqlil::Parameter {
+        sqlil::Parameter::new(r#type, self.cvt.create_param())
     }
 
     pub fn add_cost(&mut self, cb: impl Fn(&Self, OperationCost) -> OperationCost + 'static) {
@@ -128,7 +169,8 @@ impl FdwSelectQuery {
 pub struct FdwInsertQuery {
     /// The operations applied to the insert query
     pub remote_ops: Vec<InsertQueryOperation>,
-    /// The list of query parameters and their respective pg type oid's for insert query
+    /// The list of query parameters and their respective pg type oid's 
+    /// which are used to supply the insert row data for the query
     pub params: Vec<(sqlil::Parameter, pg_sys::Oid)>
 }
 
@@ -136,6 +178,12 @@ pub struct FdwInsertQuery {
 pub struct FdwUpdateQuery {
     /// The operations applied to the update query
     pub remote_ops: Vec<UpdateQueryOperation>,
+    /// The list of query parameters and their respective pg type oid's 
+    /// which are used to supply the updated row data for the query
+    pub update_params: Vec<(sqlil::Parameter, pg_sys::Oid)>,
+    /// The list of query parameters and their respective pg type oid's 
+    /// which are used to specify the row ID to update
+    pub rowid_params: Vec<(sqlil::Parameter, pg_sys::Oid)>
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

@@ -17,7 +17,7 @@ use crate::{
             FdwQueryContext, FdwQueryType,
         },
     },
-    sqlil::{from_datum, from_pg_type},
+    sqlil::{from_datum, from_pg_type, into_pg_type},
     util::{table::PgTable, tuple::slot_get_attr},
 };
 
@@ -97,25 +97,19 @@ fn plan_foreign_insert(
     let mut query = FdwQueryContext::insert(table.rd_id);
 
     // Create an insert query to insert a single row
-    ctx.create_query(
-        query.cvt.register_alias(table.relid()),
-        sqlil::QueryType::Insert,
-    )
-    .unwrap();
+    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Insert)
+        .unwrap();
 
     // Add a parameter for each column
     for att in table.attrs() {
-        let col_name = att.name().to_string();
-        let att_type = att.atttypid;
-        let data_type = from_pg_type(att_type as _).unwrap();
-        let param = sqlil::Parameter::new(data_type, query.cvt.create_param());
+        let (col_name, att_type, param) = create_param_for_col(att, &mut query);
 
         let op = InsertQueryOperation::AddColumn((col_name, sqlil::Expr::Parameter(param.clone())));
 
         match ctx.apply_query_op(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
-                panic!("Failed to create insert query on data source: unsupported")
+                panic!("Failed to create insert query on data source: unable to add query parameter for insert value")
             }
         }
 
@@ -125,6 +119,101 @@ fn plan_foreign_insert(
     }
 
     query
+}
+
+unsafe fn plan_foreign_update(
+    ctx: &mut PgBox<FdwContext>,
+    root: *mut PlannerInfo,
+    plan: *mut ModifyTable,
+    rte: *mut RangeTblEntry,
+    table: PgTable,
+) -> FdwQueryContext {
+    let mut query = FdwQueryContext::update(table.rd_id);
+
+    // Create an insert query to insert a single row
+    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Update)
+        .unwrap();
+
+    // Determine the columns which are updated by the query
+    let updated_cols = if !table.trigdesc.is_null() && (*table.trigdesc).trig_update_before_row {
+        // If the target table has a BEFORE UPDATE trigger we have to include all columns
+        // as the trigger may change columns not specified in the query itself.
+        table.attrs().collect::<Vec<_>>()
+    } else {
+        // Otherwise we use the columns specified from the query itself
+        let cols = pg_sys::bms_union((*rte).updatedCols, (*rte).extraUpdatedCols);
+
+        table
+            .attrs()
+            .filter(|col| {
+                // From pg src:
+                // updatedCols are bitmapsets, which cannot have negative integer members,
+                // so we subtract FirstLowInvalidHeapAttributeNumber from column
+                // numbers before storing them in these fields.
+                // @see https://doxygen.postgresql.org/parsenodes_8h_source.html#l01180
+                pg_sys::bms_is_member(
+                    col.attnum as i32 - pg_sys::FirstLowInvalidHeapAttributeNumber,
+                    cols,
+                )
+            })
+            .collect()
+    };
+
+    // Add a parameter for each column to update
+    for att in updated_cols.into_iter() {
+        let (col_name, att_type, param) = create_param_for_col(att, &mut query);
+
+        let op = UpdateQueryOperation::AddSet((col_name, sqlil::Expr::Parameter(param.clone())));
+
+        match ctx.apply_query_op(op.clone().into()).unwrap() {
+            QueryOperationResult::Ok(_) => {}
+            QueryOperationResult::Unsupported => {
+                panic!("Failed to create update query on data source: unable to add query parameter for update value")
+            }
+        }
+
+        let update = query.as_update_mut().unwrap();
+        update.remote_ops.push(op);
+        update.update_params.push((param, att_type));
+    }
+
+    // Add a conditions to filter the row to by the row id
+    let row_id_exprs = ctx.get_row_id_exprs(query.base_rel_alias()).unwrap();
+    for (expr, r#type) in row_id_exprs.into_iter() {
+        let param = query.create_param(r#type.clone());
+        let op = UpdateQueryOperation::AddWhere(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+            expr,
+            sqlil::BinaryOpType::Equal,
+            sqlil::Expr::Parameter(param.clone()),
+        )));
+
+        match ctx.apply_query_op(op.clone().into()).unwrap() {
+            QueryOperationResult::Ok(_) => {}
+            QueryOperationResult::Unsupported => {
+                panic!("Failed to create update query on data source: unable to add query parameter for row id condition")
+            }
+        }
+
+        let update = query.as_update_mut().unwrap();
+        update.remote_ops.push(op);
+        update
+            .rowid_params
+            .push((param, into_pg_type(&r#type).unwrap()))
+    }
+
+    query
+}
+
+fn create_param_for_col(
+    att: &pg_sys::FormData_pg_attribute,
+    query: &mut FdwQueryContext,
+) -> (String, u32, sqlil::Parameter) {
+    let col_name = att.name().to_string();
+    let att_type = att.atttypid;
+    let data_type = from_pg_type(att_type as _).unwrap();
+    let param = query.create_param(data_type);
+
+    (col_name, att_type, param)
 }
 
 #[pg_guard]
