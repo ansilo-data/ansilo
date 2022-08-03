@@ -165,6 +165,20 @@ impl FdwContext {
         Ok(())
     }
 
+    pub fn write_query_input_unordered(&mut self, mut data: Vec<(u32, DataValue)>) -> Result<()> {
+        let writer = self.query_writer.as_mut().context("Query not prepared")?;
+        let mut ordered_params = vec![];
+
+        for (pid, _) in writer.get_structure().params.iter() {
+            ordered_params.push(
+                data.remove(data.iter().position(|(id, _)| *id == *pid).unwrap())
+                    .1,
+            );
+        }
+
+        self.write_query_input(ordered_params)
+    }
+
     pub fn execute_query(&mut self) -> Result<RowStructure> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
 

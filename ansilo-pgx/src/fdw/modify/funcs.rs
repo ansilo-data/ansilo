@@ -28,18 +28,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     target_rte: *mut RangeTblEntry,
     target_relation: Relation,
 ) {
-    // Add a var for with varattno as SelfItemPointerAttributeNumber to the tlist
-    // This is picked up in get_foreign_plan and mapped to row ID expressions from the data source
-    let var = pg_sys::makeVar(
-        rtindex,
-        pg_sys::SelfItemPointerAttributeNumber as _,
-        pg_sys::TIDOID,
-        -1,
-        pg_sys::InvalidOid,
-        0,
-    );
-
-    pg_sys::add_row_identity_var(root, var, rtindex, cstr::cstr!("ctid").as_ptr());
+    // Noop here. This is handled in get_foriegn_plan for ForeignScan
 }
 
 #[pg_guard]
@@ -80,8 +69,8 @@ pub unsafe extern "C" fn plan_foreign_modify(
 
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_INSERT => plan_foreign_insert(&mut ctx, root, plan, table),
-        // pg_sys::CmdType_CMD_UPDATE => plan_foreign_update(ctx, root, plan, table),
-        // pg_sys::CmdType_CMD_DELETE => plan_foreign_delete(ctx, root, plan, table),
+        pg_sys::CmdType_CMD_UPDATE => plan_foreign_update(&mut ctx, root, plan, rte, table),
+        // pg_sys::CmdType_CMD_DELETE => plan_foreign_delete(&mut ctx, root, plan, rte, table),
         _ => panic!("Unexpected operation: {}", (*plan).operation),
     };
 
@@ -228,6 +217,8 @@ pub unsafe extern "C" fn begin_foreign_modify(
 
     ctx.prepare_query().unwrap();
 
+    // (*rinfo).ri
+
     (*rinfo).ri_FdwState = fdw_private as *mut _;
 }
 
@@ -262,16 +253,16 @@ pub unsafe extern "C" fn exec_foreign_insert(
         let (is_null, datum) = slot_get_attr(slot, idx);
 
         if is_null {
-            query_input.push(DataValue::Null);
+            query_input.push((param.id, DataValue::Null));
         } else {
             let data_val = from_datum(*type_oid, datum).unwrap();
             debug_assert_eq!(&data_val.r#type(), &param.r#type);
 
-            query_input.push(data_val);
+            query_input.push((param.id, data_val));
         }
     }
 
-    ctx.write_query_input(query_input).unwrap();
+    ctx.write_query_input_unordered(query_input).unwrap();
     ctx.execute_query().unwrap();
     ctx.restart_query().unwrap();
 
@@ -302,7 +293,37 @@ pub unsafe extern "C" fn exec_foreign_update(
     slot: *mut TupleTableSlot,
     plan_slot: *mut TupleTableSlot,
 ) -> *mut TupleTableSlot {
-    unimplemented!()
+    let (mut ctx, query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let update = query.as_update().unwrap();
+    let mut query_input = vec![];
+
+    // We assume the rowid's are the first
+    // as we ensure this is the case in get_foreign_plan
+    let all_params = update
+        .rowid_params
+        .iter()
+        .chain(update.update_params.iter());
+    
+    for (idx, (param, type_oid)) in all_params.enumerate() {
+        let (is_null, datum) = slot_get_attr(slot, idx);
+
+        if is_null {
+            query_input.push((param.id, DataValue::Null));
+        } else {
+            let data_val = from_datum(*type_oid, datum)
+                .unwrap()
+                .try_coerce_into(&param.r#type)
+                .unwrap();
+
+            query_input.push((param.id, data_val));
+        }
+    }
+
+    ctx.write_query_input_unordered(query_input).unwrap();
+    ctx.execute_query().unwrap();
+    ctx.restart_query().unwrap();
+
+    slot
 }
 
 #[pg_guard]

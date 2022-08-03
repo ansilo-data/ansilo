@@ -15695,7 +15695,7 @@ pub const NodeTag_T_SupportRequestIndexCondition: NodeTag = 431;
 pub type NodeTag = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct Node {
+pub ri_FdwState
     pub type_: NodeTag,
 }
 impl Default for Node {

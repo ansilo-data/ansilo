@@ -1015,18 +1015,62 @@ pub unsafe extern "C" fn get_foreign_plan(
     );
 
     // If we find whole-row references we resolve those down to the columns in the base tables
-    for rte in return_whole_rows(root, &mut required_cols) {
+    for (varno, rte) in find_whole_row_vars(root, &mut required_cols) {
         let rel = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
 
         for att in rel.attrs() {
             required_cols.push(pg_sys::makeVar(
-                att.attrelid,
+                varno,
                 att.attnum,
                 att.atttypid,
                 att.atttypmod,
                 att.attnum as _,
                 0,
             ) as *mut Node);
+        }
+    }
+
+    // If this in an update/delete command we will need to include the row id's
+    if let pg_sys::CmdType_CMD_UPDATE | pg_sys::CmdType_CMD_DELETE = (*(*root).parse).commandType {
+        let row_ids = match ctx.get_row_id_exprs(query.base_rel_alias()) {
+            Ok(r) => r,
+            Err(err) => panic!("Failed to get row ID's for table: {err}"),
+        };
+
+        let exprs = row_ids
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (expr, r#type))| {
+                (
+                    expr,
+                    pg_sys::makeVar(
+                        0, // TODO
+                        pg_sys::SelfItemPointerAttributeNumber as _,
+                        into_pg_type(&r#type).unwrap(),
+                        -1,
+                        pg_sys::InvalidOid,
+                        0,
+                    ) as *mut Node,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        for (expr, col) in exprs {
+            let col_alias = query.as_select_mut().unwrap().new_column_alias();
+            let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
+
+            if apply_query_operation(&mut ctx, query.as_select_mut().unwrap(), query_op).is_none() {
+                panic!("Failed to push down column required for local condition evaluation: rejected by remote");
+            }
+
+            let tle = pg_sys::makeTargetEntry(
+                pg_sys::copyObjectImpl(col as *mut _) as *mut _,
+                (fdw_scan_list.len() + 1) as _,
+                ptr::null_mut(),
+                true,
+            );
+
+            fdw_scan_list.push(tle as *mut _);
         }
     }
 
@@ -1039,63 +1083,48 @@ pub unsafe extern "C" fn get_foreign_plan(
             continue;
         }
 
-        // If this is a ctid var, resolve to row ID expressions
-        let exprs = if (*(col as *mut pg_sys::Var)).varattno
-            == pg_sys::SelfItemPointerAttributeNumber as i16
-        {
-            let col = col as *mut pg_sys::Var;
-            let rte = pg_sys::planner_rt_fetch((*col).varno, root);
-            let alias = query.cvt.register_alias((*col).varno);
+        // If this is a whole row reference we have already handled this earlier
+        // so just add straight to the tlist
+        if is_whole_row(col) {
+            let tle = pg_sys::makeTargetEntry(
+                pg_sys::copyObjectImpl(col as *mut _) as *mut _,
+                (fdw_scan_list.len() + 1) as _,
+                ptr::null_mut(),
+                false,
+            );
 
-            let row_ids = match ctx.get_row_id_exprs(alias) {
-                Ok(r) => r,
-                Err(err) => panic!("Failed to get row ID's for table: {err}"),
-            };
+            fdw_scan_list.push(tle as *mut _);
+            continue;
+        }
 
-            row_ids
-                .into_iter()
-                .enumerate()
-                .map(|(idx, (expr, r#type))| {
-                    (
-                        expr,
-                        pg_sys::makeVar(
-                            (*col).varno,
-                            -100 - (idx as i16),
-                            into_pg_type(&r#type).unwrap(),
-                            -1,
-                            pg_sys::InvalidOid,
-                            0,
-                        ) as *mut Node,
-                    )
-                })
-                .collect::<Vec<_>>()
-        } else {
-            let expr = match convert(col as *mut _, &mut query.cvt, &planner, &ctx) {
-                Ok(expr) => expr,
-                Err(err) => {
-                    panic!(
-                        "Failed to push down column required for local condition evaluation: {err}"
-                    );
-                }
-            };
-
-            vec![(expr, col)]
+        // Otherwise this is a standard column var or aggregate that needs to retrieved
+        // from the data source
+        let expr = match convert(col as *mut _, &mut query.cvt, &planner, &ctx) {
+            Ok(expr) => expr,
+            Err(err) => {
+                panic!("Failed to push down column required for local condition evaluation: {err}");
+            }
         };
 
-        for (expr, col) in exprs {
-            let col_alias = query.as_select_mut().unwrap().new_column_alias();
-            let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
+        let col_alias = query.as_select_mut().unwrap().new_column_alias();
+        let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
 
-            if apply_query_operation(&mut ctx, query.as_select_mut().unwrap(), query_op).is_none() {
-                panic!("Failed to push down column required for local condition evaluation: rejected by remote");
-            }
-
-            fdw_scan_list.push(col as *mut _);
+        if apply_query_operation(&mut ctx, query.as_select_mut().unwrap(), query_op).is_none() {
+            panic!("Failed to push down column required for local condition evaluation: rejected by remote");
         }
+
+        let tle = pg_sys::makeTargetEntry(
+            pg_sys::copyObjectImpl(col as *mut _) as *mut _,
+            (fdw_scan_list.len() + 1) as _,
+            ptr::null_mut(),
+            false,
+        );
+
+        fdw_scan_list.push(tle as *mut _);
     }
 
-    // Convert expr nodes to target entry list
-    let fdw_scan_list = pg_sys::add_to_flat_tlist(ptr::null_mut(), vec_to_pg_list(fdw_scan_list));
+    // Convert to pg list
+    let fdw_scan_list = vec_to_pg_list(fdw_scan_list);
 
     // Ensure outer plan generates tuples with the matching desc
     let mut outer_plan = outer_plan;
@@ -1121,20 +1150,15 @@ pub unsafe extern "C" fn get_foreign_plan(
     )
 }
 
-unsafe fn return_whole_rows(
+unsafe fn find_whole_row_vars(
     root: *mut PlannerInfo,
-    required_cols: &mut Vec<*mut Node>,
-) -> Vec<*mut pg_sys::RangeTblEntry> {
-    let (whole_rows, cols) = required_cols
+    required_cols: &Vec<*mut Node>,
+) -> Vec<(u32, *mut pg_sys::RangeTblEntry)> {
+    required_cols
         .iter()
-        .partition(|c| (*((**c) as *mut pg_sys::Var)).varattno == 0);
-
-    *required_cols = cols;
-
-    whole_rows
-        .into_iter()
-        .map(|r| (*(r as *mut pg_sys::Var)).varno)
-        .map(|varno| pg_sys::planner_rt_fetch(varno, root))
+        .filter(|c| is_whole_row(**c))
+        .map(|r| (*((*r) as *mut pg_sys::Var)).varno)
+        .map(|varno| (varno, pg_sys::planner_rt_fetch(varno, root)))
         .collect()
 }
 
@@ -1149,6 +1173,15 @@ unsafe fn pull_vars(nodes: impl std::iter::Iterator<Item = *mut Node>) -> Vec<*m
         })
         .flat_map(|i| PgList::<Node>::from_pg(i).iter_ptr().collect::<Vec<_>>())
         .collect::<Vec<_>>()
+}
+
+unsafe fn is_self_item_ptr(node: *mut Node) -> bool {
+    (*node).type_ == pg_sys::NodeTag_T_Var as u32
+        && (*(node as *mut pg_sys::Var)).varattno == pg_sys::SelfItemPointerAttributeNumber as i16
+}
+
+unsafe fn is_whole_row(node: *mut Node) -> bool {
+    (*node).type_ == pg_sys::NodeTag_T_Var as u32 && (*(node as *mut pg_sys::Var)).varattno == 0
 }
 
 #[pg_guard]
@@ -1250,8 +1283,6 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
     let tupdesc = (*slot).tts_tupleDescriptor;
     let nattrs = (*tupdesc).natts as usize;
 
-    assert!(row_structure.cols.len() == nattrs);
-
     // equivalent of ExecClearTuple(slot) (symbol is not exposed)
     (*(*slot).tts_ops).clear.unwrap()(slot);
 
@@ -1259,8 +1290,18 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
     (*slot).tts_values = pg_sys::palloc(nattrs * mem::size_of::<pg_sys::Datum>()) as *mut _;
     (*slot).tts_isnull = pg_sys::palloc(nattrs * mem::size_of::<bool>()) as *mut _;
 
-    // Read the next row into the tuple
-    for i in 0..nattrs {
+    // Keep track of the column we are reading from the data source
+    let mut col_idx = 0;
+    let mut has_row_reference = false;
+
+    for (attr_idx, attr) in attrs.iter().enumerate() {
+        // If it's a whole row reference we dont need to perform anything here.
+        // We first materalize the whole tuple slot then populate the attrs with copies
+        if attr.atttypid == pg_sys::RECORDOID {
+            has_row_reference = true;
+            continue;
+        }
+
         let data = ctx
             .read_result_data()
             .context("Failed to read data value")
@@ -1269,7 +1310,7 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         // Check if we have reached the last data value
         if data.is_none() {
             // If this is the first attribute we have reached the end so return an empty tuple
-            if i == 0 {
+            if attr_idx == 0 {
                 return slot;
             }
 
@@ -1279,14 +1320,55 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
 
         // Convert the retrieved value to a pg datum and store in the tuple
         into_datum(
-            attrs[i].atttypid,
-            &row_structure.cols[i].1,
+            attr.atttypid,
+            &row_structure.cols[col_idx].1,
             data.unwrap(),
-            (*slot).tts_isnull.add(i),
-            (*slot).tts_values.add(i),
+            (*slot).tts_isnull.add(attr_idx),
+            (*slot).tts_values.add(attr_idx),
         )
         .unwrap();
+
+        col_idx += 1;
     }
+
+    // If there is a whole-row reference we materialise it here
+    if has_row_reference {
+        let econtext = (*node).ss.ps.ps_ExprContext;
+
+        // Reconstruct row without system or record cols
+        let tuple_datum = {
+            let tupdesc = (*(*node).ss.ss_currentRelation).rd_att;
+            let nattrs = (*tupdesc).natts as usize;
+            let mut tts_values =
+                pg_sys::palloc(nattrs * mem::size_of::<pg_sys::Datum>()) as *mut pg_sys::Datum;
+            let mut tts_isnull = pg_sys::palloc(nattrs * mem::size_of::<bool>()) as *mut bool;
+            let mut i = 0;
+
+            for (attr_idx, attr) in attrs.iter().enumerate() {
+                if attr_idx <= 1 { // TODO
+                    continue;
+                }
+
+                *tts_values.add(i) = *(*slot).tts_values.add(attr_idx);
+                *tts_isnull.add(i) = *(*slot).tts_isnull.add(attr_idx);
+
+                i += 1;
+            }
+
+            let heap_tuple = pg_sys::heap_form_tuple(tupdesc, tts_values, tts_isnull);
+
+            pg_sys::heap_copy_tuple_as_datum(heap_tuple, tupdesc)
+        };
+
+        for (attr_idx, attr) in attrs.iter().enumerate() {
+            if attr.atttypid == pg_sys::RECORDOID {
+                *(*slot).tts_isnull.add(attr_idx) = false;
+                *(*slot).tts_values.add(attr_idx) = tuple_datum;
+            }
+        }
+    }
+
+    assert!(row_structure.cols.len() == col_idx);
 
     pg_sys::ExecStoreVirtualTuple(slot);
     slot
