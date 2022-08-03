@@ -103,7 +103,7 @@ impl MemoryQueryExecutor {
             let attrs = self.get_attrs(&insert.target.entity)?;
             let ctx = DataContext::Cell(DataValue::Null);
 
-            let row = attrs
+            let mut row = attrs
                 .iter()
                 .map(|a| {
                     (
@@ -116,6 +116,9 @@ impl MemoryQueryExecutor {
                 .map(|(t, a)| (t, a.and_then(|a| a.as_cell())))
                 .map(|(t, a)| a.and_then(|a| a.try_coerce_into(t)))
                 .collect::<Result<Vec<_>>>()?;
+
+            // Append null rowid
+            row.push(DataValue::Null);
 
             rows.push(row);
 
@@ -176,7 +179,7 @@ impl MemoryQueryExecutor {
     fn get_entity_data(&self, s: &sqlil::EntitySource) -> Result<Vec<Vec<DataValue>>> {
         self.data
             .with_data(&s.entity.entity_id, &s.entity.version_id, |rows| {
-                rows.clone()
+                Self::with_row_ids(rows.clone())
             })
             .ok_or(Error::msg("Could not find entity"))
     }
@@ -188,9 +191,30 @@ impl MemoryQueryExecutor {
     ) -> Result<()> {
         self.data
             .with_data_mut(&s.entity.entity_id, &s.entity.version_id, move |rows| {
-                cb(rows)
+                let mut rows_with_id = Self::with_row_ids(rows.clone());
+                cb(&mut rows_with_id)?;
+                *rows = Self::without_row_ids(rows_with_id);
+
+                Ok(())
             })
             .ok_or(Error::msg("Could not find entity"))?
+    }
+
+    /// Append a row id (the index of the row) to each row
+    fn with_row_ids(mut rows: Vec<Vec<DataValue>>) -> Vec<Vec<DataValue>> {
+        for (rowid, row) in rows.iter_mut().enumerate() {
+            row.push(DataValue::UInt64(rowid as _));
+        }
+
+        rows
+    }
+
+    fn without_row_ids(mut rows: Vec<Vec<DataValue>>) -> Vec<Vec<DataValue>> {
+        for (_, row) in rows.iter_mut().enumerate() {
+            row.remove(row.len() - 1);
+        }
+
+        rows
     }
 
     fn perform_join(
@@ -235,7 +259,7 @@ impl MemoryQueryExecutor {
         }
 
         if join.r#type.is_left() || join.r#type.is_full() {
-            let nulls = self.get_attrs(&join.target.entity)?.len();
+            let nulls = self.get_attrs(&join.target.entity)?.len() + 1;
             let nulls = iter::repeat(DataValue::Null)
                 .take(nulls)
                 .collect::<Vec<_>>();
@@ -249,7 +273,7 @@ impl MemoryQueryExecutor {
         }
 
         if join.r#type.is_right() || join.r#type.is_full() {
-            let nulls = self.get_attrs(&source.entity)?.len();
+            let nulls = self.get_attrs(&source.entity)?.len() + 1;
             let nulls = iter::repeat(DataValue::Null)
                 .take(nulls)
                 .collect::<Vec<_>>();
@@ -582,12 +606,17 @@ impl MemoryQueryExecutor {
         Ok(&entity.version().attributes)
     }
 
-    fn get_attr(&self, a: &sqlil::AttributeIdentifier) -> Result<&EntityAttributeConfig> {
+    fn get_attr(&self, a: &sqlil::AttributeIdentifier) -> Result<EntityAttributeConfig> {
         let entity = self.query.get_entity(&a.entity_alias)?;
+
+        if a.attribute_id == "ROWIDX" {
+            return Ok(EntityAttributeConfig::minimal("ROWIDX", DataType::UInt64));
+        }
 
         self.get_attrs(entity)?
             .iter()
             .find(|i| i.id == a.attribute_id)
+            .cloned()
             .ok_or(Error::msg("Could not find attr"))
     }
 
@@ -596,16 +625,23 @@ impl MemoryQueryExecutor {
             .query
             .get_entity_sources()
             .take_while(|e| e.alias != a.entity_alias)
-            .map(|e| self.get_attrs(&e.entity).unwrap().len())
+            // add +1 for the row id appended to each row
+            .map(|e| self.get_attrs(&e.entity).unwrap().len() + 1)
             .sum();
 
         let entity = self.query.get_entity(&a.entity_alias)?;
-        Ok(pos
-            + self
-                .get_attrs(entity)?
-                .iter()
-                .position(|i| i.id == a.attribute_id)
-                .ok_or(Error::msg("Could not find attr"))?)
+
+        if a.attribute_id == "ROWIDX" {
+            // Row id is appended to each row
+            Ok(pos + self.get_attrs(entity)?.len())
+        } else {
+            Ok(pos
+                + self
+                    .get_attrs(entity)?
+                    .iter()
+                    .position(|i| i.id == a.attribute_id)
+                    .ok_or(Error::msg("Could not find attr"))?)
+        }
     }
 }
 
@@ -1878,5 +1914,59 @@ mod tests {
                 )
             })
             .unwrap();
+    }
+
+    #[test]
+    fn test_memory_connector_executor_select_row_id() {
+        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        select
+            .cols
+            .push(("row_id".to_string(), sqlil::Expr::attr("people", "ROWIDX")));
+        select.cols.push((
+            "first_name".to_string(),
+            sqlil::Expr::attr("people", "first_name"),
+        ));
+        select.cols.push((
+            "last_name".to_string(),
+            sqlil::Expr::attr("people", "last_name"),
+        ));
+
+        let executor = create_executor(select, HashMap::new());
+        let results = executor.run().unwrap();
+
+        assert_eq!(
+            results,
+            MemoryResultSet::new(
+                vec![
+                    ("row_id".to_string(), DataType::UInt64),
+                    (
+                        "first_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    ),
+                    (
+                        "last_name".to_string(),
+                        DataType::Utf8String(StringOptions::default())
+                    )
+                ],
+                vec![
+                    vec![
+                        DataValue::UInt64(0),
+                        DataValue::from("Mary"),
+                        DataValue::from("Jane"),
+                    ],
+                    vec![
+                        DataValue::UInt64(1),
+                        DataValue::from("John"),
+                        DataValue::from("Smith"),
+                    ],
+                    vec![
+                        DataValue::UInt64(2),
+                        DataValue::from("Mary"),
+                        DataValue::from("Bennet"),
+                    ],
+                ]
+            )
+            .unwrap()
+        )
     }
 }
