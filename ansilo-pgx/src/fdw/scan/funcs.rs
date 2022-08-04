@@ -1733,9 +1733,6 @@ unsafe fn calculate_query_cost(
     query: &mut FdwQueryContext,
     planner: &PlannerContext,
 ) -> OperationCost {
-    // TODO: store retrieved rows in query
-    // use to calculate for join path
-    // continue with other paths
     let mut cost = query.base_cost.clone();
 
     let (remote_sel, remote_qual_cost) = calculate_cond_costs(planner, query.remote_conds.clone());
