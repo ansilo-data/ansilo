@@ -1000,7 +1000,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     };
 
     // First, pull out all cols/aggrefs required for the query (tlist, local conds and target expr's)
-    let mut required_cols = pull_vars(
+    let required_cols = pull_vars(
         result_tlist
             .iter_ptr()
             .map(|i| (*i).expr as *mut Node)
@@ -1014,22 +1014,8 @@ pub unsafe extern "C" fn get_foreign_plan(
             .chain(PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs).iter_ptr())
             .chain(PgList::<Node>::from_pg(fdw_recheck_quals).iter_ptr()),
     );
-
-    // If we find whole-row references we resolve those down to the columns in the base tables
-    for (varno, rte) in find_whole_row_vars(root, &mut required_cols) {
-        let rel = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
-
-        for att in rel.attrs() {
-            required_cols.push(pg_sys::makeVar(
-                varno,
-                att.attnum,
-                att.atttypid,
-                att.atttypmod,
-                att.attnum as _,
-                0,
-            ) as *mut Node);
-        }
-    }
+    
+    let mut required_cols = deduplicate_columns(required_cols);
 
     for (varno, vars) in find_row_id_vars(&required_cols) {
         // Retrieve the row id expr's from the data source
@@ -1068,7 +1054,22 @@ pub unsafe extern "C" fn get_foreign_plan(
         }
     }
 
-    // Deduplicate required columns
+    // If we find whole-row references we resolve those down to the columns in the base tables
+    for (varno, rte) in find_whole_row_vars(root, &mut required_cols) {
+        let rel = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
+
+        for att in rel.attrs() {
+            required_cols.push(pg_sys::makeVar(
+                varno,
+                att.attnum,
+                att.atttypid,
+                att.atttypmod,
+                att.attnum as _,
+                0,
+            ) as *mut Node);
+        }
+    }
+
     let required_cols = deduplicate_columns(required_cols);
 
     for col in required_cols {
@@ -1233,7 +1234,13 @@ unsafe fn deduplicate_columns(cols: Vec<*mut Node>) -> Vec<*mut Node> {
 }
 
 unsafe fn cols_are_equivalent(a: *mut pg_sys::Var, b: *mut pg_sys::Var) -> bool {
-    ((*a).varno, (*a).varattno) == ((*b).varno, (*b).varattno)
+    // HACK: If it is a row id var, we include the location in the comparison
+    // to disambiguate them if there are multiple row id's for a table.
+    if is_self_item_ptr(a as *mut _) {
+        ((*a).varno, (*a).varattno, (*a).location) == ((*b).varno, (*b).varattno, (*b).location)
+    } else {
+        ((*a).varno, (*a).varattno) == ((*b).varno, (*b).varattno)
+    }
 }
 
 #[pg_guard]
@@ -1387,34 +1394,6 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
     if has_row_reference {
         let econtext = (*node).ss.ps.ps_ExprContext;
 
-        // Reconstruct row without system or record cols
-        unsafe fn resconstruct_row_tuple_datum(
-            node: *mut ForeignScanState,
-            slot: *mut TupleTableSlot,
-            query: &FdwSelectQuery,
-            var_no: u32,
-        ) -> Datum {
-            let tupdesc = (*(*node).ss.ss_currentRelation).rd_att;
-            let nattrs = (*tupdesc).natts as usize;
-            let mut tts_values =
-                pg_sys::palloc(nattrs * mem::size_of::<pg_sys::Datum>()) as *mut pg_sys::Datum;
-            let mut tts_isnull = pg_sys::palloc(nattrs * mem::size_of::<bool>()) as *mut bool;
-
-            let attrs = (*tupdesc).attrs.as_slice(nattrs);
-            let res_cols = query.get_result_cols(var_no).unwrap();
-
-            for (attr_idx, attr) in attrs.iter().enumerate() {
-                // We subtract 1 from the resno (1-based) to get the index in the tts_* arrays
-                let res_idx = *res_cols.get(&(attr.attnum as _)).unwrap() - 1;
-                *tts_values.add(attr_idx) = *(*slot).tts_values.add(res_idx as _);
-                *tts_isnull.add(attr_idx) = *(*slot).tts_isnull.add(res_idx as _);
-            }
-
-            let heap_tuple = pg_sys::heap_form_tuple(tupdesc, tts_values, tts_isnull);
-
-            pg_sys::heap_copy_tuple_as_datum(heap_tuple, tupdesc)
-        };
-
         let query = query.as_select().unwrap();
 
         for (attr_idx, attr) in attrs.iter().enumerate() {
@@ -1431,6 +1410,34 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
 
     pg_sys::ExecStoreVirtualTuple(slot);
     slot
+}
+
+// Reconstruct row without system or record cols
+unsafe fn resconstruct_row_tuple_datum(
+    node: *mut ForeignScanState,
+    slot: *mut TupleTableSlot,
+    query: &FdwSelectQuery,
+    var_no: u32,
+) -> Datum {
+    let tupdesc = (*(*node).ss.ss_currentRelation).rd_att;
+    let nattrs = (*tupdesc).natts as usize;
+    let mut tts_values =
+        pg_sys::palloc(nattrs * mem::size_of::<pg_sys::Datum>()) as *mut pg_sys::Datum;
+    let mut tts_isnull = pg_sys::palloc(nattrs * mem::size_of::<bool>()) as *mut bool;
+
+    let attrs = (*tupdesc).attrs.as_slice(nattrs);
+    let res_cols = query.get_result_cols(var_no).unwrap();
+
+    for (attr_idx, attr) in attrs.iter().enumerate() {
+        // We subtract 1 from the resno (1-based) to get the index in the tts_* arrays
+        let res_idx = *res_cols.get(&(attr.attnum as _)).unwrap() - 1;
+        *tts_values.add(attr_idx) = *(*slot).tts_values.add(res_idx as _);
+        *tts_isnull.add(attr_idx) = *(*slot).tts_isnull.add(res_idx as _);
+    }
+
+    let heap_tuple = pg_sys::heap_form_tuple(tupdesc, tts_values, tts_isnull);
+
+    pg_sys::heap_copy_tuple_as_datum(heap_tuple, tupdesc)
 }
 
 /// Execute a local join execution plan for a foreign join

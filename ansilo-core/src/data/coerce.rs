@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use rust_decimal::{prelude::ToPrimitive, Decimal};
 
 use super::{DataType, DataValue};
 
@@ -29,7 +30,7 @@ impl DataValue {
             DataValue::UInt64(data) => Self::try_coerce_uint64(data, r#type)?,
             // DataValue::Float32(data) => Self::try_coerce_float32(data, r#type)?,
             // DataValue::Float64(data) => Self::try_coerce_float64(data, r#type)?,
-            // DataValue::Decimal(data) => Self::try_coerce_decimal(data, r#type)?,
+            DataValue::Decimal(data) => Self::try_coerce_decimal(data, r#type)?,
             // DataValue::JSON(data) => Self::try_coerce_json(data, r#type)?,
             // DataValue::Date(data) => Self::try_coerce_date(data, r#type)?,
             // DataValue::Time(data) => Self::try_coerce_time(data, r#type)?,
@@ -151,9 +152,7 @@ impl DataValue {
             DataType::Int32 if data >= i32::MIN as _ && data <= i32::MAX as _ => {
                 Self::Int32(data as i32)
             }
-            DataType::UInt32 if data >= 0 && data <= u32::MAX as _ => {
-                Self::UInt32(data as u32)
-            }
+            DataType::UInt32 if data >= 0 && data <= u32::MAX as _ => Self::UInt32(data as u32),
             _ => bail!(
                 "No type coercion exists from type 'int64' ({}) to {:?}",
                 data,
@@ -161,10 +160,35 @@ impl DataValue {
             ),
         })
     }
+
+    fn try_coerce_decimal(data: Decimal, r#type: &DataType) -> Result<DataValue> {
+        if let DataType::Decimal(_) = r#type {
+            return Ok(Self::Decimal(data));
+        }
+
+        if data.fract().is_zero() {
+            match r#type {
+                DataType::UInt64 => {
+                    if let Some(val) = data.to_u64() {
+                        return Ok(DataValue::UInt64(val));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        bail!(
+            "No type coercion exists from type 'decimal' ({}) to {:?}",
+            data,
+            r#type
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use rust_decimal::Decimal;
+
     use crate::data::*;
 
     #[test]
@@ -386,6 +410,20 @@ mod tests {
             .unwrap_err();
         DataValue::Int64(i64::MAX)
             .try_coerce_into(&DataType::Int32)
+            .unwrap_err();
+    }
+
+    #[test]
+    fn test_data_value_coerce_decimal() {
+        assert_eq!(
+            DataValue::Decimal(Decimal::new(100, 0))
+                .try_coerce_into(&DataType::UInt64)
+                .unwrap(),
+            DataValue::UInt64(100)
+        );
+
+        DataValue::Decimal(Decimal::new(313, 2))
+            .try_coerce_into(&DataType::UInt64)
             .unwrap_err();
     }
 }

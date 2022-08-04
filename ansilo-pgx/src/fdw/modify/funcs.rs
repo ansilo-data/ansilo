@@ -1,4 +1,7 @@
-use ansilo_core::{data::DataValue, sqlil};
+use ansilo_core::{
+    data::{DataType, DataValue},
+    sqlil,
+};
 use ansilo_pg::fdw::proto::*;
 use pgx::{
     pg_sys::{
@@ -46,6 +49,11 @@ pub unsafe extern "C" fn add_foreign_update_targets(
             pg_sys::InvalidOid,
             0,
         );
+
+        // HACK: we could have multiple row id vars using the same varattno
+        // We want to keep these distinct so we need a way to disambiguate them
+        // We use the location attribute to reference which row id var this is.
+        (*col).location = idx as _;
 
         // Append each rowid as a resjunk tle
         // We give each rowid a unique name in the format below so
@@ -314,16 +322,10 @@ pub unsafe extern "C" fn exec_foreign_insert(
     let mut query_input = vec![];
 
     for (idx, (param, type_oid)) in insert.params.iter().enumerate() {
-        let (is_null, datum) = slot_get_attr(slot, idx);
-
-        if is_null {
-            query_input.push((param.id, DataValue::Null));
-        } else {
-            let data_val = from_datum(*type_oid, datum).unwrap();
-            debug_assert_eq!(&data_val.r#type(), &param.r#type);
-
-            query_input.push((param.id, data_val));
-        }
+        query_input.push((
+            param.id,
+            slot_datum_into_data_val(slot, idx, *type_oid, &param.r#type),
+        ));
     }
 
     ctx.write_query_input_unordered(query_input).unwrap();
@@ -363,32 +365,18 @@ pub unsafe extern "C" fn exec_foreign_update(
 
     // We first bind the parameters for updating the row columns
     for (param, att_num, type_oid) in update.update_params.iter() {
-        let (is_null, datum) = slot_get_attr(slot, (att_num - 1) as _);
-
-        if is_null {
-            query_input.push((param.id, DataValue::Null));
-        } else {
-            let data_val = from_datum(*type_oid, datum).unwrap();
-            debug_assert_eq!(&data_val.r#type(), &param.r#type);
-
-            query_input.push((param.id, data_val));
-        }
+        query_input.push((
+            param.id,
+            slot_datum_into_data_val(slot, (att_num - 1) as _, *type_oid, &param.r#type),
+        ));
     }
 
     // Then bind the row id parameters (rowid's are stored as resjunk in the plan slot)
     for (param, att_num, type_oid) in update.rowid_params.iter() {
-        let (is_null, datum) = slot_get_attr(plan_slot, (att_num - 1) as _);
-
-        if is_null {
-            query_input.push((param.id, DataValue::Null));
-        } else {
-            let data_val = from_datum(*type_oid, datum)
-                .unwrap()
-                .try_coerce_into(&param.r#type)
-                .unwrap();
-
-            query_input.push((param.id, data_val));
-        }
+        query_input.push((
+            param.id,
+            slot_datum_into_data_val(plan_slot, (att_num - 1) as _, *type_oid, &param.r#type),
+        ));
     }
 
     ctx.write_query_input_unordered(query_input).unwrap();
@@ -474,4 +462,26 @@ pub unsafe extern "C" fn exec_foreign_truncate(
     restart_seqs: bool,
 ) {
     unimplemented!()
+}
+
+/// Retrieves a datum from a slot and converts it to the requested
+/// type for a query parameter
+unsafe fn slot_datum_into_data_val(
+    slot: *mut TupleTableSlot,
+    att_idx: usize,
+    type_oid: pg_sys::Oid,
+    param_type: &DataType,
+) -> DataValue {
+    let (is_null, datum) = slot_get_attr(slot, att_idx);
+
+    if is_null {
+        DataValue::Null
+    } else {
+        let data_val = from_datum(type_oid, datum)
+            .unwrap()
+            .try_coerce_into(param_type)
+            .unwrap();
+
+        data_val
+    }
 }

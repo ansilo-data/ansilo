@@ -80,10 +80,9 @@ impl<T: FromDatum + 'static> ParseDatum<T> for T {
     }
 }
 
-/// TODO: implement faster conversion using bit manipulation to translate across formats
+/// TODO[low]: implement faster conversion using bit manipulation to translate across formats
 unsafe fn from_numeric(datum: pg_sys::Datum) -> DataValue {
     // @see https://doxygen.postgresql.org/numeric_8h_source.html#l00059
-    //
     let numeric = pgx::Numeric::from_datum(datum, false).unwrap();
     let num_str = numeric.0;
 
