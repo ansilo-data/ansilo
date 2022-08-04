@@ -92,9 +92,9 @@ pub unsafe extern "C" fn plan_foreign_modify(
         panic!("WITH CHECK OPTION is currently not supported");
     }
 
-    // if !(*plan).returningLists.is_null() {
-    //     panic!("RETURNING clauses are currently not supported");
-    // }
+    if !(*plan).returningLists.is_null() {
+        panic!("RETURNING clauses are currently not supported");
+    }
 
     if (*plan).onConflictAction != pg_sys::OnConflictAction_ONCONFLICT_NONE {
         panic!("ON CONFLICT clause is currently not supported");
