@@ -617,7 +617,7 @@ impl MemoryQueryExecutor {
             .iter()
             .find(|i| i.id == a.attribute_id)
             .cloned()
-            .ok_or(Error::msg("Could not find attr"))
+            .ok_or_else(|| Error::msg(format!("Could not find attr: {:?}", a)))
     }
 
     fn get_attr_index(&self, a: &sqlil::AttributeIdentifier) -> Result<usize> {
@@ -640,7 +640,7 @@ impl MemoryQueryExecutor {
                     .get_attrs(entity)?
                     .iter()
                     .position(|i| i.id == a.attribute_id)
-                    .ok_or(Error::msg("Could not find attr"))?)
+                    .ok_or_else(|| Error::msg(format!("Could not find attr: {:?}", a)))?)
         }
     }
 }

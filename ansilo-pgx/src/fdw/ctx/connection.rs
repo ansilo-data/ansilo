@@ -1,5 +1,6 @@
 use std::{
     cmp,
+    collections::HashMap,
     os::unix::net::UnixStream,
     path::Path,
     sync::{Arc, Mutex},
@@ -153,6 +154,8 @@ impl FdwContext {
         Ok(query_input)
     }
 
+    /// Writes the supplied query params
+    /// This function assumes that the values are in the order expected by the query input structure
     pub fn write_query_input(&mut self, data: Vec<DataValue>) -> Result<()> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
 
@@ -165,15 +168,16 @@ impl FdwContext {
         Ok(())
     }
 
-    pub fn write_query_input_unordered(&mut self, mut data: Vec<(u32, DataValue)>) -> Result<()> {
+    /// Writes the supplied query params
+    /// This will ensure the correct ordering of the query parameters by sorting them
+    /// using the parameter id's in the supplied vec.
+    pub fn write_query_input_unordered(&mut self, data: Vec<(u32, DataValue)>) -> Result<()> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
         let mut ordered_params = vec![];
+        let mut data = data.into_iter().collect::<HashMap<_, _>>();
 
-        for (pid, _) in writer.get_structure().params.iter() {
-            ordered_params.push(
-                data.remove(data.iter().position(|(id, _)| *id == *pid).unwrap())
-                    .1,
-            );
+        for (param_id, _) in writer.get_structure().params.iter() {
+            ordered_params.push(data.remove(param_id).unwrap());
         }
 
         self.write_query_input(ordered_params)

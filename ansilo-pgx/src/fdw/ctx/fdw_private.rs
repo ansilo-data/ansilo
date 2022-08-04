@@ -72,7 +72,7 @@ pub(crate) unsafe fn into_fdw_private_scan(
     let mut list = PgList::<c_void>::new();
 
     list.push(ctx.into_pg() as *mut _);
-    list.push(PgBox::new(query).into_pg() as *mut _);
+    list.push(query.into_pg() as *mut _);
     list.push(PgBox::new(scan).into_pg() as *mut _);
 
     list.into_pg()

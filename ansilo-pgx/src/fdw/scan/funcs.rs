@@ -12,6 +12,7 @@ use ansilo_pg::fdw::{
         SelectQueryOperation, ServerMessage,
     },
 };
+use itertools::Itertools;
 use pgx::{
     pg_sys::{
         add_path, shm_toc, EquivalenceClass, EquivalenceMember, ForeignPath, ForeignScan,
@@ -29,7 +30,7 @@ use crate::{
         parse_entity_version_id_from_foreign_table, parse_entity_version_id_from_rel,
         ConversionContext,
     },
-    util::{list::vec_to_pg_list, table::PgTable},
+    util::{list::vec_to_pg_list, string::to_pg_cstr, table::PgTable},
 };
 
 /// Default cost values in case they cant be estimated
@@ -1030,32 +1031,19 @@ pub unsafe extern "C" fn get_foreign_plan(
         }
     }
 
-    // If this in an update/delete command we will need to include the row id's
-    if let pg_sys::CmdType_CMD_UPDATE | pg_sys::CmdType_CMD_DELETE = (*(*root).parse).commandType {
-        let row_ids = match ctx.get_row_id_exprs(query.base_rel_alias()) {
+    for (varno, vars) in find_row_id_vars(&required_cols) {
+        // Retrieve the row id expr's from the data source
+        let alias = query.cvt.register_alias(varno);
+        let row_ids = match ctx.get_row_id_exprs(alias) {
             Ok(r) => r,
             Err(err) => panic!("Failed to get row ID's for table: {err}"),
         };
 
-        let exprs = row_ids
-            .into_iter()
-            .enumerate()
-            .map(|(idx, (expr, r#type))| {
-                (
-                    expr,
-                    pg_sys::makeVar(
-                        0, // TODO
-                        pg_sys::SelfItemPointerAttributeNumber as _,
-                        into_pg_type(&r#type).unwrap(),
-                        -1,
-                        pg_sys::InvalidOid,
-                        0,
-                    ) as *mut Node,
-                )
-            })
-            .collect::<Vec<_>>();
+        // There must be the correct number of vars in the outer plan tlist
+        // This is ensured by add_foreign_update_targets
+        assert_eq!(row_ids.len(), vars.len());
 
-        for (expr, col) in exprs {
+        for (idx, (expr, r#type)) in row_ids.into_iter().enumerate() {
             let col_alias = query.as_select_mut().unwrap().new_column_alias();
             let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
 
@@ -1063,10 +1051,16 @@ pub unsafe extern "C" fn get_foreign_plan(
                 panic!("Failed to push down column required for local condition evaluation: rejected by remote");
             }
 
+            // Append each rowid as a resjunk tle
+            // We give each rowid a unique name in the format below so
+            // that when planning our table modification, it can find
+            // the appropriate tle's in the subplan output tlist
+            let res_name = to_pg_cstr(&format!("ctid_ansilo_{idx}")).unwrap();
+
             let tle = pg_sys::makeTargetEntry(
-                pg_sys::copyObjectImpl(col as *mut _) as *mut _,
+                vars[idx] as *mut _,
                 (fdw_scan_list.len() + 1) as _,
-                ptr::null_mut(),
+                res_name,
                 true,
             );
 
@@ -1074,24 +1068,32 @@ pub unsafe extern "C" fn get_foreign_plan(
         }
     }
 
+    // Deduplicate required columns
+    let required_cols = deduplicate_columns(required_cols);
+
     for col in required_cols {
-        // If we already have added this col for selection, skip it
-        if fdw_scan_list
-            .iter()
-            .any(|i| pg_sys::equal((*i) as *mut _, col as *mut _))
-        {
+        // If this is a row id col, we have already handled this earlier
+        if is_self_item_ptr(col) {
             continue;
         }
 
         // If this is a whole row reference we have already handled this earlier
         // so just add straight to the tlist
         if is_whole_row(col) {
+            let res_no = (fdw_scan_list.len() + 1);
             let tle = pg_sys::makeTargetEntry(
                 pg_sys::copyObjectImpl(col as *mut _) as *mut _,
-                (fdw_scan_list.len() + 1) as _,
+                res_no as _,
                 ptr::null_mut(),
                 false,
             );
+
+            // We record which varno this var references so it can be reconstructed
+            // during the scan
+            query
+                .as_select_mut()
+                .unwrap()
+                .record_result_var_no(res_no as _, (*(col as *mut pg_sys::Var)).varno);
 
             fdw_scan_list.push(tle as *mut _);
             continue;
@@ -1113,9 +1115,22 @@ pub unsafe extern "C" fn get_foreign_plan(
             panic!("Failed to push down column required for local condition evaluation: rejected by remote");
         }
 
+        let res_no = (fdw_scan_list.len() + 1) as _;
+
+        // We keep track of the mapping of the column id's to result indices
+        // So we can later reconstruct whole-row references during the scan
+        if (*col).type_ == pg_sys::NodeTag_T_Var {
+            let var = col as *mut pg_sys::Var;
+            query
+                .as_select_mut()
+                .unwrap()
+                .record_result_col(res_no, var);
+        }
+
+        // Construct a tle for the output of this column
         let tle = pg_sys::makeTargetEntry(
             pg_sys::copyObjectImpl(col as *mut _) as *mut _,
-            (fdw_scan_list.len() + 1) as _,
+            res_no as _,
             ptr::null_mut(),
             false,
         );
@@ -1162,6 +1177,14 @@ unsafe fn find_whole_row_vars(
         .collect()
 }
 
+unsafe fn find_row_id_vars(required_cols: &Vec<*mut Node>) -> HashMap<u32, Vec<*mut pg_sys::Var>> {
+    required_cols
+        .iter()
+        .filter(|c| is_self_item_ptr(**c))
+        .map(|r| (*r) as *mut pg_sys::Var)
+        .into_group_map_by(|var| (**var).varno)
+}
+
 /// Retrieves all vars (columns) and aggref's from the supplied node iterator
 unsafe fn pull_vars(nodes: impl std::iter::Iterator<Item = *mut Node>) -> Vec<*mut Node> {
     nodes
@@ -1182,6 +1205,35 @@ unsafe fn is_self_item_ptr(node: *mut Node) -> bool {
 
 unsafe fn is_whole_row(node: *mut Node) -> bool {
     (*node).type_ == pg_sys::NodeTag_T_Var as u32 && (*(node as *mut pg_sys::Var)).varattno == 0
+}
+
+unsafe fn deduplicate_columns(cols: Vec<*mut Node>) -> Vec<*mut Node> {
+    let mut unique = vec![];
+
+    for col in cols {
+        if (*col).type_ == pg_sys::NodeTag_T_Var {
+            if unique.iter().any(|i: &*mut Node| {
+                (**i).type_ == pg_sys::NodeTag_T_Var && cols_are_equivalent((*i) as _, col as _)
+            }) {
+                continue;
+            }
+        } else {
+            if unique
+                .iter()
+                .any(|i| pg_sys::equal((*i) as *mut _, col as *mut _))
+            {
+                continue;
+            }
+        }
+
+        unique.push(col);
+    }
+
+    unique
+}
+
+unsafe fn cols_are_equivalent(a: *mut pg_sys::Var, b: *mut pg_sys::Var) -> bool {
+    ((*a).varno, (*a).varattno) == ((*b).varno, (*b).varattno)
 }
 
 #[pg_guard]
@@ -1278,7 +1330,7 @@ unsafe fn send_query_params(
 pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *mut TupleTableSlot {
     let slot = (*node).ss.ss_ScanTupleSlot;
 
-    let (mut ctx, _, scan) = from_fdw_private_scan((*node).fdw_state as _);
+    let (mut ctx, mut query, scan) = from_fdw_private_scan((*node).fdw_state as _);
     let row_structure = scan.row_structure.as_ref().unwrap();
     let tupdesc = (*slot).tts_tupleDescriptor;
     let nattrs = (*tupdesc).natts as usize;
@@ -1336,23 +1388,26 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         let econtext = (*node).ss.ps.ps_ExprContext;
 
         // Reconstruct row without system or record cols
-        let tuple_datum = {
+        unsafe fn resconstruct_row_tuple_datum(
+            node: *mut ForeignScanState,
+            slot: *mut TupleTableSlot,
+            query: &FdwSelectQuery,
+            var_no: u32,
+        ) -> Datum {
             let tupdesc = (*(*node).ss.ss_currentRelation).rd_att;
             let nattrs = (*tupdesc).natts as usize;
             let mut tts_values =
                 pg_sys::palloc(nattrs * mem::size_of::<pg_sys::Datum>()) as *mut pg_sys::Datum;
             let mut tts_isnull = pg_sys::palloc(nattrs * mem::size_of::<bool>()) as *mut bool;
-            let mut i = 0;
+
+            let attrs = (*tupdesc).attrs.as_slice(nattrs);
+            let res_cols = query.get_result_cols(var_no).unwrap();
 
             for (attr_idx, attr) in attrs.iter().enumerate() {
-                if attr_idx <= 1 { // TODO
-                    continue;
-                }
-
-                *tts_values.add(i) = *(*slot).tts_values.add(attr_idx);
-                *tts_isnull.add(i) = *(*slot).tts_isnull.add(attr_idx);
-
-                i += 1;
+                // We subtract 1 from the resno (1-based) to get the index in the tts_* arrays
+                let res_idx = *res_cols.get(&(attr.attnum as _)).unwrap() - 1;
+                *tts_values.add(attr_idx) = *(*slot).tts_values.add(res_idx as _);
+                *tts_isnull.add(attr_idx) = *(*slot).tts_isnull.add(res_idx as _);
             }
 
             let heap_tuple = pg_sys::heap_form_tuple(tupdesc, tts_values, tts_isnull);
@@ -1360,10 +1415,14 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
             pg_sys::heap_copy_tuple_as_datum(heap_tuple, tupdesc)
         };
 
+        let query = query.as_select().unwrap();
+
         for (attr_idx, attr) in attrs.iter().enumerate() {
             if attr.atttypid == pg_sys::RECORDOID {
+                let var_no = query.get_result_var_no(attr.attnum as _).unwrap();
                 *(*slot).tts_isnull.add(attr_idx) = false;
-                *(*slot).tts_values.add(attr_idx) = tuple_datum;
+                *(*slot).tts_values.add(attr_idx) =
+                    resconstruct_row_tuple_datum(node, slot, query, var_no);
             }
         }
     }

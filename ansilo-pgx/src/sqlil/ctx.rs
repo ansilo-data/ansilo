@@ -38,6 +38,11 @@ impl ConversionContext {
         self.aliases.get(&relid).map(|i| i.as_str())
     }
 
+    /// Gets all rel id's and aliases in the query
+    pub(crate) fn aliases(&self) -> &HashMap<u32, String> {
+        &self.aliases
+    }
+
     /// Registers a new param or retrieves the existing param associated to the supplied node
     pub(crate) unsafe fn register_param(&mut self, node: *mut Node) -> u32 {
         if let Some((_, param_id)) = self

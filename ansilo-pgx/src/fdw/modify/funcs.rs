@@ -18,7 +18,7 @@ use crate::{
         },
     },
     sqlil::{from_datum, from_pg_type, into_pg_type},
-    util::{table::PgTable, tuple::slot_get_attr},
+    util::{string::to_pg_cstr, table::PgTable, tuple::slot_get_attr},
 };
 
 #[pg_guard]
@@ -28,7 +28,36 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     target_rte: *mut RangeTblEntry,
     target_relation: Relation,
 ) {
-    // Noop here. This is handled in get_foriegn_plan for ForeignScan
+    // TODO: See how we can avoid having multiple connections to ansilo within the same plan tree
+    // This will be vital once we start dealing with foreign locking or transactions
+    let mut ctx = common::connect((*target_relation).rd_id);
+
+    let row_ids = match ctx.get_row_id_exprs("unused") {
+        Ok(r) => r,
+        Err(err) => panic!("Failed to get row ID's for table: {err}"),
+    };
+
+    for (idx, (expr, r#type)) in row_ids.into_iter().enumerate() {
+        let col = pg_sys::makeVar(
+            rtindex,
+            pg_sys::SelfItemPointerAttributeNumber as _,
+            into_pg_type(&r#type).unwrap(),
+            -1,
+            pg_sys::InvalidOid,
+            0,
+        );
+
+        // Append each rowid as a resjunk tle
+        // We give each rowid a unique name in the format below so
+        // that when planning our table modification, it can find
+        // the appropriate tle's in the subplan output tlist
+        let res_name = to_pg_cstr(&format!("ctid_ansilo_{idx}")).unwrap();
+
+        // Register it as a row-identity column needed by this rel
+        pg_sys::add_row_identity_var(root, col, rtindex, res_name as *const _);
+    }
+
+    ctx.disconnect().unwrap();
 }
 
 #[pg_guard]
@@ -63,7 +92,7 @@ pub unsafe extern "C" fn plan_foreign_modify(
         panic!("ON CONFLICT clause is currently not supported");
     }
 
-    // TODO: See how we can avoid having multipe connections to ansilo within the same plan tree
+    // TODO: See how we can avoid having multiple connections to ansilo within the same plan tree
     // This will be vital once we start dealing with foreign locking or transactions
     let mut ctx = common::connect(table.rd_id);
 
@@ -118,6 +147,7 @@ unsafe fn plan_foreign_update(
     table: PgTable,
 ) -> FdwQueryContext {
     let mut query = FdwQueryContext::update(table.rd_id);
+    // let subplan = (plan *mut pg_sys::PlanState
 
     // Create an insert query to insert a single row
     ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Update)
@@ -163,11 +193,14 @@ unsafe fn plan_foreign_update(
 
         let update = query.as_update_mut().unwrap();
         update.remote_ops.push(op);
-        update.update_params.push((param, att_type));
+        update
+            .update_params
+            .push((param, att.attnum as _, att_type));
     }
 
     // Add a conditions to filter the row to by the row id
     let row_id_exprs = ctx.get_row_id_exprs(query.base_rel_alias()).unwrap();
+
     for (expr, r#type) in row_id_exprs.into_iter() {
         let param = query.create_param(r#type.clone());
         let op = UpdateQueryOperation::AddWhere(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
@@ -183,11 +216,16 @@ unsafe fn plan_foreign_update(
             }
         }
 
+        // We cannot determine the attr no at this stage in planning as
+        // it dependent on the output subplan tlist.
+        // We put a placeholder for now and defer until begin_foreign_modify
+        let attnum = 0;
+
         let update = query.as_update_mut().unwrap();
         update.remote_ops.push(op);
         update
             .rowid_params
-            .push((param, into_pg_type(&r#type).unwrap()))
+            .push((param, attnum, into_pg_type(&r#type).unwrap()))
     }
 
     query
@@ -213,11 +251,37 @@ pub unsafe extern "C" fn begin_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     eflags: ::std::os::raw::c_int,
 ) {
-    let (mut ctx, _query, _state) = from_fdw_private_modify(fdw_private);
+    let (mut ctx, mut query, _state) = from_fdw_private_modify(fdw_private);
+
+    // If this is an UPDATE/DELETE query we need to find the attr no's for the row id's
+    // from the subplan tlist
+    let row_id_params = match &mut query.q {
+        FdwQueryType::Update(q) => Some(&mut q.rowid_params),
+        FdwQueryType::Delete(q) => todo!(),
+        _ => None,
+    };
+
+    if let Some(row_id_params) = row_id_params {
+        // Here we find the attr no's of the row id's from the subplan
+        // This should be output in the tlist with names using the format below.
+        // @see get_foreign_plan function.
+        let subplan = (*(*(mtstate as *mut pg_sys::PlanState)).lefttree).plan;
+
+        for (idx, (param, attnum, r#type)) in row_id_params.iter_mut().enumerate() {
+            let num = pg_sys::ExecFindJunkAttributeInTlist(
+                (*subplan).targetlist,
+                to_pg_cstr(&format!("ctid_ansilo_{idx}")).unwrap(),
+            );
+
+            if num == pg_sys::InvalidAttrNumber as i16 {
+                panic!("Unable to find row id #{} entry in subplan tlist", idx + 1)
+            }
+
+            *attnum = num as _;
+        }
+    }
 
     ctx.prepare_query().unwrap();
-
-    // (*rinfo).ri
 
     (*rinfo).ri_FdwState = fdw_private as *mut _;
 }
@@ -297,15 +361,23 @@ pub unsafe extern "C" fn exec_foreign_update(
     let update = query.as_update().unwrap();
     let mut query_input = vec![];
 
-    // We assume the rowid's are the first
-    // as we ensure this is the case in get_foreign_plan
-    let all_params = update
-        .rowid_params
-        .iter()
-        .chain(update.update_params.iter());
-    
-    for (idx, (param, type_oid)) in all_params.enumerate() {
-        let (is_null, datum) = slot_get_attr(slot, idx);
+    // We first bind the parameters for updating the row columns
+    for (param, att_num, type_oid) in update.update_params.iter() {
+        let (is_null, datum) = slot_get_attr(slot, (att_num - 1) as _);
+
+        if is_null {
+            query_input.push((param.id, DataValue::Null));
+        } else {
+            let data_val = from_datum(*type_oid, datum).unwrap();
+            debug_assert_eq!(&data_val.r#type(), &param.r#type);
+
+            query_input.push((param.id, data_val));
+        }
+    }
+
+    // Then bind the row id parameters (rowid's are stored as resjunk in the plan slot)
+    for (param, att_num, type_oid) in update.rowid_params.iter() {
+        let (is_null, datum) = slot_get_attr(plan_slot, (att_num - 1) as _);
 
         if is_null {
             query_input.push((param.id, DataValue::Null));
