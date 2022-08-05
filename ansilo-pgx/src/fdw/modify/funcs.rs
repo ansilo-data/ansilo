@@ -1,3 +1,5 @@
+use std::{os::raw::c_int, ptr};
+
 use ansilo_core::{
     data::{DataType, DataValue},
     sqlil,
@@ -5,9 +7,9 @@ use ansilo_core::{
 use ansilo_pg::fdw::proto::*;
 use pgx::{
     pg_sys::{
-        DropBehavior, EState, ExecRowMark, ForeignScanState, Index, List, LockClauseStrength,
-        ModifyTable, ModifyTableState, PlannerInfo, RangeTblEntry, Relation, ResultRelInfo,
-        RowMarkType, TupleTableSlot,
+        DropBehavior, EState, ExecRowMark, ForeignScan, ForeignScanState, Index, List,
+        LockClauseStrength, ModifyTable, ModifyTableState, Plan, PlanState, PlannerInfo,
+        RangeTblEntry, Relation, ResultRelInfo, RowMarkType, TupleTableSlot,
     },
     *,
 };
@@ -16,11 +18,12 @@ use crate::{
     fdw::{
         common,
         ctx::{
-            from_fdw_private_modify, into_fdw_private_modify, FdwContext, FdwModifyContext,
-            FdwQueryContext, FdwQueryType,
+            from_fdw_private_modify, from_fdw_private_rel, into_fdw_private_modify, FdwContext,
+            FdwModifyContext, FdwQueryContext, FdwQueryType, FdwScanContext, FdwSelectQuery,
+            PlannerContext,
         },
     },
-    sqlil::{from_datum, from_pg_type, into_pg_type},
+    sqlil::{convert, from_datum, from_pg_type, into_pg_type},
     util::{string::to_pg_cstr, table::PgTable, tuple::slot_get_attr},
 };
 
@@ -83,10 +86,6 @@ pub unsafe extern "C" fn plan_foreign_modify(
     result_relation: Index,
     subplan_index: ::std::os::raw::c_int,
 ) -> *mut List {
-    let rte = pg_sys::planner_rt_fetch(result_relation, root);
-
-    let table = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
-
     // Currently we do not support WITH CHECK OPTION
     if !(*plan).withCheckOptionLists.is_null() {
         panic!("WITH CHECK OPTION is currently not supported");
@@ -99,6 +98,10 @@ pub unsafe extern "C" fn plan_foreign_modify(
     if (*plan).onConflictAction != pg_sys::OnConflictAction_ONCONFLICT_NONE {
         panic!("ON CONFLICT clause is currently not supported");
     }
+
+    let rte = pg_sys::planner_rt_fetch(result_relation, root);
+
+    let table = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
 
     // TODO: See how we can avoid having multiple connections to ansilo within the same plan tree
     // This will be vital once we start dealing with foreign locking or transactions
@@ -311,7 +314,7 @@ pub unsafe extern "C" fn begin_foreign_modify(
         // Here we find the attr no's of the row id's from the subplan
         // This should be output in the tlist with names using the format below.
         // @see get_foreign_plan function.
-        let subplan = (*(*(mtstate as *mut pg_sys::PlanState)).lefttree).plan;
+        let subplan = (*outer_plan_state(mtstate as *mut _)).plan;
 
         for (idx, (_, attnum, _)) in row_id_params.iter_mut().enumerate() {
             let num = pg_sys::ExecFindJunkAttributeInTlist(
@@ -468,8 +471,179 @@ pub unsafe extern "C" fn plan_direct_modify(
     result_relation: Index,
     subplan_index: ::std::os::raw::c_int,
 ) -> bool {
-    // TODO
-    return false;
+    // Currently, we do not support RETURNING in direct modifications
+    if !(*plan).returningLists.is_null() {
+        return false;
+    }
+
+    // We do not support conflict resolution in direct modifications
+    if (*plan).onConflictAction != pg_sys::OnConflictAction_ONCONFLICT_NONE {
+        return false;
+    }
+
+    // Try find the matching foreign scan node
+    // which outputs the rows to be modified
+    let foreign_scan = find_modify_table_subplan(root, plan, result_relation, subplan_index);
+
+    if foreign_scan.is_null() {
+        return false;
+    }
+
+    // If any quals need to be locally evaluated we cannot perform
+    // the modification remotely
+    if !(*foreign_scan).scan.plan.qual.is_null() {
+        return false;
+    }
+
+    let (ctx, inner_select, planner) = from_fdw_private_rel((*foreign_scan).fdw_private);
+
+    // Similarly if there are local conds for evaluation we
+    // cannot perform this remotely
+    if !inner_select.local_conds.is_empty() {
+        return false;
+    }
+
+    // The only operations we support for direct modifications
+    // are WHERE clauses
+    if inner_select
+        .as_select()
+        .unwrap()
+        .remote_ops
+        .iter()
+        .any(|op| !op.is_add_column() && !op.is_add_where())
+    {
+        return false;
+    }
+
+    let rte = pg_sys::planner_rt_fetch(result_relation, root);
+    let planner =
+        PlannerContext::base_rel(root, *(*root).simple_rel_array.add(result_relation as _));
+
+    let table = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
+
+    // TODO: See how we can avoid having multiple connections to ansilo within the same plan tree
+    // This will be vital once we start dealing with foreign locking or transactions
+    let mut ctx = common::connect(table.rd_id);
+
+    let query = match (*plan).operation {
+        pg_sys::CmdType_CMD_UPDATE => plan_direct_foreign_update(
+            &mut ctx,
+            root,
+            plan,
+            result_relation,
+            &planner,
+            &inner_select,
+            table,
+        ),
+        // pg_sys::CmdType_CMD_DELETE => {
+        //     plan_direct_foreign_delete(&mut ctx, root, plan, result_relation, planner, select)
+        // }
+        _ => return false,
+    };
+
+    let query = match query {
+        Some(q) => q,
+        None => return false,
+    };
+
+    // Update the scan operation and result relation info
+    (*foreign_scan).operation = (*plan).operation;
+    (*foreign_scan).resultRelation = result_relation;
+
+    // Update join relationed fields
+    if (*foreign_scan).scan.scanrelid == 0 {
+        (*foreign_scan).scan.plan.lefttree = ptr::null_mut();
+    }
+
+    // Update the fdw_private state with the modification query state
+    (*foreign_scan).fdw_private = into_fdw_private_modify(ctx, query, FdwModifyContext::new());
+
+    return true;
+}
+
+unsafe fn plan_direct_foreign_update(
+    ctx: &mut PgBox<FdwContext>,
+    root: *mut PlannerInfo,
+    plan: *mut ModifyTable,
+    result_relation: Index,
+    planner: &PlannerContext,
+    inner_select: &FdwQueryContext,
+    table: PgTable,
+) -> Option<FdwQueryContext> {
+    let mut query = FdwQueryContext::update(table.rd_id);
+
+    // Create an update query to update a single row
+    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Update)
+        .unwrap();
+
+    // The expressions of concern are the first N columns of the processed
+    // targetlist, where N is the length of the rel's update_colnos.
+    let mut processed_tlist = ptr::null_mut();
+    let mut target_attrs = ptr::null_mut();
+    pg_sys::get_translated_update_targetlist(
+        root,
+        result_relation,
+        &mut processed_tlist,
+        &mut target_attrs,
+    );
+    let mut processed_tlist = PgList::<pg_sys::TargetEntry>::from_pg(processed_tlist);
+    let mut target_attrs = PgList::<c_int>::from_pg(target_attrs);
+
+    for (tle, attno) in processed_tlist.iter_ptr().zip(target_attrs.iter_int()) {
+        if attno <= pg_sys::InvalidAttrNumber as _ {
+            panic!("system-column update is not supported");
+        }
+
+        let col_attr = table.attrs().find(|i| i.attnum == attno as i16)?;
+
+        // Try convert the tle expr to sqlil, if this fails we bail out
+        let expr = match convert((*tle).expr as *mut _, &mut query.cvt, planner, ctx) {
+            Ok(expr) => expr,
+            Err(_) => return None,
+        };
+
+        // Try apply this as a SET expression to the update query
+        let op = UpdateQueryOperation::AddSet((col_attr.name().to_string(), expr));
+
+        match ctx.apply_query_op(op.clone().into()).unwrap() {
+            QueryOperationResult::Ok(_) => {}
+            QueryOperationResult::Unsupported => {
+                return None;
+            }
+        }
+
+        query.as_update_mut().unwrap().remote_ops.push(op);
+    }
+
+    // We apply the remote conditions of the inner select query to the update query
+    for remote_cond in inner_select.remote_conds.iter().cloned() {
+        // Try convert the tle expr to sqlil, if this fails we bail out
+        let expr = match convert(
+            (*remote_cond).clause as *mut _,
+            &mut query.cvt,
+            planner,
+            ctx,
+        ) {
+            Ok(expr) => expr,
+            Err(_) => return None,
+        };
+
+        // Try push down the where clause
+        let op = UpdateQueryOperation::AddWhere(expr);
+
+        match ctx.apply_query_op(op.clone().into()).unwrap() {
+            QueryOperationResult::Ok(_) => {}
+            QueryOperationResult::Unsupported => {
+                return None;
+            }
+        }
+
+        query.remote_conds.push(remote_cond);
+        query.as_update_mut().unwrap().remote_ops.push(op);
+    }
+
+    // If we made it this far, we have been able to push down the entire update query
+    Some(query)
 }
 
 #[pg_guard]
@@ -477,17 +651,58 @@ pub unsafe extern "C" fn begin_direct_modify(
     node: *mut ForeignScanState,
     eflags: ::std::os::raw::c_int,
 ) {
-    unimplemented!()
+    // Skip if EXPLAIN query
+    if eflags & pg_sys::EXEC_FLAG_EXPLAIN_ONLY as i32 != 0 {
+        return;
+    }
+
+    let plan = (*node).ss.ps.plan as *mut ForeignScan;
+    let (mut ctx, mut query, state) = from_fdw_private_modify((*plan).fdw_private);
+
+    let input_structure = ctx.prepare_query().unwrap();
+
+    // Send query params, if any
+    if !input_structure.params.is_empty() {
+        crate::fdw::scan::send_query_params(
+            &mut ctx,
+            &mut FdwScanContext::new(),
+            &query,
+            &input_structure,
+            node,
+        );
+    }
+
+    let row_structure = ctx.execute_query().unwrap();
+
+    (*node).fdw_state = into_fdw_private_modify(ctx, query.clone(), state.clone()) as *mut _;
 }
 
 #[pg_guard]
 pub unsafe extern "C" fn iterate_direct_modify(node: *mut ForeignScanState) -> *mut TupleTableSlot {
-    unimplemented!()
+    let (mut ctx, _query, _state) = from_fdw_private_modify((*node).fdw_state as *mut _);
+
+    // Execute the direct modification
+    ctx.execute_query().unwrap();
+
+    // Currently, we do not support RETURNING data from direct modifications
+    // So we just clear the tuple and return.
+    // equivalent of ExecClearTuple(slot) (symbol is not exposed
+    let slot = (*node).ss.ss_ScanTupleSlot;
+    (*(*slot).tts_ops).clear.unwrap()(slot);
+
+    return slot;
 }
 
 #[pg_guard]
 pub unsafe extern "C" fn end_direct_modify(node: *mut ForeignScanState) {
-    unimplemented!()
+    // Check if this is an EXPLAIN query and skip if so
+    if (*node).fdw_state.is_null() {
+        return;
+    }
+
+    let (mut ctx, _, _) = from_fdw_private_modify((*node).fdw_state as _);
+
+    ctx.disconnect().unwrap();
 }
 
 #[pg_guard]
@@ -551,4 +766,72 @@ unsafe fn slot_datum_into_data_val(
 
         data_val
     }
+}
+
+/// Finds a matching foreign scan node for a modify table node
+/// used to try perform direct modification of the data source.
+///
+/// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a0fcf6729b47c456eec40d026d091255b
+unsafe fn find_modify_table_subplan(
+    root: *mut PlannerInfo,
+    plan: *mut ModifyTable,
+    rtindex: Index,
+    subplan_index: c_int,
+) -> *mut ForeignScan {
+    let mut subplan = outer_plan(plan as *mut _);
+
+    // The cases we support are (1) the desired ForeignScan is the immediate
+    // child of ModifyTable, or (2) it is the subplan_index'th child of an
+    // Append node that is the immediate child of ModifyTable.  There is no
+    // point in looking further down, as that would mean that local joins are
+    // involved, so we can't do the update directly.
+    //
+    // There could be a Result atop the Append too, acting to compute the
+    // UPDATE targetlist values.  We ignore that here; the tlist will be
+    // checked by our caller.
+    //
+    // In principle we could examine all the children of the Append, but it's
+    // currently unlikely that the core planner would generate such a plan
+    // with the children out-of-order.  Moreover, such a search risks costing
+    // O(N^2) time when there are a lot of children.
+    //
+    if (*subplan).type_ == pg_sys::NodeTag_T_Append {
+        let appendplan = subplan as *mut pg_sys::Append;
+        let appendlist = PgList::<Plan>::from_pg((*appendplan).appendplans);
+
+        if subplan_index < appendlist.len() as _ {
+            subplan = appendlist.get_ptr(subplan_index as _).unwrap();
+        }
+    } else if (*subplan).type_ == pg_sys::NodeTag_T_Result
+        && !outer_plan(subplan as *mut _).is_null()
+        && (*outer_plan(subplan as *mut _)).type_ == pg_sys::NodeTag_T_Append
+    {
+        let appendplan = outer_plan(subplan as *mut _) as *mut pg_sys::Append;
+        let appendlist = PgList::<Plan>::from_pg((*appendplan).appendplans);
+
+        if subplan_index < appendlist.len() as _ {
+            subplan = appendlist.get_ptr(subplan_index as _).unwrap();
+        }
+    }
+
+    // Now, have we got a ForeignScan on the desired rel?
+    if (*subplan).type_ == pg_sys::NodeTag_T_ForeignScan {
+        let fscan = subplan as *mut ForeignScan;
+
+        if (pg_sys::bms_is_member(rtindex as _, (*fscan).fs_relids)) {
+            return fscan;
+        }
+    }
+
+    ptr::null_mut()
+}
+
+#[inline]
+unsafe fn outer_plan(plan: *mut pg_sys::Plan) -> *mut Plan {
+    (*plan).lefttree
+}
+
+#[inline]
+unsafe fn outer_plan_state(plan: *mut PlanState) -> *mut PlanState {
+    (*plan).lefttree
 }

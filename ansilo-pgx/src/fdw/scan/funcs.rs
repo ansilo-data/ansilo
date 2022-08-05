@@ -1272,7 +1272,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
     (*node).fdw_state = into_fdw_private_scan(ctx, query, scan) as *mut _;
 }
 
-unsafe fn send_query_params(
+pub unsafe fn send_query_params(
     ctx: &mut FdwContext,
     scan: &mut FdwScanContext,
     query: &FdwQueryContext,

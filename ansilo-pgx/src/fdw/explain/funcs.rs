@@ -55,9 +55,21 @@ pub unsafe extern "C" fn explain_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     es: *mut ExplainState,
 ) {
-    let plan = (*mtstate).ps.plan;
     let (mut ctx, query, _) = from_fdw_private_modify(fdw_private);
 
+    explain_modify(es, &mut *ctx, &query);
+}
+
+#[pg_guard]
+pub unsafe extern "C" fn explain_direct_modify(node: *mut ForeignScanState, es: *mut ExplainState) {
+    let plan = (*node).ss.ps.plan as *mut ForeignScan;
+
+    let (mut ctx, query, _) = from_fdw_private_modify((*plan).fdw_private);
+
+    explain_modify(es, &mut *ctx, &query);
+}
+
+unsafe fn explain_modify(es: *mut ExplainState, ctx: &mut FdwContext, query: &FdwQueryContext) {
     // Retrieve explain state from data source
     let remote_query = ctx.explain_query((*es).verbose).unwrap();
 
@@ -78,11 +90,6 @@ pub unsafe extern "C" fn explain_foreign_modify(
 
         explain_json(es, "Remote Ops", remote_ops);
     }
-}
-
-#[pg_guard]
-pub unsafe extern "C" fn explain_direct_modify(node: *mut ForeignScanState, es: *mut ExplainState) {
-    unimplemented!()
 }
 
 /// Deparses the supplied conditions so that they can be shown in the explain query output
