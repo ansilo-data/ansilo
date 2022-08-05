@@ -1,0 +1,49 @@
+{
+    "SQL": "DELETE FROM \"people:1.0\";",
+    "Expected": {
+        "Plan": {
+            "Node Type": "ModifyTable",
+            "Operation": "Delete",
+            "Relation Name": "people:1.0",
+            "Remote Ops": [
+                {
+                    "AddWhere": {
+                        "@type": "BinaryOp",
+                        "left": {
+                            "@type": "Attribute",
+                            "attribute_id": "ROWIDX",
+                            "entity_alias": "t1"
+                        },
+                        "type": "Equal",
+                        "right": {
+                            "@type": "Parameter",
+                            "id": 1,
+                            "type": "UInt64"
+                        }
+                    }
+                }
+            ],
+            "Plans": [
+                {
+                    "Node Type": "Foreign Scan",
+                    "Operation": "Select",
+                    "Relation Name": "people:1.0",
+                    "Local Conds": [],
+                    "Remote Conds": [],
+                    "Remote Ops": [
+                        {
+                            "AddColumn": {
+                                "0": "c0",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "ROWIDX",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

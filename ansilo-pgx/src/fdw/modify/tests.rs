@@ -79,16 +79,6 @@ mod tests {
             MemoryConnectorEntitySourceConfig::default(),
         ));
 
-        entities.add(EntitySource::minimal(
-            "large",
-            EntityVersionConfig::minimal(
-                "1.0",
-                vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
-                EntitySourceConfig::minimal(""),
-            ),
-            MemoryConnectorEntitySourceConfig::default(),
-        ));
-
         conf.set_data(
             "people",
             "1.0",
@@ -141,15 +131,6 @@ mod tests {
                     DataValue::from("Luna"),
                 ],
             ],
-        );
-
-        conf.set_data(
-            "large",
-            "1.0",
-            (0..1_000_000)
-                .into_iter()
-                .map(|x| vec![DataValue::UInt32(x)])
-                .collect(),
         );
 
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
@@ -310,5 +291,136 @@ mod tests {
     #[pg_test]
     fn test_fdw_insert_select_explain() {
         assert_query_plan_expected!("test_cases/0002_insert_select.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_update_all_rows() {
+        setup_test("update_all_rows");
+
+        let results = execute_query(
+            r#"
+            UPDATE "people:1.0" SET first_name = 'Updated: ' || first_name;
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (1, "Updated: Mary".into(), "Jane".into()),
+                (2, "Updated: John".into(), "Smith".into()),
+                (3, "Updated: Gary".into(), "Gregson".into()),
+                (4, "Updated: Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_update_all_rows_explain() {
+        assert_query_plan_expected!("test_cases/0003_update_all_rows.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_update_where() {
+        setup_test("update_where");
+
+        let results = execute_query(
+            r#"
+            UPDATE "people:1.0" SET first_name = 'Updated: ' || first_name WHERE id = 3;
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (1, "Mary".into(), "Jane".into()),
+                (2, "John".into(), "Smith".into()),
+                (3, "Updated: Gary".into(), "Gregson".into()),
+                (4, "Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_update_where_explain() {
+        assert_query_plan_expected!("test_cases/0004_update_where.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_delete_all_rows() {
+        setup_test("delete_all_rows");
+
+        let results = execute_query(
+            r#"
+            DELETE FROM "people:1.0";
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(results, vec![]);
+    }
+
+    #[pg_test]
+    fn test_fdw_delete_all_rows_explain() {
+        assert_query_plan_expected!("test_cases/0005_delete_all_rows.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_delete_where() {
+        setup_test("delete_where");
+
+        let results = execute_query(
+            r#"
+            DELETE FROM "people:1.0" WHERE id = 3;
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (1, "Mary".into(), "Jane".into()),
+                (2, "John".into(), "Smith".into()),
+                (4, "Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_delete_where_explain() {
+        assert_query_plan_expected!("test_cases/0006_delete_where.json");
     }
 }

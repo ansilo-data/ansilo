@@ -1,0 +1,98 @@
+{
+    "SQL": "UPDATE \"people:1.0\" SET first_name = 'Updated: ' || first_name;",
+    "Expected": {
+        "Plan": {
+            "Node Type": "ModifyTable",
+            "Operation": "Update",
+            "Relation Name": "people:1.0",
+            "Remote Ops": [
+                {
+                    "AddSet": {
+                        "0": "first_name",
+                        "1": {
+                            "@type": "Parameter",
+                            "id": 1,
+                            "type": {
+                                "Utf8String": {
+                                    "length": "null"
+                                }
+                            }
+                        }
+                    }
+                },
+                {
+                    "AddWhere": {
+                        "@type": "BinaryOp",
+                        "left": {
+                            "@type": "Attribute",
+                            "attribute_id": "ROWIDX",
+                            "entity_alias": "t1"
+                        },
+                        "type": "Equal",
+                        "right": {
+                            "@type": "Parameter",
+                            "id": 2,
+                            "type": "UInt64"
+                        }
+                    }
+                }
+            ],
+            "Plans": [
+                {
+                    "Node Type": "Foreign Scan",
+                    "Operation": "Select",
+                    "Relation Name": "people:1.0",
+                    "Output": [
+                        "('Updated: '::text || (first_name)::text)",
+                        "ctid",
+                        "\"people:1.0\".*"
+                    ],
+                    "Local Conds": [],
+                    "Remote Conds": [],
+                    "Remote Ops": [
+                        {
+                            "AddColumn": {
+                                "0": "c0",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "ROWIDX",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c1",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "first_name",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c2",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "id",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c3",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "last_name",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

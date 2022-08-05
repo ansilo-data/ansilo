@@ -1,0 +1,78 @@
+{
+    "SQL": "DELETE FROM \"people:1.0\" WHERE id = 3;",
+    "Expected": {
+        "Plan": {
+            "Node Type": "ModifyTable",
+            "Operation": "Delete",
+            "Relation Name": "people:1.0",
+            "Remote Ops": [
+                {
+                    "AddWhere": {
+                        "@type": "BinaryOp",
+                        "left": {
+                            "@type": "Attribute",
+                            "attribute_id": "ROWIDX",
+                            "entity_alias": "t1"
+                        },
+                        "type": "Equal",
+                        "right": {
+                            "@type": "Parameter",
+                            "id": 1,
+                            "type": "UInt64"
+                        }
+                    }
+                }
+            ],
+            "Plans": [
+                {
+                    "Node Type": "Foreign Scan",
+                    "Operation": "Select",
+                    "Relation Name": "people:1.0",
+                    "Local Conds": [],
+                    "Remote Conds": [
+                        "(\"people:1.0\".id = 3)"
+                    ],
+                    "Remote Ops": [
+                        {
+                            "AddWhere": {
+                                "@type": "BinaryOp",
+                                "left": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "id",
+                                    "entity_alias": "t1"
+                                },
+                                "type": "Equal",
+                                "right": {
+                                    "@type": "Constant",
+                                    "value": {
+                                        "Int32": 3
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c0",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "ROWIDX",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c1",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "id",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

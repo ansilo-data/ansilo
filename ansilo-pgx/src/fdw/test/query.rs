@@ -28,7 +28,10 @@ pub(crate) fn execute_modify<R: DeserializeOwned + Serialize + Clone + FromDatum
 ) -> R {
     let query = query.into();
     let json = Spi::connect(|mut client| {
-        let res = client.update(query.as_str(), None, None).first().get_one::<R>();
+        let res = client
+            .update(query.as_str(), None, None)
+            .first()
+            .get_one::<R>();
         let res = serde_json::to_string(&res).unwrap();
 
         Ok(Some(res))
