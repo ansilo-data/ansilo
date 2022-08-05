@@ -107,7 +107,7 @@ pub unsafe extern "C" fn plan_foreign_modify(
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_INSERT => plan_foreign_insert(&mut ctx, root, plan, table),
         pg_sys::CmdType_CMD_UPDATE => plan_foreign_update(&mut ctx, root, plan, rte, table),
-        // pg_sys::CmdType_CMD_DELETE => plan_foreign_delete(&mut ctx, root, plan, rte, table),
+        pg_sys::CmdType_CMD_DELETE => plan_foreign_delete(&mut ctx, root, plan, rte, table),
         _ => panic!("Unexpected operation: {}", (*plan).operation),
     };
 
@@ -155,9 +155,8 @@ unsafe fn plan_foreign_update(
     table: PgTable,
 ) -> FdwQueryContext {
     let mut query = FdwQueryContext::update(table.rd_id);
-    // let subplan = (plan *mut pg_sys::PlanState
 
-    // Create an insert query to insert a single row
+    // Create an update query to update a single row
     ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Update)
         .unwrap();
 
@@ -239,16 +238,50 @@ unsafe fn plan_foreign_update(
     query
 }
 
-fn create_param_for_col(
-    att: &pg_sys::FormData_pg_attribute,
-    query: &mut FdwQueryContext,
-) -> (String, u32, sqlil::Parameter) {
-    let col_name = att.name().to_string();
-    let att_type = att.atttypid;
-    let data_type = from_pg_type(att_type as _).unwrap();
-    let param = query.create_param(data_type);
+unsafe fn plan_foreign_delete(
+    ctx: &mut PgBox<FdwContext>,
+    root: *mut PlannerInfo,
+    plan: *mut ModifyTable,
+    rte: *mut RangeTblEntry,
+    table: PgTable,
+) -> FdwQueryContext {
+    let mut query = FdwQueryContext::delete(table.rd_id);
 
-    (col_name, att_type, param)
+    // Create an delete query to delete a single row
+    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Delete)
+        .unwrap();
+
+    // Add a conditions to filter the row to by the row id
+    let row_id_exprs = ctx.get_row_id_exprs(query.base_rel_alias()).unwrap();
+
+    for (expr, r#type) in row_id_exprs.into_iter() {
+        let param = query.create_param(r#type.clone());
+        let op = DeleteQueryOperation::AddWhere(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+            expr,
+            sqlil::BinaryOpType::Equal,
+            sqlil::Expr::Parameter(param.clone()),
+        )));
+
+        match ctx.apply_query_op(op.clone().into()).unwrap() {
+            QueryOperationResult::Ok(_) => {}
+            QueryOperationResult::Unsupported => {
+                panic!("Failed to create update query on data source: unable to add query parameter for row id condition")
+            }
+        }
+
+        // We cannot determine the attr no at this stage in planning as
+        // it dependent on the output subplan tlist.
+        // We put a placeholder for now and defer until begin_foreign_modify
+        let attnum = 0;
+
+        let delete = query.as_delete_mut().unwrap();
+        delete.remote_ops.push(op);
+        delete
+            .rowid_params
+            .push((param, attnum, into_pg_type(&r#type).unwrap()))
+    }
+
+    query
 }
 
 #[pg_guard]
@@ -259,13 +292,18 @@ pub unsafe extern "C" fn begin_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     eflags: ::std::os::raw::c_int,
 ) {
+    // Skip if EXPLAIN query
+    if eflags & pg_sys::EXEC_FLAG_EXPLAIN_ONLY as i32 != 0 {
+        return;
+    }
+
     let (mut ctx, mut query, _state) = from_fdw_private_modify(fdw_private);
 
     // If this is an UPDATE/DELETE query we need to find the attr no's for the row id's
     // from the subplan tlist
     let row_id_params = match &mut query.q {
         FdwQueryType::Update(q) => Some(&mut q.rowid_params),
-        FdwQueryType::Delete(q) => todo!(),
+        FdwQueryType::Delete(q) => Some(&mut q.rowid_params),
         _ => None,
     };
 
@@ -275,7 +313,7 @@ pub unsafe extern "C" fn begin_foreign_modify(
         // @see get_foreign_plan function.
         let subplan = (*(*(mtstate as *mut pg_sys::PlanState)).lefttree).plan;
 
-        for (idx, (param, attnum, r#type)) in row_id_params.iter_mut().enumerate() {
+        for (idx, (_, attnum, _)) in row_id_params.iter_mut().enumerate() {
             let num = pg_sys::ExecFindJunkAttributeInTlist(
                 (*subplan).targetlist,
                 to_pg_cstr(&format!("ctid_ansilo_{idx}")).unwrap(),
@@ -393,7 +431,23 @@ pub unsafe extern "C" fn exec_foreign_delete(
     slot: *mut TupleTableSlot,
     plan_slot: *mut TupleTableSlot,
 ) -> *mut TupleTableSlot {
-    unimplemented!()
+    let (mut ctx, query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let delete = query.as_delete().unwrap();
+    let mut query_input = vec![];
+
+    // Then bind the row id parameters (rowid's are stored as resjunk in the plan slot)
+    for (param, att_num, type_oid) in delete.rowid_params.iter() {
+        query_input.push((
+            param.id,
+            slot_datum_into_data_val(plan_slot, (att_num - 1) as _, *type_oid, &param.r#type),
+        ));
+    }
+
+    ctx.write_query_input_unordered(query_input).unwrap();
+    ctx.execute_query().unwrap();
+    ctx.restart_query().unwrap();
+
+    slot
 }
 
 #[pg_guard]
@@ -462,6 +516,19 @@ pub unsafe extern "C" fn exec_foreign_truncate(
     restart_seqs: bool,
 ) {
     unimplemented!()
+}
+
+/// Creates a new query parameter for the supplied column
+fn create_param_for_col(
+    att: &pg_sys::FormData_pg_attribute,
+    query: &mut FdwQueryContext,
+) -> (String, u32, sqlil::Parameter) {
+    let col_name = att.name().to_string();
+    let att_type = att.atttypid;
+    let data_type = from_pg_type(att_type as _).unwrap();
+    let param = query.create_param(data_type);
+
+    (col_name, att_type, param)
 }
 
 /// Retrieves a datum from a slot and converts it to the requested

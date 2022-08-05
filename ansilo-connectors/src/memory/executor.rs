@@ -117,9 +117,11 @@ impl MemoryQueryExecutor {
                 .map(|(t, a)| a.and_then(|a| a.try_coerce_into(t)))
                 .collect::<Result<Vec<_>>>()?;
 
-            // Append null rowid
-            row.push(DataValue::Null);
-
+            self.data.append_row_ids(
+                &insert.target.entity.entity_id,
+                &insert.target.entity.version_id,
+                &mut [&mut row],
+            );
             rows.push(row);
 
             Ok(())
@@ -179,7 +181,7 @@ impl MemoryQueryExecutor {
     fn get_entity_data(&self, s: &sqlil::EntitySource) -> Result<Vec<Vec<DataValue>>> {
         self.data
             .with_data(&s.entity.entity_id, &s.entity.version_id, |rows| {
-                Self::with_row_ids(rows.clone())
+                rows.clone()
             })
             .ok_or(Error::msg("Could not find entity"))
     }
@@ -191,30 +193,9 @@ impl MemoryQueryExecutor {
     ) -> Result<()> {
         self.data
             .with_data_mut(&s.entity.entity_id, &s.entity.version_id, move |rows| {
-                let mut rows_with_id = Self::with_row_ids(rows.clone());
-                cb(&mut rows_with_id)?;
-                *rows = Self::without_row_ids(rows_with_id);
-
-                Ok(())
+                cb(rows)
             })
             .ok_or(Error::msg("Could not find entity"))?
-    }
-
-    /// Append a row id (the index of the row) to each row
-    fn with_row_ids(mut rows: Vec<Vec<DataValue>>) -> Vec<Vec<DataValue>> {
-        for (rowid, row) in rows.iter_mut().enumerate() {
-            row.push(DataValue::UInt64(rowid as _));
-        }
-
-        rows
-    }
-
-    fn without_row_ids(mut rows: Vec<Vec<DataValue>>) -> Vec<Vec<DataValue>> {
-        for (_, row) in rows.iter_mut().enumerate() {
-            row.remove(row.len() - 1);
-        }
-
-        rows
     }
 
     fn perform_join(
@@ -1741,7 +1722,12 @@ mod tests {
             .with_data("people", "1.0", |data| {
                 assert_eq!(
                     data.iter().last().unwrap(),
-                    &vec![DataValue::Null, DataValue::Null, DataValue::Null]
+                    &vec![
+                        DataValue::Null,
+                        DataValue::Null,
+                        DataValue::Null,
+                        DataValue::UInt64(3)
+                    ]
                 );
             })
             .unwrap();
@@ -1777,7 +1763,8 @@ mod tests {
                     &vec![
                         DataValue::UInt32(123),
                         DataValue::from("New"),
-                        DataValue::from("Man")
+                        DataValue::from("Man"),
+                        DataValue::UInt64(3)
                     ]
                 );
             })

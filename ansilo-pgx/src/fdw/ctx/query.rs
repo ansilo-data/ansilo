@@ -225,7 +225,7 @@ pub struct FdwUpdateQuery {
     /// which are used to supply the updated row data for the query
     pub update_params: Vec<(sqlil::Parameter, u32, pg_sys::Oid)>,
     /// The list of query parametersand their respective attnum's and type oid's
-    /// which are used to specify the row ID to update
+    /// which are used to specify the row to update
     pub rowid_params: Vec<(sqlil::Parameter, u32, pg_sys::Oid)>,
 }
 
@@ -233,6 +233,9 @@ pub struct FdwUpdateQuery {
 pub struct FdwDeleteQuery {
     /// The operations applied to the delete query
     pub remote_ops: Vec<DeleteQueryOperation>,
+    /// The list of query parametersand their respective attnum's and type oid's
+    /// which are used to specify the row to delete
+    pub rowid_params: Vec<(sqlil::Parameter, u32, pg_sys::Oid)>,
 }
 
 /// Context storage for the FDW stored in the fdw_private field

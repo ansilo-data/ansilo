@@ -25,7 +25,7 @@ pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *
 
     explain_json(es, "Remote Query", remote_query);
 
-    // If verbose mode, show the local query plan operations
+    // If verbose mode, show the query plan operations
     if (*es).verbose {
         explain_conds(
             (*node).ss.ps.plan,
@@ -55,7 +55,29 @@ pub unsafe extern "C" fn explain_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     es: *mut ExplainState,
 ) {
-    unimplemented!()
+    let plan = (*mtstate).ps.plan;
+    let (mut ctx, query, _) = from_fdw_private_modify(fdw_private);
+
+    // Retrieve explain state from data source
+    let remote_query = ctx.explain_query((*es).verbose).unwrap();
+
+    explain_json(es, "Remote Query", remote_query);
+
+    // If verbose mode, show the remote query plan operations
+    if (*es).verbose {
+        let remote_ops = match &query.q {
+            FdwQueryType::Insert(q) => serde_json::to_value(q.remote_ops.clone()),
+            FdwQueryType::Update(q) => serde_json::to_value(q.remote_ops.clone()),
+            FdwQueryType::Delete(q) => serde_json::to_value(q.remote_ops.clone()),
+            _ => panic!(
+                "Unexpected query type in explain foreign modify: {:?}",
+                query.q
+            ),
+        }
+        .unwrap();
+
+        explain_json(es, "Remote Ops", remote_ops);
+    }
 }
 
 #[pg_guard]
