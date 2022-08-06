@@ -1,0 +1,67 @@
+{
+    "SQL": "UPDATE \"people:1.0\" SET first_name = 'Updated: ' || first_name WHERE id = 4;",
+    "Expected": {
+        "Plan": {
+            "Node Type": "ModifyTable",
+            "Operation": "Update",
+            "Relation Name": "people:1.0",
+            "Plans": [
+                {
+                    "Node Type": "Foreign Scan",
+                    "Operation": "Update",
+                    "Relation Name": "people:1.0",
+                    "Remote Conds": [],
+                    "Remote Ops": [
+                        {
+                            "AddSet": {
+                                "0": "first_name",
+                                "1": {
+                                    "@type": "BinaryOp",
+                                    "left": {
+                                        "@type": "Constant",
+                                        "value": {
+                                            "Utf8String": {
+                                                "0": 85,
+                                                "1": 112,
+                                                "2": 100,
+                                                "3": 97,
+                                                "4": 116,
+                                                "5": 101,
+                                                "6": 100,
+                                                "7": 58,
+                                                "8": 32
+                                            }
+                                        }
+                                    },
+                                    "right": {
+                                        "@type": "Attribute",
+                                        "attribute_id": "first_name",
+                                        "entity_alias": "t1"
+                                    },
+                                    "type": "Concat"
+                                }
+                            }
+                        },
+                        {
+                            "AddWhere": {
+                                "@type": "BinaryOp",
+                                "left": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "id",
+                                    "entity_alias": "t1"
+                                },
+                                "right": {
+                                    "@type": "Constant",
+                                    "value": {
+                                        "Int32": 4
+                                    }
+                                },
+                                "type": "Equal"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

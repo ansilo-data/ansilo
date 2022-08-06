@@ -1,5 +1,5 @@
 {
-    "SQL": "DELETE FROM \"people:1.0\";",
+    "SQL": "DELETE FROM \"people:1.0\" WHERE MD5(id::text) = MD5('3');",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
@@ -28,8 +28,11 @@
                     "Node Type": "Foreign Scan",
                     "Operation": "Select",
                     "Relation Name": "people:1.0",
-                    "Local Conds": [],
-                    "Remote Conds": [],
+                    "Local Conds": [
+                        "(md5((\"people:1.0\".id)::text) = 'eccbc87e4b5ce2fe28308fd9f2a7baf3'::text)"
+                    ],
+                    "Remote Conds": [
+                    ],
                     "Remote Ops": [
                         {
                             "AddColumn": {
@@ -37,6 +40,16 @@
                                 "1": {
                                     "@type": "Attribute",
                                     "attribute_id": "ROWIDX",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c1",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "id",
                                     "entity_alias": "t1"
                                 }
                             }

@@ -108,9 +108,15 @@ pub unsafe extern "C" fn plan_foreign_modify(
     let mut ctx = common::connect(table.rd_id);
 
     let query = match (*plan).operation {
-        pg_sys::CmdType_CMD_INSERT => plan_foreign_insert(&mut ctx, root, plan, table),
-        pg_sys::CmdType_CMD_UPDATE => plan_foreign_update(&mut ctx, root, plan, rte, table),
-        pg_sys::CmdType_CMD_DELETE => plan_foreign_delete(&mut ctx, root, plan, rte, table),
+        pg_sys::CmdType_CMD_INSERT => {
+            plan_foreign_insert(&mut ctx, root, plan, result_relation, table)
+        }
+        pg_sys::CmdType_CMD_UPDATE => {
+            plan_foreign_update(&mut ctx, root, plan, result_relation, rte, table)
+        }
+        pg_sys::CmdType_CMD_DELETE => {
+            plan_foreign_delete(&mut ctx, root, plan, result_relation, rte, table)
+        }
         _ => panic!("Unexpected operation: {}", (*plan).operation),
     };
 
@@ -121,9 +127,10 @@ fn plan_foreign_insert(
     ctx: &mut PgBox<FdwContext>,
     root: *mut PlannerInfo,
     plan: *mut ModifyTable,
+    result_relation: Index,
     table: PgTable,
 ) -> FdwQueryContext {
-    let mut query = FdwQueryContext::insert(table.rd_id);
+    let mut query = FdwQueryContext::insert(result_relation);
 
     // Create an insert query to insert a single row
     ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Insert)
@@ -154,10 +161,11 @@ unsafe fn plan_foreign_update(
     ctx: &mut PgBox<FdwContext>,
     root: *mut PlannerInfo,
     plan: *mut ModifyTable,
+    result_relation: Index,
     rte: *mut RangeTblEntry,
     table: PgTable,
 ) -> FdwQueryContext {
-    let mut query = FdwQueryContext::update(table.rd_id);
+    let mut query = FdwQueryContext::update(result_relation);
 
     // Create an update query to update a single row
     ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Update)
@@ -245,10 +253,11 @@ unsafe fn plan_foreign_delete(
     ctx: &mut PgBox<FdwContext>,
     root: *mut PlannerInfo,
     plan: *mut ModifyTable,
+    result_relation: Index,
     rte: *mut RangeTblEntry,
     table: PgTable,
 ) -> FdwQueryContext {
-    let mut query = FdwQueryContext::delete(table.rd_id);
+    let mut query = FdwQueryContext::delete(result_relation);
 
     // Create an delete query to delete a single row
     ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Delete)
@@ -489,16 +498,10 @@ pub unsafe extern "C" fn plan_direct_modify(
         return false;
     }
 
-    // If any quals need to be locally evaluated we cannot perform
-    // the modification remotely
-    if !(*foreign_scan).scan.plan.qual.is_null() {
-        return false;
-    }
-
     let (ctx, inner_select, planner) = from_fdw_private_rel((*foreign_scan).fdw_private);
 
-    // Similarly if there are local conds for evaluation we
-    // cannot perform this remotely
+    // If any quals need to be locally evaluated we cannot perform
+    // the modification remotely
     if !inner_select.local_conds.is_empty() {
         return false;
     }
@@ -535,9 +538,15 @@ pub unsafe extern "C" fn plan_direct_modify(
             &inner_select,
             table,
         ),
-        // pg_sys::CmdType_CMD_DELETE => {
-        //     plan_direct_foreign_delete(&mut ctx, root, plan, result_relation, planner, select)
-        // }
+        pg_sys::CmdType_CMD_DELETE => plan_direct_foreign_delete(
+            &mut ctx,
+            root,
+            plan,
+            result_relation,
+            &planner,
+            &inner_select,
+            table,
+        ),
         _ => return false,
     };
 
@@ -570,9 +579,10 @@ unsafe fn plan_direct_foreign_update(
     inner_select: &FdwQueryContext,
     table: PgTable,
 ) -> Option<FdwQueryContext> {
-    let mut query = FdwQueryContext::update(table.rd_id);
+    let mut query = FdwQueryContext::update(result_relation);
 
-    // Create an update query to update a single row
+    // Create an update query to update all rows specified by the
+    // inner select query
     ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Update)
         .unwrap();
 
@@ -617,7 +627,7 @@ unsafe fn plan_direct_foreign_update(
 
     // We apply the remote conditions of the inner select query to the update query
     for remote_cond in inner_select.remote_conds.iter().cloned() {
-        // Try convert the tle expr to sqlil, if this fails we bail out
+        // Try convert the cond to sqlil, if this fails we bail out
         let expr = match convert(
             (*remote_cond).clause as *mut _,
             &mut query.cvt,
@@ -646,6 +656,53 @@ unsafe fn plan_direct_foreign_update(
     Some(query)
 }
 
+unsafe fn plan_direct_foreign_delete(
+    ctx: &mut PgBox<FdwContext>,
+    root: *mut PlannerInfo,
+    plan: *mut ModifyTable,
+    result_relation: Index,
+    planner: &PlannerContext,
+    inner_select: &FdwQueryContext,
+    table: PgTable,
+) -> Option<FdwQueryContext> {
+    let mut query = FdwQueryContext::delete(result_relation);
+
+    // Create an delete query to delete all rows specified by the
+    // inner select query
+    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Delete)
+        .unwrap();
+
+    // We apply the remote conditions of the inner select query to the delete query
+    for remote_cond in inner_select.remote_conds.iter().cloned() {
+        // Try convert the cond to sqlil, if this fails we bail out
+        let expr = match convert(
+            (*remote_cond).clause as *mut _,
+            &mut query.cvt,
+            planner,
+            ctx,
+        ) {
+            Ok(expr) => expr,
+            Err(_) => return None,
+        };
+
+        // Try push down the where clause
+        let op = DeleteQueryOperation::AddWhere(expr);
+
+        match ctx.apply_query_op(op.clone().into()).unwrap() {
+            QueryOperationResult::Ok(_) => {}
+            QueryOperationResult::Unsupported => {
+                return None;
+            }
+        }
+
+        query.remote_conds.push(remote_cond);
+        query.as_delete_mut().unwrap().remote_ops.push(op);
+    }
+
+    // If we made it this far, we have been able to push down the entire update query
+    Some(query)
+}
+
 #[pg_guard]
 pub unsafe extern "C" fn begin_direct_modify(
     node: *mut ForeignScanState,
@@ -657,36 +714,28 @@ pub unsafe extern "C" fn begin_direct_modify(
     }
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (mut ctx, mut query, state) = from_fdw_private_modify((*plan).fdw_private);
+    let (mut ctx, mut query, mut state) = from_fdw_private_modify((*plan).fdw_private);
 
-    let input_structure = ctx.prepare_query().unwrap();
+    ctx.prepare_query().unwrap();
 
-    // Send query params, if any
-    if !input_structure.params.is_empty() {
-        crate::fdw::scan::send_query_params(
-            &mut ctx,
-            &mut FdwScanContext::new(),
-            &query,
-            &input_structure,
-            node,
-        );
-    }
-
-    let row_structure = ctx.execute_query().unwrap();
+    crate::fdw::scan::prepare_query_params(&mut state.scan, &query, node);
 
     (*node).fdw_state = into_fdw_private_modify(ctx, query.clone(), state.clone()) as *mut _;
 }
 
 #[pg_guard]
 pub unsafe extern "C" fn iterate_direct_modify(node: *mut ForeignScanState) -> *mut TupleTableSlot {
-    let (mut ctx, _query, _state) = from_fdw_private_modify((*node).fdw_state as *mut _);
+    let (mut ctx, query, state) = from_fdw_private_modify((*node).fdw_state as *mut _);
+
+    // Send query params
+    crate::fdw::scan::send_query_params(&mut ctx, &state.scan, &query, node);
 
     // Execute the direct modification
     ctx.execute_query().unwrap();
 
     // Currently, we do not support RETURNING data from direct modifications
     // So we just clear the tuple and return.
-    // equivalent of ExecClearTuple(slot) (symbol is not exposed
+    // equivalent of ExecClearTuple(slot) (symbol is not exposed)
     let slot = (*node).ss.ss_ScanTupleSlot;
     (*(*slot).tts_ops).clear.unwrap()(slot);
 
@@ -794,7 +843,6 @@ unsafe fn find_modify_table_subplan(
     // currently unlikely that the core planner would generate such a plan
     // with the children out-of-order.  Moreover, such a search risks costing
     // O(N^2) time when there are a lot of children.
-    //
     if (*subplan).type_ == pg_sys::NodeTag_T_Append {
         let appendplan = subplan as *mut pg_sys::Append;
         let appendlist = PgList::<Plan>::from_pg((*appendplan).appendplans);

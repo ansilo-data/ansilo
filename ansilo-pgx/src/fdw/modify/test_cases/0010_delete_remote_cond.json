@@ -1,0 +1,39 @@
+{
+    "SQL": "DELETE FROM \"people:1.0\" WHERE id = 4;",
+    "Expected": {
+        "Plan": {
+            "Node Type": "ModifyTable",
+            "Operation": "Delete",
+            "Relation Name": "people:1.0",
+            "Plans": [
+                {
+                    "Node Type": "Foreign Scan",
+                    "Operation": "Delete",
+                    "Relation Name": "people:1.0",
+                    "Remote Conds": [
+                        "(\"people:1.0\".id = 4)"
+                    ],
+                    "Remote Ops": [
+                        {
+                            "AddWhere": {
+                                "@type": "BinaryOp",
+                                "left": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "id",
+                                    "entity_alias": "t1"
+                                },
+                                "right": {
+                                    "@type": "Constant",
+                                    "value": {
+                                        "Int32": 4
+                                    }
+                                },
+                                "type": "Equal"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

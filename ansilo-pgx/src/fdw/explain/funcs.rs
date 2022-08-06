@@ -57,7 +57,7 @@ pub unsafe extern "C" fn explain_foreign_modify(
 ) {
     let (mut ctx, query, _) = from_fdw_private_modify(fdw_private);
 
-    explain_modify(es, &mut *ctx, &query);
+    explain_modify((*mtstate).ps.plan, es, &mut *ctx, &query);
 }
 
 #[pg_guard]
@@ -66,10 +66,15 @@ pub unsafe extern "C" fn explain_direct_modify(node: *mut ForeignScanState, es: 
 
     let (mut ctx, query, _) = from_fdw_private_modify((*plan).fdw_private);
 
-    explain_modify(es, &mut *ctx, &query);
+    explain_modify(plan as *mut Plan, es, &mut *ctx, &query);
 }
 
-unsafe fn explain_modify(es: *mut ExplainState, ctx: &mut FdwContext, query: &FdwQueryContext) {
+unsafe fn explain_modify(
+    plan: *mut Plan,
+    es: *mut ExplainState,
+    ctx: &mut FdwContext,
+    query: &FdwQueryContext,
+) {
     // Retrieve explain state from data source
     let remote_query = ctx.explain_query((*es).verbose).unwrap();
 
@@ -88,6 +93,7 @@ unsafe fn explain_modify(es: *mut ExplainState, ctx: &mut FdwContext, query: &Fd
         }
         .unwrap();
 
+        explain_conds(plan, es, "Remote Conds", query.remote_conds.clone());
         explain_json(es, "Remote Ops", remote_ops);
     }
 }

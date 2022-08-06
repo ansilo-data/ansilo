@@ -1,5 +1,5 @@
 {
-    "SQL": "UPDATE \"people:1.0\" SET first_name = 'Updated: ' || first_name WHERE id = 3;",
+    "SQL": "UPDATE \"people:1.0\" SET first_name = 'Updated: ' || MD5(first_name) WHERE id = 3;",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
@@ -43,7 +43,7 @@
                     "Operation": "Select",
                     "Relation Name": "people:1.0",
                     "Output": [
-                        "('Updated: '::text || (first_name)::text)",
+                        "('Updated: '::text || md5((first_name)::text))",
                         "ctid",
                         "\"people:1.0\".*"
                     ],

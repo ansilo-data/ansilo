@@ -17,8 +17,8 @@ pub struct FdwQueryContext {
     pub q: FdwQueryType,
     /// The base entity size estimation
     pub base_cost: OperationCost,
-    /// The base relation relid
-    pub base_relid: pg_sys::Oid,
+    /// The base relation var number
+    pub base_varno: pg_sys::Oid,
     /// The estimate of the number of rows returned by the query
     /// before any local conditions are checked
     pub retrieved_rows: Option<u64>,
@@ -33,16 +33,16 @@ pub struct FdwQueryContext {
 }
 
 impl FdwQueryContext {
-    pub fn new(base_relid: pg_sys::Oid, query: FdwQueryType, base_cost: OperationCost) -> Self {
+    pub fn new(base_varno: pg_sys::Oid, query: FdwQueryType, base_cost: OperationCost) -> Self {
         let mut cvt = ConversionContext::new();
-        cvt.register_alias(base_relid);
+        cvt.register_alias(base_varno);
 
         let retrieved_rows = base_cost.rows;
 
         Self {
             q: query,
             base_cost,
-            base_relid,
+            base_varno,
             retrieved_rows,
             local_conds: vec![],
             remote_conds: vec![],
@@ -59,9 +59,9 @@ impl FdwQueryContext {
         )
     }
 
-    pub fn insert(base_relid: pg_sys::Oid) -> Self {
+    pub fn insert(base_varno: pg_sys::Oid) -> Self {
         Self::new(
-            base_relid,
+            base_varno,
             FdwQueryType::Insert(FdwInsertQuery::default()),
             OperationCost::default(),
         )
@@ -84,7 +84,7 @@ impl FdwQueryContext {
     }
 
     pub fn base_rel_alias(&self) -> &str {
-        self.cvt.get_alias(self.base_relid).unwrap()
+        self.cvt.get_alias(self.base_varno).unwrap()
     }
 
     pub fn as_select(&self) -> Option<&FdwSelectQuery> {
@@ -259,10 +259,15 @@ impl FdwScanContext {
 
 /// Context storage for the FDW stored in the fdw_private field
 #[derive(Clone)]
-pub struct FdwModifyContext {}
+pub struct FdwModifyContext {
+    /// The context for the inner scan
+    pub scan: FdwScanContext,
+}
 
 impl FdwModifyContext {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            scan: FdwScanContext::new()
+        }
     }
 }

@@ -294,8 +294,174 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_update_all_rows() {
-        setup_test("update_all_rows");
+    fn test_fdw_update_all_rows_local_set() {
+        setup_test("update_all_rows_local_set");
+
+        let results = execute_query(
+            r#"
+            UPDATE "people:1.0" SET first_name = 'Updated: ' || MD5(first_name);
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (1, "Updated: e39e74fb4e80ba656f773669ed50315a".into(), "Jane".into()),
+                (2, "Updated: 61409aa1fd47d4a5332de23cbf59a36f".into(), "Smith".into()),
+                (3, "Updated: 01d4848202a3c7697ec037b02b4ee4e8".into(), "Gregson".into()),
+                (4, "Updated: e39e74fb4e80ba656f773669ed50315a".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_update_all_rows_local_explain() {
+        assert_query_plan_expected!("test_cases/0003_update_all_rows_local_set.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_update_where_local_set() {
+        setup_test("update_where_local_set");
+
+        let results = execute_query(
+            r#"
+            UPDATE "people:1.0" SET first_name = 'Updated: ' || MD5(first_name) WHERE id = 3;
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (1, "Mary".into(), "Jane".into()),
+                (2, "John".into(), "Smith".into()),
+                (3, "Updated: 01d4848202a3c7697ec037b02b4ee4e8".into(), "Gregson".into()),
+                (4, "Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_update_where_local_set_explain() {
+        assert_query_plan_expected!("test_cases/0004_update_where_local_set.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_update_where_local_cond() {
+        setup_test("update_where_local_cond");
+
+        let results = execute_query(
+            r#"
+            UPDATE "people:1.0" SET first_name = 'Updated: ' || first_name WHERE MD5(id::text) = MD5('3');
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (1, "Mary".into(), "Jane".into()),
+                (2, "John".into(), "Smith".into()),
+                (3, "Updated: Gary".into(), "Gregson".into()),
+                (4, "Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_update_where_local_cond_explain() {
+        assert_query_plan_expected!("test_cases/0005_update_where_local_cond.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_delete_all_rows() {
+        setup_test("delete_all_rows");
+
+        let results = execute_query(
+            r#"
+            DELETE FROM "people:1.0";
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(results, vec![]);
+    }
+
+    #[pg_test]
+    fn test_fdw_delete_all_rows_explain() {
+        assert_query_plan_expected!("test_cases/0006_delete_all_rows.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_delete_where_local_cond() {
+        setup_test("delete_where_local_cond");
+
+        let results = execute_query(
+            r#"
+            DELETE FROM "people:1.0" WHERE MD5(id::text) = MD5('3');
+
+            SELECT * FROM "people:1.0";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (1, "Mary".into(), "Jane".into()),
+                (2, "John".into(), "Smith".into()),
+                (4, "Mary".into(), "Bennet".into()),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_delete_where_local_cond_explain() {
+        assert_query_plan_expected!("test_cases/0007_delete_where_local_cond.json");
+    }
+
+    #[pg_test]
+    fn test_fdw_update_all_rows_remote_set() {
+        setup_test("update_all_rows_remote_set");
 
         let results = execute_query(
             r#"
@@ -324,17 +490,17 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_update_all_rows_explain() {
-        assert_query_plan_expected!("test_cases/0003_update_all_rows.json");
+    fn test_fdw_update_all_rows_remote_set_explain() {
+        assert_query_plan_expected!("test_cases/0008_update_all_rows_remote_set.json");
     }
 
     #[pg_test]
-    fn test_fdw_update_where() {
-        setup_test("update_where");
+    fn test_fdw_update_remote_cond() {
+        setup_test("update_remote_cond");
 
         let results = execute_query(
             r#"
-            UPDATE "people:1.0" SET first_name = 'Updated: ' || first_name WHERE id = 3;
+            UPDATE "people:1.0" SET first_name = 'Updated: ' || first_name WHERE id = 4;
 
             SELECT * FROM "people:1.0";
             "#,
@@ -352,51 +518,24 @@ mod tests {
             vec![
                 (1, "Mary".into(), "Jane".into()),
                 (2, "John".into(), "Smith".into()),
-                (3, "Updated: Gary".into(), "Gregson".into()),
-                (4, "Mary".into(), "Bennet".into()),
+                (3, "Gary".into(), "Gregson".into()),
+                (4, "Updated: Mary".into(), "Bennet".into()),
             ]
         );
     }
 
     #[pg_test]
-    fn test_fdw_update_where_explain() {
-        assert_query_plan_expected!("test_cases/0004_update_where.json");
+    fn test_fdw_update_remote_cond_explain() {
+        assert_query_plan_expected!("test_cases/0009_update_remote_cond.json");
     }
 
     #[pg_test]
-    fn test_fdw_delete_all_rows() {
-        setup_test("delete_all_rows");
+    fn test_fdw_delete_remote_cond() {
+        setup_test("delete_remote_cond");
 
         let results = execute_query(
             r#"
-            DELETE FROM "people:1.0";
-
-            SELECT * FROM "people:1.0";
-            "#,
-            |i| {
-                (
-                    i["id"].value::<i64>().unwrap(),
-                    i["first_name"].value::<String>().unwrap(),
-                    i["last_name"].value::<String>().unwrap(),
-                )
-            },
-        );
-
-        assert_eq!(results, vec![]);
-    }
-
-    #[pg_test]
-    fn test_fdw_delete_all_rows_explain() {
-        assert_query_plan_expected!("test_cases/0005_delete_all_rows.json");
-    }
-
-    #[pg_test]
-    fn test_fdw_delete_where() {
-        setup_test("delete_where");
-
-        let results = execute_query(
-            r#"
-            DELETE FROM "people:1.0" WHERE id = 3;
+            DELETE FROM "people:1.0" WHERE id = 4;
 
             SELECT * FROM "people:1.0";
             "#,
@@ -414,13 +553,13 @@ mod tests {
             vec![
                 (1, "Mary".into(), "Jane".into()),
                 (2, "John".into(), "Smith".into()),
-                (4, "Mary".into(), "Bennet".into()),
+                (3, "Gary".into(), "Gregson".into()),
             ]
         );
     }
 
     #[pg_test]
-    fn test_fdw_delete_where_explain() {
-        assert_query_plan_expected!("test_cases/0006_delete_where.json");
+    fn test_fdw_delete_remote_cond_explain() {
+        assert_query_plan_expected!("test_cases/0010_delete_remote_cond.json");
     }
 }

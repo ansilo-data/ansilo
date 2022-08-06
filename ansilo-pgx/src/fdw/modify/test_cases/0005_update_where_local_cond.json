@@ -1,11 +1,25 @@
 {
-    "SQL": "DELETE FROM \"people:1.0\" WHERE id = 3;",
+    "SQL": "UPDATE \"people:1.0\" SET first_name = 'Updated: ' || first_name WHERE MD5(id::text) = MD5('3');",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
-            "Operation": "Delete",
+            "Operation": "Update",
             "Relation Name": "people:1.0",
             "Remote Ops": [
+                {
+                    "AddSet": {
+                        "0": "first_name",
+                        "1": {
+                            "@type": "Parameter",
+                            "id": 1,
+                            "type": {
+                                "Utf8String": {
+                                    "length": "null"
+                                }
+                            }
+                        }
+                    }
+                },
                 {
                     "AddWhere": {
                         "@type": "BinaryOp",
@@ -17,7 +31,7 @@
                         "type": "Equal",
                         "right": {
                             "@type": "Parameter",
-                            "id": 1,
+                            "id": 2,
                             "type": "UInt64"
                         }
                     }
@@ -28,28 +42,16 @@
                     "Node Type": "Foreign Scan",
                     "Operation": "Select",
                     "Relation Name": "people:1.0",
-                    "Local Conds": [],
-                    "Remote Conds": [
-                        "(\"people:1.0\".id = 3)"
+                    "Output": [
+                        "('Updated: '::text || (first_name)::text)",
+                        "ctid",
+                        "\"people:1.0\".*"
                     ],
+                    "Local Conds": [
+                        "(md5((\"people:1.0\".id)::text) = 'eccbc87e4b5ce2fe28308fd9f2a7baf3'::text)"
+                    ],
+                    "Remote Conds": [],
                     "Remote Ops": [
-                        {
-                            "AddWhere": {
-                                "@type": "BinaryOp",
-                                "left": {
-                                    "@type": "Attribute",
-                                    "attribute_id": "id",
-                                    "entity_alias": "t1"
-                                },
-                                "type": "Equal",
-                                "right": {
-                                    "@type": "Constant",
-                                    "value": {
-                                        "Int32": 3
-                                    }
-                                }
-                            }
-                        },
                         {
                             "AddColumn": {
                                 "0": "c0",
@@ -66,6 +68,26 @@
                                 "1": {
                                     "@type": "Attribute",
                                     "attribute_id": "id",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c2",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "first_name",
+                                    "entity_alias": "t1"
+                                }
+                            }
+                        },
+                        {
+                            "AddColumn": {
+                                "0": "c3",
+                                "1": {
+                                    "@type": "Attribute",
+                                    "attribute_id": "last_name",
                                     "entity_alias": "t1"
                                 }
                             }

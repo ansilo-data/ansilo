@@ -6,7 +6,7 @@ use pgx::pg_sys::{self, Node};
 /// Mapping data that is accrued while converting pg expr's to sqlil
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConversionContext {
-    /// Query table relid's to alias mappings
+    /// Query table var no's to alias mappings
     /// We record the aliases for any relations within the query here
     aliases: HashMap<pg_sys::Oid, String>,
 
@@ -23,19 +23,19 @@ impl ConversionContext {
         }
     }
 
-    /// Gets a unique table alias for the supplied relid
-    pub(crate) fn register_alias(&mut self, relid: pg_sys::Oid) -> &str {
-        if !self.aliases.contains_key(&relid) {
+    /// Gets a unique table alias for the supplied varno
+    pub(crate) fn register_alias(&mut self, varno: pg_sys::Oid) -> &str {
+        if !self.aliases.contains_key(&varno) {
             self.aliases
-                .insert(relid, format!("t{}", self.aliases.len() + 1));
+                .insert(varno, format!("t{}", self.aliases.len() + 1));
         }
 
-        self.aliases.get(&relid).unwrap()
+        self.aliases.get(&varno).unwrap()
     }
 
     /// Gets a unique table alias for the supplied relid
-    pub(crate) fn get_alias(&self, relid: pg_sys::Oid) -> Option<&str> {
-        self.aliases.get(&relid).map(|i| i.as_str())
+    pub(crate) fn get_alias(&self, varno: pg_sys::Oid) -> Option<&str> {
+        self.aliases.get(&varno).map(|i| i.as_str())
     }
 
     /// Gets all rel id's and aliases in the query

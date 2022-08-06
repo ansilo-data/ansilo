@@ -154,6 +154,15 @@ impl FdwContext {
         Ok(query_input)
     }
 
+    /// Gets the query input structure expected by the prepared
+    /// query
+    pub fn get_input_structure(&self) -> Result<&QueryInputStructure> {
+        self.query_writer
+            .as_ref()
+            .map(|i| i.get_structure())
+            .context("Query not prepared")
+    }
+
     /// Writes the supplied query params
     /// This function assumes that the values are in the order expected by the query input structure
     pub fn write_query_input(&mut self, data: Vec<DataValue>) -> Result<()> {

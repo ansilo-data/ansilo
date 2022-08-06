@@ -334,7 +334,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         return;
     }
 
-    let target_alias = join_query.cvt.register_alias(inner_query.base_relid);
+    let target_alias = join_query.cvt.register_alias(inner_query.base_varno);
     let join_op = SelectQueryOperation::AddJoin(sqlil::Join::new(
         join_type,
         sqlil::EntitySource::new(inner_ctx.entity.clone(), target_alias),
@@ -1014,7 +1014,7 @@ pub unsafe extern "C" fn get_foreign_plan(
             .chain(PgList::<Node>::from_pg((*(*foreignrel).reltarget).exprs).iter_ptr())
             .chain(PgList::<Node>::from_pg(fdw_recheck_quals).iter_ptr()),
     );
-    
+
     let mut required_cols = deduplicate_columns(required_cols);
 
     for (varno, vars) in find_row_id_vars(&required_cols) {
@@ -1259,59 +1259,65 @@ pub unsafe extern "C" fn begin_foreign_scan(
 
     // Prepare the query for the chosen path
     restore_query_state(&mut ctx, &query);
-    let input_structure = ctx.prepare_query().unwrap();
+    ctx.prepare_query().unwrap();
 
-    // Send query params, if any
-    if !input_structure.params.is_empty() {
-        send_query_params(&mut ctx, &mut scan, &query, &input_structure, node);
-    }
+    // Prepare the query parameter expr's for evaluation
+    prepare_query_params(&mut scan, &query, node);
 
-    let row_structure = ctx.execute_query().unwrap();
-
-    scan.row_structure = Some(row_structure);
     (*node).fdw_state = into_fdw_private_scan(ctx, query, scan) as *mut _;
+}
+
+pub unsafe fn prepare_query_params(
+    scan: &mut FdwScanContext,
+    query: &FdwQueryContext,
+    node: *mut ForeignScanState,
+) {
+    // Prepare the query param expr's for evaluation
+    let param_nodes = query.cvt.param_nodes();
+    let param_exprs = PgList::<pg_sys::ExprState>::from_pg(pg_sys::ExecInitExprList(
+        vec_to_pg_list(param_nodes.clone()),
+        node as _,
+    ));
+
+    // Collect list of param id's to their respective ExprState nodes
+    let param_map = param_exprs
+        .iter_ptr()
+        .zip(param_nodes.into_iter())
+        .enumerate()
+        .flat_map(|(idx, (expr, node))| {
+            query
+                .cvt
+                .param_ids(node)
+                .into_iter()
+                .map(|id| (id, (expr, pg_sys::exprType(node))))
+                .collect::<Vec<_>>()
+                .into_iter()
+        })
+        .collect::<HashMap<_, _>>();
+
+    scan.param_exprs = Some(param_map);
 }
 
 pub unsafe fn send_query_params(
     ctx: &mut FdwContext,
-    scan: &mut FdwScanContext,
+    scan: &FdwScanContext,
     query: &FdwQueryContext,
-    input_structure: &QueryInputStructure,
     node: *mut ForeignScanState,
 ) {
-    // Prepare the query param expr's if it has not been done
-    // If a scan is restarted, they should already be present
-    if scan.param_exprs.is_none() {
-        let param_nodes = query.cvt.param_nodes();
-        let param_exprs = PgList::<pg_sys::ExprState>::from_pg(pg_sys::ExecInitExprList(
-            vec_to_pg_list(param_nodes.clone()),
-            node as _,
-        ));
+    let input_data = {
+        let input_structure = ctx
+            .get_input_structure()
+            .expect("Failed to send query params");
 
-        // Collect list of param id's to their respective ExprState nodes
-        let param_map = param_exprs
-            .iter_ptr()
-            .zip(param_nodes.into_iter())
-            .enumerate()
-            .flat_map(|(idx, (expr, node))| {
-                query
-                    .cvt
-                    .param_ids(node)
-                    .into_iter()
-                    .map(|id| (id, (expr, pg_sys::exprType(node))))
-                    .collect::<Vec<_>>()
-                    .into_iter()
-            })
-            .collect::<HashMap<_, _>>();
+        if input_structure.params.is_empty() {
+            return;
+        }
 
-        scan.param_exprs = Some(param_map);
-    }
+        // Evaluate each parameter to a datum
+        // We do so in a short-lived memory context so as not to leak the memory
+        let param_exprs = scan.param_exprs.as_ref().unwrap();
+        let econtext = (*node).ss.ps.ps_ExprContext;
 
-    // Evaluate each parameter to a datum
-    // We do so in a short-lived memory context so as not to leak the memory
-    let param_exprs = scan.param_exprs.as_ref().unwrap();
-    let econtext = (*node).ss.ps.ps_ExprContext;
-    let input_data =
         PgMemoryContexts::For((*econtext).ecxt_per_tuple_memory).switch_to(|context| {
             input_structure
                 .params
@@ -1324,7 +1330,8 @@ pub unsafe fn send_query_params(
                     from_datum(type_oid, datum).unwrap()
                 })
                 .collect::<Vec<_>>()
-        });
+        })
+    };
 
     // Finally, serialise and send the query params
     ctx.write_query_input(input_data).unwrap();
@@ -1337,8 +1344,20 @@ pub unsafe fn send_query_params(
 pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *mut TupleTableSlot {
     let slot = (*node).ss.ss_ScanTupleSlot;
 
-    let (mut ctx, mut query, scan) = from_fdw_private_scan((*node).fdw_state as _);
-    let row_structure = scan.row_structure.as_ref().unwrap();
+    let (mut ctx, mut query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
+
+    // Get the query output structure, if this is not present then execute the query
+    let row_structure = if let Some(row_structure) = scan.row_structure.as_ref() {
+        row_structure
+    } else {
+        // Send query params, if any
+        send_query_params(&mut ctx, &scan, &query, node);
+
+        let row_structure = ctx.execute_query().unwrap();
+        scan.row_structure = Some(row_structure);
+        scan.row_structure.as_ref().unwrap()
+    };
+
     let tupdesc = (*slot).tts_tupleDescriptor;
     let nattrs = (*tupdesc).natts as usize;
 
@@ -1458,7 +1477,7 @@ pub unsafe extern "C" fn recheck_foreign_scan(
 
     assert!(!outerplan.is_null());
 
-    /* Execute a local join execution plan */
+    // Execute a local join execution plan
     let result = {
         if !(*outerplan).chgParam.is_null() {
             pg_sys::ExecReScan(outerplan)
@@ -1471,7 +1490,7 @@ pub unsafe extern "C" fn recheck_foreign_scan(
         return false;
     }
 
-    /* Store result in the given slot */
+    // Store result in the given slot
     (*(*slot).tts_ops).copyslot.unwrap()(slot, result);
 
     return true;
@@ -1484,17 +1503,10 @@ pub unsafe extern "C" fn recheck_foreign_scan(
 pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
     let (mut ctx, query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
 
-    ctx.restart_query().unwrap();
-
-    // Rewrite query params, if changed
-    if !(*node).ss.ps.chgParam.is_null() {
-        let input_structure = ctx.query_writer.as_ref().unwrap().get_structure().clone();
-        if !input_structure.params.is_empty() {
-            send_query_params(&mut ctx, &mut scan, &query, &input_structure, node);
-        }
+    if scan.row_structure.is_some() {
+        ctx.restart_query().unwrap();
+        scan.row_structure = None;
     }
-
-    ctx.execute_query().unwrap();
 }
 
 /// Finish scanning foreign table and dispose objects used for this scan

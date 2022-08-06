@@ -53,6 +53,11 @@ impl ServerOptions {
 /// Connects to ansilo using the appropriate data source from the supplied RelOptInfo
 pub unsafe fn connect(foreign_table_oid: Oid) -> PgBox<FdwContext> {
     let table = GetForeignTable(foreign_table_oid);
+
+    if table.is_null() {
+        panic!("Could not find table with oid: {}", foreign_table_oid);
+    }
+
     let entity = parse_entity_version_id_from_foreign_table(foreign_table_oid).unwrap();
     let server = GetForeignServer((*table).serverid);
 
