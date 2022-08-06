@@ -154,8 +154,7 @@ impl FdwContext {
         Ok(query_input)
     }
 
-    /// Gets the query input structure expected by the prepared
-    /// query
+    /// Gets the query input structure expected by the prepared query
     pub fn get_input_structure(&self) -> Result<&QueryInputStructure> {
         self.query_writer
             .as_ref()
