@@ -135,7 +135,10 @@ mod tests {
 
     use nix::libc::close;
 
-    use crate::fdw::{proto::AuthDataSource, test::create_tmp_ipc_channel};
+    use crate::fdw::{
+        proto::{AuthDataSource, ClientQueryMessage, ServerQueryMessage},
+        test::create_tmp_ipc_channel,
+    };
 
     use super::*;
 
@@ -174,7 +177,7 @@ mod tests {
             for _ in 1..100 {
                 server
                     .recv(|req| {
-                        assert_eq!(req, ClientMessage::Execute);
+                        assert_eq!(req, ClientMessage::Close);
                         Ok(Some(ServerMessage::AuthAccepted))
                     })
                     .unwrap();
@@ -182,7 +185,7 @@ mod tests {
         });
 
         for _ in 1..100 {
-            let res = client.send(ClientMessage::Execute).unwrap();
+            let res = client.send(ClientMessage::Close).unwrap();
             assert_eq!(res, ServerMessage::AuthAccepted);
         }
 
@@ -199,8 +202,16 @@ mod tests {
             for _ in 1..10 {
                 server
                     .recv(|req| {
-                        assert_eq!(req, ClientMessage::WriteParams(param_buff.to_vec()));
-                        Ok(Some(ServerMessage::ResultData(result_buff.to_vec())))
+                        assert_eq!(
+                            req,
+                            ClientMessage::Query(
+                                0,
+                                ClientQueryMessage::WriteParams(param_buff.to_vec())
+                            )
+                        );
+                        Ok(Some(ServerMessage::Query(ServerQueryMessage::ResultData(
+                            result_buff.to_vec(),
+                        ))))
                     })
                     .unwrap();
             }
@@ -208,9 +219,14 @@ mod tests {
 
         for _ in 1..10 {
             let res = client
-                .send(ClientMessage::WriteParams(param_buff.to_vec()))
+                .send(ClientMessage::Query(0, ClientQueryMessage::WriteParams(
+                    param_buff.to_vec(),
+                )))
                 .unwrap();
-            assert_eq!(res, ServerMessage::ResultData(result_buff.to_vec()));
+            assert_eq!(
+                res,
+                ServerMessage::Query(ServerQueryMessage::ResultData(result_buff.to_vec()))
+            );
         }
 
         server_thread.join().unwrap();
@@ -238,7 +254,7 @@ mod tests {
 
         drop(server);
 
-        client.send(ClientMessage::Prepare).unwrap_err();
+        client.send(ClientMessage::Query(0, ClientQueryMessage::Prepare)).unwrap_err();
     }
 
     #[test]

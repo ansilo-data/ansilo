@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::Display,
     io::{Read, Write},
     mem,
@@ -20,7 +21,7 @@ use ansilo_logging::warn;
 
 use super::{
     channel::IpcServerChannel,
-    proto::{ClientMessage, ServerMessage},
+    proto::{ClientMessage, ClientQueryMessage, QueryId, ServerMessage, ServerQueryMessage},
 };
 
 /// A single connection from the FDW
@@ -33,8 +34,10 @@ pub(crate) struct FdwConnection<TConnector: Connector> {
     pool: TConnector::TConnectionPool,
     /// Connection state
     connection: FdwConnectionState<TConnector>,
-    /// Current query state
-    query: FdwQueryState<TConnector>,
+    /// Current query states
+    queries: HashMap<QueryId, FdwQueryState<TConnector>>,
+    /// Current query id counter
+    query_id: QueryId,
 }
 
 enum FdwConnectionState<TConnector: Connector> {
@@ -63,7 +66,8 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             entities,
             pool,
             connection: FdwConnectionState::New,
-            query: FdwQueryState::New,
+            queries: HashMap::new(),
+            query_id: 0,
         }
     }
 
@@ -96,36 +100,15 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             ClientMessage::EstimateSize(entity) => {
                 ServerMessage::EstimatedSizeResult(self.estimate_size(&entity)?)
             }
-            ClientMessage::Create(entity, query_type) => {
-                ServerMessage::QueryCreated(self.create_query(&entity, query_type)?)
-            }
-            ClientMessage::Apply(op) => {
-                ServerMessage::OperationResult(self.apply_query_operation(op)?)
-            }
             ClientMessage::GetRowIds(entity) => {
                 ServerMessage::RowIds(self.get_row_id_exprs(&entity)?)
             }
-            ClientMessage::Explain(verbose) => {
-                ServerMessage::ExplainResult(self.explain_query(verbose)?)
+            ClientMessage::CreateQuery(entity, query_type) => {
+                let (query_id, cost) = self.create_query(&entity, query_type)?;
+                ServerMessage::QueryCreated(query_id, cost)
             }
-            ClientMessage::Prepare => {
-                let structure = self.prepare()?;
-                ServerMessage::QueryPrepared(structure)
-            }
-            ClientMessage::WriteParams(data) => {
-                self.write_params(data)?;
-                ServerMessage::QueryParamsWritten
-            }
-            ClientMessage::Execute => ServerMessage::QueryExecuted(self.execute()?),
-            ClientMessage::Read(len) => {
-                // TODO: remove copy
-                let mut buff = vec![0u8; len as usize];
-                let read = self.read(&mut buff[..])?;
-                ServerMessage::ResultData(buff[..read].to_vec())
-            }
-            ClientMessage::RestartQuery => {
-                self.restart_query()?;
-                ServerMessage::QueryRestarted
+            ClientMessage::Query(query_id, message) => {
+                ServerMessage::Query(self.handle_query_message(query_id, message)?)
             }
             ClientMessage::Close => return Ok(None),
             ClientMessage::GenericError(err) => bail!("Error received from client: {}", err),
@@ -134,6 +117,44 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
                 ServerMessage::GenericError("Invalid message received".to_string())
             }
         }))
+    }
+
+    fn handle_query_message(
+        &mut self,
+        query_id: u32,
+        message: ClientQueryMessage,
+    ) -> Result<ServerQueryMessage> {
+        Ok(match message {
+            ClientQueryMessage::Apply(op) => {
+                ServerQueryMessage::OperationResult(self.apply_query_operation(query_id, op)?)
+            }
+            ClientQueryMessage::Explain(verbose) => {
+                ServerQueryMessage::Explained(self.explain_query(query_id, verbose)?)
+            }
+            ClientQueryMessage::Prepare => {
+                let structure = self.prepare(query_id)?;
+                ServerQueryMessage::Prepared(structure)
+            }
+            ClientQueryMessage::WriteParams(data) => {
+                self.write_params(query_id, data)?;
+                ServerQueryMessage::ParamsWritten
+            }
+            ClientQueryMessage::Execute => ServerQueryMessage::Executed(self.execute(query_id)?),
+            ClientQueryMessage::Read(len) => {
+                // TODO: remove copy
+                let mut buff = vec![0u8; len as usize];
+                let read = self.read(query_id, &mut buff[..])?;
+                ServerQueryMessage::ResultData(buff[..read].to_vec())
+            }
+            ClientQueryMessage::Restart => {
+                self.restart_query(query_id)?;
+                ServerQueryMessage::Restarted
+            }
+            ClientQueryMessage::Discard => {
+                self.queries.remove(&query_id).context("Invalid query id")?;
+                ServerQueryMessage::Discarded
+            }
+        })
     }
 
     fn connect(&mut self) -> Result<()> {
@@ -145,108 +166,19 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(())
     }
 
+    fn query(
+        queries: &mut HashMap<QueryId, FdwQueryState<TConnector>>,
+        query_id: QueryId,
+    ) -> Result<&mut FdwQueryState<TConnector>> {
+        queries.get_mut(&query_id).context("Invalid query id")
+    }
+
     fn estimate_size(&mut self, entity: &EntityVersionIdentifier) -> Result<OperationCost> {
         self.connect()?;
         Ok(TConnector::TQueryPlanner::estimate_size(
             self.connection.get()?,
             Self::get_entity_config(&self.entities, entity)?,
         )?)
-    }
-
-    fn create_query(
-        &mut self,
-        source: &sqlil::EntitySource,
-        r#type: sqlil::QueryType,
-    ) -> Result<OperationCost> {
-        self.connect()?;
-        let (cost, query) = TConnector::TQueryPlanner::create_base_query(
-            self.connection.get()?,
-            &self.entities,
-            Self::get_entity_config(&self.entities, &source.entity)?,
-            source,
-            r#type,
-        )?;
-
-        self.query = FdwQueryState::Planning(query);
-
-        Ok(cost)
-    }
-
-    fn apply_query_operation(&mut self, op: QueryOperation) -> Result<QueryOperationResult> {
-        match op {
-            QueryOperation::Select(op) => self.apply_select_operation(op),
-            QueryOperation::Insert(op) => self.apply_insert_operation(op),
-            QueryOperation::Update(op) => self.apply_update_operation(op),
-            QueryOperation::Delete(op) => self.apply_delete_operation(op),
-        }
-    }
-
-    fn apply_select_operation(&mut self, op: SelectQueryOperation) -> Result<QueryOperationResult> {
-        let select = self
-            .query
-            .current()?
-            .as_select_mut()
-            .context("Current query is not SELECT")?;
-
-        let res = TConnector::TQueryPlanner::apply_select_operation(
-            self.connection.get()?,
-            &self.entities,
-            select,
-            op,
-        )?;
-
-        Ok(res)
-    }
-
-    fn apply_insert_operation(&mut self, op: InsertQueryOperation) -> Result<QueryOperationResult> {
-        let insert = self
-            .query
-            .current()?
-            .as_insert_mut()
-            .context("Current query is not INSERT")?;
-
-        let res = TConnector::TQueryPlanner::apply_insert_operation(
-            self.connection.get()?,
-            &self.entities,
-            insert,
-            op,
-        )?;
-
-        Ok(res)
-    }
-
-    fn apply_update_operation(&mut self, op: UpdateQueryOperation) -> Result<QueryOperationResult> {
-        let update = self
-            .query
-            .current()?
-            .as_update_mut()
-            .context("Current query is not INSERT")?;
-
-        let res = TConnector::TQueryPlanner::apply_update_operation(
-            self.connection.get()?,
-            &self.entities,
-            update,
-            op,
-        )?;
-
-        Ok(res)
-    }
-
-    fn apply_delete_operation(&mut self, op: DeleteQueryOperation) -> Result<QueryOperationResult> {
-        let delete = self
-            .query
-            .current()?
-            .as_delete_mut()
-            .context("Current query is not DELETE")?;
-
-        let res = TConnector::TQueryPlanner::apply_delete_operation(
-            self.connection.get()?,
-            &self.entities,
-            delete,
-            op,
-        )?;
-
-        Ok(res)
     }
 
     fn get_row_id_exprs(
@@ -264,8 +196,123 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(res)
     }
 
-    fn prepare(&mut self) -> Result<QueryInputStructure> {
-        let query = self.query.current()?;
+    fn create_query(
+        &mut self,
+        source: &sqlil::EntitySource,
+        r#type: sqlil::QueryType,
+    ) -> Result<(QueryId, OperationCost)> {
+        self.connect()?;
+        let (cost, query) = TConnector::TQueryPlanner::create_base_query(
+            self.connection.get()?,
+            &self.entities,
+            Self::get_entity_config(&self.entities, &source.entity)?,
+            source,
+            r#type,
+        )?;
+
+        let query_id = self.query_id;
+        self.queries
+            .insert(query_id, FdwQueryState::Planning(query));
+        self.query_id += 1;
+
+        Ok((query_id, cost))
+    }
+
+    fn apply_query_operation(
+        &mut self,
+        query_id: QueryId,
+        op: QueryOperation,
+    ) -> Result<QueryOperationResult> {
+        match op {
+            QueryOperation::Select(op) => self.apply_select_operation(query_id, op),
+            QueryOperation::Insert(op) => self.apply_insert_operation(query_id, op),
+            QueryOperation::Update(op) => self.apply_update_operation(query_id, op),
+            QueryOperation::Delete(op) => self.apply_delete_operation(query_id, op),
+        }
+    }
+
+    fn apply_select_operation(
+        &mut self,
+        query_id: QueryId,
+        op: SelectQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        let select = Self::query(&mut self.queries, query_id)?
+            .current()?
+            .as_select_mut()
+            .context("Current query is not SELECT")?;
+
+        let res = TConnector::TQueryPlanner::apply_select_operation(
+            self.connection.get()?,
+            &self.entities,
+            select,
+            op,
+        )?;
+
+        Ok(res)
+    }
+
+    fn apply_insert_operation(
+        &mut self,
+        query_id: QueryId,
+        op: InsertQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        let insert = Self::query(&mut self.queries, query_id)?
+            .current()?
+            .as_insert_mut()
+            .context("Current query is not INSERT")?;
+
+        let res = TConnector::TQueryPlanner::apply_insert_operation(
+            self.connection.get()?,
+            &self.entities,
+            insert,
+            op,
+        )?;
+
+        Ok(res)
+    }
+
+    fn apply_update_operation(
+        &mut self,
+        query_id: QueryId,
+        op: UpdateQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        let update = Self::query(&mut self.queries, query_id)?
+            .current()?
+            .as_update_mut()
+            .context("Current query is not INSERT")?;
+
+        let res = TConnector::TQueryPlanner::apply_update_operation(
+            self.connection.get()?,
+            &self.entities,
+            update,
+            op,
+        )?;
+
+        Ok(res)
+    }
+
+    fn apply_delete_operation(
+        &mut self,
+        query_id: QueryId,
+        op: DeleteQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        let delete = Self::query(&mut self.queries, query_id)?
+            .current()?
+            .as_delete_mut()
+            .context("Current query is not DELETE")?;
+
+        let res = TConnector::TQueryPlanner::apply_delete_operation(
+            self.connection.get()?,
+            &self.entities,
+            delete,
+            op,
+        )?;
+
+        Ok(res)
+    }
+
+    fn prepare(&mut self, query_id: QueryId) -> Result<QueryInputStructure> {
+        let query = Self::query(&mut self.queries, query_id)?.current()?;
         let connection = self.connection.get()?;
 
         let query =
@@ -273,13 +320,14 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         let handle = connection.prepare(query)?;
 
         let structure = handle.get_structure()?;
-        self.query = FdwQueryState::Prepared(QueryHandleWrite(handle));
+        *Self::query(&mut self.queries, query_id)? =
+            FdwQueryState::Prepared(QueryHandleWrite(handle));
 
         Ok(structure)
     }
 
-    fn write_params(&mut self, data: Vec<u8>) -> Result<()> {
-        let handle = self.query.query_handle()?;
+    fn write_params(&mut self, query_id: QueryId, data: Vec<u8>) -> Result<()> {
+        let handle = Self::query(&mut self.queries, query_id)?.query_handle()?;
 
         handle
             .write_all(data.as_slice())
@@ -288,8 +336,11 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(())
     }
 
-    fn execute(&mut self) -> Result<RowStructure> {
-        let query = mem::replace(&mut self.query, FdwQueryState::New);
+    fn execute(&mut self, query_id: QueryId) -> Result<RowStructure> {
+        let query = mem::replace(
+            Self::query(&mut self.queries, query_id)?,
+            FdwQueryState::New,
+        );
         let mut handle = match query {
             FdwQueryState::Prepared(handle) => handle,
             _ => bail!(
@@ -301,12 +352,13 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         let result_set = handle.0.execute()?;
         let row_structure = result_set.get_structure()?;
 
-        self.query = FdwQueryState::Executed(handle, ResultSetRead(result_set));
+        *Self::query(&mut self.queries, query_id)? =
+            FdwQueryState::Executed(handle, ResultSetRead(result_set));
         Ok(row_structure)
     }
 
-    fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
-        let result_set = self.query.result_set()?;
+    fn read(&mut self, query_id: QueryId, buff: &mut [u8]) -> Result<usize> {
+        let result_set = Self::query(&mut self.queries, query_id)?.result_set()?;
 
         let read = result_set
             .read(buff)
@@ -315,10 +367,13 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(read)
     }
 
-    fn restart_query(&mut self) -> Result<()> {
-        let query = mem::replace(&mut self.query, FdwQueryState::New);
+    fn restart_query(&mut self, query_id: QueryId) -> Result<()> {
+        let query = mem::replace(
+            Self::query(&mut self.queries, query_id)?,
+            FdwQueryState::New,
+        );
 
-        self.query = match query {
+        *Self::query(&mut self.queries, query_id)? = match query {
             FdwQueryState::Executed(mut handle, _) => {
                 handle.0.restart()?;
                 FdwQueryState::Prepared(handle)
@@ -332,11 +387,11 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(())
     }
 
-    fn explain_query(&mut self, verbose: bool) -> Result<String> {
+    fn explain_query(&mut self, query_id: QueryId, verbose: bool) -> Result<String> {
         let res = TConnector::TQueryPlanner::explain_query(
             self.connection.get()?,
             &self.entities,
-            &*self.query.current()?,
+            Self::query(&mut self.queries, query_id)?.current()?,
             verbose,
         )?;
 
@@ -521,42 +576,61 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_select");
 
         let res = client
-            .send(ClientMessage::Create(
+            .send(ClientMessage::CreateQuery(
                 sqlil::source("people", "1.0", "people"),
                 sqlil::QueryType::Select,
             ))
             .unwrap();
 
-        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
 
         let res = client
-            .send(ClientMessage::Apply(
-                SelectQueryOperation::AddColumn((
-                    "first_name".into(),
-                    sqlil::Expr::attr("people", "first_name"),
-                ))
-                .into(),
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    SelectQueryOperation::AddColumn((
+                        "first_name".into(),
+                        sqlil::Expr::attr("people", "first_name"),
+                    ))
+                    .into(),
+                ),
             ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
         );
 
-        let res = client.send(ClientMessage::Prepare).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
         assert_eq!(
             res,
-            ServerMessage::QueryPrepared(QueryInputStructure::new(vec![]))
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
         );
 
-        let res = client.send(ClientMessage::Execute).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .unwrap();
         let row_structure = RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
-        assert_eq!(res, ServerMessage::QueryExecuted(row_structure.clone()));
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Executed(row_structure.clone()))
+        );
 
-        let res = client.send(ClientMessage::Read(1024)).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Read(1024)))
+            .unwrap();
         let data = match res {
-            ServerMessage::ResultData(data) => data,
+            ServerMessage::Query(ServerQueryMessage::ResultData(data)) => data,
             _ => unreachable!("Unexpected response {:?}", res),
         };
 
@@ -584,7 +658,9 @@ mod tests {
     fn test_fdw_connection_execute_without_query() {
         let (thread, mut client) = create_mock_connection("connection_execute_without_auth");
 
-        let res = client.send(ClientMessage::Execute).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .unwrap();
 
         assert!(matches!(res, ServerMessage::GenericError(_)));
 
@@ -617,44 +693,63 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_select");
 
         let res = client
-            .send(ClientMessage::Create(
+            .send(ClientMessage::CreateQuery(
                 sqlil::source("people", "1.0", "people"),
                 sqlil::QueryType::Select,
             ))
             .unwrap();
 
-        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
 
         let res = client
-            .send(ClientMessage::Apply(
-                SelectQueryOperation::AddColumn((
-                    "first_name".into(),
-                    sqlil::Expr::attr("people", "first_name"),
-                ))
-                .into(),
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    SelectQueryOperation::AddColumn((
+                        "first_name".into(),
+                        sqlil::Expr::attr("people", "first_name"),
+                    ))
+                    .into(),
+                ),
             ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
         );
 
-        let res = client.send(ClientMessage::Prepare).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
         assert_eq!(
             res,
-            ServerMessage::QueryPrepared(QueryInputStructure::new(vec![]))
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
         );
 
         for _ in 1..3 {
-            let res = client.send(ClientMessage::Execute).unwrap();
+            let res = client
+                .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+                .unwrap();
             let row_structure =
                 RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
-            assert_eq!(res, ServerMessage::QueryExecuted(row_structure.clone()));
+            assert_eq!(
+                res,
+                ServerMessage::Query(ServerQueryMessage::Executed(row_structure.clone()))
+            );
 
-            let res = client.send(ClientMessage::Read(1024)).unwrap();
+            let res = client
+                .send(ClientMessage::Query(0, ClientQueryMessage::Read(1024)))
+                .unwrap();
             let data = match res {
-                ServerMessage::ResultData(data) => data,
+                ServerMessage::Query(ServerQueryMessage::ResultData(data)) => data,
                 _ => unreachable!("Unexpected response {:?}", res),
             };
 
@@ -674,8 +769,10 @@ mod tests {
             );
             assert_eq!(result_data.read_data_value().unwrap(), None);
 
-            let res = client.send(ClientMessage::RestartQuery).unwrap();
-            assert_eq!(res, ServerMessage::QueryRestarted);
+            let res = client
+                .send(ClientMessage::Query(0, ClientQueryMessage::Restart))
+                .unwrap();
+            assert_eq!(res, ServerMessage::Query(ServerQueryMessage::Restarted));
         }
 
         client.close().unwrap();
@@ -687,33 +784,43 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_select_explain");
 
         let res = client
-            .send(ClientMessage::Create(
+            .send(ClientMessage::CreateQuery(
                 sqlil::source("people", "1.0", "people"),
                 sqlil::QueryType::Select,
             ))
             .unwrap();
 
-        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
 
         let res = client
-            .send(ClientMessage::Apply(
-                SelectQueryOperation::AddColumn((
-                    "first_name".into(),
-                    sqlil::Expr::attr("people", "first_name"),
-                ))
-                .into(),
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    SelectQueryOperation::AddColumn((
+                        "first_name".into(),
+                        sqlil::Expr::attr("people", "first_name"),
+                    ))
+                    .into(),
+                ),
             ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
         );
 
-        let res = client.send(ClientMessage::Explain(true)).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Explain(true)))
+            .unwrap();
 
         let json = match res {
-            ServerMessage::ExplainResult(res) => res,
+            ServerMessage::Query(ServerQueryMessage::Explained(res)) => res,
             _ => panic!("Unexpected response from server: {:?}", res),
         };
 
@@ -728,65 +835,84 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_insert");
 
         let res = client
-            .send(ClientMessage::Create(
+            .send(ClientMessage::CreateQuery(
                 sqlil::source("people", "1.0", "people"),
                 sqlil::QueryType::Insert,
             ))
             .unwrap();
 
-        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
 
         let res = client
-            .send(ClientMessage::Apply(
-                InsertQueryOperation::AddColumn((
-                    "first_name".into(),
-                    sqlil::Expr::constant(DataValue::from("New")),
-                ))
-                .into(),
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    InsertQueryOperation::AddColumn((
+                        "first_name".into(),
+                        sqlil::Expr::constant(DataValue::from("New")),
+                    ))
+                    .into(),
+                ),
             ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
         );
 
         let res = client
-            .send(ClientMessage::Apply(
-                InsertQueryOperation::AddColumn((
-                    "last_name".into(),
-                    sqlil::Expr::constant(DataValue::from("Man")),
-                ))
-                .into(),
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    InsertQueryOperation::AddColumn((
+                        "last_name".into(),
+                        sqlil::Expr::constant(DataValue::from("Man")),
+                    ))
+                    .into(),
+                ),
             ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
         );
 
-        let res = client.send(ClientMessage::Prepare).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
         assert_eq!(
             res,
-            ServerMessage::QueryPrepared(QueryInputStructure::new(vec![]))
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
         );
 
-        let res = client.send(ClientMessage::Execute).unwrap();
-        assert_eq!(res, ServerMessage::QueryExecuted(RowStructure::new(vec![])));
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+        );
 
         client.close().unwrap();
         let entities = thread.join().unwrap().unwrap();
 
         // Assert row was actually inserted
-        entities
-            .with_data("people", "1.0", |rows| {
-                assert_eq!(
-                    rows.iter().last().unwrap().clone(),
-                    vec![DataValue::from("New"), DataValue::from("Man")]
-                );
-            })
-            .unwrap();
+        let rows = entities.get_data("people", "1.0").unwrap();
+        assert_eq!(
+            rows.iter().last().unwrap().clone(),
+            vec![DataValue::from("New"), DataValue::from("Man")]
+        );
     }
 
     #[test]
@@ -794,54 +920,68 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_update");
 
         let res = client
-            .send(ClientMessage::Create(
+            .send(ClientMessage::CreateQuery(
                 sqlil::source("people", "1.0", "people"),
                 sqlil::QueryType::Update,
             ))
             .unwrap();
 
-        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
 
         let res = client
-            .send(ClientMessage::Apply(
-                UpdateQueryOperation::AddSet((
-                    "first_name".into(),
-                    sqlil::Expr::constant(DataValue::from("Updated")),
-                ))
-                .into(),
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    UpdateQueryOperation::AddSet((
+                        "first_name".into(),
+                        sqlil::Expr::constant(DataValue::from("Updated")),
+                    ))
+                    .into(),
+                ),
             ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
         );
 
-        let res = client.send(ClientMessage::Prepare).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
         assert_eq!(
             res,
-            ServerMessage::QueryPrepared(QueryInputStructure::new(vec![]))
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
         );
 
-        let res = client.send(ClientMessage::Execute).unwrap();
-        assert_eq!(res, ServerMessage::QueryExecuted(RowStructure::new(vec![])));
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+        );
 
         client.close().unwrap();
         let entities = thread.join().unwrap().unwrap();
 
         // Assert rows were all updated
-        entities
-            .with_data("people", "1.0", |rows| {
-                assert_eq!(
-                    rows,
-                    &vec![
-                        vec![DataValue::from("Updated"), DataValue::from("Jane")],
-                        vec![DataValue::from("Updated"), DataValue::from("Smith")],
-                        vec![DataValue::from("Updated"), DataValue::from("Gregson")],
-                    ]
-                );
-            })
-            .unwrap();
+        let rows = entities.get_data("people", "1.0").unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                vec![DataValue::from("Updated"), DataValue::from("Jane")],
+                vec![DataValue::from("Updated"), DataValue::from("Smith")],
+                vec![DataValue::from("Updated"), DataValue::from("Gregson")],
+            ]
+        );
     }
 
     #[test]
@@ -849,54 +989,69 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_delete");
 
         let res = client
-            .send(ClientMessage::Create(
+            .send(ClientMessage::CreateQuery(
                 sqlil::source("people", "1.0", "people"),
                 sqlil::QueryType::Delete,
             ))
             .unwrap();
 
-        assert_eq!(res, ServerMessage::QueryCreated(OperationCost::default()));
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
 
         let res = client
-            .send(ClientMessage::Apply(
-                DeleteQueryOperation::AddWhere(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
-                    sqlil::Expr::attr("people", "first_name"),
-                    sqlil::BinaryOpType::Equal,
-                    sqlil::Expr::constant(DataValue::from("John")),
-                )))
-                .into(),
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    DeleteQueryOperation::AddWhere(sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                        sqlil::Expr::attr("people", "first_name"),
+                        sqlil::BinaryOpType::Equal,
+                        sqlil::Expr::constant(DataValue::from("John")),
+                    )))
+                    .into(),
+                ),
             ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::OperationResult(QueryOperationResult::Ok(OperationCost::default()))
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
         );
 
-        let res = client.send(ClientMessage::Prepare).unwrap();
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
         assert_eq!(
             res,
-            ServerMessage::QueryPrepared(QueryInputStructure::new(vec![]))
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
         );
 
-        let res = client.send(ClientMessage::Execute).unwrap();
-        assert_eq!(res, ServerMessage::QueryExecuted(RowStructure::new(vec![])));
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+        );
 
         client.close().unwrap();
         let entities = thread.join().unwrap().unwrap();
 
         // Assert row was deleted
-        entities
-            .with_data("people", "1.0", |rows| {
-                assert_eq!(
-                    rows,
-                    &vec![
-                        vec![DataValue::from("Mary"), DataValue::from("Jane")],
-                        vec![DataValue::from("Gary"), DataValue::from("Gregson")],
-                    ]
-                );
-            })
-            .unwrap();
+        let rows = entities.get_data("people", "1.0").unwrap();
+
+        assert_eq!(
+            rows,
+            vec![
+                vec![DataValue::from("Mary"), DataValue::from("Jane")],
+                vec![DataValue::from("Gary"), DataValue::from("Gregson")],
+            ]
+        );
     }
 
     #[test]
@@ -916,6 +1071,155 @@ mod tests {
                 DataType::UInt64
             )])
         );
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_multiple_queries() {
+        let (thread, mut client) = create_mock_connection("connection_select");
+
+        let queries = (0..5)
+            .map(|i| {
+                let res = client
+                    .send(ClientMessage::CreateQuery(
+                        sqlil::source("people", "1.0", "people"),
+                        sqlil::QueryType::Select,
+                    ))
+                    .unwrap();
+
+                assert_eq!(
+                    res,
+                    ServerMessage::QueryCreated(i, OperationCost::default())
+                );
+
+                i
+            })
+            .collect::<Vec<_>>();
+
+        for query_id in queries.iter().cloned() {
+            let res = client
+                .send(ClientMessage::Query(
+                    query_id,
+                    ClientQueryMessage::Apply(
+                        SelectQueryOperation::AddColumn((
+                            "first_name".into(),
+                            sqlil::Expr::attr("people", "first_name"),
+                        ))
+                        .into(),
+                    ),
+                ))
+                .unwrap();
+
+            assert_eq!(
+                res,
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                ))
+            );
+        }
+
+        for query_id in queries.iter().cloned() {
+            let res = client
+                .send(ClientMessage::Query(query_id, ClientQueryMessage::Prepare))
+                .unwrap();
+            assert_eq!(
+                res,
+                ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                    vec![]
+                )))
+            );
+        }
+
+        for query_id in queries.iter().cloned() {
+            for _ in 1..3 {
+                let res = client
+                    .send(ClientMessage::Query(query_id, ClientQueryMessage::Execute))
+                    .unwrap();
+                let row_structure =
+                    RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
+                assert_eq!(
+                    res,
+                    ServerMessage::Query(ServerQueryMessage::Executed(row_structure.clone()))
+                );
+
+                let res = client
+                    .send(ClientMessage::Query(
+                        query_id,
+                        ClientQueryMessage::Read(1024),
+                    ))
+                    .unwrap();
+                let data = match res {
+                    ServerMessage::Query(ServerQueryMessage::ResultData(data)) => data,
+                    _ => unreachable!("Unexpected response {:?}", res),
+                };
+
+                let mut result_data = DataReader::new(io::Cursor::new(data), row_structure.types());
+
+                assert_eq!(
+                    result_data.read_data_value().unwrap(),
+                    Some(DataValue::from("Mary"))
+                );
+                assert_eq!(
+                    result_data.read_data_value().unwrap(),
+                    Some(DataValue::from("John"))
+                );
+                assert_eq!(
+                    result_data.read_data_value().unwrap(),
+                    Some(DataValue::from("Gary"))
+                );
+                assert_eq!(result_data.read_data_value().unwrap(), None);
+
+                let res = client
+                    .send(ClientMessage::Query(query_id, ClientQueryMessage::Restart))
+                    .unwrap();
+                assert_eq!(res, ServerMessage::Query(ServerQueryMessage::Restarted));
+            }
+
+            let res = client
+                .send(ClientMessage::Query(query_id, ClientQueryMessage::Discard))
+                .unwrap();
+            match res {
+                ServerMessage::Query(ServerQueryMessage::Discarded) => {}
+                _ => unreachable!("Unexpected response {:?}", res),
+            };
+        }
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_invalid_query_id() {
+        let (thread, mut client) = create_mock_connection("connection_select_explain");
+
+        let res = client
+            .send(ClientMessage::CreateQuery(
+                sqlil::source("people", "1.0", "people"),
+                sqlil::QueryType::Select,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
+
+        let res = client
+            .send(ClientMessage::Query(
+                123,
+                ClientQueryMessage::Apply(
+                    SelectQueryOperation::AddColumn((
+                        "first_name".into(),
+                        sqlil::Expr::attr("people", "first_name"),
+                    ))
+                    .into(),
+                ),
+            ))
+            .unwrap();
+
+        assert_eq!(res, ServerMessage::GenericError("Invalid query id".into()));
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();

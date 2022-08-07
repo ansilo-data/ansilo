@@ -97,7 +97,7 @@ impl FdwContext {
 
     pub fn create_query(&mut self, alias: &str, r#type: sqlil::QueryType) -> Result<OperationCost> {
         let res = self
-            .send(ClientMessage::Create(
+            .send(ClientMessage::CreateQuery(
                 sqlil::EntitySource::new(self.entity.clone(), alias),
                 r#type,
             ))

@@ -6,6 +6,8 @@ pub use ansilo_connectors::interface::{
 use ansilo_core::{sqlil::{self, EntityVersionIdentifier}, data::DataType};
 use bincode::{Decode, Encode};
 
+pub type QueryId = u32;
+
 /// Protocol messages sent by postgres
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ClientMessage {
@@ -13,12 +15,23 @@ pub enum ClientMessage {
     AuthDataSource(AuthDataSource),
     /// Estimates the number of entities from the source
     EstimateSize(EntityVersionIdentifier),
-    /// Creates a new query
-    Create(sqlil::EntitySource, sqlil::QueryType),
-    /// Applies the supplied operation to the current query
-    Apply(QueryOperation),
     /// Requests the row id expressions for the entity source
     GetRowIds(sqlil::EntitySource),
+    /// Creates a new query
+    CreateQuery(sqlil::EntitySource, sqlil::QueryType),
+    /// Performes an action on the the specified query
+    Query(QueryId, ClientQueryMessage),
+    /// Instruct the server to close the connection
+    Close,
+    /// Error occurred with message
+    GenericError(String),
+}
+
+/// Protocol messages sent by postgres to operate on a query instance
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub enum ClientQueryMessage {
+    /// Applies the supplied operation to the current query
+    Apply(QueryOperation),
     /// Returns an explaination of the current query state for debugging purposes in JSON encoding
     /// The boolean flag determines if a more vebose output is requested
     Explain(bool),
@@ -32,11 +45,9 @@ pub enum ClientMessage {
     /// Read up to the supplied number of bytes from the query
     Read(u32),
     /// Discard the current result set and ready the query for new params and execution
-    RestartQuery,
-    /// Instruct the server to close the connection
-    Close,
-    /// Error occurred with message
-    GenericError(String),
+    Restart,
+    /// Instructs the server to remove the query instance
+    Discard,
 }
 
 /// Message sent by the client to initialise the connection
@@ -57,32 +68,41 @@ impl AuthDataSource {
     }
 }
 
-/// Protocol messages sent by ansilo
+/// Protocol responses sent by ansilo
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ServerMessage {
     /// Token was accepted
     AuthAccepted,
     /// Estimated size result
     EstimatedSizeResult(OperationCost),
-    /// The base query was created
-    QueryCreated(OperationCost),
-    /// Operation applied
-    OperationResult(QueryOperationResult),
     /// The returned row id expressions
     RowIds(Vec<(sqlil::Expr, DataType)>),
+    /// The base query was created
+    QueryCreated(QueryId, OperationCost),
+    /// The responses from operations on a specific query
+    Query(ServerQueryMessage),
+    /// Error occurred with message
+    GenericError(String),
+}
+
+/// Protocol respones sent by ansilo in regards to a specific query
+#[derive(Debug, PartialEq, Clone, Encode, Decode)]
+pub enum ServerQueryMessage {
+    /// Operation applied
+    OperationResult(QueryOperationResult),
     /// The result of the query explaination as a JSON encoded string
-    ExplainResult(String),
+    Explained(String),
     /// The query was prepared
-    QueryPrepared(QueryInputStructure),
+    Prepared(QueryInputStructure),
     /// Query params written
-    QueryParamsWritten,
+    ParamsWritten,
     /// The query was executed
-    QueryExecuted(RowStructure),
+    Executed(RowStructure),
     /// Rows returned by the query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
     ResultData(Vec<u8>),
     /// Query restarted
-    QueryRestarted,
-    /// Error occurred with message
-    GenericError(String),
+    Restarted,
+    /// Query removed
+    Discarded
 }
