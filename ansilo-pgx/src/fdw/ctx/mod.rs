@@ -2,6 +2,7 @@ mod connection;
 mod query;
 mod fdw_private;
 mod planner;
+pub mod mem;
 
 pub use connection::*;
 pub use query::*;

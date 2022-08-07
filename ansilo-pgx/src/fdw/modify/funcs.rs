@@ -16,11 +16,15 @@ use pgx::{
 
 use crate::{
     fdw::{
-        common,
+        common::{
+            self,
+            params::{prepare_query_params, send_query_params},
+        },
         ctx::{
-            from_fdw_private_modify, from_fdw_private_rel, into_fdw_private_modify, FdwContext,
-            FdwModifyContext, FdwQueryContext, FdwQueryType, FdwScanContext, FdwSelectQuery,
-            PlannerContext,
+            from_fdw_private_modify, from_fdw_private_rel, into_fdw_private_modify,
+            mem::{pg_query_scoped, pg_transaction_scoped},
+            FdwContext, FdwModifyContext, FdwQueryContext, FdwQueryType, FdwScanContext,
+            FdwSelectQuery, PlannerContext,
         },
     },
     sqlil::{convert, from_datum, from_pg_type, into_pg_type},
@@ -34,9 +38,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     target_rte: *mut RangeTblEntry,
     target_relation: Relation,
 ) {
-    // TODO: See how we can avoid having multiple connections to ansilo within the same plan tree
-    // This will be vital once we start dealing with foreign locking or transactions
-    let mut ctx = common::connect((*target_relation).rd_id);
+    let mut ctx = pg_transaction_scoped(common::connect((*target_relation).rd_id));
 
     let row_ids = match ctx.get_row_id_exprs("unused") {
         Ok(r) => r,
@@ -67,8 +69,6 @@ pub unsafe extern "C" fn add_foreign_update_targets(
         // Register it as a row-identity column needed by this rel
         pg_sys::add_row_identity_var(root, col, rtindex, res_name as *const _);
     }
-
-    // TODO: Clean up
 }
 
 #[pg_guard]
@@ -103,9 +103,10 @@ pub unsafe extern "C" fn plan_foreign_modify(
 
     let table = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
 
-    // TODO: See how we can avoid having multiple connections to ansilo within the same plan tree
-    // This will be vital once we start dealing with foreign locking or transactions
-    let mut ctx = common::connect(table.rd_id);
+    // We scope the connection to the top-level transaction
+    // so all queries use the same connection which is required
+    // for remote transactions or locking.
+    let mut ctx = pg_transaction_scoped(common::connect(table.rd_id));
 
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_INSERT => {
@@ -120,7 +121,11 @@ pub unsafe extern "C" fn plan_foreign_modify(
         _ => panic!("Unexpected operation: {}", (*plan).operation),
     };
 
-    into_fdw_private_modify(ctx, query, FdwModifyContext::new())
+    into_fdw_private_modify(
+        ctx,
+        pg_query_scoped(root, query),
+        pg_query_scoped(root, FdwModifyContext::new()),
+    )
 }
 
 fn plan_foreign_insert(
@@ -131,7 +136,8 @@ fn plan_foreign_insert(
     table: PgTable,
 ) -> FdwQueryContext {
     // Create an insert query to insert a single row
-    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Insert)
+    let mut query = ctx
+        .create_query(result_relation, sqlil::QueryType::Insert)
         .unwrap();
 
     // Add a parameter for each column
@@ -164,7 +170,8 @@ unsafe fn plan_foreign_update(
     table: PgTable,
 ) -> FdwQueryContext {
     // Create an update query to update a single row
-    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Update)
+    let mut query = ctx
+        .create_query(result_relation, sqlil::QueryType::Update)
         .unwrap();
 
     // Determine the columns which are updated by the query
@@ -254,7 +261,8 @@ unsafe fn plan_foreign_delete(
     table: PgTable,
 ) -> FdwQueryContext {
     // Create an delete query to delete a single row
-    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Delete)
+    let mut query = ctx
+        .create_query(result_relation, sqlil::QueryType::Delete)
         .unwrap();
 
     // Add a conditions to filter the row to by the row id
@@ -458,13 +466,8 @@ pub unsafe extern "C" fn exec_foreign_delete(
 
 #[pg_guard]
 pub unsafe extern "C" fn end_foreign_modify(estate: *mut EState, rinfo: *mut ResultRelInfo) {
-    if (*rinfo).ri_FdwState.is_null() {
-        return;
-    }
-
-    let (mut ctx, _query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
-
-    // TODO: Clean up
+    // No manual clean up is needed as all items should be dropped
+    // at the end of the memory contexts in which they were scoped to
 }
 
 #[pg_guard]
@@ -518,9 +521,7 @@ pub unsafe extern "C" fn plan_direct_modify(
 
     let table = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
 
-    // TODO: See how we can avoid having multiple connections to ansilo within the same plan tree
-    // This will be vital once we start dealing with foreign locking or transactions
-    let mut ctx = common::connect(table.rd_id);
+    let mut ctx = pg_transaction_scoped(common::connect(table.rd_id));
 
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_UPDATE => plan_direct_foreign_update(
@@ -559,7 +560,11 @@ pub unsafe extern "C" fn plan_direct_modify(
     }
 
     // Update the fdw_private state with the modification query state
-    (*foreign_scan).fdw_private = into_fdw_private_modify(ctx, query, FdwModifyContext::new());
+    (*foreign_scan).fdw_private = into_fdw_private_modify(
+        ctx,
+        pg_query_scoped(root, query),
+        pg_query_scoped(root, FdwModifyContext::new()),
+    );
 
     return true;
 }
@@ -575,7 +580,8 @@ unsafe fn plan_direct_foreign_update(
 ) -> Option<FdwQueryContext> {
     // Create an update query to update all rows specified by the
     // inner select query
-    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Update)
+    let mut query = ctx
+        .create_query(result_relation, sqlil::QueryType::Update)
         .unwrap();
 
     // The expressions of concern are the first N columns of the processed
@@ -659,7 +665,8 @@ unsafe fn plan_direct_foreign_delete(
 ) -> Option<FdwQueryContext> {
     // Create an delete query to delete all rows specified by the
     // inner select query
-    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Delete)
+    let mut query = ctx
+        .create_query(result_relation, sqlil::QueryType::Delete)
         .unwrap();
 
     // We apply the remote conditions of the inner select query to the delete query
@@ -708,7 +715,7 @@ pub unsafe extern "C" fn begin_direct_modify(
 
     query.prepare_query().unwrap();
 
-    crate::fdw::scan::prepare_query_params(&mut state.scan, &query, node);
+    prepare_query_params(&mut state.scan, &query, node);
 
     (*node).fdw_state = (*plan).fdw_private as *mut _;
 }
@@ -718,7 +725,7 @@ pub unsafe extern "C" fn iterate_direct_modify(node: *mut ForeignScanState) -> *
     let (ctx, mut query, state) = from_fdw_private_modify((*node).fdw_state as *mut _);
 
     // Send query params
-    crate::fdw::scan::send_query_params(&mut query, &state.scan, node);
+    send_query_params(&mut query, &state.scan, node);
 
     // Execute the direct modification
     query.execute_query().unwrap();
@@ -738,10 +745,6 @@ pub unsafe extern "C" fn end_direct_modify(node: *mut ForeignScanState) {
     if (*node).fdw_state.is_null() {
         return;
     }
-
-    let (mut ctx, _, _) = from_fdw_private_modify((*node).fdw_state as _);
-
-    // TODO: Clean up
 }
 
 #[pg_guard]

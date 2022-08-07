@@ -24,7 +24,16 @@ use pgx::{
 };
 
 use crate::{
-    fdw::{common, ctx::*},
+    fdw::{
+        common::{
+            self,
+            params::{prepare_query_params, send_query_params},
+        },
+        ctx::{
+            mem::{pg_query_scoped, pg_scan_scoped, pg_transaction_scoped},
+            *,
+        },
+    },
     sqlil::{
         convert, convert_list, from_datum, into_datum, into_pg_type,
         parse_entity_version_id_from_foreign_table, parse_entity_version_id_from_rel,
@@ -57,8 +66,12 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     baserel: *mut RelOptInfo,
     foreigntableid: Oid,
 ) {
-    let mut ctx = common::connect(foreigntableid);
-    let planner = PlannerContext::base_rel(root, baserel);
+    // We scope the connection to the top-level transaction
+    // so all queries use the same connection which is required
+    // for remote transactions or locking.
+    let mut ctx = pg_transaction_scoped(common::connect(foreigntableid));
+
+    let planner = pg_query_scoped(root, PlannerContext::base_rel(root, baserel));
 
     let mut base_cost = ctx.estimate_size().unwrap();
 
@@ -66,9 +79,11 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     base_cost.rows = base_cost.rows.or(Some(DEFAULT_ROW_VOLUME));
 
     // We have to evaluate the possibility and costs of pushing down the restriction clauses
-    let mut query = ctx
-        .create_query((*baserel).relid, QueryType::Select)
-        .unwrap();
+    let mut query = pg_query_scoped(
+        root,
+        ctx.create_query((*baserel).relid, QueryType::Select)
+            .unwrap(),
+    );
 
     // Apply base cost defaults
     query.base_cost.default_to(&base_cost);
@@ -118,7 +133,10 @@ pub unsafe extern "C" fn get_foreign_paths(
         ptr::null_mut(),
         (*baserel).lateral_relids,
         ptr::null_mut(),
-        into_fdw_private_path(planner.clone(), base_query.duplicate().unwrap()),
+        into_fdw_private_path(
+            pg_query_scoped(root, planner.clone()),
+            pg_query_scoped(root, base_query.duplicate().unwrap()),
+        ),
     );
     add_path(baserel, path as *mut pg_sys::Path);
 
@@ -225,7 +243,10 @@ pub unsafe extern "C" fn get_foreign_paths(
             ptr::null_mut(),
             (*ppi).ppi_req_outer,
             ptr::null_mut(),
-            into_fdw_private_path(planner.clone(), query),
+            into_fdw_private_path(
+                pg_query_scoped(root, planner.clone()),
+                pg_query_scoped(root, query),
+            ),
         );
         add_path(baserel, path as *mut pg_sys::Path);
     }
@@ -418,11 +439,18 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         ptr::null_mut(), /* no pathkeys */
         (*joinrel).lateral_relids,
         epq_path,
-        into_fdw_private_path(planner.clone(), join_query.duplicate().unwrap()),
+        into_fdw_private_path(
+            pg_query_scoped(root, planner.clone()),
+            pg_query_scoped(root, join_query.duplicate().unwrap()),
+        ),
     );
     add_path(joinrel, join_path as *mut _);
 
-    (*joinrel).fdw_private = into_fdw_private_rel(outer_ctx, join_query, planner) as *mut _;
+    (*joinrel).fdw_private = into_fdw_private_rel(
+        outer_ctx,
+        pg_query_scoped(root, join_query),
+        pg_query_scoped(root, planner),
+    ) as *mut _;
 }
 
 /// Add paths for post-join operations like aggregation, grouping etc. if
@@ -600,7 +628,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     }
 
     // Success, we forget the AddColumn operations as this is performed later in get_foreign_plan
-    
+
     // If the row estimate is not retrieved from the source
     // estimate it below
     if group_query.retrieved_rows.is_none() {
@@ -656,11 +684,18 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(planner.clone(), group_query.duplicate().unwrap()),
+        into_fdw_private_path(
+            pg_query_scoped(root, planner.clone()),
+            pg_query_scoped(root, group_query.duplicate().unwrap()),
+        ),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private_rel(ctx, group_query, planner.clone()) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(
+        ctx,
+        pg_query_scoped(root, group_query),
+        pg_query_scoped(root, planner.clone()),
+    ) as *mut _;
 }
 
 #[pg_guard]
@@ -813,11 +848,18 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(planner.clone(), order_query.duplicate().unwrap()),
+        into_fdw_private_path(
+            pg_query_scoped(root, planner.clone()),
+            pg_query_scoped(root, order_query.duplicate().unwrap()),
+        ),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private_rel(ctx, order_query, planner.clone()) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(
+        ctx,
+        pg_query_scoped(root, order_query),
+        pg_query_scoped(root, planner.clone()),
+    ) as *mut _;
 }
 
 #[pg_guard]
@@ -944,11 +986,18 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(planner.clone(), limit_query.duplicate().unwrap()),
+        into_fdw_private_path(
+            pg_query_scoped(root, planner.clone()),
+            pg_query_scoped(root, limit_query.duplicate().unwrap()),
+        ),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
-    (*outputrel).fdw_private = into_fdw_private_rel(ctx, limit_query, planner.clone()) as *mut _;
+    (*outputrel).fdw_private = into_fdw_private_rel(
+        ctx,
+        pg_query_scoped(root, limit_query),
+        pg_query_scoped(root, planner.clone()),
+    ) as *mut _;
 }
 
 /// Create ForeignScan plan node which implements selected best path
@@ -1168,13 +1217,16 @@ pub unsafe extern "C" fn get_foreign_plan(
         );
     }
 
-    let fdw_private = into_fdw_private_rel(ctx, query.duplicate().unwrap(), planner.clone());
+    let local_conds =
+        pg_sys::extract_actual_clauses(vec_to_pg_list(query.local_conds.clone()), false);
+    let fdw_exprs = vec_to_pg_list(query.cvt.param_nodes());
+    let fdw_private = into_fdw_private_rel(ctx, query, planner);
 
     pg_sys::make_foreignscan(
         tlist,
-        pg_sys::extract_actual_clauses(vec_to_pg_list(query.local_conds.clone()), false),
+        local_conds,
         scan_relid,
-        vec_to_pg_list(query.cvt.param_nodes()),
+        fdw_exprs,
         fdw_private,
         fdw_scan_list,
         fdw_recheck_quals,
@@ -1271,7 +1323,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
     let (ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
-    let mut scan = FdwScanContext::new();
+    let mut scan = pg_scan_scoped(&mut (*node).ss, FdwScanContext::new());
 
     // Prepare the query for the chosen path
     // restore_query_state(&mut ctx, &query);
@@ -1281,75 +1333,6 @@ pub unsafe extern "C" fn begin_foreign_scan(
     prepare_query_params(&mut scan, &query, node);
 
     (*node).fdw_state = into_fdw_private_scan(ctx, query, scan) as *mut _;
-}
-
-pub unsafe fn prepare_query_params(
-    scan: &mut FdwScanContext,
-    query: &FdwQueryContext,
-    node: *mut ForeignScanState,
-) {
-    // Prepare the query param expr's for evaluation
-    let param_nodes = query.cvt.param_nodes();
-    let param_exprs = PgList::<pg_sys::ExprState>::from_pg(pg_sys::ExecInitExprList(
-        vec_to_pg_list(param_nodes.clone()),
-        node as _,
-    ));
-
-    // Collect list of param id's to their respective ExprState nodes
-    let param_map = param_exprs
-        .iter_ptr()
-        .zip(param_nodes.into_iter())
-        .enumerate()
-        .flat_map(|(idx, (expr, node))| {
-            query
-                .cvt
-                .param_ids(node)
-                .into_iter()
-                .map(|id| (id, (expr, pg_sys::exprType(node))))
-                .collect::<Vec<_>>()
-                .into_iter()
-        })
-        .collect::<HashMap<_, _>>();
-
-    scan.param_exprs = Some(param_map);
-}
-
-pub unsafe fn send_query_params(
-    query: &mut FdwQueryContext,
-    scan: &FdwScanContext,
-    node: *mut ForeignScanState,
-) {
-    let input_data = {
-        let input_structure = query
-            .get_input_structure()
-            .expect("Failed to send query params");
-
-        if input_structure.params.is_empty() {
-            return;
-        }
-
-        // Evaluate each parameter to a datum
-        // We do so in a short-lived memory context so as not to leak the memory
-        let param_exprs = scan.param_exprs.as_ref().unwrap();
-        let econtext = (*node).ss.ps.ps_ExprContext;
-
-        PgMemoryContexts::For((*econtext).ecxt_per_tuple_memory).switch_to(|context| {
-            input_structure
-                .params
-                .iter()
-                .map(|(id, r#type)| {
-                    let (expr, type_oid) = *param_exprs.get(id).unwrap();
-                    let mut is_null = false;
-
-                    let datum = (*expr).evalfunc.unwrap()(expr, econtext, &mut is_null as *mut _);
-                    from_datum(type_oid, datum).unwrap()
-                })
-                .collect::<Vec<_>>()
-        })
-    };
-
-    // Finally, serialise and send the query params
-    query.write_query_input(input_data).unwrap();
 }
 
 /// Retrieve next row from the result set, or clear tuple slot to indicate EOF
@@ -1529,14 +1512,8 @@ pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c.html#a5a14f8d89c5b76e02df2e8615f7a6835
 #[pg_guard]
 pub unsafe extern "C" fn end_foreign_scan(node: *mut ForeignScanState) {
-    // Check if this is an EXPLAIN query and skip if so
-    if (*node).fdw_state.is_null() {
-        return;
-    }
-
-    let (mut ctx, _, _) = from_fdw_private_scan((*node).fdw_state as _);
-
-    // TODO: Clean up
+    // No manual clean up is needed as all items should be dropped
+    // at the end of the memory contexts in which they were scoped to
 }
 
 #[pg_guard]

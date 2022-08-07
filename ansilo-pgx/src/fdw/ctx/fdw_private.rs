@@ -8,14 +8,14 @@ use super::{FdwContext, FdwQueryContext, FdwScanContext, PlannerContext, FdwModi
 /// to be stored in fdw_private fields
 pub(crate) unsafe fn into_fdw_private_rel(
     ctx: PgBox<FdwContext, AllocatedByPostgres>,
-    query: FdwQueryContext,
-    planner: PlannerContext
+    query: PgBox<FdwQueryContext, AllocatedByPostgres>,
+    planner: PgBox<PlannerContext, AllocatedByPostgres>
 ) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
     list.push(ctx.into_pg() as *mut _);
-    list.push(PgBox::new(query).into_pg() as *mut _);
-    list.push(PgBox::new(planner).into_pg() as *mut _);
+    list.push(query.into_pg() as *mut _);
+    list.push(planner.into_pg() as *mut _);
 
     list.into_pg()
 }
@@ -38,13 +38,13 @@ pub(crate) unsafe fn from_fdw_private_rel(
 }
 
 pub(crate) unsafe fn into_fdw_private_path(
-    planner: PlannerContext,
-    query: FdwQueryContext,
+    planner: PgBox<PlannerContext, AllocatedByPostgres>,
+    query: PgBox<FdwQueryContext, AllocatedByPostgres>,
 ) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
-    list.push(PgBox::new(planner).into_pg() as *mut _);
-    list.push(PgBox::new(query).into_pg() as *mut _);
+    list.push(planner.into_pg() as *mut _);
+    list.push(query.into_pg() as *mut _);
 
     list.into_pg()
 }
@@ -65,15 +65,15 @@ pub(crate) unsafe fn from_fdw_private_path(
 }
 
 pub(crate) unsafe fn into_fdw_private_scan(
-    ctx: PgBox<FdwContext>,
-    query: PgBox<FdwQueryContext>,
-    scan: FdwScanContext,
+    ctx: PgBox<FdwContext, AllocatedByPostgres>,
+    query: PgBox<FdwQueryContext, AllocatedByPostgres>,
+    scan: PgBox<FdwScanContext, AllocatedByPostgres>,
 ) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
     list.push(ctx.into_pg() as *mut _);
     list.push(query.into_pg() as *mut _);
-    list.push(PgBox::new(scan).into_pg() as *mut _);
+    list.push(scan.into_pg() as *mut _);
 
     list.into_pg()
 }
@@ -96,15 +96,15 @@ pub(crate) unsafe fn from_fdw_private_scan(
 }
 
 pub(crate) unsafe fn into_fdw_private_modify(
-    ctx: PgBox<FdwContext>,
-    query: FdwQueryContext,
-    modify: FdwModifyContext,
+    ctx: PgBox<FdwContext, AllocatedByPostgres>,
+    query: PgBox<FdwQueryContext, AllocatedByPostgres>,
+    modify: PgBox<FdwModifyContext, AllocatedByPostgres>,
 ) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
     list.push(ctx.into_pg() as *mut _);
-    list.push(PgBox::new(query).into_pg() as *mut _);
-    list.push(PgBox::new(modify).into_pg() as *mut _);
+    list.push(query.into_pg() as *mut _);
+    list.push(modify.into_pg() as *mut _);
 
     list.into_pg()
 }

@@ -78,7 +78,7 @@ impl Drop for FdwIpcConnection {
 }
 
 /// Returns a connection to the data source for the supplied foreign table
-pub(crate) unsafe fn connect(foreign_table_relid: Oid) -> PgBox<FdwContext> {
+pub(crate) unsafe fn connect(foreign_table_relid: Oid) -> FdwContext {
     // Look up the foreign table from its relid
     let table = GetForeignTable(foreign_table_relid);
 
@@ -104,7 +104,7 @@ pub(crate) unsafe fn connect(foreign_table_relid: Oid) -> PgBox<FdwContext> {
 
     let ctx = FdwContext::new(con, entity);
 
-    PgBox::new(ctx).into_pg_boxed()
+    ctx
 }
 
 /// Gets a connection to the data source for the supplied foreign table
