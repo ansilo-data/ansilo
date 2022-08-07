@@ -68,7 +68,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
         pg_sys::add_row_identity_var(root, col, rtindex, res_name as *const _);
     }
 
-    ctx.disconnect().unwrap();
+    // TODO: Clean up
 }
 
 #[pg_guard]
@@ -130,10 +130,8 @@ fn plan_foreign_insert(
     result_relation: Index,
     table: PgTable,
 ) -> FdwQueryContext {
-    let mut query = FdwQueryContext::insert(result_relation);
-
     // Create an insert query to insert a single row
-    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Insert)
+    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Insert)
         .unwrap();
 
     // Add a parameter for each column
@@ -142,7 +140,7 @@ fn plan_foreign_insert(
 
         let op = InsertQueryOperation::AddColumn((col_name, sqlil::Expr::Parameter(param.clone())));
 
-        match ctx.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply_query_op(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 panic!("Failed to create insert query on data source: unable to add query parameter for insert value")
@@ -165,10 +163,8 @@ unsafe fn plan_foreign_update(
     rte: *mut RangeTblEntry,
     table: PgTable,
 ) -> FdwQueryContext {
-    let mut query = FdwQueryContext::update(result_relation);
-
     // Create an update query to update a single row
-    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Update)
+    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Update)
         .unwrap();
 
     // Determine the columns which are updated by the query
@@ -202,7 +198,7 @@ unsafe fn plan_foreign_update(
 
         let op = UpdateQueryOperation::AddSet((col_name, sqlil::Expr::Parameter(param.clone())));
 
-        match ctx.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply_query_op(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 panic!("Failed to create update query on data source: unable to add query parameter for update value")
@@ -227,7 +223,7 @@ unsafe fn plan_foreign_update(
             sqlil::Expr::Parameter(param.clone()),
         )));
 
-        match ctx.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply_query_op(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 panic!("Failed to create update query on data source: unable to add query parameter for row id condition")
@@ -257,10 +253,8 @@ unsafe fn plan_foreign_delete(
     rte: *mut RangeTblEntry,
     table: PgTable,
 ) -> FdwQueryContext {
-    let mut query = FdwQueryContext::delete(result_relation);
-
     // Create an delete query to delete a single row
-    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Delete)
+    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Delete)
         .unwrap();
 
     // Add a conditions to filter the row to by the row id
@@ -274,7 +268,7 @@ unsafe fn plan_foreign_delete(
             sqlil::Expr::Parameter(param.clone()),
         )));
 
-        match ctx.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply_query_op(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 panic!("Failed to create update query on data source: unable to add query parameter for row id condition")
@@ -309,7 +303,7 @@ pub unsafe extern "C" fn begin_foreign_modify(
         return;
     }
 
-    let (mut ctx, mut query, _state) = from_fdw_private_modify(fdw_private);
+    let (ctx, mut query, _state) = from_fdw_private_modify(fdw_private);
 
     // If this is an UPDATE/DELETE query we need to find the attr no's for the row id's
     // from the subplan tlist
@@ -339,7 +333,7 @@ pub unsafe extern "C" fn begin_foreign_modify(
         }
     }
 
-    ctx.prepare_query().unwrap();
+    query.prepare_query().unwrap();
 
     (*rinfo).ri_FdwState = fdw_private as *mut _;
 }
@@ -367,7 +361,7 @@ pub unsafe extern "C" fn exec_foreign_insert(
     slot: *mut TupleTableSlot,
     plan_slot: *mut TupleTableSlot,
 ) -> *mut TupleTableSlot {
-    let (mut ctx, query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let (ctx, mut query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
     let insert = query.as_insert().unwrap();
     let mut query_input = vec![];
 
@@ -378,9 +372,9 @@ pub unsafe extern "C" fn exec_foreign_insert(
         ));
     }
 
-    ctx.write_query_input_unordered(query_input).unwrap();
-    ctx.execute_query().unwrap();
-    ctx.restart_query().unwrap();
+    query.write_query_input_unordered(query_input).unwrap();
+    query.execute_query().unwrap();
+    query.restart_query().unwrap();
 
     slot
 }
@@ -409,7 +403,7 @@ pub unsafe extern "C" fn exec_foreign_update(
     slot: *mut TupleTableSlot,
     plan_slot: *mut TupleTableSlot,
 ) -> *mut TupleTableSlot {
-    let (mut ctx, query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let (ctx, mut query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
     let update = query.as_update().unwrap();
     let mut query_input = vec![];
 
@@ -429,9 +423,9 @@ pub unsafe extern "C" fn exec_foreign_update(
         ));
     }
 
-    ctx.write_query_input_unordered(query_input).unwrap();
-    ctx.execute_query().unwrap();
-    ctx.restart_query().unwrap();
+    query.write_query_input_unordered(query_input).unwrap();
+    query.execute_query().unwrap();
+    query.restart_query().unwrap();
 
     slot
 }
@@ -443,7 +437,7 @@ pub unsafe extern "C" fn exec_foreign_delete(
     slot: *mut TupleTableSlot,
     plan_slot: *mut TupleTableSlot,
 ) -> *mut TupleTableSlot {
-    let (mut ctx, query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let (ctx, mut query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
     let delete = query.as_delete().unwrap();
     let mut query_input = vec![];
 
@@ -455,9 +449,9 @@ pub unsafe extern "C" fn exec_foreign_delete(
         ));
     }
 
-    ctx.write_query_input_unordered(query_input).unwrap();
-    ctx.execute_query().unwrap();
-    ctx.restart_query().unwrap();
+    query.write_query_input_unordered(query_input).unwrap();
+    query.execute_query().unwrap();
+    query.restart_query().unwrap();
 
     slot
 }
@@ -470,7 +464,7 @@ pub unsafe extern "C" fn end_foreign_modify(estate: *mut EState, rinfo: *mut Res
 
     let (mut ctx, _query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
 
-    ctx.disconnect().unwrap();
+    // TODO: Clean up
 }
 
 #[pg_guard]
@@ -579,11 +573,9 @@ unsafe fn plan_direct_foreign_update(
     inner_select: &FdwQueryContext,
     table: PgTable,
 ) -> Option<FdwQueryContext> {
-    let mut query = FdwQueryContext::update(result_relation);
-
     // Create an update query to update all rows specified by the
     // inner select query
-    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Update)
+    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Update)
         .unwrap();
 
     // The expressions of concern are the first N columns of the processed
@@ -615,7 +607,7 @@ unsafe fn plan_direct_foreign_update(
         // Try apply this as a SET expression to the update query
         let op = UpdateQueryOperation::AddSet((col_attr.name().to_string(), expr));
 
-        match ctx.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply_query_op(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 return None;
@@ -641,7 +633,7 @@ unsafe fn plan_direct_foreign_update(
         // Try push down the where clause
         let op = UpdateQueryOperation::AddWhere(expr);
 
-        match ctx.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply_query_op(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 return None;
@@ -665,11 +657,9 @@ unsafe fn plan_direct_foreign_delete(
     inner_select: &FdwQueryContext,
     table: PgTable,
 ) -> Option<FdwQueryContext> {
-    let mut query = FdwQueryContext::delete(result_relation);
-
     // Create an delete query to delete all rows specified by the
     // inner select query
-    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Delete)
+    let mut query = ctx.create_query(result_relation, sqlil::QueryType::Delete)
         .unwrap();
 
     // We apply the remote conditions of the inner select query to the delete query
@@ -688,7 +678,7 @@ unsafe fn plan_direct_foreign_delete(
         // Try push down the where clause
         let op = DeleteQueryOperation::AddWhere(expr);
 
-        match ctx.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply_query_op(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 return None;
@@ -714,24 +704,24 @@ pub unsafe extern "C" fn begin_direct_modify(
     }
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (mut ctx, mut query, mut state) = from_fdw_private_modify((*plan).fdw_private);
+    let (ctx, mut query, mut state) = from_fdw_private_modify((*plan).fdw_private);
 
-    ctx.prepare_query().unwrap();
+    query.prepare_query().unwrap();
 
     crate::fdw::scan::prepare_query_params(&mut state.scan, &query, node);
 
-    (*node).fdw_state = into_fdw_private_modify(ctx, query.clone(), state.clone()) as *mut _;
+    (*node).fdw_state = (*plan).fdw_private as *mut _;
 }
 
 #[pg_guard]
 pub unsafe extern "C" fn iterate_direct_modify(node: *mut ForeignScanState) -> *mut TupleTableSlot {
-    let (mut ctx, query, state) = from_fdw_private_modify((*node).fdw_state as *mut _);
+    let (ctx, mut query, state) = from_fdw_private_modify((*node).fdw_state as *mut _);
 
     // Send query params
-    crate::fdw::scan::send_query_params(&mut ctx, &state.scan, &query, node);
+    crate::fdw::scan::send_query_params(&mut query, &state.scan, node);
 
     // Execute the direct modification
-    ctx.execute_query().unwrap();
+    query.execute_query().unwrap();
 
     // Currently, we do not support RETURNING data from direct modifications
     // So we just clear the tuple and return.
@@ -751,7 +741,7 @@ pub unsafe extern "C" fn end_direct_modify(node: *mut ForeignScanState) {
 
     let (mut ctx, _, _) = from_fdw_private_modify((*node).fdw_state as _);
 
-    ctx.disconnect().unwrap();
+    // TODO: Clean up
 }
 
 #[pg_guard]

@@ -1,17 +1,21 @@
-use std::{ffi::CString, ptr};
+use std::{ffi::CString, os::unix::{net::UnixStream, prelude::FromRawFd}, ptr, sync::Arc};
 
 use ansilo_core::{data::DataType, err::Result, sqlil};
+use ansilo_pg::fdw::channel::IpcClientChannel;
 use pgx::{
     pg_sys::{self, Node},
     *,
 };
 
 use crate::{
-    fdw::ctx::{FdwContext, PlannerContext},
+    fdw::{
+        common::FdwIpcConnection,
+        ctx::{FdwContext, PlannerContext},
+    },
     sqlil::datum::into_pg_type,
 };
 
-use super::{ConversionContext};
+use super::ConversionContext;
 
 /// Converts the first target expr from the supplied select query to SQLIL for testing
 pub(super) fn convert_simple_expr(select: &'static str) -> Result<sqlil::Expr> {
@@ -27,7 +31,10 @@ pub(super) fn convert_simple_expr_with_context(
     unsafe {
         let (node, planner) = parse_pg_expr(select, params);
 
-        let fdw = FdwContext::new("data_source", sqlil::entity("entity", "version"));
+        let client = IpcClientChannel::new(UnixStream::from_raw_fd(1234));
+        let con = FdwIpcConnection::new("data_source", client);
+
+        let fdw = FdwContext::new(Arc::new(con), sqlil::entity("entity", "version"));
 
         super::convert(node.as_ptr() as *const _, ctx, &planner, &fdw)
     }
@@ -64,8 +71,7 @@ fn parse_pg_expr(select: &'static str, params: Vec<DataType>) -> (PgBox<Node>, P
         );
         pg_sys::setup_simple_rel_arrays(planner_info);
 
-        let base_rel =
-            pg_sys::build_simple_rel(planner_info, 1, ptr::null_mut());
+        let base_rel = pg_sys::build_simple_rel(planner_info, 1, ptr::null_mut());
 
         let target_node = PgList::<Node>::from_pg((*query).targetList).head().unwrap()
             as *mut pg_sys::TargetEntry;
@@ -77,5 +83,3 @@ fn parse_pg_expr(select: &'static str, params: Vec<DataType>) -> (PgBox<Node>, P
         )
     }
 }
-
-

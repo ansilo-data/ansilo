@@ -150,6 +150,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
                 self.restart_query(query_id)?;
                 ServerQueryMessage::Restarted
             }
+            ClientQueryMessage::Duplicate => {
+                let new_id = self.duplicate_query(query_id)?;
+                ServerQueryMessage::Duplicated(new_id)
+            }
             ClientQueryMessage::Discard => {
                 self.queries.remove(&query_id).context("Invalid query id")?;
                 ServerQueryMessage::Discarded
@@ -398,6 +402,20 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         let json = serde_json::to_string(&res).context("Failed to encode explain state to JSON")?;
 
         Ok(json)
+    }
+
+    fn duplicate_query(&mut self, query_id: u32) -> Result<QueryId> {
+        let cloned = match Self::query(&mut self.queries, query_id)? {
+            FdwQueryState::New => FdwQueryState::New,
+            FdwQueryState::Planning(state) => FdwQueryState::Planning(state.clone()),
+            _ => bail!("Duplicating query is only valid for new or planning states"),
+        };
+
+        let query_id = self.query_id;
+        self.queries.insert(query_id, cloned);
+        self.query_id += 1;
+
+        Ok(query_id)
     }
 
     fn get_entity_config<'a, 'b>(
@@ -1220,6 +1238,95 @@ mod tests {
             .unwrap();
 
         assert_eq!(res, ServerMessage::GenericError("Invalid query id".into()));
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_duplicate_query() {
+        let (thread, mut client) = create_mock_connection("connection_select");
+
+        let res = client
+            .send(ClientMessage::CreateQuery(
+                sqlil::source("people", "1.0", "people"),
+                sqlil::QueryType::Select,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
+
+        let res = client
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    SelectQueryOperation::AddColumn((
+                        "first_name".into(),
+                        sqlil::Expr::attr("people", "first_name"),
+                    ))
+                    .into(),
+                ),
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Duplicate))
+            .unwrap();
+
+        assert_eq!(res, ServerMessage::Query(ServerQueryMessage::Duplicated(1)));
+
+        let res = client
+            .send(ClientMessage::Query(1, ClientQueryMessage::Prepare))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
+        );
+
+        let res = client
+            .send(ClientMessage::Query(1, ClientQueryMessage::Execute))
+            .unwrap();
+        let row_structure = RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Executed(row_structure.clone()))
+        );
+
+        let res = client
+            .send(ClientMessage::Query(1, ClientQueryMessage::Read(1024)))
+            .unwrap();
+        let data = match res {
+            ServerMessage::Query(ServerQueryMessage::ResultData(data)) => data,
+            _ => unreachable!("Unexpected response {:?}", res),
+        };
+
+        let mut result_data = DataReader::new(io::Cursor::new(data), row_structure.types());
+
+        assert_eq!(
+            result_data.read_data_value().unwrap(),
+            Some(DataValue::from("Mary"))
+        );
+        assert_eq!(
+            result_data.read_data_value().unwrap(),
+            Some(DataValue::from("John"))
+        );
+        assert_eq!(
+            result_data.read_data_value().unwrap(),
+            Some(DataValue::from("Gary"))
+        );
+        assert_eq!(result_data.read_data_value().unwrap(), None);
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();

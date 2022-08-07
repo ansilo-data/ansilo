@@ -1,20 +1,35 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{cmp, collections::HashMap, rc::Rc, sync::Arc};
 
-use ansilo_core::{data::DataType, sqlil};
-use ansilo_pg::fdw::proto::{
-    DeleteQueryOperation, InsertQueryOperation, OperationCost, RowStructure, SelectQueryOperation,
-    UpdateQueryOperation,
+use ansilo_core::{
+    data::{DataType, DataValue},
+    err::{anyhow, Context, Error, Result},
+    sqlil,
 };
+use ansilo_pg::fdw::{
+    data::{QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
+    proto::{
+        ClientMessage, ClientQueryMessage, DeleteQueryOperation, InsertQueryOperation,
+        OperationCost, QueryId, QueryInputStructure, QueryOperation, QueryOperationResult,
+        RowStructure, SelectQueryOperation, ServerMessage, ServerQueryMessage,
+        UpdateQueryOperation,
+    },
+};
+
 use pgx::pg_sys::{self, RestrictInfo};
 use serde::{Deserialize, Serialize};
 
-use crate::sqlil::ConversionContext;
+use crate::{fdw::common::FdwIpcConnection, sqlil::ConversionContext};
 
 /// Query-specific state for the FDW
-#[derive(Clone)]
 pub struct FdwQueryContext {
     /// The type-specific query state
     pub q: FdwQueryType,
+    /// The IPC connection
+    connection: QueryScopedConnection,
+    /// The current query handle writer
+    query_writer: Option<QueryHandleWriter<FdwQueryHandle>>,
+    /// The current result set reader
+    result_set: Option<ResultSetReader<FdwResultSet>>,
     /// The base entity size estimation
     pub base_cost: OperationCost,
     /// The base relation var number
@@ -32,15 +47,46 @@ pub struct FdwQueryContext {
     pub cost_fns: Vec<Rc<dyn Fn(&Self, OperationCost) -> OperationCost>>,
 }
 
-impl FdwQueryContext {
-    pub fn new(base_varno: pg_sys::Oid, query: FdwQueryType, base_cost: OperationCost) -> Self {
-        let mut cvt = ConversionContext::new();
-        cvt.register_alias(base_varno);
+#[derive(Clone)]
+struct QueryScopedConnection {
+    /// The query id used by the IPC server to identify the query
+    pub query_id: QueryId,
+    /// The IPC connection
+    pub connection: Arc<FdwIpcConnection>,
+}
 
+#[derive(Clone)]
+pub struct FdwQueryHandle {
+    /// The connection to ansilo
+    connection: QueryScopedConnection,
+    /// The query input structure
+    pub query_input: QueryInputStructure,
+}
+
+#[derive(Clone)]
+pub struct FdwResultSet {
+    /// The connection to ansilo
+    connection: QueryScopedConnection,
+    /// The result set output structure
+    pub row_structure: RowStructure,
+}
+
+impl FdwQueryContext {
+    pub fn new(
+        connection: Arc<FdwIpcConnection>,
+        query_id: QueryId,
+        base_varno: pg_sys::Oid,
+        query: FdwQueryType,
+        base_cost: OperationCost,
+        cvt: ConversionContext
+    ) -> Self {
         let retrieved_rows = base_cost.rows;
 
         Self {
+            connection: QueryScopedConnection::new(query_id, connection),
             q: query,
+            query_writer: None,
+            result_set: None,
             base_cost,
             base_varno,
             retrieved_rows,
@@ -49,38 +95,6 @@ impl FdwQueryContext {
             cvt,
             cost_fns: vec![],
         }
-    }
-
-    pub fn select(base_relid: pg_sys::Oid, base_cost: OperationCost) -> Self {
-        Self::new(
-            base_relid,
-            FdwQueryType::Select(FdwSelectQuery::default()),
-            base_cost,
-        )
-    }
-
-    pub fn insert(base_varno: pg_sys::Oid) -> Self {
-        Self::new(
-            base_varno,
-            FdwQueryType::Insert(FdwInsertQuery::default()),
-            OperationCost::default(),
-        )
-    }
-
-    pub fn update(base_relid: pg_sys::Oid) -> Self {
-        Self::new(
-            base_relid,
-            FdwQueryType::Update(FdwUpdateQuery::default()),
-            OperationCost::default(),
-        )
-    }
-
-    pub fn delete(base_relid: pg_sys::Oid) -> Self {
-        Self::new(
-            base_relid,
-            FdwQueryType::Delete(FdwDeleteQuery::default()),
-            OperationCost::default(),
-        )
     }
 
     pub fn base_rel_alias(&self) -> &str {
@@ -143,13 +157,235 @@ impl FdwQueryContext {
         }
     }
 
+    pub fn apply_query_op(&mut self, query_op: QueryOperation) -> Result<QueryOperationResult> {
+        let result = self
+            .connection
+            .send(ClientQueryMessage::Apply(query_op))
+            .and_then(|res| match res {
+                ServerQueryMessage::OperationResult(result) => Ok(result),
+                _ => Err(unexpected_response(res)),
+            })
+            .context("Applying query op")?;
+
+        Ok(result)
+    }
+
+    pub fn prepare_query(&mut self) -> Result<QueryInputStructure> {
+        let query_input = self
+            .connection
+            .send(ClientQueryMessage::Prepare)
+            .and_then(|res| match res {
+                ServerQueryMessage::Prepared(structure) => Ok(structure),
+                _ => Err(unexpected_response(res)),
+            })
+            .context("Preparing query")?;
+
+        self.query_writer = Some(QueryHandleWriter::new(FdwQueryHandle {
+            connection: self.connection.clone(),
+            query_input: query_input.clone(),
+        })?);
+
+        Ok(query_input)
+    }
+
+    /// Gets the query input structure expected by the prepared query
+    pub fn get_input_structure(&self) -> Result<&QueryInputStructure> {
+        self.query_writer
+            .as_ref()
+            .map(|i| i.get_structure())
+            .context("Query not prepared")
+    }
+
+    /// Writes the supplied query params
+    /// This function assumes that the values are in the order expected by the query input structure
+    pub fn write_query_input(&mut self, data: Vec<DataValue>) -> Result<()> {
+        let writer = self.query_writer.as_mut().context("Query not prepared")?;
+
+        // This wont be too inefficient as it is being buffered
+        // by an underlying BufWriter
+        for val in data.into_iter() {
+            writer.write_data_value(val)?;
+        }
+
+        Ok(())
+    }
+
+    /// Writes the supplied query params
+    /// This will ensure the correct ordering of the query parameters by sorting them
+    /// using the parameter id's in the supplied vec.
+    pub fn write_query_input_unordered(&mut self, data: Vec<(u32, DataValue)>) -> Result<()> {
+        let writer = self.query_writer.as_mut().context("Query not prepared")?;
+        let mut ordered_params = vec![];
+        let mut data = data.into_iter().collect::<HashMap<_, _>>();
+
+        for (param_id, _) in writer.get_structure().params.iter() {
+            ordered_params.push(data.remove(param_id).unwrap());
+        }
+
+        self.write_query_input(ordered_params)
+    }
+
+    pub fn execute_query(&mut self) -> Result<RowStructure> {
+        let writer = self.query_writer.as_mut().context("Query not prepared")?;
+
+        writer.flush()?;
+        let result_set = writer.inner_mut().execute()?;
+        let row_structure = result_set.row_structure.clone();
+
+        self.result_set = Some(ResultSetReader::new(result_set)?);
+
+        Ok(row_structure)
+    }
+
+    pub fn read_result_data(&mut self) -> Result<Option<DataValue>> {
+        let reader = self.result_set.as_mut().context("Query not executed")?;
+
+        reader.read_data_value()
+    }
+
+    pub fn restart_query(&mut self) -> Result<()> {
+        let writer = self.query_writer.as_mut().context("Query not executed")?;
+        writer.restart()?;
+
+        Ok(())
+    }
+
+    pub fn explain_query(&mut self, verbose: bool) -> Result<serde_json::Value> {
+        let json: String = self
+            .connection
+            .send(ClientQueryMessage::Explain(verbose))
+            .and_then(|res| match res {
+                ServerQueryMessage::Explained(result) => Ok(result),
+                _ => Err(unexpected_response(res)),
+            })
+            .context("Explain query")?;
+
+        let parsed: serde_json::Value = serde_json::from_str(&json)
+            .with_context(|| format!("Failed to parse JSON from explain result: {:?}", json))?;
+
+        Ok(parsed)
+    }
+
     /// Creates a new parameter (not associated to a node)
     pub(crate) fn create_param(&mut self, r#type: DataType) -> sqlil::Parameter {
         sqlil::Parameter::new(r#type, self.cvt.create_param())
     }
 
+    /// Duplicate
+    pub(crate) fn duplicate(&self) -> Result<Self> {
+        let query_id = self
+            .connection
+            .send(ClientQueryMessage::Duplicate)
+            .and_then(|res| match res {
+                ServerQueryMessage::Duplicated(query_id) => Ok(query_id),
+                _ => return Err(unexpected_response(res)),
+            })
+            .context("Duplicating query")?;
+
+        Ok(Self {
+            q: self.q.clone(),
+            connection: QueryScopedConnection::new(
+                query_id,
+                Arc::clone(&self.connection.connection),
+            ),
+            query_writer: None,
+            result_set: None,
+            base_cost: self.base_cost.clone(),
+            base_varno: self.base_varno.clone(),
+            retrieved_rows: self.retrieved_rows.clone(),
+            local_conds: self.local_conds.clone(),
+            remote_conds: self.remote_conds.clone(),
+            cvt: self.cvt.clone(),
+            cost_fns: self.cost_fns.clone(),
+        })
+    }
+
     pub fn add_cost(&mut self, cb: impl Fn(&Self, OperationCost) -> OperationCost + 'static) {
         self.cost_fns.push(Rc::new(cb));
+    }
+}
+
+/// TODO[low]: the query handle and result set are agnostic enough to be migrated to ansilo-pg crate
+impl QueryHandle for FdwQueryHandle {
+    type TResultSet = FdwResultSet;
+
+    fn get_structure(&self) -> Result<QueryInputStructure> {
+        Ok(self.query_input.clone())
+    }
+
+    fn write(&mut self, buff: &[u8]) -> Result<usize> {
+        self.connection
+            .send(ClientQueryMessage::WriteParams(buff.to_vec()))
+            .and_then(|res| match res {
+                ServerQueryMessage::ParamsWritten => Ok(buff.len()),
+                _ => return Err(unexpected_response(res)),
+            })
+            .context("Failed to write query params")
+    }
+
+    fn restart(&mut self) -> Result<()> {
+        self.connection
+            .send(ClientQueryMessage::Restart)
+            .and_then(|res| match res {
+                ServerQueryMessage::Restarted => Ok(()),
+                _ => return Err(unexpected_response(res)),
+            })
+            .context("Failed to restart query")
+    }
+
+    fn execute(&mut self) -> Result<Self::TResultSet> {
+        self.connection
+            .send(ClientQueryMessage::Execute)
+            .and_then(|res| match res {
+                ServerQueryMessage::Executed(row_structure) => Ok(FdwResultSet {
+                    connection: self.connection.clone(),
+                    row_structure,
+                }),
+                _ => return Err(unexpected_response(res)),
+            })
+            .context("Failed to execute query")
+    }
+}
+
+impl ResultSet for FdwResultSet {
+    fn get_structure(&self) -> Result<RowStructure> {
+        Ok(self.row_structure.clone())
+    }
+
+    fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
+        self.connection
+            .send(ClientQueryMessage::Read(buff.len() as _))
+            .and_then(|res| match res {
+                ServerQueryMessage::ResultData(data) => {
+                    let read = cmp::min(buff.len(), data.len());
+                    buff[..read].copy_from_slice(&data[..read]);
+                    Ok(read)
+                }
+                _ => return Err(unexpected_response(res)),
+            })
+            .context("Failed to read from result set")
+    }
+}
+
+impl QueryScopedConnection {
+    fn new(query_id: QueryId, connection: Arc<FdwIpcConnection>) -> Self {
+        Self {
+            query_id,
+            connection,
+        }
+    }
+
+    fn send(&self, message: ClientQueryMessage) -> Result<ServerQueryMessage> {
+        let res = self
+            .connection
+            .send(ClientMessage::Query(self.query_id, message))?;
+
+        let res = match res {
+            ServerMessage::Query(res) => res,
+            _ => return Err(unexpected_outer_response(res)),
+        };
+
+        Ok(res)
     }
 }
 
@@ -172,7 +408,7 @@ pub struct FdwSelectQuery {
     res_cols: HashMap<u32, HashMap<u32, u32>>,
     /// Mapping of output resno's which refer to whole-rows to the varno
     /// they refer to. The structure is HashMap<resno, varno>
-    res_var_nos: HashMap<u32, u32>
+    res_var_nos: HashMap<u32, u32>,
 }
 
 impl FdwSelectQuery {
@@ -267,7 +503,19 @@ pub struct FdwModifyContext {
 impl FdwModifyContext {
     pub fn new() -> Self {
         Self {
-            scan: FdwScanContext::new()
+            scan: FdwScanContext::new(),
         }
     }
+}
+
+fn unexpected_outer_response(response: ServerMessage) -> Error {
+    if let ServerMessage::GenericError(message) = response {
+        anyhow!("Error from server: {message}")
+    } else {
+        anyhow!("Unexpected response {:?}", response)
+    }
+}
+
+fn unexpected_response(response: ServerQueryMessage) -> Error {
+    anyhow!("Unexpected response {:?}", response)
 }

@@ -3,7 +3,7 @@ use std::{cmp, collections::HashMap, ffi::c_void, mem, ops::ControlFlow, ptr};
 use ansilo_core::{
     data::DataValue,
     err::{bail, Context, Result},
-    sqlil::{self, JoinType, Ordering, OrderingType},
+    sqlil::{self, JoinType, Ordering, OrderingType, QueryType},
 };
 use ansilo_pg::fdw::{
     data::DataWriter,
@@ -66,11 +66,16 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     base_cost.rows = base_cost.rows.or(Some(DEFAULT_ROW_VOLUME));
 
     // We have to evaluate the possibility and costs of pushing down the restriction clauses
-    let mut query = FdwQueryContext::select((*baserel).relid, base_cost.clone());
+    let mut query = ctx
+        .create_query((*baserel).relid, QueryType::Select)
+        .unwrap();
+
+    // Apply base cost defaults
+    query.base_cost.default_to(&base_cost);
 
     let baserel_conds = PgList::<RestrictInfo>::from_pg((*baserel).baserestrictinfo);
     apply_query_conds(
-        &mut ctx,
+        &ctx,
         &mut query,
         &planner,
         baserel_conds.iter_ptr().collect(),
@@ -113,7 +118,7 @@ pub unsafe extern "C" fn get_foreign_paths(
         ptr::null_mut(),
         (*baserel).lateral_relids,
         ptr::null_mut(),
-        into_fdw_private_path(planner.clone(), base_query.clone()),
+        into_fdw_private_path(planner.clone(), base_query.duplicate().unwrap()),
     );
     add_path(baserel, path as *mut pg_sys::Path);
 
@@ -197,10 +202,10 @@ pub unsafe extern "C" fn get_foreign_paths(
 
     // Create a path for each parameterised path option
     for ppi in param_paths.into_iter() {
-        let mut query = base_query.clone();
+        let mut query = base_query.duplicate().unwrap();
 
         apply_query_conds(
-            &mut ctx,
+            &ctx,
             &mut query,
             &planner,
             PgList::<RestrictInfo>::from_pg((*ppi).ppi_clauses)
@@ -220,7 +225,7 @@ pub unsafe extern "C" fn get_foreign_paths(
             ptr::null_mut(),
             (*ppi).ppi_req_outer,
             ptr::null_mut(),
-            into_fdw_private_path(planner.clone(), query.clone()),
+            into_fdw_private_path(planner.clone(), query),
         );
         add_path(baserel, path as *mut pg_sys::Path);
     }
@@ -299,7 +304,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         return;
     }
 
-    let mut join_query = outer_query.clone();
+    let mut join_query = outer_query.duplicate().unwrap();
 
     // We need to recalculate the retrieved row estimate
     // (done later in the function)
@@ -342,14 +347,14 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     ));
 
     // Apply the join before the conditions
-    apply_query_operations(&mut outer_ctx, &mut join_query, vec![join_op.clone()]);
+    apply_query_operations(&mut join_query, vec![join_op.clone()]);
 
     // Apply the base conditions of the inner query to the join query
     // It is important we redo the mapping of RestrictInfo's to sqlil expr's
     // as any query parameters, table aliases could be different when merged
     // into the join query.
     apply_query_conds(
-        &mut outer_ctx,
+        &outer_ctx,
         &mut join_query,
         &planner,
         inner_query.remote_conds.clone(),
@@ -413,7 +418,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         ptr::null_mut(), /* no pathkeys */
         (*joinrel).lateral_relids,
         epq_path,
-        into_fdw_private_path(planner.clone(), join_query.clone()),
+        into_fdw_private_path(planner.clone(), join_query.duplicate().unwrap()),
     );
     add_path(joinrel, join_path as *mut _);
 
@@ -491,7 +496,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         return;
     }
 
-    let mut group_query = input_query.clone();
+    let mut group_query = input_query.duplicate().unwrap();
 
     // Invalidate the retrieved rows estimate and, if required,
     // estimate it below
@@ -499,7 +504,8 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
 
     let groupedrel = (*outputrel).reltarget;
     let mut group_by_exprs = vec![];
-    let mut query_ops = vec![];
+    let mut group_by_query_ops = vec![];
+    let mut add_col_query_ops = vec![];
 
     // Iterate each target expr
     for (i, node) in PgList::<Node>::from_pg((*groupedrel).exprs)
@@ -530,7 +536,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
                 return;
             }
 
-            query_ops.push(SelectQueryOperation::AddGroupBy(expr));
+            group_by_query_ops.push(SelectQueryOperation::AddGroupBy(expr));
             group_by_exprs.push(node);
         } else {
             // Retrieve the vars/aggrefs from the expression
@@ -546,7 +552,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
                         .unwrap()
                         .walk_any(|e| matches!(e, sqlil::Expr::Parameter(_)))
                 {
-                    query_ops.push(
+                    add_col_query_ops.push(
                         group_query
                             .as_select_mut()
                             .unwrap()
@@ -562,29 +568,39 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
 
     // TODO: add in checks for aggregates in local conditions?
 
-    if query_ops.is_empty() {
+    if group_by_query_ops.is_empty() && add_col_query_ops.is_empty() {
         return;
     }
 
-    apply_query_operations(&mut ctx, &mut group_query, query_ops.clone());
+    // Apply the group by expressions
+    apply_query_operations(&mut group_query, group_by_query_ops.clone());
 
     // If failed to push down then abort
-    if query_ops
+    if group_by_query_ops
         .iter()
         .any(|i| !group_query.as_select().unwrap().remote_ops.contains(i))
     {
         return;
     }
 
-    // Success, we forget the AddColumn operations as this is performed later in get_foreign_plan
-    let select = group_query.as_select_mut().unwrap();
-    select.remote_ops = select
-        .remote_ops
-        .iter()
-        .filter(|i| !i.is_add_column())
-        .cloned()
-        .collect::<Vec<_>>();
+    // Now we test if we can push down the aggregate expressions on a new query
+    {
+        let mut agg_query = group_query.duplicate().unwrap();
 
+        // Apply the group by expressions
+        apply_query_operations(&mut agg_query, add_col_query_ops.clone());
+
+        // If failed to push down then abort
+        if add_col_query_ops
+            .iter()
+            .any(|i| !agg_query.as_select().unwrap().remote_ops.contains(i))
+        {
+            return;
+        }
+    }
+
+    // Success, we forget the AddColumn operations as this is performed later in get_foreign_plan
+    
     // If the row estimate is not retrieved from the source
     // estimate it below
     if group_query.retrieved_rows.is_none() {
@@ -640,7 +656,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(planner.clone(), group_query.clone()),
+        into_fdw_private_path(planner.clone(), group_query.duplicate().unwrap()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -661,7 +677,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         return;
     }
 
-    let mut order_query = input_query.clone();
+    let mut order_query = input_query.duplicate().unwrap();
     let mut query_ops = vec![];
     let mut path_keys = vec![];
 
@@ -716,7 +732,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         path_keys.push(path_key);
     }
 
-    apply_query_operations(&mut ctx, &mut order_query, query_ops.clone());
+    apply_query_operations(&mut order_query, query_ops.clone());
 
     // If failed to push down then abort
     if query_ops
@@ -797,7 +813,7 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(planner.clone(), order_query.clone()),
+        into_fdw_private_path(planner.clone(), order_query.duplicate().unwrap()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -870,7 +886,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         return;
     }
 
-    let mut limit_query = input_query.clone();
+    let mut limit_query = input_query.duplicate().unwrap();
 
     // Invalidate retrieved rows so it can be estimated later
     limit_query.retrieved_rows = None;
@@ -885,7 +901,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         query_ops.push(SelectQueryOperation::SetRowLimit(limit));
     }
 
-    apply_query_operations(&mut ctx, &mut limit_query, query_ops.clone());
+    apply_query_operations(&mut limit_query, query_ops.clone());
 
     // If failed to push down then abort
     if query_ops
@@ -928,7 +944,7 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         cost.total_cost.unwrap(),
         ptr::null_mut(),
         ptr::null_mut(),
-        into_fdw_private_path(planner.clone(), limit_query.clone()),
+        into_fdw_private_path(planner.clone(), limit_query.duplicate().unwrap()),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
@@ -987,7 +1003,7 @@ pub unsafe extern "C" fn get_foreign_plan(
     let mut result_tlist = PgList::<pg_sys::TargetEntry>::from_pg(tlist);
     let mut resno = 1;
 
-    restore_query_state(&mut ctx, &query);
+    // restore_query_state(&mut ctx, &query);
 
     // These checks are used the validate that tuple state is still expected when operating under
     // READ COMMITTED isolation level (EPQ = EvalPlanQual)
@@ -1033,7 +1049,7 @@ pub unsafe extern "C" fn get_foreign_plan(
             let col_alias = query.as_select_mut().unwrap().new_column_alias();
             let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
 
-            if apply_query_operation(&mut ctx, query.as_select_mut().unwrap(), query_op).is_none() {
+            if apply_query_operation(&mut query, query_op).is_none() {
                 panic!("Failed to push down column required for local condition evaluation: rejected by remote");
             }
 
@@ -1112,7 +1128,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         let col_alias = query.as_select_mut().unwrap().new_column_alias();
         let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
 
-        if apply_query_operation(&mut ctx, query.as_select_mut().unwrap(), query_op).is_none() {
+        if apply_query_operation(&mut query, query_op).is_none() {
             panic!("Failed to push down column required for local condition evaluation: rejected by remote");
         }
 
@@ -1152,7 +1168,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         );
     }
 
-    let fdw_private = into_fdw_private_rel(ctx, query.clone(), planner.clone());
+    let fdw_private = into_fdw_private_rel(ctx, query.duplicate().unwrap(), planner.clone());
 
     pg_sys::make_foreignscan(
         tlist,
@@ -1254,12 +1270,12 @@ pub unsafe extern "C" fn begin_foreign_scan(
     }
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (mut ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
+    let (ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
     let mut scan = FdwScanContext::new();
 
     // Prepare the query for the chosen path
-    restore_query_state(&mut ctx, &query);
-    ctx.prepare_query().unwrap();
+    // restore_query_state(&mut ctx, &query);
+    query.prepare_query().unwrap();
 
     // Prepare the query parameter expr's for evaluation
     prepare_query_params(&mut scan, &query, node);
@@ -1299,13 +1315,12 @@ pub unsafe fn prepare_query_params(
 }
 
 pub unsafe fn send_query_params(
-    ctx: &mut FdwContext,
+    query: &mut FdwQueryContext,
     scan: &FdwScanContext,
-    query: &FdwQueryContext,
     node: *mut ForeignScanState,
 ) {
     let input_data = {
-        let input_structure = ctx
+        let input_structure = query
             .get_input_structure()
             .expect("Failed to send query params");
 
@@ -1334,7 +1349,7 @@ pub unsafe fn send_query_params(
     };
 
     // Finally, serialise and send the query params
-    ctx.write_query_input(input_data).unwrap();
+    query.write_query_input(input_data).unwrap();
 }
 
 /// Retrieve next row from the result set, or clear tuple slot to indicate EOF
@@ -1344,16 +1359,16 @@ pub unsafe fn send_query_params(
 pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *mut TupleTableSlot {
     let slot = (*node).ss.ss_ScanTupleSlot;
 
-    let (mut ctx, mut query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
+    let (ctx, mut query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
 
     // Get the query output structure, if this is not present then execute the query
     let row_structure = if let Some(row_structure) = scan.row_structure.as_ref() {
         row_structure
     } else {
         // Send query params, if any
-        send_query_params(&mut ctx, &scan, &query, node);
+        send_query_params(&mut query, &scan, node);
 
-        let row_structure = ctx.execute_query().unwrap();
+        let row_structure = query.execute_query().unwrap();
         scan.row_structure = Some(row_structure);
         scan.row_structure.as_ref().unwrap()
     };
@@ -1380,7 +1395,7 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
             continue;
         }
 
-        let data = ctx
+        let data = query
             .read_result_data()
             .context("Failed to read data value")
             .unwrap();
@@ -1425,7 +1440,7 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         }
     }
 
-    assert!(row_structure.cols.len() == col_idx);
+    assert_eq!(row_structure.cols.len(), col_idx);
 
     pg_sys::ExecStoreVirtualTuple(slot);
     slot
@@ -1501,10 +1516,10 @@ pub unsafe extern "C" fn recheck_foreign_scan(
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c_source.html#l01641
 #[pg_guard]
 pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
-    let (mut ctx, query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
+    let (ctx, mut query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
 
     if scan.row_structure.is_some() {
-        ctx.restart_query().unwrap();
+        query.restart_query().unwrap();
         scan.row_structure = None;
     }
 }
@@ -1521,9 +1536,7 @@ pub unsafe extern "C" fn end_foreign_scan(node: *mut ForeignScanState) {
 
     let (mut ctx, _, _) = from_fdw_private_scan((*node).fdw_state as _);
 
-    ctx.disconnect().unwrap();
-
-    // TODO: verify no mem leaks
+    // TODO: Clean up
 }
 
 #[pg_guard]
@@ -1584,36 +1597,32 @@ pub unsafe extern "C" fn reparameterize_foreign_path_by_child(
     unimplemented!()
 }
 
-// Sends the query
-unsafe fn restore_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
-    let select = query.as_select().unwrap();
+// // Sends the query
+// unsafe fn restore_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
+//     let select = query.as_select().unwrap();
 
-    // Initialise a new select query
-    ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Select)
-        .unwrap();
+//     // Initialise a new select query
+//     ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Select)
+//         .unwrap();
 
-    // We have already applied these ops to the query before but not on the
-    // remote side
-    // TODO: optimise so we dont perform duplicate work
-    for query_op in select.remote_ops.iter() {
-        ctx.apply_query_op(query_op.clone().into()).unwrap();
-    }
-}
+//     // We have already applied these ops to the query before but not on the
+//     // remote side
+//     // TODO: optimise so we dont perform duplicate work
+//     for query_op in select.remote_ops.iter() {
+//         ctx.apply_query_op(query_op.clone().into()).unwrap();
+//     }
+// }
 
 // Generate a path cost estimation based on the supplied conditions
 unsafe fn apply_query_operations(
-    ctx: &mut FdwContext,
     query: &mut FdwQueryContext,
     new_query_ops: Vec<SelectQueryOperation>,
 ) {
-    restore_query_state(ctx, query);
-
     let mut cost = None;
 
     // Apply each of the query operations and evaluate the cost
     for query_op in new_query_ops {
-        if let Some(new_cost) = apply_query_operation(ctx, query.as_select_mut().unwrap(), query_op)
-        {
+        if let Some(new_cost) = apply_query_operation(query, query_op) {
             cost = Some(new_cost);
         }
     }
@@ -1626,15 +1635,14 @@ unsafe fn apply_query_operations(
 }
 
 fn apply_query_operation(
-    ctx: &mut FdwContext,
-    select: &mut FdwSelectQuery,
+    query: &mut FdwQueryContext,
     query_op: SelectQueryOperation,
 ) -> Option<OperationCost> {
-    let result = ctx.apply_query_op(query_op.clone().into()).unwrap();
+    let result = query.apply_query_op(query_op.clone().into()).unwrap();
 
     match result {
         QueryOperationResult::Ok(cost) => {
-            select.remote_ops.push(query_op);
+            query.as_select_mut().unwrap().remote_ops.push(query_op);
             Some(cost)
         }
         QueryOperationResult::Unsupported => None,
@@ -1642,7 +1650,7 @@ fn apply_query_operation(
 }
 
 unsafe fn apply_query_conds(
-    ctx: &mut FdwContext,
+    ctx: &FdwContext,
     query: &mut FdwQueryContext,
     planner: &PlannerContext,
     conds: Vec<*mut RestrictInfo>,
@@ -1662,7 +1670,7 @@ unsafe fn apply_query_conds(
         })
         .collect::<Vec<_>>();
 
-    apply_query_operations(ctx, query, conds.iter().map(|(i, _)| i).cloned().collect());
+    apply_query_operations(query, conds.iter().map(|(i, _)| i).cloned().collect());
 
     for (cond, ri) in conds.into_iter() {
         if query.as_select().unwrap().remote_ops.contains(&cond) {
@@ -1771,9 +1779,8 @@ unsafe fn calculate_query_cost(
                 * (DEFAULT_FDW_TUPLE_COST + pg_sys::cpu_tuple_cost + local_qual_cost.per_tuple))),
     );
 
-    let query_copy = query.clone();
-    for cost_fn in query.cost_fns.iter_mut() {
-        cost = cost_fn(&query_copy, cost);
+    for cost_fn in query.cost_fns.iter() {
+        cost = cost_fn(&query, cost);
     }
 
     cost

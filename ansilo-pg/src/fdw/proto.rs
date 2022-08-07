@@ -46,6 +46,8 @@ pub enum ClientQueryMessage {
     Read(u32),
     /// Discard the current result set and ready the query for new params and execution
     Restart,
+    /// Copies the state of the query to a new query
+    Duplicate,
     /// Instructs the server to remove the query instance
     Discard,
 }
@@ -103,6 +105,8 @@ pub enum ServerQueryMessage {
     ResultData(Vec<u8>),
     /// Query restarted
     Restarted,
+    /// Query duplicated
+    Duplicated(QueryId),
     /// Query removed
     Discarded
 }

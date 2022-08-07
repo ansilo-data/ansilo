@@ -16,12 +16,10 @@ use crate::util::string::{parse_to_owned_utf8_string, to_cstr};
 #[pg_guard]
 pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *mut ExplainState) {
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (mut ctx, query, _) = from_fdw_private_rel((*plan).fdw_private);
-
-    let select = query.as_select().unwrap();
+    let (ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
 
     // Retrieve explain state from data source
-    let remote_query = ctx.explain_query((*es).verbose).unwrap();
+    let remote_query = query.explain_query((*es).verbose).unwrap();
 
     explain_json(es, "Remote Query", remote_query);
 
@@ -42,7 +40,7 @@ pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *
         explain_json(
             es,
             "Remote Ops",
-            serde_json::to_value(select.remote_ops.clone()).unwrap(),
+            serde_json::to_value(query.as_select().unwrap().remote_ops.clone()).unwrap(),
         );
     }
 }
@@ -55,28 +53,23 @@ pub unsafe extern "C" fn explain_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     es: *mut ExplainState,
 ) {
-    let (mut ctx, query, _) = from_fdw_private_modify(fdw_private);
+    let (ctx, mut query, _) = from_fdw_private_modify(fdw_private);
 
-    explain_modify((*mtstate).ps.plan, es, &mut *ctx, &query);
+    explain_modify((*mtstate).ps.plan, es, &mut query);
 }
 
 #[pg_guard]
 pub unsafe extern "C" fn explain_direct_modify(node: *mut ForeignScanState, es: *mut ExplainState) {
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
 
-    let (mut ctx, query, _) = from_fdw_private_modify((*plan).fdw_private);
+    let (ctx, mut query, _) = from_fdw_private_modify((*plan).fdw_private);
 
-    explain_modify(plan as *mut Plan, es, &mut *ctx, &query);
+    explain_modify(plan as *mut Plan, es, &mut query);
 }
 
-unsafe fn explain_modify(
-    plan: *mut Plan,
-    es: *mut ExplainState,
-    ctx: &mut FdwContext,
-    query: &FdwQueryContext,
-) {
+unsafe fn explain_modify(plan: *mut Plan, es: *mut ExplainState, query: &mut FdwQueryContext) {
     // Retrieve explain state from data source
-    let remote_query = ctx.explain_query((*es).verbose).unwrap();
+    let remote_query = query.explain_query((*es).verbose).unwrap();
 
     explain_json(es, "Remote Query", remote_query);
 
