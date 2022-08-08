@@ -12,7 +12,7 @@ use crate::{
     interface::{QueryHandle, QueryInputStructure},
 };
 
-use super::{executor::MemoryQueryExecutor, MemoryConnectionConfig, MemoryResultSet, MemoryConnectorEntitySourceConfig};
+use super::{executor::MemoryQueryExecutor, MemoryDatabase, MemoryResultSet, MemoryConnectorEntitySourceConfig};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MemoryQuery {
@@ -28,7 +28,7 @@ impl MemoryQuery {
 
 pub struct MemoryQueryHandle {
     query: MemoryQuery,
-    data: Arc<MemoryConnectionConfig>,
+    data: Arc<MemoryDatabase>,
     entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     param_buff: Vec<u8>,
     reset: bool,
@@ -37,7 +37,7 @@ pub struct MemoryQueryHandle {
 impl MemoryQueryHandle {
     pub fn new(
         query: MemoryQuery,
-        data: Arc<MemoryConnectionConfig>,
+        data: Arc<MemoryDatabase>,
         entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     ) -> Self {
         Self {

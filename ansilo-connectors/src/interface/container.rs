@@ -7,13 +7,10 @@ use ansilo_core::{
 
 use crate::{
     common::entity::ConnectorEntityConfig,
-    jdbc::{
-        JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet,
-        JdbcTransactionManager,
-    },
+    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector, OracleJdbcEntitySourceConfig},
     memory::{
-        MemoryConnection, MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
+        MemoryConnection, MemoryDatabase, MemoryConnectionPool, MemoryConnector,
         MemoryConnectorEntitySourceConfig, MemoryQuery, MemoryQueryHandle, MemoryResultSet,
     },
 };
@@ -29,7 +26,7 @@ pub enum Connectors {
 #[derive(Debug)]
 pub enum ConnectionConfigs {
     OracleJdbc(OracleJdbcConnectionConfig),
-    Memory(MemoryConnectionConfig),
+    Memory(MemoryDatabase),
 }
 
 #[derive(Debug)]

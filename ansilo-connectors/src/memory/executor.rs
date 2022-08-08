@@ -15,11 +15,11 @@ use itertools::Itertools;
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
-use super::{MemoryConnectionConfig, MemoryConnectorEntitySourceConfig, MemoryResultSet};
+use super::{MemoryDatabase, MemoryConnectorEntitySourceConfig, MemoryResultSet};
 
 #[derive(Debug, Clone)]
 pub(crate) struct MemoryQueryExecutor {
-    data: Arc<MemoryConnectionConfig>,
+    data: Arc<MemoryDatabase>,
     entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     query: sqlil::Query,
     params: HashMap<u32, DataValue>,
@@ -29,7 +29,7 @@ pub(crate) struct MemoryQueryExecutor {
 /// as a testing instrument.
 impl MemoryQueryExecutor {
     pub(crate) fn new(
-        data: Arc<MemoryConnectionConfig>,
+        data: Arc<MemoryDatabase>,
         entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
         query: sqlil::Query,
         params: HashMap<u32, DataValue>,
@@ -732,12 +732,12 @@ mod tests {
 
     fn mock_data() -> (
         ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-        MemoryConnectionConfig,
+        MemoryDatabase,
     ) {
-        let conf = MemoryConnectionConfig::new();
-        let mut entities = ConnectorEntityConfig::new();
+        let data = MemoryDatabase::new();
+        let mut conf = ConnectorEntityConfig::new();
 
-        entities.add(EntitySource::minimal(
+        conf.add(EntitySource::minimal(
             "people",
             EntityVersionConfig::minimal(
                 "1.0",
@@ -751,7 +751,7 @@ mod tests {
             MemoryConnectorEntitySourceConfig::default(),
         ));
 
-        entities.add(EntitySource::minimal(
+        conf.add(EntitySource::minimal(
             "pets",
             EntityVersionConfig::minimal(
                 "1.0",
@@ -765,7 +765,7 @@ mod tests {
             MemoryConnectorEntitySourceConfig::default(),
         ));
 
-        conf.set_data(
+        data.set_data(
             "people",
             "1.0",
             vec![
@@ -787,7 +787,7 @@ mod tests {
             ],
         );
 
-        conf.set_data(
+        data.set_data(
             "pets",
             "1.0",
             vec![
@@ -814,7 +814,7 @@ mod tests {
             ],
         );
 
-        (entities, conf)
+        (conf, data)
     }
 
     fn create_executor(

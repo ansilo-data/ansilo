@@ -1,4 +1,7 @@
-use std::{mem, sync::Arc};
+use std::{
+    mem,
+    sync::{atomic::Ordering, Arc},
+};
 
 use ansilo_core::err::{bail, Result};
 
@@ -7,20 +10,18 @@ use crate::{
     interface::{Connection, ConnectionPool, TransactionManager},
 };
 
-use super::{
-    MemoryConnectionConfig, MemoryConnectorEntitySourceConfig, MemoryQuery, MemoryQueryHandle,
-};
+use super::{MemoryConnectorEntitySourceConfig, MemoryDatabase, MemoryQuery, MemoryQueryHandle};
 
 /// Implementation for opening JDBC connections
 #[derive(Clone)]
 pub struct MemoryConnectionPool {
-    conf: Arc<MemoryConnectionConfig>,
+    conf: Arc<MemoryDatabase>,
     entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
 }
 
 impl MemoryConnectionPool {
     pub fn new(
-        conf: MemoryConnectionConfig,
+        conf: MemoryDatabase,
         entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     ) -> Result<Self> {
         Ok(Self {
@@ -29,7 +30,7 @@ impl MemoryConnectionPool {
         })
     }
 
-    pub fn conf(&self) -> Arc<MemoryConnectionConfig> {
+    pub fn conf(&self) -> Arc<MemoryDatabase> {
         Arc::clone(&self.conf)
     }
 }
@@ -46,20 +47,25 @@ impl ConnectionPool for MemoryConnectionPool {
 }
 
 pub struct MemoryConnection {
-    pub data: Arc<MemoryConnectionConfig>,
+    pub data: Arc<MemoryDatabase>,
     conf: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-    rollback_state: Option<MemoryConnectionConfig>,
+    transaction: Option<TransactionState>,
+}
+
+pub struct TransactionState {
+    rollback_state: MemoryDatabase,
+    commit_state: Arc<MemoryDatabase>,
 }
 
 impl MemoryConnection {
     pub fn new(
-        data: Arc<MemoryConnectionConfig>,
+        data: Arc<MemoryDatabase>,
         conf: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     ) -> Self {
         Self {
             data,
             conf,
-            rollback_state: None,
+            transaction: None,
         }
     }
 }
@@ -70,15 +76,21 @@ impl Connection for MemoryConnection {
     type TTransactionManager = MemoryConnection;
 
     fn prepare(&mut self, query: MemoryQuery) -> Result<MemoryQueryHandle> {
+        let target = if let Some(transaction) = &self.transaction {
+            &transaction.commit_state
+        } else {
+            &self.data
+        };
+
         Ok(MemoryQueryHandle::new(
             query,
-            Arc::clone(&self.data),
+            Arc::clone(target),
             self.conf.clone(),
         ))
     }
 
     fn transaction_manager(&mut self) -> Option<&mut Self> {
-        if self.data.transactions_enabled {
+        if self.data.transactions_enabled.load(Ordering::Relaxed) {
             Some(self)
         } else {
             None
@@ -86,32 +98,152 @@ impl Connection for MemoryConnection {
     }
 }
 
+impl TransactionState {
+    pub fn new(current_state: MemoryDatabase) -> Self {
+        let rollback_state = current_state.clone();
+        let commit_state = Arc::new(current_state);
+
+        Self {
+            rollback_state,
+            commit_state,
+        }
+    }
+}
+
 impl TransactionManager for MemoryConnection {
     fn is_in_transaction(&mut self) -> Result<bool> {
-        Ok(self.rollback_state.is_some())
+        Ok(self.transaction.is_some())
     }
 
     fn begin_transaction(&mut self) -> Result<()> {
-        self.rollback_state = Some((*self.data).clone());
+        self.transaction = Some(TransactionState::new((*self.data).clone()));
         Ok(())
     }
 
     fn rollback_transaction(&mut self) -> Result<()> {
-        if self.rollback_state.is_none() {
+        if self.transaction.is_none() {
             bail!("No active transaction");
         }
 
-        let rb = mem::replace(&mut self.rollback_state, None);
-        self.data.restore_from(rb.unwrap());
+        let trans = mem::replace(&mut self.transaction, None).unwrap();
+        self.data.restore_from(trans.rollback_state);
         Ok(())
     }
 
     fn commit_transaction(&mut self) -> Result<()> {
-        if self.rollback_state.is_none() {
+        if self.transaction.is_none() {
             bail!("No active transaction");
         }
 
-        self.rollback_state = None;
+        let trans = mem::replace(&mut self.transaction, None).unwrap();
+        self.data.restore_from((*trans.commit_state).clone());
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ansilo_core::{
+        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig},
+        data::{DataType, DataValue},
+    };
+
+    use crate::common::entity::EntitySource;
+
+    use super::*;
+
+    fn mock_data() -> (
+        ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+        MemoryDatabase,
+    ) {
+        let data = MemoryDatabase::new();
+        let mut conf = ConnectorEntityConfig::new();
+
+        conf.add(EntitySource::minimal(
+            "dummy",
+            EntityVersionConfig::minimal(
+                "1.0",
+                vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
+                EntitySourceConfig::minimal(""),
+            ),
+            MemoryConnectorEntitySourceConfig::default(),
+        ));
+
+        data.set_data("dummy", "1.0", vec![vec![DataValue::UInt32(1)]]);
+
+        (conf, data)
+    }
+
+    fn setup_connection() -> MemoryConnection {
+        let (conf, data) = mock_data();
+
+        MemoryConnection::new(Arc::new(data), conf)
+    }
+
+    #[test]
+    fn test_memory_connector_connection_transactions_disabled() {
+        let mut con = setup_connection();
+
+        con.data.transactions_enabled.store(false, Ordering::SeqCst);
+
+        assert!(con.transaction_manager().is_none());
+    }
+
+    #[test]
+    fn test_memory_connector_connection_transactions_enabled() {
+        let mut con = setup_connection();
+
+        assert!(con.transaction_manager().is_some());
+    }
+
+    #[test]
+    fn test_memory_connector_connection_transaction_rollback() {
+        let mut con = setup_connection();
+
+        let orig = con.data.get_data("dummy", "1.0").unwrap();
+
+        assert_eq!(con.is_in_transaction().unwrap(), false);
+        con.begin_transaction().unwrap();
+        assert_eq!(con.is_in_transaction().unwrap(), true);
+
+        con.data
+            .with_data_mut("dummy", "1.0", |data| {
+                data[0][0] = DataValue::UInt32(123);
+                ()
+            })
+            .unwrap();
+
+        con.rollback_transaction().unwrap();
+        assert_eq!(con.is_in_transaction().unwrap(), false);
+
+        let after_rollback = con.data.get_data("dummy", "1.0").unwrap();
+
+        assert_eq!(after_rollback, orig);
+    }
+
+    #[test]
+    fn test_memory_connector_connection_transaction_commit() {
+        let mut con = setup_connection();
+
+        assert_eq!(con.is_in_transaction().unwrap(), false);
+        con.begin_transaction().unwrap();
+        assert_eq!(con.is_in_transaction().unwrap(), true);
+
+        // Mutate commit state
+        con.transaction.as_mut()
+            .unwrap()
+            .commit_state
+            .with_data_mut("dummy", "1.0", |data| {
+                data[0][0] = DataValue::UInt32(123);
+                ()
+            })
+            .unwrap();
+
+        con.commit_transaction().unwrap();
+        assert_eq!(con.is_in_transaction().unwrap(), false);
+
+        let after_commit = con.data.get_data("dummy", "1.0").unwrap();
+
+        assert_eq!(after_commit, vec![vec![DataValue::UInt32(123)],]);
     }
 }

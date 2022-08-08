@@ -208,7 +208,7 @@ mod tests {
     use ansilo_connectors::{
         common::entity::EntitySource,
         memory::{
-            MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
+            MemoryDatabase, MemoryConnectionPool, MemoryConnector,
             MemoryConnectorEntitySourceConfig,
         },
     };
@@ -226,7 +226,7 @@ mod tests {
     use super::*;
 
     fn create_memory_connection_pool() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionPool) {
-        let conf = MemoryConnectionConfig::new();
+        let conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
         entities.add(EntitySource::minimal(

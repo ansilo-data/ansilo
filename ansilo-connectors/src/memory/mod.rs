@@ -33,7 +33,7 @@ pub struct MemoryConnector;
 impl Connector for MemoryConnector {
     type TConnectionPool = MemoryConnectionPool;
     type TConnection = MemoryConnection;
-    type TConnectionConfig = MemoryConnectionConfig;
+    type TConnectionConfig = MemoryDatabase;
     type TEntitySearcher = MemoryEntitySearcher;
     type TEntityValidator = MemoryEntityValidator;
     type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
@@ -47,7 +47,7 @@ impl Connector for MemoryConnector {
     const TYPE: &'static str = "test.memory";
 
     fn parse_options(_options: config::Value) -> Result<Self::TConnectionConfig> {
-        Ok(MemoryConnectionConfig::new())
+        Ok(MemoryDatabase::new())
     }
 
     fn parse_entity_source_options(_options: config::Value) -> Result<Self::TEntitySourceConfig> {
@@ -55,7 +55,7 @@ impl Connector for MemoryConnector {
     }
 
     fn create_connection_pool(
-        conf: MemoryConnectionConfig,
+        conf: MemoryDatabase,
         _nc: &NodeConfig,
         entities: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     ) -> Result<Self::TConnectionPool> {

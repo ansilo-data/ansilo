@@ -24,7 +24,7 @@ mod tests {
         common::entity::{ConnectorEntityConfig, EntitySource},
         interface::{container::ConnectionPools, Connector, OperationCost},
         memory::{
-            MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
+            MemoryDatabase, MemoryConnectionPool, MemoryConnector,
             MemoryConnectorEntitySourceConfig,
         },
     };
@@ -40,7 +40,7 @@ mod tests {
     use serde_json::json;
 
     fn create_memory_connection_pool() -> ConnectionPools {
-        let mut conf = MemoryConnectionConfig::new();
+        let mut conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
         entities.add(EntitySource::minimal(

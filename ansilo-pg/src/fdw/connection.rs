@@ -512,15 +512,15 @@ impl<TConnector: Connector> FdwConnectionState<TConnector> {
 mod tests {
     use std::{
         io,
-        sync::Arc,
+        sync::{atomic::Ordering, Arc},
         thread::{self, JoinHandle},
     };
 
     use ansilo_connectors::{
         common::{data::DataReader, entity::EntitySource},
         memory::{
-            MemoryConnectionConfig, MemoryConnectionPool, MemoryConnector,
-            MemoryConnectorEntitySourceConfig,
+            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
+            MemoryDatabase,
         },
     };
     use ansilo_core::{
@@ -534,14 +534,18 @@ mod tests {
 
     use super::*;
 
-    fn create_memory_connection_pool() -> (
+    fn create_memory_connection_pool(
+        transactions_enabled: bool,
+    ) -> (
         ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
         MemoryConnectionPool,
     ) {
-        let conf = MemoryConnectionConfig::new();
-        let mut entities = ConnectorEntityConfig::new();
+        let data = MemoryDatabase::new();
+        data.transactions_enabled
+            .store(transactions_enabled, Ordering::SeqCst);
+        let mut conf = ConnectorEntityConfig::new();
 
-        entities.add(EntitySource::minimal(
+        conf.add(EntitySource::minimal(
             "people",
             EntityVersionConfig::minimal(
                 "1.0",
@@ -554,7 +558,7 @@ mod tests {
             MemoryConnectorEntitySourceConfig::default(),
         ));
 
-        conf.set_data(
+        data.set_data(
             "people",
             "1.0",
             vec![
@@ -564,19 +568,17 @@ mod tests {
             ],
         );
 
-        let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
-            .unwrap();
+        let pool =
+            MemoryConnector::create_connection_pool(data, &NodeConfig::default(), &conf).unwrap();
 
-        (entities, pool)
+        (conf, pool)
     }
 
-    fn create_mock_connection(
+    fn create_mock_connection_opts(
         name: &'static str,
-    ) -> (
-        JoinHandle<Result<Arc<MemoryConnectionConfig>>>,
-        IpcClientChannel,
-    ) {
-        let (entities, pool) = create_memory_connection_pool();
+        transactions_enabled: bool,
+    ) -> (JoinHandle<Result<Arc<MemoryDatabase>>>, IpcClientChannel) {
+        let (entities, pool) = create_memory_connection_pool(transactions_enabled);
 
         let (client_chan, server_chan) = create_tmp_ipc_channel(name);
 
@@ -589,6 +591,12 @@ mod tests {
         });
 
         (thread, client_chan)
+    }
+
+    fn create_mock_connection(
+        name: &'static str,
+    ) -> (JoinHandle<Result<Arc<MemoryDatabase>>>, IpcClientChannel) {
+        create_mock_connection_opts(name, true)
     }
 
     #[test]
@@ -1130,7 +1138,7 @@ mod tests {
 
     #[test]
     fn test_fdw_connection_multiple_queries() {
-        let (thread, mut client) = create_mock_connection("connection_select");
+        let (thread, mut client) = create_mock_connection("connection_multiple_queries");
 
         let queries = (0..5)
             .map(|i| {
@@ -1244,7 +1252,7 @@ mod tests {
 
     #[test]
     fn test_fdw_connection_invalid_query_id() {
-        let (thread, mut client) = create_mock_connection("connection_select_explain");
+        let (thread, mut client) = create_mock_connection("connection_invalid_query_id");
 
         let res = client
             .send(ClientMessage::CreateQuery(
@@ -1279,7 +1287,7 @@ mod tests {
 
     #[test]
     fn test_fdw_connection_duplicate_query() {
-        let (thread, mut client) = create_mock_connection("connection_select");
+        let (thread, mut client) = create_mock_connection("connection_duplicate_query");
 
         let res = client
             .send(ClientMessage::CreateQuery(
@@ -1364,5 +1372,128 @@ mod tests {
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_begin_transaction_when_not_supported() {
+        let (thread, mut client) =
+            create_mock_connection_opts("connection_transaction_not_supported", false);
+
+        let res = client.send(ClientMessage::BeginTransaction).unwrap();
+
+        assert_eq!(res, ServerMessage::TransactionsNotSupported);
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_begin_transaction_rollback() {
+        let (thread, mut client) = create_mock_connection("connection_transaction_rollback");
+
+        let res = client.send(ClientMessage::BeginTransaction).unwrap();
+
+        assert_eq!(res, ServerMessage::TransactionBegun);
+
+        // Trigger DELETE FROM "people:1.0"
+        let res = client
+            .send(ClientMessage::CreateQuery(
+                sqlil::source("people", "1.0", "people"),
+                sqlil::QueryType::Delete,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+        );
+
+        // Perform rollback
+
+        let res = client.send(ClientMessage::RollbackTransaction).unwrap();
+        assert_eq!(res, ServerMessage::TransactionRolledBack);
+
+        client.close().unwrap();
+        let entities = thread.join().unwrap().unwrap();
+
+        // Assert delete was rolled back
+        let rows = entities.get_data("people", "1.0").unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                vec![DataValue::from("Mary"), DataValue::from("Jane")],
+                vec![DataValue::from("John"), DataValue::from("Smith")],
+                vec![DataValue::from("Gary"), DataValue::from("Gregson")],
+            ],
+        );
+    }
+
+    #[test]
+    fn test_fdw_connection_begin_transaction_commit() {
+        let (thread, mut client) = create_mock_connection("connection_transaction_rollback");
+
+        let res = client.send(ClientMessage::BeginTransaction).unwrap();
+
+        assert_eq!(res, ServerMessage::TransactionBegun);
+
+        // Trigger DELETE FROM "people:1.0"
+        let res = client
+            .send(ClientMessage::CreateQuery(
+                sqlil::source("people", "1.0", "people"),
+                sqlil::QueryType::Delete,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+        );
+
+        // Perform commit
+        let res = client.send(ClientMessage::CommitTransaction).unwrap();
+        assert_eq!(res, ServerMessage::TransactionCommitted);
+
+        client.close().unwrap();
+        let entities = thread.join().unwrap().unwrap();
+
+        // Assert delete was committed
+        let rows = entities.get_data("people", "1.0").unwrap();
+        assert_eq!(rows, Vec::<Vec<DataValue>>::new());
     }
 }

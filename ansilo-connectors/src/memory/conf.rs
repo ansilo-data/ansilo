@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::RwLock};
+use std::{
+    collections::HashMap,
+    sync::{atomic::{AtomicBool, Ordering}, RwLock},
+};
 
 use ansilo_core::data::DataValue;
 use serde::{Deserialize, Serialize};
@@ -6,22 +9,22 @@ use serde::{Deserialize, Serialize};
 /// The in-memory data store config, all data is stored in the data structure
 /// below
 #[derive(Debug, Serialize, Deserialize)]
-pub struct MemoryConnectionConfig {
+pub struct MemoryDatabase {
     /// The in-memory data queried by the connector
     /// This 2D tabular data keyed by the respective the string "{entity_id}-{version_id}"
     data: RwLock<HashMap<String, Vec<Vec<DataValue>>>>,
     /// We also keep track of row id's to ensure they are uniquely assigned for each entity
     row_ids: RwLock<HashMap<String, u64>>,
     /// Whether transactions are supported
-    pub transactions_enabled: bool
+    pub transactions_enabled: AtomicBool,
 }
 
-impl MemoryConnectionConfig {
+impl MemoryDatabase {
     pub fn new() -> Self {
         Self {
             data: RwLock::new(HashMap::new()),
             row_ids: RwLock::new(HashMap::new()),
-            transactions_enabled: true
+            transactions_enabled: AtomicBool::new(true),
         }
     }
 
@@ -117,12 +120,12 @@ impl MemoryConnectionConfig {
     }
 }
 
-impl Clone for MemoryConnectionConfig {
+impl Clone for MemoryDatabase {
     fn clone(&self) -> Self {
         Self {
             data: RwLock::new(self.data.read().unwrap().clone()),
             row_ids: RwLock::new(self.row_ids.read().unwrap().clone()),
-            transactions_enabled: self.transactions_enabled
+            transactions_enabled: AtomicBool::new(self.transactions_enabled.load(Ordering::SeqCst)),
         }
     }
 }
@@ -133,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_connection_config() {
-        let conf = MemoryConnectionConfig::new();
+        let conf = MemoryDatabase::new();
 
         conf.set_data(
             "a",
