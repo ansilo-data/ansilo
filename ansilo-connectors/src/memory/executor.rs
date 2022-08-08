@@ -162,15 +162,15 @@ impl MemoryQueryExecutor {
 
     fn run_delete(&self, delete: &sqlil::Delete) -> Result<MemoryResultSet> {
         self.update_entity_data(&delete.target, |rows| {
-            let mut i = 0;
-
-            while i < rows.len() {
-                if self.satisfies_where(&rows[i])? {
-                    rows.remove(i);
-                } else {
-                    i += 1;
+            let mut retained = vec![];
+            
+            for row in rows.iter() {
+                if !self.satisfies_where(row)? {
+                    retained.push(row.clone());
                 }
             }
+
+            *rows = retained;
 
             Ok(())
         })?;

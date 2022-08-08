@@ -1,8 +1,11 @@
 mod connect;
 mod options;
 mod auth;
-pub mod params;
+mod params;
+mod transaction;
 
 pub use connect::*;
 pub use options::*;
 pub use auth::*;
+pub use params::*;
+pub use transaction::*;

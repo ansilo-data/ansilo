@@ -25,10 +25,7 @@ use pgx::{
 
 use crate::{
     fdw::{
-        common::{
-            self,
-            params::{prepare_query_params, send_query_params},
-        },
+        common::{self, prepare_query_params, send_query_params},
         ctx::{
             mem::{pg_query_scoped, pg_scan_scoped, pg_transaction_scoped},
             *,

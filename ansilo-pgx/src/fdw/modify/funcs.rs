@@ -16,10 +16,7 @@ use pgx::{
 
 use crate::{
     fdw::{
-        common::{
-            self,
-            params::{prepare_query_params, send_query_params},
-        },
+        common::{self, prepare_query_params, send_query_params, begin_remote_transaction},
         ctx::{
             from_fdw_private_modify, from_fdw_private_rel, into_fdw_private_modify,
             mem::{pg_query_scoped, pg_transaction_scoped},
@@ -312,6 +309,9 @@ pub unsafe extern "C" fn begin_foreign_modify(
     }
 
     let (ctx, mut query, _state) = from_fdw_private_modify(fdw_private);
+
+    // Upon the first modification query we begin a remote transaction
+    begin_remote_transaction(&ctx.connection);
 
     // If this is an UPDATE/DELETE query we need to find the attr no's for the row id's
     // from the subplan tlist
@@ -712,6 +712,9 @@ pub unsafe extern "C" fn begin_direct_modify(
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
     let (ctx, mut query, mut state) = from_fdw_private_modify((*plan).fdw_private);
+
+    // Upon the first modification query we begin a remote transaction
+    begin_remote_transaction(&ctx.connection);
 
     query.prepare().unwrap();
 

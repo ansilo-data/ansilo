@@ -1,36 +1,8 @@
-use std::{cmp, collections::HashMap, ffi::c_void, mem, ops::ControlFlow, ptr};
+use std::collections::HashMap;
 
-use ansilo_core::{
-    data::DataValue,
-    err::{bail, Context, Result},
-    sqlil::{self, JoinType, Ordering, OrderingType, QueryType},
-};
-use ansilo_pg::fdw::{
-    data::DataWriter,
-    proto::{
-        ClientMessage, OperationCost, QueryInputStructure, QueryOperationResult, RowStructure,
-        SelectQueryOperation, ServerMessage,
-    },
-};
-use pgx::{
-    pg_sys::{
-        add_path, shm_toc, EquivalenceClass, EquivalenceMember, ForeignPath, ForeignScan,
-        ForeignScanState, JoinPathExtraData, List, Node, Oid, ParallelContext, Path, PathKey, Plan,
-        PlannerInfo, RangeTblEntry, RelOptInfo, RestrictInfo, Size, TargetEntry, TupleTableSlot,
-        UpperRelationKind,
-    },
-    *,
-};
+use pgx::{pg_sys::ForeignScanState, *};
 
-use crate::{
-    fdw::{common, ctx::*},
-    sqlil::{
-        convert, convert_list, from_datum, into_datum, into_pg_type,
-        parse_entity_version_id_from_foreign_table, parse_entity_version_id_from_rel,
-        ConversionContext,
-    },
-    util::{list::vec_to_pg_list, string::to_pg_cstr, table::PgTable},
-};
+use crate::{fdw::ctx::*, sqlil::from_datum, util::list::vec_to_pg_list};
 
 pub(crate) unsafe fn prepare_query_params(
     scan: &mut FdwScanContext,
