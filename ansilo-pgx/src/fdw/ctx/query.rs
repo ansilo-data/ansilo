@@ -15,7 +15,10 @@ use ansilo_pg::fdw::{
     },
 };
 
-use pgx::pg_sys::{self, RestrictInfo};
+use pgx::{
+    pg_sys::{self, RestrictInfo},
+    warning,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{fdw::common::FdwIpcConnection, sqlil::ConversionContext};
@@ -78,7 +81,7 @@ impl FdwQueryContext {
         base_varno: pg_sys::Oid,
         query: FdwQueryType,
         base_cost: OperationCost,
-        cvt: ConversionContext
+        cvt: ConversionContext,
     ) -> Self {
         let retrieved_rows = base_cost.rows;
 
@@ -302,6 +305,30 @@ impl FdwQueryContext {
 
     pub fn add_cost(&mut self, cb: impl Fn(&Self, OperationCost) -> OperationCost + 'static) {
         self.cost_fns.push(Rc::new(cb));
+    }
+}
+
+/// Upon dropping the query context we want to ensure
+/// the query is dropped on the server side.
+impl Drop for FdwQueryContext {
+    fn drop(&mut self) {
+        let result = self
+            .connection
+            .send(ClientQueryMessage::Discard)
+            .and_then(|res| match res {
+                ServerQueryMessage::Discarded => Ok(()),
+                _ => return Err(unexpected_response(res)),
+            })
+            .context("Discarding query");
+
+        if let Err(err) = result {
+            warning!(
+                "Failed to discard query {} on connection {}: {:?}",
+                self.connection.query_id,
+                self.connection.connection.data_source_id.clone(),
+                err
+            )
+        }
     }
 }
 
