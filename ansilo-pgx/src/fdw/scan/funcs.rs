@@ -1574,22 +1574,6 @@ pub unsafe extern "C" fn reparameterize_foreign_path_by_child(
     unimplemented!()
 }
 
-// // Sends the query
-// unsafe fn restore_query_state(ctx: &mut FdwContext, query: &FdwQueryContext) {
-//     let select = query.as_select().unwrap();
-
-//     // Initialise a new select query
-//     ctx.create_query(query.base_rel_alias(), sqlil::QueryType::Select)
-//         .unwrap();
-
-//     // We have already applied these ops to the query before but not on the
-//     // remote side
-//     // TODO: optimise so we dont perform duplicate work
-//     for query_op in select.remote_ops.iter() {
-//         ctx.apply_query_op(query_op.clone().into()).unwrap();
-//     }
-// }
-
 // Generate a path cost estimation based on the supplied conditions
 unsafe fn apply_query_operations(
     query: &mut FdwQueryContext,
