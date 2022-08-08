@@ -26,6 +26,7 @@ pub trait Connection: Sized {
 }
 
 /// Manages transaction state for data sources
+/// TODO: Implement support for explicit isolation-level control.
 pub trait TransactionManager {
     /// Checks if the current connection is in a transaction
     fn is_in_transaction(&self) -> Result<bool>;

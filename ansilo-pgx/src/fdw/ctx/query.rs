@@ -160,7 +160,11 @@ impl FdwQueryContext {
         }
     }
 
-    pub fn apply_query_op(&mut self, query_op: QueryOperation) -> Result<QueryOperationResult> {
+    /// Apply's the supplied operation to the current state of the query.
+    /// Depending on the support of executing the query operation on the data source
+    /// this could be rejected, in which case the query operation must be performed
+    /// locally by postgres.
+    pub fn apply(&mut self, query_op: QueryOperation) -> Result<QueryOperationResult> {
         let result = self
             .connection
             .send(ClientQueryMessage::Apply(query_op))
@@ -173,7 +177,9 @@ impl FdwQueryContext {
         Ok(result)
     }
 
-    pub fn prepare_query(&mut self) -> Result<QueryInputStructure> {
+    /// Compiles the current query state into a prepared query.
+    /// Any required query parameters will have to written before execution.
+    pub fn prepare(&mut self) -> Result<QueryInputStructure> {
         let query_input = self
             .connection
             .send(ClientQueryMessage::Prepare)
@@ -201,7 +207,7 @@ impl FdwQueryContext {
 
     /// Writes the supplied query params
     /// This function assumes that the values are in the order expected by the query input structure
-    pub fn write_query_input(&mut self, data: Vec<DataValue>) -> Result<()> {
+    pub fn write_params(&mut self, data: Vec<DataValue>) -> Result<()> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
 
         // This wont be too inefficient as it is being buffered
@@ -216,7 +222,7 @@ impl FdwQueryContext {
     /// Writes the supplied query params
     /// This will ensure the correct ordering of the query parameters by sorting them
     /// using the parameter id's in the supplied vec.
-    pub fn write_query_input_unordered(&mut self, data: Vec<(u32, DataValue)>) -> Result<()> {
+    pub fn write_params_unordered(&mut self, data: Vec<(u32, DataValue)>) -> Result<()> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
         let mut ordered_params = vec![];
         let mut data = data.into_iter().collect::<HashMap<_, _>>();
@@ -225,10 +231,12 @@ impl FdwQueryContext {
             ordered_params.push(data.remove(param_id).unwrap());
         }
 
-        self.write_query_input(ordered_params)
+        self.write_params(ordered_params)
     }
 
-    pub fn execute_query(&mut self) -> Result<RowStructure> {
+    /// Executes the current query.
+    /// All query parameters are expected to have been written.
+    pub fn execute(&mut self) -> Result<RowStructure> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
 
         writer.flush()?;
@@ -240,12 +248,15 @@ impl FdwQueryContext {
         Ok(row_structure)
     }
 
+    /// Reads the next data value from the result set of this query
     pub fn read_result_data(&mut self) -> Result<Option<DataValue>> {
         let reader = self.result_set.as_mut().context("Query not executed")?;
 
         reader.read_data_value()
     }
 
+    /// Restart's the current query.
+    /// Query parameters will have to be rewritten for the next execution.
     pub fn restart_query(&mut self) -> Result<()> {
         let writer = self.query_writer.as_mut().context("Query not executed")?;
         writer.restart()?;
@@ -253,7 +264,9 @@ impl FdwQueryContext {
         Ok(())
     }
 
-    pub fn explain_query(&mut self, verbose: bool) -> Result<serde_json::Value> {
+    /// Retrieves any useful debugging information on the execution plan
+    /// of the query.
+    pub fn explain(&mut self, verbose: bool) -> Result<serde_json::Value> {
         let json: String = self
             .connection
             .send(ClientQueryMessage::Explain(verbose))
@@ -269,12 +282,8 @@ impl FdwQueryContext {
         Ok(parsed)
     }
 
-    /// Creates a new parameter (not associated to a node)
-    pub(crate) fn create_param(&mut self, r#type: DataType) -> sqlil::Parameter {
-        sqlil::Parameter::new(r#type, self.cvt.create_param())
-    }
-
-    /// Duplicate
+    /// Creates a copy of the query that can be modified
+    /// independently of the original
     pub(crate) fn duplicate(&self) -> Result<Self> {
         let query_id = self
             .connection
@@ -303,6 +312,13 @@ impl FdwQueryContext {
         })
     }
 
+    /// Creates a new parameter (not associated to a node)
+    pub(crate) fn create_param(&mut self, r#type: DataType) -> sqlil::Parameter {
+        sqlil::Parameter::new(r#type, self.cvt.create_param())
+    }
+
+    /// Adds a new query cost callback, used to modify the cost of the query
+    /// when planning
     pub fn add_cost(&mut self, cb: impl Fn(&Self, OperationCost) -> OperationCost + 'static) {
         self.cost_fns.push(Rc::new(cb));
     }

@@ -98,5 +98,5 @@ pub(crate) unsafe fn send_query_params(
     };
 
     // Finally, serialise and send the query params
-    query.write_query_input(input_data).unwrap();
+    query.write_params(input_data).unwrap();
 }

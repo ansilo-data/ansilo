@@ -1327,7 +1327,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
 
     // Prepare the query for the chosen path
     // restore_query_state(&mut ctx, &query);
-    query.prepare_query().unwrap();
+    query.prepare().unwrap();
 
     // Prepare the query parameter expr's for evaluation
     prepare_query_params(&mut scan, &query, node);
@@ -1351,7 +1351,7 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         // Send query params, if any
         send_query_params(&mut query, &scan, node);
 
-        let row_structure = query.execute_query().unwrap();
+        let row_structure = query.execute().unwrap();
         scan.row_structure = Some(row_structure);
         scan.row_structure.as_ref().unwrap()
     };
@@ -1615,7 +1615,7 @@ fn apply_query_operation(
     query: &mut FdwQueryContext,
     query_op: SelectQueryOperation,
 ) -> Option<OperationCost> {
-    let result = query.apply_query_op(query_op.clone().into()).unwrap();
+    let result = query.apply(query_op.clone().into()).unwrap();
 
     match result {
         QueryOperationResult::Ok(cost) => {

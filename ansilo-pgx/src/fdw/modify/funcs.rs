@@ -146,7 +146,7 @@ fn plan_foreign_insert(
 
         let op = InsertQueryOperation::AddColumn((col_name, sqlil::Expr::Parameter(param.clone())));
 
-        match query.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 panic!("Failed to create insert query on data source: unable to add query parameter for insert value")
@@ -205,7 +205,7 @@ unsafe fn plan_foreign_update(
 
         let op = UpdateQueryOperation::AddSet((col_name, sqlil::Expr::Parameter(param.clone())));
 
-        match query.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 panic!("Failed to create update query on data source: unable to add query parameter for update value")
@@ -230,7 +230,7 @@ unsafe fn plan_foreign_update(
             sqlil::Expr::Parameter(param.clone()),
         )));
 
-        match query.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 panic!("Failed to create update query on data source: unable to add query parameter for row id condition")
@@ -276,7 +276,7 @@ unsafe fn plan_foreign_delete(
             sqlil::Expr::Parameter(param.clone()),
         )));
 
-        match query.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 panic!("Failed to create update query on data source: unable to add query parameter for row id condition")
@@ -341,7 +341,7 @@ pub unsafe extern "C" fn begin_foreign_modify(
         }
     }
 
-    query.prepare_query().unwrap();
+    query.prepare().unwrap();
 
     (*rinfo).ri_FdwState = fdw_private as *mut _;
 }
@@ -380,8 +380,8 @@ pub unsafe extern "C" fn exec_foreign_insert(
         ));
     }
 
-    query.write_query_input_unordered(query_input).unwrap();
-    query.execute_query().unwrap();
+    query.write_params_unordered(query_input).unwrap();
+    query.execute().unwrap();
     query.restart_query().unwrap();
 
     slot
@@ -431,8 +431,8 @@ pub unsafe extern "C" fn exec_foreign_update(
         ));
     }
 
-    query.write_query_input_unordered(query_input).unwrap();
-    query.execute_query().unwrap();
+    query.write_params_unordered(query_input).unwrap();
+    query.execute().unwrap();
     query.restart_query().unwrap();
 
     slot
@@ -457,8 +457,8 @@ pub unsafe extern "C" fn exec_foreign_delete(
         ));
     }
 
-    query.write_query_input_unordered(query_input).unwrap();
-    query.execute_query().unwrap();
+    query.write_params_unordered(query_input).unwrap();
+    query.execute().unwrap();
     query.restart_query().unwrap();
 
     slot
@@ -613,7 +613,7 @@ unsafe fn plan_direct_foreign_update(
         // Try apply this as a SET expression to the update query
         let op = UpdateQueryOperation::AddSet((col_attr.name().to_string(), expr));
 
-        match query.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 return None;
@@ -639,7 +639,7 @@ unsafe fn plan_direct_foreign_update(
         // Try push down the where clause
         let op = UpdateQueryOperation::AddWhere(expr);
 
-        match query.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 return None;
@@ -685,7 +685,7 @@ unsafe fn plan_direct_foreign_delete(
         // Try push down the where clause
         let op = DeleteQueryOperation::AddWhere(expr);
 
-        match query.apply_query_op(op.clone().into()).unwrap() {
+        match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
                 return None;
@@ -713,7 +713,7 @@ pub unsafe extern "C" fn begin_direct_modify(
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
     let (ctx, mut query, mut state) = from_fdw_private_modify((*plan).fdw_private);
 
-    query.prepare_query().unwrap();
+    query.prepare().unwrap();
 
     prepare_query_params(&mut state.scan, &query, node);
 
@@ -728,7 +728,7 @@ pub unsafe extern "C" fn iterate_direct_modify(node: *mut ForeignScanState) -> *
     send_query_params(&mut query, &state.scan, node);
 
     // Execute the direct modification
-    query.execute_query().unwrap();
+    query.execute().unwrap();
 
     // Currently, we do not support RETURNING data from direct modifications
     // So we just clear the tuple and return.

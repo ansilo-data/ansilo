@@ -19,7 +19,7 @@ pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *
     let (ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
 
     // Retrieve explain state from data source
-    let remote_query = query.explain_query((*es).verbose).unwrap();
+    let remote_query = query.explain((*es).verbose).unwrap();
 
     explain_json(es, "Remote Query", remote_query);
 
@@ -69,7 +69,7 @@ pub unsafe extern "C" fn explain_direct_modify(node: *mut ForeignScanState, es: 
 
 unsafe fn explain_modify(plan: *mut Plan, es: *mut ExplainState, query: &mut FdwQueryContext) {
     // Retrieve explain state from data source
-    let remote_query = query.explain_query((*es).verbose).unwrap();
+    let remote_query = query.explain((*es).verbose).unwrap();
 
     explain_json(es, "Remote Query", remote_query);
 
