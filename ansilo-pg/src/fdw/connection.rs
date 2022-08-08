@@ -423,7 +423,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
     fn with_transaction_manager(
         &mut self,
-        cb: impl FnOnce(TConnector::TTransactionManager) -> Result<ServerMessage>,
+        cb: impl FnOnce(&mut TConnector::TTransactionManager) -> Result<ServerMessage>,
     ) -> Result<ServerMessage> {
         self.connect()?;
         let tm = match self.connection.get()?.transaction_manager() {
