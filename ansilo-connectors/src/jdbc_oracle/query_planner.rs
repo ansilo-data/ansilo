@@ -27,7 +27,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn estimate_size(
-        connection: &JdbcConnection,
+        connection: &mut JdbcConnection,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
     ) -> Result<OperationCost> {
         // TODO: custom query support
@@ -54,7 +54,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn get_row_id_exprs(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -66,7 +66,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn create_base_select(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -76,7 +76,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn apply_select_operation(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         op: SelectQueryOperation,
@@ -99,7 +99,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn create_base_insert(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -116,7 +116,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn create_base_update(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -133,7 +133,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn create_base_delete(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -150,7 +150,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn apply_insert_operation(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         insert: &mut sql::Insert,
         op: InsertQueryOperation,
@@ -161,7 +161,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn apply_update_operation(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         update: &mut sql::Update,
         op: UpdateQueryOperation,
@@ -173,7 +173,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn apply_delete_operation(
-        _connection: &JdbcConnection,
+        _connection: &mut JdbcConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         delete: &mut sql::Delete,
         op: DeleteQueryOperation,
@@ -184,7 +184,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn explain_query(
-        connection: &JdbcConnection,
+        connection: &mut JdbcConnection,
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         verbose: bool,

@@ -24,7 +24,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
     fn estimate_size(
-        connection: &MemoryConnection,
+        connection: &mut MemoryConnection,
         entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
     ) -> Result<OperationCost> {
         if let Some(mock_size) = &entity.source_conf.mock_entity_size {
@@ -34,7 +34,7 @@ impl QueryPlanner for MemoryQueryPlanner {
         Ok(OperationCost::new(
             Some(
                 connection
-                    .0
+                    .data
                     .with_data(&entity.conf.id, &entity.version_id, |rows| rows.len())
                     .ok_or(Error::msg("Could not find entity"))? as _,
             ),
@@ -45,7 +45,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn get_row_id_exprs(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -57,7 +57,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn create_base_select(
-        _connection: &Self::TConnection,
+        _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         _entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -67,7 +67,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn create_base_insert(
-        _connection: &Self::TConnection,
+        _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         _entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -76,7 +76,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn create_base_update(
-        _connection: &Self::TConnection,
+        _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         _entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -85,7 +85,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn create_base_delete(
-        _connection: &Self::TConnection,
+        _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         _entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -94,7 +94,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn apply_select_operation(
-        _connection: &Self::TConnection,
+        _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         select: &mut sql::Select,
         op: SelectQueryOperation,
@@ -117,7 +117,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn apply_insert_operation(
-        _connection: &Self::TConnection,
+        _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         insert: &mut sql::Insert,
         op: InsertQueryOperation,
@@ -128,7 +128,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn apply_update_operation(
-        _connection: &Self::TConnection,
+        _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         update: &mut sql::Update,
         op: UpdateQueryOperation,
@@ -140,7 +140,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn apply_delete_operation(
-        _connection: &Self::TConnection,
+        _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         delete: &mut sql::Delete,
         op: DeleteQueryOperation,
@@ -151,7 +151,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn explain_query(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         query: &sql::Query,
         verbose: bool,

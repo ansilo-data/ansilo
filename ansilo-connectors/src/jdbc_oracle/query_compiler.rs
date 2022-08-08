@@ -21,7 +21,7 @@ impl QueryCompiler for OracleJdbcQueryCompiler {
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn compile_query(
-        _con: &JdbcConnection,
+        _con: &mut JdbcConnection,
         conf: &OracleJdbcConnectorEntityConfig,
         query: sql::Query,
     ) -> Result<JdbcQuery> {

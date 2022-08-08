@@ -10,7 +10,7 @@ impl EntitySearcher for MemoryEntitySearcher {
     type TConnection = MemoryConnection;
     type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
-    fn discover(_connection: &MemoryConnection, _nc: &NodeConfig) -> Result<Vec<EntitySource<MemoryConnectorEntitySourceConfig>>> {
+    fn discover(_connection: &mut MemoryConnection, _nc: &NodeConfig) -> Result<Vec<EntitySource<MemoryConnectorEntitySourceConfig>>> {
         Ok(vec![])
     }
 }

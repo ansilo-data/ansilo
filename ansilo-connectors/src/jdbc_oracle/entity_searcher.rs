@@ -12,7 +12,7 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn discover(
-        connection: &JdbcConnection,
+        connection: &mut JdbcConnection,
         nc: &NodeConfig,
     ) -> Result<Vec<EntitySource<OracleJdbcEntitySourceConfig>>> {
         todo!()

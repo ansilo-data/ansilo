@@ -12,7 +12,7 @@ pub trait QueryCompiler {
 
     /// Compiles the query into a connector-specific query object
     fn compile_query(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         select: sql::Query,
     ) -> Result<Self::TQuery>;

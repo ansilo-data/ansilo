@@ -14,7 +14,7 @@ impl EntityValidator for MemoryEntityValidator {
     type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
     fn validate(
-        _connection: &MemoryConnection,
+        _connection: &mut MemoryConnection,
         _entity_version: &EntityVersionConfig,
         _nc: &NodeConfig,
     ) -> Result<EntitySource<MemoryConnectorEntitySourceConfig>> {

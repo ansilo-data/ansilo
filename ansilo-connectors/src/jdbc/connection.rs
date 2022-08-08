@@ -33,7 +33,7 @@ impl JdbcConnectionPool {
         };
 
         // TODO: add event handler with handle_checkin callback to "clean" the connection
-        // this will be different per db, eg for postgres it is "DISCARD ALL" 
+        // this will be different per db, eg for postgres it is "DISCARD ALL"
         let pool = if let Some(conf) = options.get_pool_config().as_ref() {
             r2d2::Builder::new()
                 .min_idle(Some(conf.min_cons))
@@ -140,16 +140,17 @@ impl ConnectionPool for JdbcConnectionPool {
     type TConnection = JdbcConnection;
 
     fn acquire(&mut self) -> Result<JdbcConnection> {
-        Ok(JdbcConnection(
-            self.pool
-                .get()
-                .context("Failed to get connection from pool")?,
-        ))
+        let state = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+        let tm_state = state.clone();
+        Ok(JdbcConnection(state, JdbcTransactionManager(tm_state)))
     }
 }
 
 /// Wrapper of of the JDBC connection
-pub struct JdbcConnection(PooledConnection<Manager>);
+pub struct JdbcConnection(PooledConnection<Manager>, JdbcTransactionManager);
 
 /// Implementation of the JDBC connection
 #[derive(Clone)]
@@ -163,7 +164,7 @@ impl Connection for JdbcConnection {
     type TQueryHandle = JdbcPreparedQuery;
     type TTransactionManager = JdbcTransactionManager;
 
-    fn prepare(&self, query: JdbcQuery) -> Result<JdbcPreparedQuery> {
+    fn prepare(&mut self, query: JdbcQuery) -> Result<JdbcPreparedQuery> {
         let state = &*self.0;
         let jdbc_prepared_query = state.jvm.with_local_frame(32, |env| {
             let param_types = env
@@ -210,8 +211,8 @@ impl Connection for JdbcConnection {
         ))
     }
 
-    fn transaction_manager(&self) -> Option<Self::TTransactionManager> {
-        Some(JdbcTransactionManager(self.0.clone()))
+    fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager> {
+        Some(&mut self.1)
     }
 }
 
@@ -271,7 +272,7 @@ impl Drop for JdbcConnectionState {
 pub struct JdbcTransactionManager(JdbcConnectionState);
 
 impl TransactionManager for JdbcTransactionManager {
-    fn is_in_transaction(&self) -> Result<bool> {
+    fn is_in_transaction(&mut self) -> Result<bool> {
         let env = self.0.jvm.env()?;
         let res = env
             .call_method(self.0.jdbc_con.as_obj(), "isInTransaction", "()Z", &[])
@@ -281,7 +282,7 @@ impl TransactionManager for JdbcTransactionManager {
         Ok(res)
     }
 
-    fn begin_transaction(&self) -> Result<()> {
+    fn begin_transaction(&mut self) -> Result<()> {
         let env = self.0.jvm.env()?;
         env.call_method(self.0.jdbc_con.as_obj(), "beginTransaction", "()V", &[])
             .context("Failed to invoke JdbcConnection::beginTransaction")?;
@@ -289,7 +290,7 @@ impl TransactionManager for JdbcTransactionManager {
         Ok(())
     }
 
-    fn rollback_transaction(&self) -> Result<()> {
+    fn rollback_transaction(&mut self) -> Result<()> {
         let env = self.0.jvm.env()?;
         env.call_method(self.0.jdbc_con.as_obj(), "rollBackTransaction", "()V", &[])
             .context("Failed to invoke JdbcConnection::rollBackTransaction")?;
@@ -297,7 +298,7 @@ impl TransactionManager for JdbcTransactionManager {
         Ok(())
     }
 
-    fn commit_transaction(&self) -> Result<()> {
+    fn commit_transaction(&mut self) -> Result<()> {
         let env = self.0.jvm.env()?;
         env.call_method(self.0.jdbc_con.as_obj(), "commitTransaction", "()V", &[])
             .context("Failed to invoke JdbcConnection::commitTransaction")?;
@@ -313,8 +314,9 @@ mod tests {
     use ansilo_core::data::{DataType, DataValue};
 
     use crate::{
+        common::data::ResultSetReader,
         interface::{QueryHandle, QueryInputStructure},
-        jdbc::{JdbcConnectionPoolConfig, JdbcQueryParam}, common::data::{ResultSetReader},
+        jdbc::{JdbcConnectionPoolConfig, JdbcQueryParam},
     };
 
     use super::*;
@@ -364,7 +366,7 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_prepare_statement() {
-        let con = init_sqlite_connection();
+        let mut con = init_sqlite_connection();
 
         let query = JdbcQuery::new("SELECT 1 as num", vec![]);
         let statement = con.prepare(query).unwrap();
@@ -377,7 +379,7 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_prepare_statement_with_param() {
-        let con = init_sqlite_connection();
+        let mut con = init_sqlite_connection();
 
         let mut query = JdbcQuery::new("SELECT ? as num", vec![]);
         query
@@ -393,7 +395,7 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_prepare_statement_invalid() {
-        let con = init_sqlite_connection();
+        let mut con = init_sqlite_connection();
 
         let query = JdbcQuery::new("INVALID QUERY", vec![]);
         let res = con.prepare(query);
@@ -402,32 +404,43 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_transaction() {
-        let con = init_sqlite_connection();
-        let tm = con.transaction_manager().unwrap();
+        let mut con = init_sqlite_connection();
 
         let query = JdbcQuery::new("CREATE TABLE dummy (x INT);", vec![]);
         con.prepare(query).unwrap().execute().unwrap();
 
-        assert_eq!(tm.is_in_transaction().unwrap(), false);
-        tm.begin_transaction().unwrap();
-        assert_eq!(tm.is_in_transaction().unwrap(), true);
+        {
+            let tm = con.transaction_manager().unwrap();
+            assert_eq!(tm.is_in_transaction().unwrap(), false);
+            tm.begin_transaction().unwrap();
+            assert_eq!(tm.is_in_transaction().unwrap(), true);
+        }
 
         let query = JdbcQuery::new("INSERT INTO dummy VALUES (1);", vec![]);
         con.prepare(query).unwrap().execute().unwrap();
 
-        tm.rollback_transaction().unwrap();
+        con.transaction_manager()
+            .unwrap()
+            .rollback_transaction()
+            .unwrap();
 
         let query = JdbcQuery::new("SELECT COUNT(*) FROM dummy", vec![]);
         let res = con.prepare(query).unwrap().execute().unwrap();
         let mut res = ResultSetReader::new(res).unwrap();
         assert_eq!(res.read_data_value().unwrap().unwrap(), DataValue::Int32(0));
 
-        tm.begin_transaction().unwrap();
+        con.transaction_manager()
+            .unwrap()
+            .begin_transaction()
+            .unwrap();
 
         let query = JdbcQuery::new("INSERT INTO dummy VALUES (1);", vec![]);
         con.prepare(query).unwrap().execute().unwrap();
 
-        tm.commit_transaction().unwrap();
+        con.transaction_manager()
+            .unwrap()
+            .commit_transaction()
+            .unwrap();
 
         let query = JdbcQuery::new("SELECT COUNT(*) FROM dummy", vec![]);
         let res = con.prepare(query).unwrap().execute().unwrap();

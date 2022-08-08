@@ -22,7 +22,7 @@ pub trait Connection: Sized {
     fn prepare(&mut self, query: Self::TQuery) -> Result<Self::TQueryHandle>;
 
     /// Gets the transaction manager if transactions are supported for this data source
-    fn transaction_manager(&mut self) -> Option<Self::TTransactionManager>;
+    fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager>;
 }
 
 /// Manages transaction state for data sources
@@ -46,19 +46,19 @@ pub trait TransactionManager {
 /// Allow connectors which do not support transactions to use the unit type
 /// in its place
 impl TransactionManager for () {
-    fn is_in_transaction(&self) -> Result<bool> {
+    fn is_in_transaction(&mut self) -> Result<bool> {
         unimplemented!()
     }
 
-    fn begin_transaction(&self) -> Result<()> {
+    fn begin_transaction(&mut self) -> Result<()> {
         unimplemented!()
     }
 
-    fn rollback_transaction(&self) -> Result<()> {
+    fn rollback_transaction(&mut self) -> Result<()> {
         unimplemented!()
     }
 
-    fn commit_transaction(&self) -> Result<()> {
+    fn commit_transaction(&mut self) -> Result<()> {
         unimplemented!()
     }
 }

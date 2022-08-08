@@ -12,6 +12,8 @@ pub struct MemoryConnectionConfig {
     data: RwLock<HashMap<String, Vec<Vec<DataValue>>>>,
     /// We also keep track of row id's to ensure they are uniquely assigned for each entity
     row_ids: RwLock<HashMap<String, u64>>,
+    /// Whether transactions are supported
+    pub transactions_enabled: bool
 }
 
 impl MemoryConnectionConfig {
@@ -19,6 +21,7 @@ impl MemoryConnectionConfig {
         Self {
             data: RwLock::new(HashMap::new()),
             row_ids: RwLock::new(HashMap::new()),
+            transactions_enabled: true
         }
     }
 
@@ -119,6 +122,7 @@ impl Clone for MemoryConnectionConfig {
         Self {
             data: RwLock::new(self.data.read().unwrap().clone()),
             row_ids: RwLock::new(self.row_ids.read().unwrap().clone()),
+            transactions_enabled: self.transactions_enabled
         }
     }
 }

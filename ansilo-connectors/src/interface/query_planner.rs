@@ -17,14 +17,14 @@ pub trait QueryPlanner {
 
     /// Gets an estimate of the number of rows for the entity
     fn estimate_size(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         entity: &EntitySource<Self::TEntitySourceConfig>,
     ) -> Result<OperationCost>;
 
     /// Gets expressions for the primary key/row ID of the supplied entity
     /// This is called for performing updates/deletes to existing rows.
     fn get_row_id_exprs(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -32,7 +32,7 @@ pub trait QueryPlanner {
 
     /// Creates a query of the specified type
     fn create_base_query(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -52,7 +52,7 @@ pub trait QueryPlanner {
 
     /// Creates a base query to select all rows of the entity
     fn create_base_select(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -60,7 +60,7 @@ pub trait QueryPlanner {
 
     /// Creates a base update query to update all rows of the entity
     fn create_base_insert(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -68,7 +68,7 @@ pub trait QueryPlanner {
 
     /// Creates a base update query to update all rows of the entity
     fn create_base_update(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -76,7 +76,7 @@ pub trait QueryPlanner {
 
     /// Creates a base delete query to delete all rows of the entity
     fn create_base_delete(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -84,7 +84,7 @@ pub trait QueryPlanner {
 
     /// Adds the supplied operation to the select query
     fn apply_select_operation(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         select: &mut sql::Select,
         op: SelectQueryOperation,
@@ -92,7 +92,7 @@ pub trait QueryPlanner {
 
     /// Adds the supplied operation to the select query
     fn apply_insert_operation(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         insert: &mut sql::Insert,
         op: InsertQueryOperation,
@@ -100,7 +100,7 @@ pub trait QueryPlanner {
 
     /// Adds the supplied operation to the update query
     fn apply_update_operation(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         update: &mut sql::Update,
         op: UpdateQueryOperation,
@@ -108,7 +108,7 @@ pub trait QueryPlanner {
 
     /// Adds the supplied operation to the delete query
     fn apply_delete_operation(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         delete: &mut sql::Delete,
         op: DeleteQueryOperation,
@@ -116,7 +116,7 @@ pub trait QueryPlanner {
 
     /// Returns a JSON representation of the query state used for debugging
     fn explain_query(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         query: &sql::Query,
         verbose: bool,

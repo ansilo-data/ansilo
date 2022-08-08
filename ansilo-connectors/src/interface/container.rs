@@ -55,10 +55,6 @@ pub enum Connections {
     Memory(MemoryConnection),
 }
 
-pub enum TransactionManagers {
-    Jdbc(JdbcTransactionManager),
-}
-
 pub enum Queries {
     Jdbc(JdbcQuery),
     Memory(MemoryQuery),
@@ -176,9 +172,9 @@ impl ConnectionPool for ConnectionPools {
 impl Connection for Connections {
     type TQuery = Queries;
     type TQueryHandle = QueryHandles;
-    type TTransactionManager = TransactionManagers;
+    type TTransactionManager = Self;
 
-    fn prepare(&self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
+    fn prepare(&mut self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
         Ok(match (self, query) {
             (Connections::Jdbc(c), Queries::Jdbc(q)) => QueryHandles::Jdbc(c.prepare(q)?),
             (Connections::Memory(c), Queries::Memory(q)) => QueryHandles::Memory(c.prepare(q)?),
@@ -186,38 +182,46 @@ impl Connection for Connections {
         })
     }
 
-    fn transaction_manager(&self) -> Option<Self::TTransactionManager> {
-        match self {
-            Connections::Jdbc(c) => c
-                .transaction_manager()
-                .map(|tm| TransactionManagers::Jdbc(tm)),
-            Connections::Memory(_) => None,
+    fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager> {
+        let supports_transactions = match self {
+            Connections::Jdbc(c) => c.transaction_manager().is_some(),
+            Connections::Memory(c) => c.transaction_manager().is_some(),
+        };
+
+        if supports_transactions {
+            Some(self)
+        } else {
+            None
         }
     }
 }
 
-impl TransactionManager for TransactionManagers {
-    fn is_in_transaction(&self) -> Result<bool> {
+impl TransactionManager for Connections {
+    fn is_in_transaction(&mut self) -> Result<bool> {
         match self {
-            TransactionManagers::Jdbc(t) => t.is_in_transaction(),
+            Connections::Jdbc(t) => t.transaction_manager().unwrap().is_in_transaction(),
+            Connections::Memory(t) => t.transaction_manager().unwrap().is_in_transaction(),
         }
     }
 
-    fn begin_transaction(&self) -> Result<()> {
+    fn begin_transaction(&mut self) -> Result<()> {
         match self {
-            TransactionManagers::Jdbc(t) => t.begin_transaction(),
+            Connections::Jdbc(t) => t.transaction_manager().unwrap().begin_transaction(),
+            Connections::Memory(t) => t.transaction_manager().unwrap().begin_transaction(),
         }
     }
 
-    fn rollback_transaction(&self) -> Result<()> {
+    fn rollback_transaction(&mut self) -> Result<()> {
         match self {
-            TransactionManagers::Jdbc(t) => t.rollback_transaction(),
+            Connections::Jdbc(t) => t.transaction_manager().unwrap().rollback_transaction(),
+            Connections::Memory(t) => t.transaction_manager().unwrap().rollback_transaction(),
         }
     }
 
-    fn commit_transaction(&self) -> Result<()> {
+    fn commit_transaction(&mut self) -> Result<()> {
         match self {
-            TransactionManagers::Jdbc(t) => t.commit_transaction(),
+            Connections::Jdbc(t) => t.transaction_manager().unwrap().commit_transaction(),
+            Connections::Memory(t) => t.transaction_manager().unwrap().commit_transaction(),
         }
     }
 }

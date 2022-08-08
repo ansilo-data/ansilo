@@ -14,7 +14,7 @@ pub trait EntitySearcher {
     /// Retrieves the list of entities from the target data source
     /// Typlically these entities will have their accessibility set to internal
     fn discover(
-        connection: &Self::TConnection,
+        connection: &mut Self::TConnection,
         nc: &NodeConfig,
     ) -> Result<Vec<EntitySource<Self::TEntitySourceConfig>>>;
 }

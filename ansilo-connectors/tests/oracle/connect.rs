@@ -36,7 +36,7 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
         None,
     );
 
-    let con = OracleJdbcConnector::create_connection_pool(
+    let mut con = OracleJdbcConnector::create_connection_pool(
         config.clone(),
         &NodeConfig::default(),
         &ConnectorEntityConfig::new(),

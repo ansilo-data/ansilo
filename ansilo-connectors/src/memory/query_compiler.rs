@@ -12,7 +12,7 @@ impl QueryCompiler for MemoryQueryCompiler {
     type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
     fn compile_query(
-        _con: &MemoryConnection,
+        _con: &mut MemoryConnection,
         _conf: &ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
         query: sql::Query,
     ) -> Result<MemoryQuery> {

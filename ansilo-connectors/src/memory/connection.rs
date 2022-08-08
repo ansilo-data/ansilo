@@ -1,6 +1,6 @@
-use std::{sync::Arc, collections::HashMap};
+use std::{mem, sync::Arc};
 
-use ansilo_core::{err::{Result, bail}, data::DataValue};
+use ansilo_core::err::{bail, Result};
 
 use crate::{
     common::entity::ConnectorEntityConfig,
@@ -38,73 +38,80 @@ impl ConnectionPool for MemoryConnectionPool {
     type TConnection = MemoryConnection;
 
     fn acquire(&mut self) -> Result<MemoryConnection> {
-        Ok(MemoryConnection(
+        Ok(MemoryConnection::new(
             Arc::clone(&self.conf),
             self.entities.clone(),
         ))
     }
 }
 
-pub struct MemoryConnection(
-    pub Arc<MemoryConnectionConfig>,
-    ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-);
+pub struct MemoryConnection {
+    pub data: Arc<MemoryConnectionConfig>,
+    conf: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+    rollback_state: Option<MemoryConnectionConfig>,
+}
+
+impl MemoryConnection {
+    pub fn new(
+        data: Arc<MemoryConnectionConfig>,
+        conf: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+    ) -> Self {
+        Self {
+            data,
+            conf,
+            rollback_state: None,
+        }
+    }
+}
 
 impl Connection for MemoryConnection {
     type TQuery = MemoryQuery;
     type TQueryHandle = MemoryQueryHandle;
-    type TTransactionManager = ();
+    type TTransactionManager = MemoryConnection;
 
-    fn prepare(&self, query: MemoryQuery) -> Result<MemoryQueryHandle> {
+    fn prepare(&mut self, query: MemoryQuery) -> Result<MemoryQueryHandle> {
         Ok(MemoryQueryHandle::new(
             query,
-            Arc::clone(&self.0),
-            self.1.clone(),
+            Arc::clone(&self.data),
+            self.conf.clone(),
         ))
     }
 
-    fn transaction_manager(&self) -> Option<Self::TTransactionManager> {
-        if self.0.transactions_enabled {
-            Some(MemoryTransactionManager::new(Arc::clone(&self.0)))
+    fn transaction_manager(&mut self) -> Option<&mut Self> {
+        if self.data.transactions_enabled {
+            Some(self)
         } else {
             None
         }
     }
 }
 
-pub struct MemoryTransactionManager {
-    data: Arc<MemoryConnectionConfig>,
-    rollback_state: Option<MemoryConnectionConfig>,
-}
-
-impl MemoryTransactionManager {
-    pub fn new(data: Arc<MemoryConnectionConfig>) -> Self {
-        Self {
-            data,
-        rollback_state: None
-        }
-    }
-}
-
-impl TransactionManager for MemoryTransactionManager {
-    fn is_in_transaction(&self) -> Result<bool> {
+impl TransactionManager for MemoryConnection {
+    fn is_in_transaction(&mut self) -> Result<bool> {
         Ok(self.rollback_state.is_some())
     }
 
-    fn begin_transaction(&self) -> Result<()> {
-        self.rollback_state = Some(self.data.clone());
+    fn begin_transaction(&mut self) -> Result<()> {
+        self.rollback_state = Some((*self.data).clone());
+        Ok(())
     }
 
-    fn rollback_transaction(&self) -> Result<()> {
+    fn rollback_transaction(&mut self) -> Result<()> {
         if self.rollback_state.is_none() {
             bail!("No active transaction");
         }
 
-        let rb = mem::replace(&mut )
-        self.data.restore_from(self.rollback_state.unwrap());
+        let rb = mem::replace(&mut self.rollback_state, None);
+        self.data.restore_from(rb.unwrap());
+        Ok(())
     }
 
-    fn commit_transaction(&self) -> Result<()> {
-        todo!()
+    fn commit_transaction(&mut self) -> Result<()> {
+        if self.rollback_state.is_none() {
+            bail!("No active transaction");
+        }
+
+        self.rollback_state = None;
+        Ok(())
     }
 }
