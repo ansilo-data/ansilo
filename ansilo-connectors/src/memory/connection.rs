@@ -100,6 +100,7 @@ impl TransactionManager for MemoryTransactionManager {
             bail!("No active transaction");
         }
 
+        let rb = mem::replace(&mut )
         self.data.restore_from(self.rollback_state.unwrap());
     }
 
