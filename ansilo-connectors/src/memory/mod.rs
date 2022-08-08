@@ -42,6 +42,7 @@ impl Connector for MemoryConnector {
     type TQueryHandle = MemoryQueryHandle;
     type TQuery = MemoryQuery;
     type TResultSet = MemoryResultSet;
+    type TTransactionManager = ();
 
     const TYPE: &'static str = "test.memory";
 

@@ -1,6 +1,6 @@
 use crate::{
     interface::Connector,
-    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet}, common::entity::ConnectorEntityConfig,
+    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet, JdbcTransactionManager}, common::entity::ConnectorEntityConfig,
 };
 
 mod conf;
@@ -34,6 +34,7 @@ impl Connector for OracleJdbcConnector {
     type TQueryHandle = JdbcPreparedQuery;
     type TQuery = JdbcQuery;
     type TResultSet = JdbcResultSet;
+    type TTransactionManager = JdbcTransactionManager;
 
     const TYPE: &'static str = "jdbc.oracle";
 

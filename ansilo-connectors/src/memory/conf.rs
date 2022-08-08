@@ -104,6 +104,14 @@ impl MemoryConnectionConfig {
             row.remove(row.len() - 1);
         }
     }
+
+    pub(super) fn restore_from(&self, other: Self) {
+        let mut data = self.data.write().unwrap();
+        *data = other.data.read().unwrap().clone();
+
+        let mut row_ids = self.row_ids.write().unwrap();
+        *row_ids = other.row_ids.read().unwrap().clone();
+    }
 }
 
 impl Clone for MemoryConnectionConfig {

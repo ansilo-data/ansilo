@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use std::{sync::Arc, collections::HashMap};
 
-use ansilo_core::err::Result;
+use ansilo_core::{err::{Result, bail}, data::DataValue};
 
 use crate::{
     common::entity::ConnectorEntityConfig,
-    interface::{Connection, ConnectionPool},
+    interface::{Connection, ConnectionPool, TransactionManager},
 };
 
 use super::{
@@ -64,6 +64,46 @@ impl Connection for MemoryConnection {
     }
 
     fn transaction_manager(&self) -> Option<Self::TTransactionManager> {
-        None
+        if self.0.transactions_enabled {
+            Some(MemoryTransactionManager::new(Arc::clone(&self.0)))
+        } else {
+            None
+        }
+    }
+}
+
+pub struct MemoryTransactionManager {
+    data: Arc<MemoryConnectionConfig>,
+    rollback_state: Option<MemoryConnectionConfig>,
+}
+
+impl MemoryTransactionManager {
+    pub fn new(data: Arc<MemoryConnectionConfig>) -> Self {
+        Self {
+            data,
+        rollback_state: None
+        }
+    }
+}
+
+impl TransactionManager for MemoryTransactionManager {
+    fn is_in_transaction(&self) -> Result<bool> {
+        Ok(self.rollback_state.is_some())
+    }
+
+    fn begin_transaction(&self) -> Result<()> {
+        self.rollback_state = Some(self.data.clone());
+    }
+
+    fn rollback_transaction(&self) -> Result<()> {
+        if self.rollback_state.is_none() {
+            bail!("No active transaction");
+        }
+
+        self.data.restore_from(self.rollback_state.unwrap());
+    }
+
+    fn commit_transaction(&self) -> Result<()> {
+        todo!()
     }
 }

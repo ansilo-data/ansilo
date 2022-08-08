@@ -19,12 +19,18 @@ pub enum ClientMessage {
     GetRowIds(sqlil::EntitySource),
     /// Creates a new query
     CreateQuery(sqlil::EntitySource, sqlil::QueryType),
-    /// Performes an action on the the specified query
+    /// Performs an action on the the specified query
     Query(QueryId, ClientQueryMessage),
+    /// Begins a transaction on the remote connection
+    BeginTransaction,
+    /// Rolls back the current transaction on the remote server
+    RollbackTransaction,
+    /// Commit's the the transaction on the remote server
+    CommitTransaction,
     /// Instruct the server to close the connection
     Close,
     /// Error occurred with message
-    GenericError(String),
+    Error(String),
 }
 
 /// Protocol messages sent by postgres to operate on a query instance
@@ -83,8 +89,16 @@ pub enum ServerMessage {
     QueryCreated(QueryId, OperationCost),
     /// The responses from operations on a specific query
     Query(ServerQueryMessage),
+    /// Transactions not supported against this data source
+    TransactionsNotSupported,
+    /// Transaction begun
+    TransactionBegun,
+    /// Transaction rolled back
+    TransactionRolledBack,
+    /// Transaction committed
+    TransactionCommitted,
     /// Error occurred with message
-    GenericError(String),
+    Error(String),
 }
 
 /// Protocol respones sent by ansilo in regards to a specific query

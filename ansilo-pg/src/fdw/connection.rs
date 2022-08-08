@@ -81,7 +81,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
                 let response = match response {
                     Ok(response) => response,
-                    Err(err) => Some(ServerMessage::GenericError(format!("{}", err))),
+                    Err(err) => Some(ServerMessage::Error(format!("{}", err))),
                 };
 
                 Ok(response)
@@ -110,11 +110,14 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             ClientMessage::Query(query_id, message) => {
                 ServerMessage::Query(self.handle_query_message(query_id, message)?)
             }
+            ClientMessage::BeginTransaction => self.begin_transaction()?,
+            ClientMessage::RollbackTransaction => self.rollback_transaction()?,
+            ClientMessage::CommitTransaction => self.commit_transaction()?,
             ClientMessage::Close => return Ok(None),
-            ClientMessage::GenericError(err) => bail!("Error received from client: {}", err),
+            ClientMessage::Error(err) => bail!("Error received from client: {}", err),
             _ => {
                 warn!("Received unexpected message from client: {:?}", message);
-                ServerMessage::GenericError("Invalid message received".to_string())
+                ServerMessage::Error("Invalid message received".to_string())
             }
         }))
     }
@@ -418,6 +421,40 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(query_id)
     }
 
+    fn with_transaction_manager(
+        &mut self,
+        cb: impl FnOnce(TConnector::TTransactionManager) -> Result<ServerMessage>,
+    ) -> Result<ServerMessage> {
+        self.connect()?;
+        let tm = match self.connection.get()?.transaction_manager() {
+            Some(tm) => tm,
+            None => return Ok(ServerMessage::TransactionsNotSupported),
+        };
+
+        cb(tm)
+    }
+
+    fn begin_transaction(&mut self) -> Result<ServerMessage> {
+        self.with_transaction_manager(|tm| {
+            tm.begin_transaction()?;
+            Ok(ServerMessage::TransactionBegun)
+        })
+    }
+
+    fn rollback_transaction(&mut self) -> Result<ServerMessage> {
+        self.with_transaction_manager(|tm| {
+            tm.rollback_transaction()?;
+            Ok(ServerMessage::TransactionRolledBack)
+        })
+    }
+
+    fn commit_transaction(&mut self) -> Result<ServerMessage> {
+        self.with_transaction_manager(|tm| {
+            tm.commit_transaction()?;
+            Ok(ServerMessage::TransactionCommitted)
+        })
+    }
+
     fn get_entity_config<'a, 'b>(
         entities: &'a ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
         entity: &'b EntityVersionIdentifier,
@@ -582,7 +619,7 @@ mod tests {
 
         assert_eq!(
             res,
-            ServerMessage::GenericError("Failed to find entity with id".to_string())
+            ServerMessage::Error("Failed to find entity with id".to_string())
         );
 
         client.close().unwrap();
@@ -680,7 +717,7 @@ mod tests {
             .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
             .unwrap();
 
-        assert!(matches!(res, ServerMessage::GenericError(_)));
+        assert!(matches!(res, ServerMessage::Error(_)));
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();
@@ -697,10 +734,7 @@ mod tests {
             )))
             .unwrap();
 
-        assert_eq!(
-            res,
-            ServerMessage::GenericError("Invalid message received".into())
-        );
+        assert_eq!(res, ServerMessage::Error("Invalid message received".into()));
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();
@@ -1237,7 +1271,7 @@ mod tests {
             ))
             .unwrap();
 
-        assert_eq!(res, ServerMessage::GenericError("Invalid query id".into()));
+        assert_eq!(res, ServerMessage::Error("Invalid query id".into()));
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();

@@ -181,7 +181,7 @@ impl FdwListener {
 
             let response = match pool {
                 Ok(_) => ServerMessage::AuthAccepted,
-                Err(_) => ServerMessage::GenericError("Unknown data source id".to_string()),
+                Err(_) => ServerMessage::Error("Unknown data source id".to_string()),
             };
 
             Ok((Some(response), pool))
@@ -299,7 +299,7 @@ mod tests {
 
         assert_eq!(
             res,
-            ServerMessage::GenericError("Unknown data source id".to_string())
+            ServerMessage::Error("Unknown data source id".to_string())
         );
 
         let _ = client.close();

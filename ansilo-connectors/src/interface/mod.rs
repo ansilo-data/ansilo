@@ -30,7 +30,11 @@ pub trait Connector {
     type TConnectionConfig: Clone + Send + 'static;
     type TEntitySourceConfig: Clone + Send + 'static;
     type TConnectionPool: ConnectionPool<TConnection = Self::TConnection>;
-    type TConnection: Connection<TQuery = Self::TQuery, TQueryHandle = Self::TQueryHandle>;
+    type TConnection: Connection<
+        TQuery = Self::TQuery,
+        TQueryHandle = Self::TQueryHandle,
+        TTransactionManager = Self::TTransactionManager,
+    >;
     type TEntitySearcher: EntitySearcher<
         TConnection = Self::TConnection,
         TEntitySourceConfig = Self::TEntitySourceConfig,
@@ -52,6 +56,7 @@ pub trait Connector {
     type TQueryHandle: QueryHandle<TResultSet = Self::TResultSet>;
     type TQuery;
     type TResultSet: ResultSet;
+    type TTransactionManager: TransactionManager;
 
     /// The type of the connector, usually the name of the target platform, eg 'postgres'
     const TYPE: &'static str;

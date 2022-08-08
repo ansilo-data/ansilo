@@ -552,7 +552,7 @@ impl FdwModifyContext {
 }
 
 fn unexpected_outer_response(response: ServerMessage) -> Error {
-    if let ServerMessage::GenericError(message) = response {
+    if let ServerMessage::Error(message) = response {
         anyhow!("Error from server: {message}")
     } else {
         anyhow!("Unexpected response {:?}", response)
