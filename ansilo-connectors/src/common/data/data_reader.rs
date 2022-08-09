@@ -1,7 +1,7 @@
 use std::io::Read;
 
 use ansilo_core::{
-    data::{DataType, DataValue},
+    data::{rust_decimal::Decimal, DataType, DataValue},
     err::{bail, Context, Result},
 };
 
@@ -63,18 +63,24 @@ where
                 DataType::Utf8String(_) => DataValue::Utf8String(self.read_stream()?),
                 DataType::Binary => DataValue::Binary(self.read_stream()?),
                 DataType::Boolean => DataValue::Boolean(self.read_exact::<1>()?[0] != 0),
-                DataType::Int8 => todo!(),
-                DataType::UInt8 => todo!(),
-                DataType::Int16 => todo!(),
-                DataType::UInt16 => todo!(),
+                DataType::Int8 => DataValue::Int8(self.read_exact::<1>()?[0] as i8),
+                DataType::UInt8 => DataValue::UInt8(self.read_exact::<1>()?[0]),
+                DataType::Int16 => DataValue::Int16(i16::from_ne_bytes(self.read_exact::<2>()?)),
+                DataType::UInt16 => DataValue::UInt16(u16::from_ne_bytes(self.read_exact::<2>()?)),
                 DataType::Int32 => DataValue::Int32(i32::from_ne_bytes(self.read_exact::<4>()?)),
                 DataType::UInt32 => DataValue::UInt32(u32::from_ne_bytes(self.read_exact::<4>()?)),
                 DataType::Int64 => DataValue::Int64(i64::from_ne_bytes(self.read_exact::<8>()?)),
                 DataType::UInt64 => DataValue::UInt64(u64::from_ne_bytes(self.read_exact::<8>()?)),
-                DataType::Float32 => todo!(),
-                DataType::Float64 => todo!(),
-                DataType::Decimal(_) => todo!(),
-                DataType::JSON => todo!(),
+                DataType::Float32 => {
+                    DataValue::Float32(f32::from_ne_bytes(self.read_exact::<4>()?))
+                }
+                DataType::Float64 => {
+                    DataValue::Float64(f64::from_ne_bytes(self.read_exact::<8>()?))
+                }
+                DataType::Decimal(_) => {
+                    DataValue::Decimal(Decimal::deserialize(self.read_exact::<16>()?))
+                }
+                DataType::JSON => DataValue::JSON(String::from_utf8(self.read_stream()?)?),
                 DataType::Date => todo!(),
                 DataType::Time => todo!(),
                 DataType::DateTime => todo!(),
@@ -158,7 +164,7 @@ mod tests {
 
     use std::io::Cursor;
 
-    use ansilo_core::data::{StringOptions};
+    use ansilo_core::data::{DecimalOptions, StringOptions};
 
     use super::*;
 
@@ -322,10 +328,7 @@ mod tests {
             .concat(),
         );
 
-        assert_eq!(
-            res.read_data_value().unwrap(),
-            Some(DataValue::Int64(1234))
-        );
+        assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int64(1234)));
         assert_eq!(res.read_data_value().unwrap(), None);
     }
 
@@ -360,5 +363,141 @@ mod tests {
 
         assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int32(123)));
         assert!(res.read_data_value().is_err());
+    }
+
+    #[test]
+    fn test_data_reader_uint8() {
+        let mut res = create_data_reader(
+            vec![DataType::UInt8],
+            [
+                vec![1u8],   // not null
+                vec![123u8], // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(res.read_data_value().unwrap(), Some(DataValue::UInt8(123)));
+        assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_reader_int8() {
+        let mut res = create_data_reader(
+            vec![DataType::Int8],
+            [
+                vec![1u8],          // not null
+                vec![-123i8 as u8], // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int8(-123)));
+        assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_reader_uint16() {
+        let mut res = create_data_reader(
+            vec![DataType::UInt16],
+            [
+                vec![1u8],                       // not null
+                1234_u16.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::UInt16(1234))
+        );
+        assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_reader_int16() {
+        let mut res = create_data_reader(
+            vec![DataType::Int16],
+            [
+                vec![1u8],                       // not null
+                1234_i16.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int16(1234)));
+        assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_reader_float32() {
+        let mut res = create_data_reader(
+            vec![DataType::Float32],
+            [
+                vec![1u8],                          // not null
+                123.456_f32.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::Float32(123.456))
+        );
+        assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_reader_float64() {
+        let mut res = create_data_reader(
+            vec![DataType::Float64],
+            [
+                vec![1u8],                          // not null
+                123.456_f64.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::Float64(123.456))
+        );
+        assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_reader_decimal() {
+        let mut res = create_data_reader(
+            vec![DataType::Decimal(DecimalOptions::default())],
+            [
+                vec![1u8],                                 // not null
+                Decimal::ONE_HUNDRED.serialize().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::Decimal(Decimal::ONE_HUNDRED))
+        );
+        assert_eq!(res.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_reader_json() {
+        let mut res = create_data_reader(
+            vec![DataType::JSON],
+            [
+                vec![1u8],                // not null
+                vec![2u8],                // read length
+                "{}".as_bytes().to_vec(), // data
+                vec![0u8],                // read length (eof)
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::JSON("{}".to_string()))
+        );
     }
 }
