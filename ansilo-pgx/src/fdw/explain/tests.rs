@@ -50,8 +50,6 @@ mod tests {
                 vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
                 EntitySourceConfig::minimal(""),
             ),
-            // We mock the tabel size to be large as the query optimizer
-            // does not like pushing down queries on very small tables.
             MemoryConnectorEntitySourceConfig::new(None),
         ));
 

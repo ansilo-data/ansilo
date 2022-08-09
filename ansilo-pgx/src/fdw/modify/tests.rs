@@ -55,7 +55,7 @@ mod tests {
                 ],
                 EntitySourceConfig::minimal(""),
             ),
-            // We mock the tabel size to be large as the query optimizer
+            // We mock the table size to be large as the query optimizer
             // does not like pushing down queries on very small tables.
             MemoryConnectorEntitySourceConfig::new(Some(OperationCost::new(
                 Some(1000),

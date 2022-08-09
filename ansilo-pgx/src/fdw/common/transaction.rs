@@ -9,10 +9,7 @@ use std::{
 };
 
 use ansilo_core::err::{bail, Context, Error, Result};
-use ansilo_pg::fdw::{
-    channel::IpcClientChannel,
-    proto::{ClientMessage, ServerMessage},
-};
+use ansilo_pg::fdw::proto::{ClientMessage, ServerMessage};
 
 use lazy_static::lazy_static;
 use pgx::{
@@ -227,4 +224,165 @@ fn get_active_transactions<'a>(
     ACTIVE_TRANSACTIONS
         .lock()
         .map_err(|e| Error::msg(format!("Failed to lock active transactions: {:?}", e)))
+}
+
+/// PGX, SPI and transactions do not play well together.
+/// For these tests we use a non-SPI postgres client to run
+/// queries for testing purposes. This is a bit silly as the tests
+/// are executed within postgres and then connect back to itself
+/// but it maintains a consistent workflow with other tests.
+#[cfg(any(test, feature = "pg_test"))]
+#[pg_schema]
+mod tests {
+    use super::*;
+
+    use crate::fdw::test::server::start_fdw_server;
+    use ansilo_connectors::{
+        common::entity::{ConnectorEntityConfig, EntitySource},
+        interface::{container::ConnectionPools, Connector},
+        memory::{MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase},
+    };
+    use ansilo_core::{
+        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        data::{DataType, DataValue},
+    };
+
+    fn create_memory_connection_pool() -> ConnectionPools {
+        let conf = MemoryDatabase::new();
+        let mut entities = ConnectorEntityConfig::new();
+
+        entities.add(EntitySource::minimal(
+            "x",
+            EntityVersionConfig::minimal(
+                "1.0",
+                vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
+                EntitySourceConfig::minimal(""),
+            ),
+            MemoryConnectorEntitySourceConfig::new(None),
+        ));
+
+        conf.set_data("x", "1.0", vec![vec![DataValue::UInt32(1)]]);
+
+        let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
+            .unwrap();
+
+        ConnectionPools::Memory(pool, entities)
+    }
+
+    fn setup_db<'a>(
+        test_name: impl Into<String>,
+        socket_path: impl Into<String>,
+    ) -> (postgres::Client, std::sync::MutexGuard<'a, ()>) {
+        lazy_static! {
+            static ref LOCK: Mutex<()> = Mutex::new(());
+        }
+
+        let lock = LOCK.lock().unwrap();
+        let test_name = test_name.into();
+        let socket_path = socket_path.into();
+        let (mut client, _) = pgx_tests::client();
+
+        client
+            .batch_execute(&format!(
+                r#"
+                CREATE SCHEMA IF NOT EXISTS {test_name}_tests;
+                SET SCHEMA '{test_name}_tests';
+
+                DROP SERVER IF EXISTS {test_name}_test_srv CASCADE;
+                CREATE SERVER {test_name}_test_srv FOREIGN DATA WRAPPER ansilo_fdw OPTIONS (
+                    socket '{socket_path}',
+                    data_source 'memory'
+                );
+
+                CREATE FOREIGN TABLE "x:1.0" (
+                    x BIGINT
+                ) SERVER {test_name}_test_srv;
+                "#
+            ))
+            .unwrap();
+
+        (client, lock)
+    }
+
+    fn setup_test<'a>(
+        test_name: impl Into<String>,
+    ) -> (postgres::Client, std::sync::MutexGuard<'a, ()>) {
+        let test_name = test_name.into();
+        let sock_path = format!("/tmp/ansilo/fdw_server/{}", test_name.clone());
+        start_fdw_server(create_memory_connection_pool(), sock_path.clone());
+        setup_db::<'a>(test_name, sock_path)
+    }
+
+    #[pg_test]
+    fn test_fdw_transaction_auto_commit() {
+        let (mut client, _lock) = setup_test("transaction_auto_commit");
+
+        client
+            .batch_execute(
+                r#"
+            DO $$BEGIN
+                ASSERT (SELECT x FROM "x:1.0") = 1;
+            END$$;
+
+            UPDATE "x:1.0" SET x = 123;
+
+            DO $$BEGIN
+                ASSERT (SELECT x FROM "x:1.0") = 123;
+            END$$;
+        "#,
+            )
+            .unwrap();
+    }
+
+    #[pg_test]
+    fn test_fdw_transaction_begin_commit() {
+        let (mut client, _lock) = setup_test("transaction_begin_commit");
+
+        client
+            .batch_execute(
+                r#"
+            BEGIN;
+
+            UPDATE "x:1.0" SET x = 123;
+
+            DO $$BEGIN
+                ASSERT (SELECT x FROM "x:1.0") = 123;
+            END$$;
+
+            COMMIT;
+
+            DO $$BEGIN
+                ASSERT (SELECT x FROM "x:1.0") = 123;
+            END$$;
+            
+            BEGIN;
+        "#,
+            )
+            .unwrap();
+    }
+
+    #[pg_test]
+    fn test_fdw_transaction_begin_rollback() {
+        let (mut client, _lock) = setup_test("transaction_begin_rollback");
+
+        client
+            .batch_execute(
+                r#"
+            BEGIN;
+
+            UPDATE "x:1.0" SET x = 123;
+
+            DO $$BEGIN
+                ASSERT (SELECT x FROM "x:1.0") = 123;
+            END$$;
+
+            ROLLBACK;
+
+            DO $$BEGIN
+                ASSERT (SELECT x FROM "x:1.0") = 1;
+            END$$;
+        "#,
+            )
+            .unwrap();
+    }
 }
