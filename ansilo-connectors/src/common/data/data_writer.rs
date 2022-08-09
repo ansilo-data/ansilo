@@ -1,7 +1,10 @@
 use std::io::{self, Write};
 
 use ansilo_core::{
-    data::{DataType, DataValue},
+    data::{
+        chrono::{Datelike, Timelike},
+        DataType, DataValue,
+    },
     err::{bail, Context, Result},
 };
 
@@ -59,8 +62,6 @@ where
             // Write non-null flag byte
             self.write(&[0])?;
         } else {
-            // TODO: data types
-            #[allow(unused_variables)]
             match (self.current_data_type(), data) {
                 (None | Some(DataType::Utf8String(_)), DataValue::Utf8String(val)) => {
                     self.write(&[1])?;
@@ -70,14 +71,26 @@ where
                     self.write(&[1])?;
                     self.write_stream(val.as_slice())?;
                 }
-                (None | Some(DataType::Boolean), DataValue::Boolean(val)) => todo!(),
-                (None | Some(DataType::Int8), DataValue::Int8(val)) => todo!(),
+                (None | Some(DataType::Boolean), DataValue::Boolean(val)) => {
+                    self.write(&[1])?;
+                    self.write(&[val as u8])?;
+                }
+                (None | Some(DataType::Int8), DataValue::Int8(val)) => {
+                    self.write(&[1])?;
+                    self.write(&[val as u8])?;
+                }
                 (None | Some(DataType::UInt8), DataValue::UInt8(val)) => {
                     self.write(&[1])?;
                     self.write(&[val])?;
                 }
-                (None | Some(DataType::Int16), DataValue::Int16(val)) => todo!(),
-                (None | Some(DataType::UInt16), DataValue::UInt16(val)) => todo!(),
+                (None | Some(DataType::Int16), DataValue::Int16(val)) => {
+                    self.write(&[1])?;
+                    self.write(&val.to_ne_bytes())?;
+                }
+                (None | Some(DataType::UInt16), DataValue::UInt16(val)) => {
+                    self.write(&[1])?;
+                    self.write(&val.to_ne_bytes())?;
+                }
                 (None | Some(DataType::Int32), DataValue::Int32(val)) => {
                     self.write(&[1])?;
                     self.write(&val.to_ne_bytes())?;
@@ -89,20 +102,48 @@ where
                 (None | Some(DataType::Int64), DataValue::Int64(val)) => {
                     self.write(&[1])?;
                     self.write(&val.to_ne_bytes())?;
-                },
+                }
                 (None | Some(DataType::UInt64), DataValue::UInt64(val)) => {
                     self.write(&[1])?;
                     self.write(&val.to_ne_bytes())?;
                 }
-                (None | Some(DataType::Float32), DataValue::Float32(val)) => todo!(),
-                (None | Some(DataType::Float64), DataValue::Float64(val)) => todo!(),
-                (None | Some(DataType::Decimal(_)), DataValue::Decimal(val)) => todo!(),
-                (None | Some(DataType::JSON), DataValue::JSON(val)) => todo!(),
-                (None | Some(DataType::Date), DataValue::Date(val)) => todo!(),
-                (None | Some(DataType::Time), DataValue::Time(val)) => todo!(),
-                (None | Some(DataType::DateTime), DataValue::DateTime(val)) => todo!(),
-                (None | Some(DataType::DateTimeWithTZ), DataValue::DateTimeWithTZ(val)) => todo!(),
-                (None | Some(DataType::Uuid), DataValue::Uuid(val)) => todo!(),
+                (None | Some(DataType::Float32), DataValue::Float32(val)) => {
+                    self.write(&[1])?;
+                    self.write(&val.to_ne_bytes())?;
+                }
+                (None | Some(DataType::Float64), DataValue::Float64(val)) => {
+                    self.write(&[1])?;
+                    self.write(&val.to_ne_bytes())?;
+                }
+                (None | Some(DataType::Decimal(_)), DataValue::Decimal(val)) => {
+                    self.write(&[1])?;
+                    self.write(&val.serialize())?;
+                }
+                (None | Some(DataType::JSON), DataValue::JSON(val)) => {
+                    self.write(&[1])?;
+                    self.write_stream(val.as_bytes())?;
+                }
+                (None | Some(DataType::Date), DataValue::Date(val)) => {
+                    self.write(&[1])?;
+                    self.write_date(val)?;
+                }
+                (None | Some(DataType::Time), DataValue::Time(val)) => {
+                    self.write(&[1])?;
+                    self.write_time(val)?;
+                }
+                (None | Some(DataType::DateTime), DataValue::DateTime(val)) => {
+                    self.write(&[1])?;
+                    self.write_date_time(val)?;
+                }
+                (None | Some(DataType::DateTimeWithTZ), DataValue::DateTimeWithTZ(val)) => {
+                    self.write(&[1])?;
+                    self.write_date_time(val.dt)?;
+                    self.write_stream(val.tz.name().as_bytes())?;
+                }
+                (None | Some(DataType::Uuid), DataValue::Uuid(val)) => {
+                    self.write(&[1])?;
+                    self.write(val.as_bytes())?;
+                }
                 (r#type, data) => bail!(
                     "Data type mismatch on query param {}, expected {:?}, received {:?}",
                     self.param_idx,
@@ -114,6 +155,24 @@ where
 
         self.advance();
 
+        Ok(())
+    }
+
+    fn write_date_time(&mut self, val: ansilo_core::data::chrono::NaiveDateTime) -> Result<()> {
+        self.write_date(val.date())?;
+        self.write_time(val.time())?;
+        Ok(())
+    }
+
+    fn write_time(&mut self, val: ansilo_core::data::chrono::NaiveTime) -> Result<()> {
+        self.write(&[val.hour() as u8, val.minute() as u8, val.second() as u8])?;
+        self.write(&val.nanosecond().to_ne_bytes())?;
+        Ok(())
+    }
+
+    fn write_date(&mut self, val: ansilo_core::data::chrono::NaiveDate) -> Result<()> {
+        self.write(&val.year().to_ne_bytes())?;
+        self.write(&[val.month() as u8, val.day() as u8])?;
         Ok(())
     }
 
@@ -174,7 +233,12 @@ mod tests {
 
     use std::io;
 
-    use ansilo_core::data::StringOptions;
+    use ansilo_core::data::{
+        chrono::{NaiveDate, NaiveDateTime, NaiveTime},
+        chrono_tz::Tz,
+        rust_decimal::Decimal,
+        DateTimeWithTZ, DecimalOptions, StringOptions,
+    };
 
     use super::*;
 
@@ -419,6 +483,299 @@ mod tests {
             [
                 vec![1u8],                       // not null
                 1234_u64.to_ne_bytes().to_vec(), // data
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_bool() {
+        let mut writer = create_data_writer(Some(vec![DataType::Boolean]));
+
+        writer.write_data_value(DataValue::Boolean(true)).unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            vec![
+                1u8, // not null
+                1u8, // data
+            ]
+        );
+
+        let mut writer = create_data_writer(Some(vec![DataType::Boolean]));
+
+        writer.write_data_value(DataValue::Boolean(false)).unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            vec![
+                1u8, // not null
+                0u8, // data
+            ]
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_uint8() {
+        let mut writer = create_data_writer(Some(vec![DataType::UInt8]));
+
+        writer.write_data_value(DataValue::UInt8(234)).unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            vec![
+                1u8,   // not null
+                234u8, // data
+            ]
+        );
+    }
+
+    #[test]
+    fn test_data_writer_write_int8() {
+        let mut writer = create_data_writer(Some(vec![DataType::Int8]));
+
+        writer.write_data_value(DataValue::Int8(-120)).unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            vec![
+                1u8,   // not null
+                136u8, // data
+            ]
+        );
+    }
+
+    #[test]
+    fn test_data_writer_write_uint16() {
+        let mut writer = create_data_writer(Some(vec![DataType::UInt16]));
+
+        writer.write_data_value(DataValue::UInt16(1234)).unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                       // not null
+                1234_u16.to_ne_bytes().to_vec(), // data
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_int16() {
+        let mut writer = create_data_writer(Some(vec![DataType::Int16]));
+
+        writer.write_data_value(DataValue::Int16(1234)).unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                       // not null
+                1234_i16.to_ne_bytes().to_vec(), // data
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_float32() {
+        let mut writer = create_data_writer(Some(vec![DataType::Float32]));
+
+        writer
+            .write_data_value(DataValue::Float32(1234.567))
+            .unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                           // not null
+                1234.567_f32.to_ne_bytes().to_vec(), // data
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_float64() {
+        let mut writer = create_data_writer(Some(vec![DataType::Float64]));
+
+        writer
+            .write_data_value(DataValue::Float64(1234.567))
+            .unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                           // not null
+                1234.567_f64.to_ne_bytes().to_vec(), // data
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_decimal() {
+        let mut writer =
+            create_data_writer(Some(vec![DataType::Decimal(DecimalOptions::default())]));
+
+        writer
+            .write_data_value(DataValue::Decimal(Decimal::ONE_THOUSAND))
+            .unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                                  // not null
+                Decimal::ONE_THOUSAND.serialize().to_vec(), // data
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_json() {
+        let mut writer = create_data_writer(Some(vec![DataType::JSON]));
+
+        writer
+            .write_data_value(DataValue::JSON("{}".to_string()))
+            .unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                // not null
+                vec![2u8],                // chunk length
+                "{}".as_bytes().to_vec(), // data
+                vec![0u8],                // eof
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_date() {
+        let mut writer = create_data_writer(Some(vec![DataType::Date]));
+
+        writer
+            .write_data_value(DataValue::Date(NaiveDate::from_ymd(2000, 10, 24)))
+            .unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                       // not null
+                2000_u32.to_ne_bytes().to_vec(), // year
+                vec![10u8],                      // month
+                vec![24u8],                      // day
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_time() {
+        let mut writer = create_data_writer(Some(vec![DataType::Time]));
+
+        writer
+            .write_data_value(DataValue::Time(NaiveTime::from_hms_nano(6, 45, 21, 12345)))
+            .unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                        // not null
+                vec![6u8],                        // hour
+                vec![45u8],                       // min
+                vec![21u8],                       // sec
+                12345_u32.to_ne_bytes().to_vec(), // nano
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_date_time() {
+        let mut writer = create_data_writer(Some(vec![DataType::DateTime]));
+
+        writer
+            .write_data_value(DataValue::DateTime(NaiveDateTime::new(
+                NaiveDate::from_ymd(2000, 10, 24),
+                NaiveTime::from_hms_nano(6, 45, 21, 12345),
+            )))
+            .unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                        // not null
+                2000_u32.to_ne_bytes().to_vec(),  // year
+                vec![10u8],                       // month
+                vec![24u8],                       // day
+                vec![6u8],                        // hour
+                vec![45u8],                       // min
+                vec![21u8],                       // sec
+                12345_u32.to_ne_bytes().to_vec(), // nano
+            ]
+            .concat()
+        )
+    }
+
+    #[test]
+    fn test_data_writer_write_date_time_with_tz() {
+        let mut writer = create_data_writer(Some(vec![DataType::DateTimeWithTZ]));
+
+        writer
+            .write_data_value(DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+                NaiveDateTime::new(
+                    NaiveDate::from_ymd(2000, 10, 24),
+                    NaiveTime::from_hms_nano(6, 45, 21, 12345),
+                ),
+                Tz::Australia__Melbourne,
+            )))
+            .unwrap();
+
+        let buff = writer.inner().into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                                 // not null
+                2000_u32.to_ne_bytes().to_vec(),           // year
+                vec![10u8],                                // month
+                vec![24u8],                                // day
+                vec![6u8],                                 // hour
+                vec![45u8],                                // min
+                vec![21u8],                                // sec
+                12345_u32.to_ne_bytes().to_vec(),          // nano
+                vec![19u8],                                // tz len
+                "Australia/Melbourne".as_bytes().to_vec(), // tz name
+                vec![0u8],                                 // tz end
             ]
             .concat()
         )
