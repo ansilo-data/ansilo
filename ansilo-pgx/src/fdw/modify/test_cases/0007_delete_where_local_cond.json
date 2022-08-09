@@ -53,6 +53,9 @@
                                     "entity_alias": "t1"
                                 }
                             }
+                        },
+                        {
+                            "SetRowLockMode": "ForUpdate"
                         }
                     ]
                 }

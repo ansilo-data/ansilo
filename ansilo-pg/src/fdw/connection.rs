@@ -520,7 +520,7 @@ mod tests {
         common::{data::DataReader, entity::EntitySource},
         memory::{
             MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
-            MemoryDatabase,
+            MemoryDatabase, MemoryDatabaseConf,
         },
     };
     use ansilo_core::{
@@ -535,14 +535,13 @@ mod tests {
     use super::*;
 
     fn create_memory_connection_pool(
-        transactions_enabled: bool,
+        db_conf: MemoryDatabaseConf,
     ) -> (
         ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
         MemoryConnectionPool,
     ) {
         let data = MemoryDatabase::new();
-        data.transactions_enabled
-            .store(transactions_enabled, Ordering::SeqCst);
+        data.update_conf(move |conf| *conf = db_conf);
         let mut conf = ConnectorEntityConfig::new();
 
         conf.add(EntitySource::minimal(
@@ -576,9 +575,9 @@ mod tests {
 
     fn create_mock_connection_opts(
         name: &'static str,
-        transactions_enabled: bool,
+        db_conf: MemoryDatabaseConf,
     ) -> (JoinHandle<Result<Arc<MemoryDatabase>>>, IpcClientChannel) {
-        let (entities, pool) = create_memory_connection_pool(transactions_enabled);
+        let (entities, pool) = create_memory_connection_pool(db_conf);
 
         let (client_chan, server_chan) = create_tmp_ipc_channel(name);
 
@@ -596,7 +595,7 @@ mod tests {
     fn create_mock_connection(
         name: &'static str,
     ) -> (JoinHandle<Result<Arc<MemoryDatabase>>>, IpcClientChannel) {
-        create_mock_connection_opts(name, true)
+        create_mock_connection_opts(name, MemoryDatabaseConf::default())
     }
 
     #[test]
@@ -1376,8 +1375,13 @@ mod tests {
 
     #[test]
     fn test_fdw_connection_begin_transaction_when_not_supported() {
-        let (thread, mut client) =
-            create_mock_connection_opts("connection_transaction_not_supported", false);
+        let (thread, mut client) = create_mock_connection_opts(
+            "connection_transaction_not_supported",
+            MemoryDatabaseConf {
+                transactions_enabled: false,
+                row_locks_pretend: true,
+            },
+        );
 
         let res = client.send(ClientMessage::BeginTransaction).unwrap();
 

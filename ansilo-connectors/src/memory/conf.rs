@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::{AtomicBool, Ordering}, RwLock},
+    sync::{Mutex, RwLock},
 };
 
 use ansilo_core::data::DataValue;
@@ -15,8 +15,25 @@ pub struct MemoryDatabase {
     data: RwLock<HashMap<String, Vec<Vec<DataValue>>>>,
     /// We also keep track of row id's to ensure they are uniquely assigned for each entity
     row_ids: RwLock<HashMap<String, u64>>,
+    /// Settings
+    conf: Mutex<MemoryDatabaseConf>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MemoryDatabaseConf {
     /// Whether transactions are supported
-    pub transactions_enabled: AtomicBool,
+    pub transactions_enabled: bool,
+    /// Whether to preten row-level locking is supported
+    pub row_locks_pretend: bool,
+}
+
+impl Default for MemoryDatabaseConf {
+    fn default() -> Self {
+        Self {
+            transactions_enabled: true,
+            row_locks_pretend: true,
+        }
+    }
 }
 
 impl MemoryDatabase {
@@ -24,8 +41,18 @@ impl MemoryDatabase {
         Self {
             data: RwLock::new(HashMap::new()),
             row_ids: RwLock::new(HashMap::new()),
-            transactions_enabled: AtomicBool::new(true),
+            conf: Mutex::new(MemoryDatabaseConf::default()),
         }
+    }
+
+    pub fn conf(&self) -> MemoryDatabaseConf {
+        let conf = self.conf.lock().unwrap();
+        conf.clone()
+    }
+
+    pub fn update_conf(&self, cb: impl FnOnce(&mut MemoryDatabaseConf)) {
+        let mut conf = self.conf.lock().unwrap();
+        cb(&mut conf);
     }
 
     pub fn set_data(
@@ -125,7 +152,7 @@ impl Clone for MemoryDatabase {
         Self {
             data: RwLock::new(self.data.read().unwrap().clone()),
             row_ids: RwLock::new(self.row_ids.read().unwrap().clone()),
-            transactions_enabled: AtomicBool::new(self.transactions_enabled.load(Ordering::SeqCst)),
+            conf: Mutex::new(self.conf()),
         }
     }
 }

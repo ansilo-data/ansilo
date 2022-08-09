@@ -112,6 +112,7 @@ mod tests {
                 "joins",
                 "order_bys",
                 "row_limit",
+                "row_lock",
                 "row_skip",
                 "where"
             ]

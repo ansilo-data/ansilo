@@ -173,6 +173,7 @@ pub enum SelectQueryOperation {
     AddOrderBy(sql::Ordering),
     SetRowLimit(u64),
     SetRowOffset(u64),
+    SetRowLockMode(sql::SelectRowLockMode),
 }
 
 impl SelectQueryOperation {
@@ -230,6 +231,14 @@ impl SelectQueryOperation {
     #[must_use]
     pub fn is_set_row_offset(&self) -> bool {
         matches!(self, Self::SetRowOffset(..))
+    }
+
+    /// Returns `true` if the select query operation is [`SetRowLockMode`].
+    ///
+    /// [`SetRowLockMode`]: SelectQueryOperation::SetRowLockMode
+    #[must_use]
+    pub fn is_set_row_lock_mode(&self) -> bool {
+        matches!(self, Self::SetRowLockMode(..))
     }
 }
 

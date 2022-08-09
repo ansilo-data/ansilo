@@ -1201,6 +1201,20 @@ pub unsafe extern "C" fn get_foreign_plan(
         fdw_scan_list.push(tle as *mut _);
     }
 
+    // If this foreign scan is part of an UPDATE/DELETE query
+    // attempt to perform row-level locking on the rows if it
+    // is supported by the data source
+    if let pg_sys::CmdType_CMD_UPDATE | pg_sys::CmdType_CMD_DELETE = (*(*root).parse).commandType {
+        if apply_query_operation(
+            &mut query,
+            SelectQueryOperation::SetRowLockMode(sqlil::SelectRowLockMode::ForUpdate),
+        )
+        .is_none()
+        {
+            pgx::warning!("Failed to apply row locks for modification query: locking is not supported by the data source");
+        }
+    }
+
     // Convert to pg list
     let fdw_scan_list = vec_to_pg_list(fdw_scan_list);
 

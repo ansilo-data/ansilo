@@ -95,6 +95,9 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
             SelectQueryOperation::SetRowOffset(offset) => {
                 Self::select_set_rows_to_skip(select, offset)
             }
+            SelectQueryOperation::SetRowLockMode(mode) => {
+                Self::select_set_row_lock_mode(select, mode)
+            }
         }
     }
 
@@ -248,6 +251,14 @@ impl OracleJdbcQueryPlanner {
         row_skip: u64,
     ) -> Result<QueryOperationResult> {
         select.row_skip = row_skip;
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
+    }
+
+    fn select_set_row_lock_mode(
+        select: &mut sql::Select,
+        mode: sql::SelectRowLockMode,
+    ) -> Result<QueryOperationResult> {
+        select.row_lock = mode;
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 

@@ -26,6 +26,17 @@ pub struct Select {
     pub row_limit: Option<u64>,
     /// The number of rows to skip
     pub row_skip: u64,
+    /// The locking mode for the rows
+    pub row_lock: SelectRowLockMode,
+}
+
+/// A query for retrieving rows from a data source
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize)]
+pub enum SelectRowLockMode {
+    /// No row locking is performed
+    None,
+    /// The rows are locked for performing an update
+    ForUpdate,
 }
 
 impl Select {
@@ -39,6 +50,7 @@ impl Select {
             order_bys: vec![],
             row_limit: None,
             row_skip: 0,
+            row_lock: SelectRowLockMode::None,
         }
     }
 

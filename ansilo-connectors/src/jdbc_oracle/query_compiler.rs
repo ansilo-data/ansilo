@@ -54,6 +54,7 @@ impl OracleJdbcQueryCompiler {
             Self::compile_select_group_by(conf, query, &select.group_bys, &mut params)?,
             Self::compile_order_by(conf, query, &select.order_bys, &mut params)?,
             Self::compile_offet_limit(select.row_skip, select.row_limit)?,
+            Self::compile_select_lock_clause(select.row_lock)?,
         ]
         .into_iter()
         .filter(|i| !i.is_empty())
@@ -300,6 +301,14 @@ impl OracleJdbcQueryCompiler {
         }
 
         Ok(parts.join(" "))
+    }
+
+    fn compile_select_lock_clause(mode: sql::SelectRowLockMode) -> Result<String> {
+        Ok(match mode {
+            sql::SelectRowLockMode::None => "",
+            sql::SelectRowLockMode::ForUpdate => "FOR UPDATE",
+        }
+        .into())
     }
 
     fn compile_expr(
@@ -815,6 +824,27 @@ mod tests {
             compiled,
             JdbcQuery::new(
                 r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10 ROWS"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_for_update() {
+        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        select.cols.push((
+            "COL".to_string(),
+            sql::Expr::AggregateCall(sql::AggregateCall::Sum(Box::new(sql::Expr::attr(
+                "entity", "attr1",
+            )))),
+        ));
+        select.row_lock = sql::SelectRowLockMode::ForUpdate;
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" FOR UPDATE"#,
                 vec![]
             )
         );

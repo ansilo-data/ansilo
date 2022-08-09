@@ -1,7 +1,4 @@
-use std::{
-    mem,
-    sync::{atomic::Ordering, Arc},
-};
+use std::{mem, sync::Arc};
 
 use ansilo_core::err::{bail, Result};
 
@@ -90,7 +87,7 @@ impl Connection for MemoryConnection {
     }
 
     fn transaction_manager(&mut self) -> Option<&mut Self> {
-        if self.data.transactions_enabled.load(Ordering::Relaxed) {
+        if self.data.conf().transactions_enabled {
             Some(self)
         } else {
             None
@@ -184,7 +181,9 @@ mod tests {
     fn test_memory_connector_connection_transactions_disabled() {
         let mut con = setup_connection();
 
-        con.data.transactions_enabled.store(false, Ordering::SeqCst);
+        con.data.update_conf(|conf| {
+            conf.transactions_enabled = false;
+        });
 
         assert!(con.transaction_manager().is_none());
     }
@@ -230,7 +229,8 @@ mod tests {
         assert_eq!(con.is_in_transaction().unwrap(), true);
 
         // Mutate commit state
-        con.transaction.as_mut()
+        con.transaction
+            .as_mut()
             .unwrap()
             .commit_state
             .with_data_mut("dummy", "1.0", |data| {

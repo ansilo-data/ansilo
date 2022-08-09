@@ -16,7 +16,7 @@ use pgx::{
 
 use crate::{
     fdw::{
-        common::{self, prepare_query_params, send_query_params, begin_remote_transaction},
+        common::{self, begin_remote_transaction, prepare_query_params, send_query_params},
         ctx::{
             from_fdw_private_modify, from_fdw_private_rel, into_fdw_private_modify,
             mem::{pg_query_scoped, pg_transaction_scoped},
@@ -510,7 +510,7 @@ pub unsafe extern "C" fn plan_direct_modify(
         .unwrap()
         .remote_ops
         .iter()
-        .any(|op| !op.is_add_column() && !op.is_add_where())
+        .any(|op| !op.is_add_column() && !op.is_add_where() && !op.is_set_row_lock_mode())
     {
         return false;
     }

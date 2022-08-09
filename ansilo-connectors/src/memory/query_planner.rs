@@ -45,9 +45,9 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn get_row_id_exprs(
-        connection: &mut Self::TConnection,
-        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
-        entity: &EntitySource<Self::TEntitySourceConfig>,
+        _connection: &mut Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<Self::TEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<Vec<(sql::Expr, DataType)>> {
         Ok(vec![(
@@ -94,7 +94,7 @@ impl QueryPlanner for MemoryQueryPlanner {
     }
 
     fn apply_select_operation(
-        _connection: &mut Self::TConnection,
+        con: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         select: &mut sql::Select,
         op: SelectQueryOperation,
@@ -112,6 +112,9 @@ impl QueryPlanner for MemoryQueryPlanner {
             SelectQueryOperation::SetRowLimit(limit) => Self::select_set_row_limit(select, limit),
             SelectQueryOperation::SetRowOffset(offset) => {
                 Self::select_set_rows_to_skip(select, offset)
+            }
+            SelectQueryOperation::SetRowLockMode(mode) => {
+                Self::select_set_row_lock_mode(con, select, mode)
             }
         }
     }
@@ -216,6 +219,19 @@ impl MemoryQueryPlanner {
     ) -> Result<QueryOperationResult> {
         select.row_skip = row_skip;
         Ok(QueryOperationResult::Ok(OperationCost::default()))
+    }
+
+    fn select_set_row_lock_mode(
+        con: &mut MemoryConnection,
+        select: &mut sql::Select,
+        mode: sql::SelectRowLockMode,
+    ) -> Result<QueryOperationResult> {
+        if con.data.conf().row_locks_pretend {
+            select.row_lock = mode;
+            Ok(QueryOperationResult::Ok(OperationCost::default()))
+        } else {
+            Ok(QueryOperationResult::Unsupported)
+        }
     }
 
     fn insert_add_col(
