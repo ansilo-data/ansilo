@@ -1,6 +1,6 @@
 use std::{env, fs, path::PathBuf};
 
-use ansilo_core::err::{Context, Result};
+use ansilo_core::err::{Context, Result, bail};
 use ansilo_logging::{debug, warn};
 use jni::{objects::JObject, InitArgsBuilder, JNIEnv, JNIVersion, JavaVM};
 
@@ -143,6 +143,19 @@ impl Jvm {
             .context("Failed to pop local frame")?;
 
         ret
+    }
+
+    /// Checks for any pending Java exceptions and clears them if present
+    pub fn check_exceptions(&self, env: &JNIEnv) -> Result<()>
+    {
+        if env.exception_check().context("Failed to check for exception")? {
+            env.exception_describe().context("Failed to describe exception")?;
+            env.exception_clear().context("Failed to clear exception")?;
+
+            bail!("Java exception occured")
+        }
+        
+        Ok(())
     }
 }
 

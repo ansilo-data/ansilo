@@ -1,9 +1,10 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use ansilo_core::err::{Context, Result};
 use jni::{
-    objects::{GlobalRef, JList, JString, JValue, JMethodID},
-    signature::{JavaType, Primitive}, sys::jmethodID,
+    objects::{GlobalRef, JList, JMethodID, JString, JValue},
+    signature::{JavaType, Primitive},
+    sys::jmethodID,
 };
 
 use crate::interface::{ResultSet, RowStructure};
@@ -41,11 +42,16 @@ impl ResultSet for JdbcResultSet {
                 .l()
                 .context("Failed to convert JdbcRowStructure into object")?;
 
+            self.jvm.check_exceptions(env)?;
+
             let jdbc_cols = env
                 .call_method(jdbc_structure, "getCols", "()Ljava/util/List;", &[])
                 .context("Failed to call JdbcRowStructure::getCols")?
                 .l()
                 .context("Failed to convert List into object")?;
+
+            self.jvm.check_exceptions(env)?;
+
             let jdbc_cols = JList::from_env(env, jdbc_cols).context("Failed to read list")?;
 
             let mut structure = RowStructure::new(vec![]);
@@ -57,6 +63,8 @@ impl ResultSet for JdbcResultSet {
                         .l()
                         .context("Failed to convert to object")?,
                 );
+                self.jvm.check_exceptions(env)?;
+
                 let name = env
                     .get_string(JString::from(name.as_obj()))
                     .context("Failed to convert java string")
@@ -71,6 +79,7 @@ impl ResultSet for JdbcResultSet {
                     .context("Failed to call JdbcRowColumnInfo::getDataTypeId")?
                     .i()
                     .context("Failed to convert to int")?;
+                self.jvm.check_exceptions(env)?;
 
                 structure
                     .cols
@@ -110,7 +119,7 @@ impl ResultSet for JdbcResultSet {
                 .i()
                 .context("Failed to parse return value of JdbcResultSet::read")?;
 
-            // TODO: exception handling
+            self.jvm.check_exceptions(env)?;
 
             result
                 .try_into()
@@ -128,11 +137,7 @@ mod tests {
 
     use super::*;
 
-    fn execute_query(
-        jvm: &Arc<Jvm>,
-        jdbc_con: JObject,
-        query: &str,
-    ) -> JdbcResultSet {
+    fn execute_query(jvm: &Arc<Jvm>, jdbc_con: JObject, query: &str) -> JdbcResultSet {
         let env = &jvm.env().unwrap();
 
         // create statement

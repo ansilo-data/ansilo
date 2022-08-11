@@ -138,6 +138,8 @@ impl QueryHandle for JdbcPreparedQuery {
                     .l()
                     .context("Failed to convert ByteBuffer to object")?;
 
+                self.jvm.check_exceptions(env)?;
+
                 byte_buff
             };
 
@@ -152,22 +154,23 @@ impl QueryHandle for JdbcPreparedQuery {
                 .i()
                 .context("Failed to convert JdbcPreparedQuery::execute return value into int")?;
 
+            self.jvm.check_exceptions(env)?;
+
             if written < 0 {
                 bail!("JdbcPreparedQuery::execute returned value less than 0");
             }
 
-            // TODO: exception handling
             Ok(written.try_into().unwrap())
         })
     }
 
     fn restart(&mut self) -> Result<()> {
         self.jvm.with_local_frame(32, |env| {
-            let jdbc_result_set = env
+            let _ = env
                 .call_method(self.jdbc_prepared_statement.as_obj(), "restart", "()V", &[])
                 .context("Failed to invoke JdbcPreparedQuery::restart")?;
 
-            // TODO: exception handling
+            self.jvm.check_exceptions(env)?;
 
             Ok(())
         })
@@ -186,7 +189,7 @@ impl QueryHandle for JdbcPreparedQuery {
                 .l()
                 .context("Failed to convert JdbcResultSet into object")?;
 
-            // TODO: exception handling
+            self.jvm.check_exceptions(env)?;
 
             let jdbc_result_set = env.new_global_ref(jdbc_result_set)?;
 
@@ -243,6 +246,8 @@ impl JdbcQueryParam {
                 )
             }
         };
+
+        jvm.check_exceptions(&env)?;
 
         Ok(result
             .context("Failed to create JdbcParameter instance")?

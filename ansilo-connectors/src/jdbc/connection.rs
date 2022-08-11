@@ -105,6 +105,8 @@ impl ManageConnection for Manager {
                         ],
                     )
                     .context("Failed to set property")?;
+
+                    self.jvm.check_exceptions(env)?;
                 }
 
                 let jdbc_con = env
@@ -114,6 +116,8 @@ impl ManageConnection for Manager {
                         &[JValue::Object(*url), JValue::Object(props)],
                     )
                     .context("Failed to initialise JDBC connection")?;
+
+                self.jvm.check_exceptions(env)?;
 
                 let jdbc_con = env.new_global_ref(jdbc_con)?;
 
@@ -171,6 +175,8 @@ impl Connection for JdbcConnection {
                 .new_object("java/util/ArrayList", "()V", &[])
                 .context("Failed to create ArrayList")?;
 
+            state.jvm.check_exceptions(env)?;
+
             // TODO[minor]: use method id and unchecked call
             for (idx, param) in query.params.iter().enumerate() {
                 let data_type_id = env.auto_local(
@@ -184,6 +190,8 @@ impl Connection for JdbcConnection {
                     &[JValue::Object(data_type_id.as_obj())],
                 )
                 .context("Failed to add Integer to array list")?;
+
+                state.jvm.check_exceptions(env)?;
             }
 
             let jdbc_prepared_query = env
@@ -197,7 +205,7 @@ impl Connection for JdbcConnection {
                 .l()
                 .context("Failed to convert JdbcPreparedQuery into object")?;
 
-            // TODO: exception handling
+            state.jvm.check_exceptions(env)?;
 
             let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query)?;
 
@@ -233,6 +241,8 @@ impl JdbcConnectionState {
             .z()
             .context("Failed to convert JdbcConnection::isValid return value")?;
 
+        self.jvm.check_exceptions(&env)?;
+
         if !res {
             bail!("Connection is not valid")
         }
@@ -248,14 +258,19 @@ impl JdbcConnectionState {
             .context("Failed to invoke JdbcConnection::isClosed")?
             .z()
             .context("Failed to convert JdbcConnection::isClosed return value")?;
+
+        self.jvm.check_exceptions(&env)?;
+
         Ok(res)
     }
 
     fn close(&mut self) -> Result<()> {
-        self.jvm
-            .env()?
-            .call_method(self.jdbc_con.as_obj(), "close", "()V", &[])
+        let env = self.jvm.env()?;
+        env.call_method(self.jdbc_con.as_obj(), "close", "()V", &[])
             .context("Failed to call JdbcConnection::close")?;
+
+        self.jvm.check_exceptions(&env)?;
+
         Ok(())
     }
 }
@@ -279,6 +294,8 @@ impl TransactionManager for JdbcTransactionManager {
             .context("Failed to invoke JdbcConnection::isInTransaction")?
             .z()
             .context("Failed to convert JdbcConnection::isInTransaction return value")?;
+        self.0.jvm.check_exceptions(&env)?;
+
         Ok(res)
     }
 
@@ -286,6 +303,7 @@ impl TransactionManager for JdbcTransactionManager {
         let env = self.0.jvm.env()?;
         env.call_method(self.0.jdbc_con.as_obj(), "beginTransaction", "()V", &[])
             .context("Failed to invoke JdbcConnection::beginTransaction")?;
+        self.0.jvm.check_exceptions(&env)?;
 
         Ok(())
     }
@@ -294,6 +312,7 @@ impl TransactionManager for JdbcTransactionManager {
         let env = self.0.jvm.env()?;
         env.call_method(self.0.jdbc_con.as_obj(), "rollBackTransaction", "()V", &[])
             .context("Failed to invoke JdbcConnection::rollBackTransaction")?;
+        self.0.jvm.check_exceptions(&env)?;
 
         Ok(())
     }
@@ -302,6 +321,7 @@ impl TransactionManager for JdbcTransactionManager {
         let env = self.0.jvm.env()?;
         env.call_method(self.0.jdbc_con.as_obj(), "commitTransaction", "()V", &[])
             .context("Failed to invoke JdbcConnection::commitTransaction")?;
+        self.0.jvm.check_exceptions(&env)?;
 
         Ok(())
     }
