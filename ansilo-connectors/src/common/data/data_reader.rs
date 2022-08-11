@@ -653,7 +653,6 @@ mod tests {
 
     #[test]
     fn test_data_reader_null_with_invalid_non_null_byte() {
-        let uuid = uuid::Uuid::new_v4();
         let mut res = create_data_reader(
             vec![DataType::Null],
             [
