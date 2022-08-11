@@ -117,7 +117,7 @@ where
                 }
                 (None | Some(DataType::Decimal(_)), DataValue::Decimal(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.serialize())?;
+                    self.write_stream(val.to_string().as_bytes())?;
                 }
                 (None | Some(DataType::JSON), DataValue::JSON(val)) => {
                     self.write(&[1])?;
@@ -643,8 +643,10 @@ mod tests {
         assert_eq!(
             buff,
             [
-                vec![1u8],                                  // not null
-                Decimal::ONE_THOUSAND.serialize().to_vec(), // data
+                vec![1u8],                  // not null
+                vec![4u8],                  // len
+                "1000".as_bytes().to_vec(), // str
+                vec![0u8],                  // eof
             ]
             .concat()
         )

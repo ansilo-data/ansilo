@@ -7,12 +7,12 @@ import java.sql.SQLException;
 import java.sql.Types;
 
 /**
- * The int32 data type
+ * The float32 data type
  */
-public class Int32DataType implements JdbcFixedSizeDataType {
+public class Float32DataType implements JdbcFixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_INTEGER;
+        return TYPE_FLOAT;
     }
 
     @Override
@@ -23,14 +23,14 @@ public class Int32DataType implements JdbcFixedSizeDataType {
     @Override
     public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
             throws Exception {
-        int val = resultSet.getInt(colIndex);
+        var val = resultSet.getFloat(colIndex);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;
         }
 
         buff.put((byte) 1);
-        buff.putInt(val);
+        buff.putFloat(val);
     }
 
     @Override
@@ -39,9 +39,9 @@ public class Int32DataType implements JdbcFixedSizeDataType {
         boolean isNull = buff.get() == 0;
         
         if (isNull) {
-            statement.setNull(index, Types.INTEGER);
+            statement.setNull(index, Types.FLOAT);
         } else {
-            statement.setInt(index, buff.getInt());
+            statement.setFloat(index, buff.getFloat());
         }
     }
 }

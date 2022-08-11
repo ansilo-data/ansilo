@@ -7,30 +7,30 @@ import java.sql.SQLException;
 import java.sql.Types;
 
 /**
- * The int32 data type
+ * The int16 data type
  */
-public class Int32DataType implements JdbcFixedSizeDataType {
+public class Int16DataType implements JdbcFixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_INTEGER;
+        return TYPE_SMALLINT;
     }
 
     @Override
     public int getFixedSize() {
-        return 5;
+        return 3;
     }
 
     @Override
     public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
             throws Exception {
-        int val = resultSet.getInt(colIndex);
+        var val = resultSet.getShort(colIndex);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;
         }
 
         buff.put((byte) 1);
-        buff.putInt(val);
+        buff.putShort(val);
     }
 
     @Override
@@ -39,9 +39,9 @@ public class Int32DataType implements JdbcFixedSizeDataType {
         boolean isNull = buff.get() == 0;
         
         if (isNull) {
-            statement.setNull(index, Types.INTEGER);
+            statement.setNull(index, Types.SMALLINT);
         } else {
-            statement.setInt(index, buff.getInt());
+            statement.setShort(index, buff.getShort());
         }
     }
 }

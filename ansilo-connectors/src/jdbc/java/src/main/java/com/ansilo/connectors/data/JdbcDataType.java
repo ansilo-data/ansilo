@@ -11,7 +11,6 @@ import java.sql.Types;
  * Used for converting data from JDBC values to our rust connector.
  * 
  * @see ansilo-connectors/src/jdbc/data.rs
- * @see https://docs.oracle.com/cd/E19830-01/819-4721/beajw/index.html
  */
 public interface JdbcDataType {
     public static final int MODE_FIXED = 1;
@@ -19,7 +18,8 @@ public interface JdbcDataType {
 
     /**
      * If you update these constants make sure to update the rust constants:
-     *  @see ansilo-connectors/src/jdbc/data.rs
+     * 
+     * @see ansilo-connectors/src/jdbc/data.rs
      */
     public static final int TYPE_BIT = 1;
     public static final int TYPE_TINYINT = 2;
@@ -33,6 +33,7 @@ public interface JdbcDataType {
     public static final int TYPE_DECIMAL = 10;
     public static final int TYPE_CHAR = 11;
     public static final int TYPE_VARCHAR = 12;
+    public static final int TYPE_LONGVARCHAR = 32;
     public static final int TYPE_DATE = 13;
     public static final int TYPE_TIME = 14;
     public static final int TYPE_TIMESTAMP = 15;
@@ -68,24 +69,52 @@ public interface JdbcDataType {
     /**
      * Binds the supplied value to the prepared statement.
      */
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff) throws SQLException;
+    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
+            throws SQLException;
 
     /**
      * Creates a new data type instance
      */
     public static JdbcDataType createFromJdbcType(int sqlType) throws SQLException {
         switch (sqlType) {
+            case Types.BIT:
+            case Types.BOOLEAN:
+                return new BoolDataType();
+
+            case Types.TINYINT:
+                return new Int8DataType();
+
+            case Types.SMALLINT:
+                return new Int16DataType();
+
+            case Types.INTEGER:
+                return new Int32DataType();
+
+            case Types.BIGINT:
+                return new Int64DataType();
+
+            case Types.FLOAT:
+            case Types.REAL:
+                return new Float32DataType();
+
+            case Types.DOUBLE:
+                return new Float64DataType();
+
+            case Types.DECIMAL:
+            case Types.NUMERIC:
+                return new DecimalDataType();
+
             case Types.VARCHAR:
             case Types.CHAR:
             case Types.LONGVARCHAR:
+            case Types.CLOB:
                 return new VarcharDataType();
 
             case Types.NVARCHAR:
             case Types.NCHAR:
+            case Types.NCLOB:
+            case Types.LONGNVARCHAR:
                 return new NVarcharDataType();
-
-            case Types.INTEGER:
-                return new Int32DataType();
 
             default:
                 throw new SQLException(String.format("Unknown sql type: %d", sqlType));
@@ -97,13 +126,43 @@ public interface JdbcDataType {
      */
     public static JdbcDataType createFromTypeId(int dataTypeId) throws SQLException {
         switch (dataTypeId) {
+            case TYPE_BIT:
+            case TYPE_BOOLEAN:
+                return new BoolDataType();
+
+            case TYPE_TINYINT:
+                return new Int8DataType();
+
+            case TYPE_SMALLINT:
+                return new Int16DataType();
+
             case TYPE_INTEGER:
                 return new Int32DataType();
 
+            case TYPE_BIGINT:
+                return new Int64DataType();
+
+            case TYPE_FLOAT:
+            case TYPE_REAL:
+                return new Float32DataType();
+
+            case TYPE_DOUBLE:
+                return new Float64DataType();
+
+            case TYPE_DECIMAL:
+            case TYPE_NUMERIC:
+                return new DecimalDataType();
+
+            case TYPE_CHAR:
+            case TYPE_CLOB:
             case TYPE_VARCHAR:
+            case TYPE_LONGVARCHAR:
                 return new VarcharDataType();
 
             case TYPE_NVARCHAR:
+            case TYPE_NCHAR:
+            case TYPE_NCLOB:
+            case TYPE_LONGNVARCHAR:
                 return new NVarcharDataType();
 
             default:

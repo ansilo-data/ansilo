@@ -48,6 +48,7 @@ pub enum JdbcType {
     Decimal = 10,
     Char = 11,
     Varchar = 12,
+    LongVarchar = 32,
     Date = 13,
     Time = 14,
     Timestamp = 15,
@@ -86,6 +87,7 @@ impl TryFrom<i32> for JdbcType {
             10 => JdbcType::Decimal,
             11 => JdbcType::Char,
             12 => JdbcType::Varchar,
+            32 => JdbcType::LongVarchar,
             13 => JdbcType::Date,
             14 => JdbcType::Time,
             15 => JdbcType::Timestamp,
@@ -145,8 +147,9 @@ pub(crate) fn default_type_to_rust(r#type: JdbcType) -> Result<DataType> {
         JdbcType::Double => DataType::Float64,
         JdbcType::Numeric => DataType::Int64,
         JdbcType::Decimal => DataType::Decimal(DecimalOptions::default()),
-        JdbcType::Char => DataType::Utf8String(StringOptions::default()),
-        JdbcType::Varchar => DataType::Utf8String(StringOptions::default()),
+        JdbcType::Varchar | JdbcType::Char | JdbcType::LongVarchar => {
+            DataType::Utf8String(StringOptions::default())
+        }
         JdbcType::Date => DataType::Date,
         JdbcType::Time => DataType::Time,
         JdbcType::Timestamp => DataType::DateTime,

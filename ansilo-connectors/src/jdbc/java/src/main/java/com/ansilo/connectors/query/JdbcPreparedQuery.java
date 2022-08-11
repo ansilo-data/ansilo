@@ -80,8 +80,11 @@ public class JdbcPreparedQuery {
     public int write(ByteBuffer buff) throws Exception {
         // We are transfering data within the name process across JNI
         // just use native-endianess
-        // We will take care of endianess during serialisation when
-        // transferring to remote systems.
+        //
+        // This is fine if we assume the reader of the buffer is on the same host.
+        // In the current version this assumption hosts as postgres is run in the same container
+        // In future versions perhaps we have to revise this assumption if we start supporting
+        // running postgres on another host.
         buff.order(ByteOrder.nativeOrder());
 
         var originalPosition = buff.position();

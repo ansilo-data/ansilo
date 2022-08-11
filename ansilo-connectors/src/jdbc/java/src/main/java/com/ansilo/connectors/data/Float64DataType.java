@@ -7,30 +7,30 @@ import java.sql.SQLException;
 import java.sql.Types;
 
 /**
- * The int32 data type
+ * The float64 data type
  */
-public class Int32DataType implements JdbcFixedSizeDataType {
+public class Float64DataType implements JdbcFixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_INTEGER;
+        return TYPE_DOUBLE;
     }
 
     @Override
     public int getFixedSize() {
-        return 5;
+        return 9;
     }
 
     @Override
     public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
             throws Exception {
-        int val = resultSet.getInt(colIndex);
+        var val = resultSet.getDouble(colIndex);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;
         }
 
         buff.put((byte) 1);
-        buff.putInt(val);
+        buff.putDouble(val);
     }
 
     @Override
@@ -39,9 +39,9 @@ public class Int32DataType implements JdbcFixedSizeDataType {
         boolean isNull = buff.get() == 0;
         
         if (isNull) {
-            statement.setNull(index, Types.INTEGER);
+            statement.setNull(index, Types.DOUBLE);
         } else {
-            statement.setInt(index, buff.getInt());
+            statement.setDouble(index, buff.getDouble());
         }
     }
 }

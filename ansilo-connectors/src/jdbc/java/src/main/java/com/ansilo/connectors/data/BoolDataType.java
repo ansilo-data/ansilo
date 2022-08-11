@@ -7,41 +7,43 @@ import java.sql.SQLException;
 import java.sql.Types;
 
 /**
- * The int32 data type
+ * The bool data type
  */
-public class Int32DataType implements JdbcFixedSizeDataType {
+public class BoolDataType implements JdbcFixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_INTEGER;
+        return TYPE_BOOLEAN;
     }
 
     @Override
     public int getFixedSize() {
-        return 5;
+        return 2;
     }
 
     @Override
     public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
             throws Exception {
-        int val = resultSet.getInt(colIndex);
+        var val = resultSet.getBoolean(colIndex);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;
         }
 
         buff.put((byte) 1);
-        buff.putInt(val);
+
+        buff.put(val ? (byte) 1 : (byte) 0);
     }
 
     @Override
     public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
             throws SQLException {
         boolean isNull = buff.get() == 0;
-        
+
         if (isNull) {
-            statement.setNull(index, Types.INTEGER);
+            statement.setNull(index, Types.BOOLEAN);
         } else {
-            statement.setInt(index, buff.getInt());
+            boolean val = buff.get() != 0;
+            statement.setBoolean(index, val);
         }
     }
 }

@@ -82,9 +82,10 @@ where
                 DataType::Float64 => {
                     DataValue::Float64(f64::from_ne_bytes(self.read_exact::<8>()?))
                 }
-                DataType::Decimal(_) => {
-                    DataValue::Decimal(Decimal::deserialize(self.read_exact::<16>()?))
-                }
+                DataType::Decimal(_) => DataValue::Decimal(
+                    Decimal::from_str_exact(&self.read_string()?)
+                        .context("Failed to parse decimal value")?,
+                ),
                 DataType::JSON => DataValue::JSON(self.read_string()?),
                 DataType::Date => DataValue::Date(self.read_date()?),
                 DataType::Time => DataValue::Time(self.read_time()?),
@@ -202,7 +203,7 @@ mod tests {
 
     use std::io::Cursor;
 
-    use ansilo_core::data::{DecimalOptions, StringOptions, uuid};
+    use ansilo_core::data::{uuid, DecimalOptions, StringOptions};
 
     use super::*;
 
@@ -507,15 +508,17 @@ mod tests {
         let mut res = create_data_reader(
             vec![DataType::Decimal(DecimalOptions::default())],
             [
-                vec![1u8],                                 // not null
-                Decimal::ONE_HUNDRED.serialize().to_vec(), // data
+                vec![1u8],                     // not null
+                vec![7u8],                     // len
+                "100.123".as_bytes().to_vec(), // str
+                vec![0u8],                     // eof
             ]
             .concat(),
         );
 
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Decimal(Decimal::ONE_HUNDRED))
+            Some(DataValue::Decimal(Decimal::new(100123, 3)))
         );
         assert_eq!(res.read_data_value().unwrap(), None);
     }
