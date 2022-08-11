@@ -1,5 +1,8 @@
 use anyhow::{bail, Result};
-use rust_decimal::{prelude::ToPrimitive, Decimal};
+use rust_decimal::{
+    prelude::{One, ToPrimitive},
+    Decimal,
+};
 
 use super::{DataType, DataValue};
 
@@ -22,14 +25,14 @@ impl DataValue {
             DataValue::Boolean(data) => Self::try_coerce_boolean(data, r#type)?,
             DataValue::Int8(data) => Self::try_coerce_int8(data, r#type)?,
             DataValue::UInt8(data) => Self::try_coerce_uint8(data, r#type)?,
-            // DataValue::Int16(data) => Self::try_coerce_int16(data, r#type)?,
-            // DataValue::UInt16(data) => Self::try_coerce_uint16(data, r#type)?,
+            DataValue::Int16(data) => Self::try_coerce_int16(data, r#type)?,
+            DataValue::UInt16(data) => Self::try_coerce_uint16(data, r#type)?,
             DataValue::Int32(data) => Self::try_coerce_int32(data, r#type)?,
             DataValue::UInt32(data) => Self::try_coerce_uint32(data, r#type)?,
             DataValue::Int64(data) => Self::try_coerce_int64(data, r#type)?,
             DataValue::UInt64(data) => Self::try_coerce_uint64(data, r#type)?,
-            // DataValue::Float32(data) => Self::try_coerce_float32(data, r#type)?,
-            // DataValue::Float64(data) => Self::try_coerce_float64(data, r#type)?,
+            DataValue::Float32(data) => Self::try_coerce_float32(data, r#type)?,
+            DataValue::Float64(data) => Self::try_coerce_float64(data, r#type)?,
             DataValue::Decimal(data) => Self::try_coerce_decimal(data, r#type)?,
             // DataValue::JSON(data) => Self::try_coerce_json(data, r#type)?,
             // DataValue::Date(data) => Self::try_coerce_date(data, r#type)?,
@@ -71,6 +74,15 @@ impl DataValue {
             DataType::Boolean => Self::Boolean(data),
             DataType::Int8 => Self::Int8(data as i8),
             DataType::UInt8 => Self::UInt8(data as u8),
+            DataType::Int16 => Self::Int16(data as i16),
+            DataType::UInt16 => Self::UInt16(data as u16),
+            DataType::Int32 => Self::Int32(data as i32),
+            DataType::UInt32 => Self::UInt32(data as u32),
+            DataType::Int64 => Self::Int64(data as i64),
+            DataType::UInt64 => Self::UInt64(data as u64),
+            DataType::Float32 => Self::Float32(if data { 1.0 } else { 0.0 }),
+            DataType::Float64 => Self::Float64(if data { 1.0 } else { 0.0 }),
+            DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
             _ => bail!(
                 "No type coercion exists from type 'boolean' to {:?}",
                 r#type
@@ -81,13 +93,21 @@ impl DataValue {
     fn try_coerce_uint8(data: u8, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::UInt8 => Self::UInt8(data),
-            DataType::Boolean => match data {
-                0 => Self::Boolean(false),
-                1 => Self::Boolean(true),
-                _ => bail!("Failed to convert from type 'uint8' to 'boolean': expecting 0 or 1, found {data}")
-            }
+            DataType::Boolean if data == 0 => Self::Boolean(false),
+            DataType::Boolean if data == 1 => Self::Boolean(true),
+            DataType::Int8 => Self::Int8(data as i8),
+            DataType::Int16 => Self::Int16(data as i16),
+            DataType::UInt16 => Self::UInt16(data as u16),
+            DataType::Int32 => Self::Int32(data as i32),
+            DataType::UInt32 => Self::UInt32(data as u32),
+            DataType::Int64 => Self::Int64(data as i64),
+            DataType::UInt64 => Self::UInt64(data as u64),
+            DataType::Float32 => Self::Float32(data as f32),
+            DataType::Float64 => Self::Float64(data as f64),
+            DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
             _ => bail!(
-                "No type coercion exists from type 'uint8' to {:?}",
+                "No type coercion exists from type 'uint8' ({}) to {:?}",
+                data,
                 r#type
             ),
         })
@@ -96,13 +116,73 @@ impl DataValue {
     fn try_coerce_int8(data: i8, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Int8 => Self::Int8(data),
-            DataType::Boolean => match data {
-                0 => Self::Boolean(false),
-                1 => Self::Boolean(true),
-                _ => bail!("Failed to convert from type 'int8' to 'boolean': expecting 0 or 1, found {data}")
-            }
+            DataType::Boolean if data == 0 => Self::Boolean(false),
+            DataType::Boolean if data == 1 => Self::Boolean(true),
+            DataType::UInt8 => Self::UInt8(data as u8),
+            DataType::Int16 => Self::Int16(data as i16),
+            DataType::UInt16 if data >= 0 => Self::UInt16(data as u16),
+            DataType::Int32 => Self::Int32(data as i32),
+            DataType::UInt32 if data >= 0 => Self::UInt32(data as u32),
+            DataType::Int64 => Self::Int64(data as i64),
+            DataType::UInt64 if data >= 0 => Self::UInt64(data as u64),
+            DataType::Float32 => Self::Float32(data as f32),
+            DataType::Float64 => Self::Float64(data as f64),
+            DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
             _ => bail!(
-                "No type coercion exists from type 'int8' to {:?}",
+                "No type coercion exists from type 'int8' ({}) to {:?}",
+                data,
+                r#type
+            ),
+        })
+    }
+
+    fn try_coerce_uint16(data: u16, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::UInt16 => Self::UInt16(data as u16),
+            DataType::Boolean if data == 0 => Self::Boolean(false),
+            DataType::Boolean if data == 1 => Self::Boolean(true),
+            DataType::Int8 if data <= i8::MAX as _ => Self::Int8(data as i8),
+            DataType::UInt8 if data >= u8::MIN as _ && data <= u8::MAX as _ => {
+                Self::UInt8(data as u8)
+            }
+            DataType::Int16 if data <= i16::MAX as _ => Self::Int16(data as i16),
+            DataType::Int32 => Self::Int32(data as i32),
+            DataType::UInt32 => Self::UInt32(data as u32),
+            DataType::Int64 => Self::Int64(data as i64),
+            DataType::UInt64 => Self::UInt64(data as u64),
+            DataType::Float32 => Self::Float32(data as f32),
+            DataType::Float64 => Self::Float64(data as f64),
+            DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
+            _ => bail!(
+                "No type coercion exists from type 'uint16' ({}) to {:?}",
+                data,
+                r#type
+            ),
+        })
+    }
+
+    fn try_coerce_int16(data: i16, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::Int16 => Self::Int16(data),
+            DataType::Boolean if data == 0 => Self::Boolean(false),
+            DataType::Boolean if data == 1 => Self::Boolean(true),
+            DataType::Int8 if data >= i8::MIN as _ && data <= i8::MAX as _ => {
+                Self::Int8(data as i8)
+            }
+            DataType::UInt8 if data >= u8::MIN as _ && data <= u8::MAX as _ => {
+                Self::UInt8(data as u8)
+            }
+            DataType::UInt16 if data >= 0 => Self::UInt16(data as u16),
+            DataType::Int32 => Self::Int32(data as i32),
+            DataType::UInt32 if data >= 0 => Self::UInt32(data as u32),
+            DataType::Int64 => Self::Int64(data as i64),
+            DataType::UInt64 if data >= 0 => Self::UInt64(data as u64),
+            DataType::Float32 => Self::Float32(data as f32),
+            DataType::Float64 => Self::Float64(data as f64),
+            DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
+            _ => bail!(
+                "No type coercion exists from type 'int16' ({}) to {:?}",
+                data,
                 r#type
             ),
         })
@@ -111,8 +191,18 @@ impl DataValue {
     fn try_coerce_uint32(data: u32, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::UInt32 => Self::UInt32(data),
-            DataType::Int32 if data < i32::MAX as _ => DataValue::Int32(data as i32),
-            DataType::Int64 => Self::Int64(data as _),
+            DataType::Boolean if data == 0 => Self::Boolean(false),
+            DataType::Boolean if data == 1 => Self::Boolean(true),
+            DataType::Int8 if data <= i8::MAX as _ => Self::Int8(data as i8),
+            DataType::UInt8 if data <= u8::MAX as _ => Self::UInt8(data as u8),
+            DataType::Int16 if data <= i16::MAX as _ => Self::Int16(data as i16),
+            DataType::UInt16 if data <= u16::MAX as _ => Self::UInt16(data as u16),
+            DataType::Int32 if data <= i32::MAX as _ => Self::Int32(data as i32),
+            DataType::Int64 => Self::Int64(data as i64),
+            DataType::UInt64 => Self::UInt64(data as u64),
+            DataType::Float32 if (data as f32) as u32 == data => Self::Float32(data as f32),
+            DataType::Float64 if (data as f64) as u32 == data => Self::Float64(data as f64),
+            DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
             _ => bail!(
                 "No type coercion exists from type 'uint32' ({}) to {:?}",
                 data,
@@ -124,7 +214,26 @@ impl DataValue {
     fn try_coerce_int32(data: i32, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Int32 => Self::Int32(data),
-            DataType::UInt32 if data >= 0 => DataValue::UInt32(data as u32),
+            DataType::Boolean if data == 0 => Self::Boolean(false),
+            DataType::Boolean if data == 1 => Self::Boolean(true),
+            DataType::Int8 if data >= i8::MIN as _ && data <= i8::MAX as _ => {
+                Self::Int8(data as i8)
+            }
+            DataType::UInt8 if data >= u8::MIN as _ && data <= u8::MAX as _ => {
+                Self::UInt8(data as u8)
+            }
+            DataType::Int16 if data >= i16::MIN as _ && data <= i16::MAX as _ => {
+                Self::Int16(data as i16)
+            }
+            DataType::UInt16 if data >= u16::MIN as _ && data <= u16::MAX as _ => {
+                Self::UInt16(data as u16)
+            }
+            DataType::UInt32 if data >= 0 => Self::UInt32(data as u32),
+            DataType::Int64 => Self::Int64(data as i64),
+            DataType::UInt64 if data >= 0 => Self::UInt64(data as u64),
+            DataType::Float32 if (data as f32) as i32 == data => Self::Float32(data as f32),
+            DataType::Float64 if (data as f64) as i32 == data => Self::Float64(data as f64),
+            DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
             _ => bail!(
                 "No type coercion exists from type 'int32' ({}) to {:?}",
                 data,
@@ -136,7 +245,20 @@ impl DataValue {
     fn try_coerce_uint64(data: u64, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::UInt64 => Self::UInt64(data),
-            DataType::Int64 if data < i64::MAX as _ => DataValue::Int64(data as i64),
+            DataType::Boolean if data == 0 => Self::Boolean(false),
+            DataType::Boolean if data == 1 => Self::Boolean(true),
+            DataType::Int8 if data <= i8::MAX as _ => Self::Int8(data as i8),
+            DataType::UInt8 if data <= u8::MAX as _ => Self::UInt8(data as u8),
+            DataType::Int16 if data <= i16::MAX as _ => Self::Int16(data as i16),
+            DataType::UInt16 if data <= u16::MAX as _ => Self::UInt16(data as u16),
+            DataType::Int32 if data <= i32::MAX as _ => Self::Int32(data as i32),
+            DataType::UInt32 if data <= u32::MAX as _ => Self::UInt32(data as u32),
+            DataType::Int64 if data <= i64::MAX as _ => Self::Int64(data as i64),
+            DataType::Float32 if (data as f32) as u64 == data => Self::Float32(data as f32),
+            DataType::Float64 if (data as f64) as u64 == data => Self::Float64(data as f64),
+            DataType::Decimal(_) if data <= i64::MAX as _ => {
+                Self::Decimal(Decimal::new(data as _, 0))
+            }
             _ => bail!(
                 "No type coercion exists from type 'uint64' ({}) to {:?}",
                 data,
@@ -148,11 +270,30 @@ impl DataValue {
     fn try_coerce_int64(data: i64, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Int64 => Self::Int64(data),
-            DataType::UInt64 if data >= 0 => DataValue::UInt64(data as u64),
+            DataType::Boolean if data == 0 => Self::Boolean(false),
+            DataType::Boolean if data == 1 => Self::Boolean(true),
+            DataType::Int8 if data >= i8::MIN as _ && data <= i8::MAX as _ => {
+                Self::Int8(data as i8)
+            }
+            DataType::UInt8 if data >= u8::MIN as _ && data <= u8::MAX as _ => {
+                Self::UInt8(data as u8)
+            }
+            DataType::Int16 if data >= i16::MIN as _ && data <= i16::MAX as _ => {
+                Self::Int16(data as i16)
+            }
+            DataType::UInt16 if data >= u16::MIN as _ && data <= u16::MAX as _ => {
+                Self::UInt16(data as u16)
+            }
             DataType::Int32 if data >= i32::MIN as _ && data <= i32::MAX as _ => {
                 Self::Int32(data as i32)
             }
-            DataType::UInt32 if data >= 0 && data <= u32::MAX as _ => Self::UInt32(data as u32),
+            DataType::UInt32 if data >= u32::MIN as _ && data <= u32::MAX as _ => {
+                Self::UInt32(data as u32)
+            }
+            DataType::UInt64 if data >= u64::MIN as _ => Self::UInt64(data as u64),
+            DataType::Float32 if (data as f32) as i64 == data => Self::Float32(data as f32),
+            DataType::Float64 if (data as f64) as i64 == data => Self::Float64(data as f64),
+            DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
             _ => bail!(
                 "No type coercion exists from type 'int64' ({}) to {:?}",
                 data,
@@ -168,13 +309,64 @@ impl DataValue {
 
         if data.fract().is_zero() {
             match r#type {
+                DataType::Boolean if data.is_zero() => return Ok(Self::Boolean(false)),
+                DataType::Boolean if data.is_one() => return Ok(Self::Boolean(true)),
+                DataType::UInt8 => {
+                    if let Some(val) = data.to_u8() {
+                        return Ok(DataValue::UInt8(val));
+                    }
+                }
+                DataType::Int8 => {
+                    if let Some(val) = data.to_i8() {
+                        return Ok(DataValue::Int8(val));
+                    }
+                }
+                DataType::UInt16 => {
+                    if let Some(val) = data.to_u16() {
+                        return Ok(DataValue::UInt16(val));
+                    }
+                }
+                DataType::Int16 => {
+                    if let Some(val) = data.to_i16() {
+                        return Ok(DataValue::Int16(val));
+                    }
+                }
+                DataType::UInt32 => {
+                    if let Some(val) = data.to_u32() {
+                        return Ok(DataValue::UInt32(val));
+                    }
+                }
+                DataType::Int32 => {
+                    if let Some(val) = data.to_i32() {
+                        return Ok(DataValue::Int32(val));
+                    }
+                }
                 DataType::UInt64 => {
                     if let Some(val) = data.to_u64() {
                         return Ok(DataValue::UInt64(val));
                     }
                 }
+                DataType::Int64 => {
+                    if let Some(val) = data.to_i64() {
+                        return Ok(DataValue::Int64(val));
+                    }
+                }
                 _ => {}
             }
+        }
+
+        match r#type {
+            DataType::Float32 => {
+                if let Some(val) = data.to_f32() {
+                    return Ok(DataValue::Float32(val));
+                }
+            }
+            DataType::Float64 => {
+                if let Some(val) = data.to_f64() {
+                    return Ok(DataValue::Float64(val));
+                }
+            }
+            _ => {}
         }
 
         bail!(
@@ -182,6 +374,116 @@ impl DataValue {
             data,
             r#type
         )
+    }
+
+    fn try_coerce_float32(data: f32, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::Float32 => Self::Float32(data),
+            DataType::Float64 => Self::Float64(data as f64),
+            DataType::Boolean if data == 0.0 => Self::Boolean(false),
+            DataType::Boolean if data == 1.0 => Self::Boolean(true),
+            DataType::Int8
+                if data.trunc() == data && data >= i8::MIN as _ && data <= i8::MAX as _ =>
+            {
+                Self::Int8(data as i8)
+            }
+            DataType::UInt8
+                if data.trunc() == data && data >= u8::MIN as _ && data <= u8::MAX as _ =>
+            {
+                Self::UInt8(data as u8)
+            }
+            DataType::Int16
+                if data.trunc() == data && data >= i16::MIN as _ && data <= i16::MAX as _ =>
+            {
+                Self::Int16(data as i16)
+            }
+            DataType::UInt16
+                if data.trunc() == data && data >= u16::MIN as _ && data <= u16::MAX as _ =>
+            {
+                Self::UInt16(data as u16)
+            }
+            DataType::Int32
+                if data.trunc() == data && data >= f32::MIN as _ && data <= f32::MAX as _ =>
+            {
+                Self::Int32(data as i32)
+            }
+            DataType::UInt32
+                if data.trunc() == data && data >= u32::MIN as _ && data <= u32::MAX as _ =>
+            {
+                Self::UInt32(data as u32)
+            }
+            DataType::Int64
+                if data.trunc() == data && data >= i64::MIN as _ && data <= i64::MAX as _ =>
+            {
+                Self::Int64(data as i64)
+            }
+            DataType::UInt64 if data.trunc() == data && data >= u64::MIN as _ => {
+                Self::UInt64(data as u64)
+            }
+            DataType::Decimal(_) if Decimal::from_f32_retain(data).is_some() => {
+                Self::Decimal(Decimal::from_f32_retain(data).unwrap())
+            }
+            _ => bail!(
+                "No type coercion exists from type 'float32' ({}) to {:?}",
+                data,
+                r#type
+            ),
+        })
+    }
+
+    fn try_coerce_float64(data: f64, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::Float64 => Self::Float64(data),
+            DataType::Float32 if (data as f32) as f64 == data => Self::Float32(data as f32),
+            DataType::Boolean if data == 0.0 => Self::Boolean(false),
+            DataType::Boolean if data == 1.0 => Self::Boolean(true),
+            DataType::Int8
+                if data.trunc() == data && data >= i8::MIN as _ && data <= i8::MAX as _ =>
+            {
+                Self::Int8(data as i8)
+            }
+            DataType::UInt8
+                if data.trunc() == data && data >= u8::MIN as _ && data <= u8::MAX as _ =>
+            {
+                Self::UInt8(data as u8)
+            }
+            DataType::Int16
+                if data.trunc() == data && data >= i16::MIN as _ && data <= i16::MAX as _ =>
+            {
+                Self::Int16(data as i16)
+            }
+            DataType::UInt16
+                if data.trunc() == data && data >= u16::MIN as _ && data <= u16::MAX as _ =>
+            {
+                Self::UInt16(data as u16)
+            }
+            DataType::Int32
+                if data.trunc() == data && data >= f64::MIN as _ && data <= f32::MAX as _ =>
+            {
+                Self::Int32(data as i32)
+            }
+            DataType::UInt32
+                if data.trunc() == data && data >= u32::MIN as _ && data <= u32::MAX as _ =>
+            {
+                Self::UInt32(data as u32)
+            }
+            DataType::Int64
+                if data.trunc() == data && data >= i64::MIN as _ && data <= i64::MAX as _ =>
+            {
+                Self::Int64(data as i64)
+            }
+            DataType::UInt64 if data.trunc() == data && data >= u64::MIN as _ => {
+                Self::UInt64(data as u64)
+            }
+            DataType::Decimal(_) if Decimal::from_f64_retain(data).is_some() => {
+                Self::Decimal(Decimal::from_f64_retain(data).unwrap())
+            }
+            _ => bail!(
+                "No type coercion exists from type 'float64' ({}) to {:?}",
+                data,
+                r#type
+            ),
+        })
     }
 }
 
@@ -195,47 +497,200 @@ mod tests {
     fn test_data_value_coerce_no_data_loss() {
         let test_cases = vec![
             (
-                DataValue::Utf8String("Hello world".as_bytes().to_vec()),
-                DataType::Binary,
+                vec![DataValue::Utf8String("Hello world".as_bytes().to_vec())],
+                vec![DataType::Binary],
             ),
             (
-                DataValue::Binary("Hello world".as_bytes().to_vec()),
-                DataType::Utf8String(StringOptions::default()),
+                vec![DataValue::Binary("Hello world".as_bytes().to_vec())],
+                vec![DataType::Utf8String(StringOptions::default())],
             ),
-            (DataValue::Boolean(true), DataType::UInt8),
-            (DataValue::Boolean(false), DataType::UInt8),
-            (DataValue::UInt8(1), DataType::Boolean),
-            (DataValue::Int8(0), DataType::Boolean),
-            (DataValue::UInt64(123456), DataType::Int64),
-            (DataValue::Int64(123456), DataType::UInt64),
+            (
+                vec![DataValue::Boolean(true), DataValue::Boolean(false)],
+                vec![
+                    DataType::Boolean,
+                    DataType::Int8,
+                    DataType::UInt8,
+                    DataType::Int16,
+                    DataType::UInt16,
+                    DataType::Int32,
+                    DataType::UInt32,
+                    DataType::UInt64,
+                    DataType::Int64,
+                    DataType::Float32,
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::UInt8(123),
+                    DataValue::Int8(123),
+                    DataValue::Int16(123),
+                    DataValue::UInt16(123),
+                    DataValue::Int32(123),
+                    DataValue::UInt32(123),
+                    DataValue::Int64(123),
+                    DataValue::UInt64(123),
+                ],
+                vec![
+                    DataType::Int8,
+                    DataType::UInt8,
+                    DataType::Int16,
+                    DataType::UInt16,
+                    DataType::UInt32,
+                    DataType::Int32,
+                    DataType::UInt64,
+                    DataType::Int64,
+                    DataType::Float32,
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::Int8(-123),
+                    DataValue::Int16(-123),
+                    DataValue::Int32(-123),
+                    DataValue::Int64(-123),
+                ],
+                vec![
+                    DataType::Int8,
+                    DataType::Int16,
+                    DataType::Int32,
+                    DataType::Int64,
+                    DataType::Float32,
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::Int16(i16::MAX),
+                    DataValue::UInt16(i16::MAX as _),
+                    DataValue::Int32(i16::MAX as _),
+                    DataValue::UInt32(i16::MAX as _),
+                    DataValue::Int64(i16::MAX as _),
+                    DataValue::UInt64(i16::MAX as _),
+                ],
+                vec![
+                    DataType::Int16,
+                    DataType::UInt16,
+                    DataType::UInt32,
+                    DataType::Int32,
+                    DataType::UInt64,
+                    DataType::Int64,
+                    DataType::Float32,
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::Int16(i16::MIN),
+                    DataValue::Int32(i16::MIN as _),
+                    DataValue::Int64(i16::MIN as _),
+                ],
+                vec![
+                    DataType::Int16,
+                    DataType::Int32,
+                    DataType::Int64,
+                    DataType::Float32,
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::Int32(i32::MAX),
+                    DataValue::UInt32(i32::MAX as _),
+                    DataValue::Int64(i32::MAX as _),
+                    DataValue::UInt64(i32::MAX as _),
+                ],
+                vec![
+                    DataType::Int32,
+                    DataType::UInt32,
+                    DataType::UInt64,
+                    DataType::Int64,
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![DataValue::Int32(i32::MIN), DataValue::Int64(i32::MIN as _)],
+                vec![
+                    DataType::Int32,
+                    DataType::Int64,
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::Int64(i64::MAX as _),
+                    DataValue::UInt64(i64::MAX as _),
+                ],
+                vec![
+                    DataType::UInt64,
+                    DataType::Int64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![DataValue::Int64(i64::MIN)],
+                vec![
+                    DataType::Int64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::Float32(1234.5678),
+                ],
+                vec![
+                    DataType::Float32,
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![DataValue::Float64(98764321.12345)],
+                vec![
+                    DataType::Float64,
+                    DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
         ];
 
-        for (data, r#type) in test_cases.into_iter() {
-            let orig_type: DataType = (&data).into();
+        for (vals, types) in test_cases.into_iter() {
+            for data in vals {
+                for r#type in types.clone() {
+                    let orig_type: DataType = (&data).into();
 
-            assert_eq!(
-                data.clone().try_coerce_into(&orig_type).unwrap(),
-                data,
-                "{:?} must be able to coerce into current type without error",
-                orig_type
-            );
+                    assert_eq!(
+                        data.clone().try_coerce_into(&orig_type).unwrap(),
+                        data,
+                        "{:?} must be able to coerce into current type without error",
+                        orig_type
+                    );
 
-            let coerced = data.clone().try_coerce_into(&r#type).unwrap();
-            let coerced_type: DataType = (&coerced).into();
+                    let coerced = data.clone().try_coerce_into(&r#type).unwrap();
+                    let coerced_type: DataType = (&coerced).into();
 
-            assert_eq!(
-                coerced_type, r#type,
-                "Unexpected data type returned when coercing {:?} into {:?}",
-                orig_type, r#type
-            );
+                    assert_eq!(
+                        coerced_type, r#type,
+                        "Unexpected data type returned when coercing {:?} into {:?}",
+                        orig_type, r#type
+                    );
 
-            assert_eq!(
-                coerced.clone().try_coerce_into(&orig_type).unwrap(),
-                data,
-                "{:?} type must be able to be coerced to {:?} and back without data loss",
-                orig_type,
-                r#type
-            );
+                    assert_eq!(
+                        coerced.clone().try_coerce_into(&orig_type).unwrap(),
+                        data,
+                        "{:?} type must be able to be coerced to {:?} and back without data loss",
+                        orig_type,
+                        r#type
+                    );
+                }
+            }
         }
     }
 
