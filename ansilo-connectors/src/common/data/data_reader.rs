@@ -1,8 +1,14 @@
-use std::io::Read;
+use std::{io::Read, str::FromStr};
 
 use ansilo_core::{
-    data::{rust_decimal::Decimal, DataType, DataValue},
-    err::{bail, Context, Result},
+    data::{
+        chrono::{NaiveDate, NaiveDateTime, NaiveTime},
+        chrono_tz::Tz,
+        rust_decimal::Decimal,
+        uuid::Uuid,
+        DataType, DataValue, DateTimeWithTZ,
+    },
+    err::{bail, Context, Error, Result},
 };
 
 /// Wraps a Read in order to parse and read the data as DataValue
@@ -58,7 +64,6 @@ where
         }
 
         let res = if not_null.unwrap() != 0 {
-            // TODO: data types
             match self.current_data_type() {
                 DataType::Utf8String(_) => DataValue::Utf8String(self.read_stream()?),
                 DataType::Binary => DataValue::Binary(self.read_stream()?),
@@ -80,13 +85,17 @@ where
                 DataType::Decimal(_) => {
                     DataValue::Decimal(Decimal::deserialize(self.read_exact::<16>()?))
                 }
-                DataType::JSON => DataValue::JSON(String::from_utf8(self.read_stream()?)?),
-                DataType::Date => todo!(),
-                DataType::Time => todo!(),
-                DataType::DateTime => todo!(),
-                DataType::DateTimeWithTZ => todo!(),
-                DataType::Uuid => todo!(),
-                DataType::Null => todo!(),
+                DataType::JSON => DataValue::JSON(self.read_string()?),
+                DataType::Date => DataValue::Date(self.read_date()?),
+                DataType::Time => DataValue::Time(self.read_time()?),
+                DataType::DateTime => DataValue::DateTime(self.read_date_time()?),
+                DataType::DateTimeWithTZ => DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+                    self.read_date_time()?,
+                    Tz::from_str(&self.read_string()?)
+                        .map_err(|tz| Error::msg(format!("Unknown timezone: {tz}")))?,
+                )),
+                DataType::Uuid => DataValue::Uuid(Uuid::from_bytes(self.read_exact::<16>()?)),
+                DataType::Null => bail!("Found null data type with non-null byte"),
             }
         } else {
             DataValue::Null
@@ -95,6 +104,35 @@ where
         self.advance();
 
         Ok(Some(res))
+    }
+
+    fn read_string(&mut self) -> Result<String> {
+        Ok(String::from_utf8(self.read_stream()?).context("Failed to parse bytes as UTF8")?)
+    }
+
+    fn read_date_time(&mut self) -> Result<NaiveDateTime> {
+        let date = self.read_date()?;
+        let time = self.read_time()?;
+        Ok(NaiveDateTime::new(date, time))
+    }
+
+    fn read_time(&mut self) -> Result<NaiveTime> {
+        let d = self.read_exact::<7>()?;
+        Ok(NaiveTime::from_hms_nano(
+            d[0] as _,
+            d[1] as _,
+            d[2] as _,
+            u32::from_ne_bytes([d[3], d[4], d[5], d[6]]),
+        ))
+    }
+
+    fn read_date(&mut self) -> Result<NaiveDate> {
+        let d = self.read_exact::<6>()?;
+        Ok(NaiveDate::from_ymd(
+            i32::from_ne_bytes([d[0], d[1], d[2], d[3]]),
+            d[4] as _,
+            d[5] as _,
+        ))
     }
 
     /// Reads a stream of data from the internal buf reader
@@ -164,7 +202,7 @@ mod tests {
 
     use std::io::Cursor;
 
-    use ansilo_core::data::{DecimalOptions, StringOptions};
+    use ansilo_core::data::{DecimalOptions, StringOptions, uuid};
 
     use super::*;
 
@@ -499,5 +537,131 @@ mod tests {
             res.read_data_value().unwrap(),
             Some(DataValue::JSON("{}".to_string()))
         );
+    }
+
+    #[test]
+    fn test_data_reader_date() {
+        let mut res = create_data_reader(
+            vec![DataType::Date],
+            [
+                vec![1u8],                       // not null
+                2020_i32.to_ne_bytes().to_vec(), // year
+                vec![10u8],                      // month
+                vec![21u8],                      // day
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::Date(NaiveDate::from_ymd(2020, 10, 21)))
+        );
+    }
+
+    #[test]
+    fn test_data_reader_time() {
+        let mut res = create_data_reader(
+            vec![DataType::Time],
+            [
+                vec![1u8],                        // not null
+                vec![12u8],                       // hour
+                vec![45u8],                       // minute
+                vec![23u8],                       // second
+                12345_u32.to_ne_bytes().to_vec(), // nanosec
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::Time(NaiveTime::from_hms_nano(12, 45, 23, 12345)))
+        );
+    }
+
+    #[test]
+    fn test_data_reader_date_time() {
+        let mut res = create_data_reader(
+            vec![DataType::DateTime],
+            [
+                vec![1u8],                        // not null
+                2020_i32.to_ne_bytes().to_vec(),  // year
+                vec![10u8],                       // month
+                vec![21u8],                       // day
+                vec![12u8],                       // hour
+                vec![45u8],                       // minute
+                vec![23u8],                       // second
+                12345_u32.to_ne_bytes().to_vec(), // nanosec
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::DateTime(NaiveDateTime::new(
+                NaiveDate::from_ymd(2020, 10, 21),
+                NaiveTime::from_hms_nano(12, 45, 23, 12345)
+            )))
+        );
+    }
+
+    #[test]
+    fn test_data_reader_date_time_with_tz() {
+        let mut res = create_data_reader(
+            vec![DataType::DateTimeWithTZ],
+            [
+                vec![1u8],                                 // not null
+                2020_i32.to_ne_bytes().to_vec(),           // year
+                vec![10u8],                                // month
+                vec![21u8],                                // day
+                vec![12u8],                                // hour
+                vec![45u8],                                // minute
+                vec![23u8],                                // second
+                12345_u32.to_ne_bytes().to_vec(),          // nanosec
+                vec![19u8],                                // tz (len)
+                "Australia/Melbourne".as_bytes().to_vec(), // tz (name)
+                vec![0u8],                                 // tz (eof)
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+                NaiveDateTime::new(
+                    NaiveDate::from_ymd(2020, 10, 21),
+                    NaiveTime::from_hms_nano(12, 45, 23, 12345)
+                ),
+                Tz::Australia__Melbourne
+            )))
+        );
+    }
+
+    #[test]
+    fn test_data_reader_uuid() {
+        let uuid = uuid::Uuid::new_v4();
+        let mut res = create_data_reader(
+            vec![DataType::Uuid],
+            [
+                vec![1u8], // not null
+                uuid.as_bytes().to_vec(),
+            ]
+            .concat(),
+        );
+
+        assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Uuid(uuid)));
+    }
+
+    #[test]
+    fn test_data_reader_null_with_invalid_non_null_byte() {
+        let uuid = uuid::Uuid::new_v4();
+        let mut res = create_data_reader(
+            vec![DataType::Null],
+            [
+                vec![1u8], // not null
+            ]
+            .concat(),
+        );
+
+        res.read_data_value().unwrap_err();
     }
 }
