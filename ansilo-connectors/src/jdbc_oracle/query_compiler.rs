@@ -5,7 +5,7 @@ use ansilo_core::{
 
 use crate::{
     interface::QueryCompiler,
-    jdbc::{JdbcConnection, JdbcQuery, JdbcQueryParam},
+    jdbc::{JdbcConnection, JdbcQuery, JdbcQueryParam, JdbcDefaultTypeMapping},
 };
 
 use super::{
@@ -16,12 +16,12 @@ use super::{
 pub struct OracleJdbcQueryCompiler;
 
 impl QueryCompiler for OracleJdbcQueryCompiler {
-    type TConnection = JdbcConnection;
+    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
     type TQuery = JdbcQuery;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn compile_query(
-        _con: &mut JdbcConnection,
+        _con: &mut Self::TConnection,
         conf: &OracleJdbcConnectorEntityConfig,
         query: sql::Query,
     ) -> Result<JdbcQuery> {

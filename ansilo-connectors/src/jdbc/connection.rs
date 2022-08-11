@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration, marker::PhantomData};
 
 use ansilo_core::err::{bail, Context, Result};
 use ansilo_logging::warn;
@@ -7,12 +7,13 @@ use r2d2::{ManageConnection, PooledConnection};
 
 use crate::interface::{Connection, ConnectionPool, TransactionManager};
 
-use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, Jvm};
+use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, JdbcTypeMapping, Jvm};
 
 /// Implementation for opening JDBC connections
 #[derive(Clone)]
-pub struct JdbcConnectionPool {
+pub struct JdbcConnectionPool<TTypeMapping: JdbcTypeMapping> {
     pool: r2d2::Pool<Manager>,
+    _p: PhantomData<TTypeMapping>
 }
 
 struct Manager {
@@ -21,7 +22,7 @@ struct Manager {
     jdbc_props: HashMap<String, String>,
 }
 
-impl JdbcConnectionPool {
+impl<TTypeMapping: JdbcTypeMapping> JdbcConnectionPool<TTypeMapping> {
     pub fn new<TConnectionOptions: JdbcConnectionConfig>(
         options: TConnectionOptions,
     ) -> Result<Self> {
@@ -53,7 +54,7 @@ impl JdbcConnectionPool {
                 .context("Failed to build connection pool")?
         };
 
-        Ok(Self { pool })
+        Ok(Self { pool, _p: PhantomData })
     }
 }
 
@@ -140,21 +141,25 @@ impl ManageConnection for Manager {
     }
 }
 
-impl ConnectionPool for JdbcConnectionPool {
-    type TConnection = JdbcConnection;
+impl<TTypeMapping: JdbcTypeMapping> ConnectionPool for JdbcConnectionPool<TTypeMapping> {
+    type TConnection = JdbcConnection<TTypeMapping>;
 
-    fn acquire(&mut self) -> Result<JdbcConnection> {
+    fn acquire(&mut self) -> Result<JdbcConnection<TTypeMapping>> {
         let state = self
             .pool
             .get()
             .context("Failed to get connection from pool")?;
         let tm_state = state.clone();
-        Ok(JdbcConnection(state, JdbcTransactionManager(tm_state)))
+        Ok(JdbcConnection(state, JdbcTransactionManager(tm_state), PhantomData))
     }
 }
 
 /// Wrapper of of the JDBC connection
-pub struct JdbcConnection(PooledConnection<Manager>, JdbcTransactionManager);
+pub struct JdbcConnection<TTypeMapping: JdbcTypeMapping>(
+    PooledConnection<Manager>,
+    JdbcTransactionManager,
+    PhantomData<TTypeMapping>
+);
 
 /// Implementation of the JDBC connection
 #[derive(Clone)]
@@ -163,12 +168,12 @@ struct JdbcConnectionState {
     jdbc_con: GlobalRef,
 }
 
-impl Connection for JdbcConnection {
+impl<TTypeMapping: JdbcTypeMapping> Connection for JdbcConnection<TTypeMapping> {
     type TQuery = JdbcQuery;
-    type TQueryHandle = JdbcPreparedQuery;
+    type TQueryHandle = JdbcPreparedQuery<TTypeMapping>;
     type TTransactionManager = JdbcTransactionManager;
 
-    fn prepare(&mut self, query: JdbcQuery) -> Result<JdbcPreparedQuery> {
+    fn prepare(&mut self, query: JdbcQuery) -> Result<JdbcPreparedQuery<TTypeMapping>> {
         let state = &*self.0;
         let jdbc_prepared_query = state.jvm.with_local_frame(32, |env| {
             let param_types = env
@@ -180,7 +185,7 @@ impl Connection for JdbcConnection {
             // TODO[minor]: use method id and unchecked call
             for (idx, param) in query.params.iter().enumerate() {
                 let data_type_id = env.auto_local(
-                    param.to_java_jdbc_parameter(idx + 1, &state.jvm)?
+                    param.to_java_jdbc_parameter::<TTypeMapping>(idx + 1, &state.jvm)?
                 );
 
                 env.call_method(
@@ -336,7 +341,7 @@ mod tests {
     use crate::{
         common::data::ResultSetReader,
         interface::{QueryHandle, QueryInputStructure},
-        jdbc::{JdbcConnectionPoolConfig, JdbcQueryParam},
+        jdbc::{JdbcConnectionPoolConfig, JdbcDefaultTypeMapping, JdbcQueryParam},
     };
 
     use super::*;
@@ -357,7 +362,7 @@ mod tests {
         }
     }
 
-    fn init_sqlite_connection() -> JdbcConnection {
+    fn init_sqlite_connection() -> JdbcConnection<JdbcDefaultTypeMapping> {
         JdbcConnectionPool::new(MockJdbcConnectionConfig(
             "jdbc:sqlite::memory:".to_owned(),
             HashMap::new(),
@@ -374,7 +379,7 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_init_invalid() {
-        let res = JdbcConnectionPool::new(MockJdbcConnectionConfig(
+        let res = JdbcConnectionPool::<JdbcDefaultTypeMapping>::new(MockJdbcConnectionConfig(
             "invalid".to_owned(),
             HashMap::new(),
         ))

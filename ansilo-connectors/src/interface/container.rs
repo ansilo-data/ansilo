@@ -38,7 +38,7 @@ pub enum EntitySourceConfigs {
 #[derive(Clone)]
 pub enum ConnectionPools {
     OracleJdbc(
-        JdbcConnectionPool,
+        <OracleJdbcConnector as Connector>::TConnectionPool,
         ConnectorEntityConfig<OracleJdbcEntitySourceConfig>,
     ),
     Memory(
@@ -48,7 +48,7 @@ pub enum ConnectionPools {
 }
 
 pub enum Connections {
-    Jdbc(JdbcConnection),
+    OracleJdbc(<OracleJdbcConnector as Connector>::TConnection),
     Memory(MemoryConnection),
 }
 
@@ -58,12 +58,12 @@ pub enum Queries {
 }
 
 pub enum QueryHandles {
-    Jdbc(JdbcPreparedQuery),
+    OracleJdbc(<OracleJdbcConnector as Connector>::TQueryHandle),
     Memory(MemoryQueryHandle),
 }
 
 pub enum ResultSets {
-    Jdbc(JdbcResultSet),
+    OracleJdbc(<OracleJdbcConnector as Connector>::TResultSet),
     Memory(MemoryResultSet),
 }
 
@@ -160,7 +160,7 @@ impl ConnectionPool for ConnectionPools {
 
     fn acquire(&mut self) -> Result<Self::TConnection> {
         Ok(match self {
-            ConnectionPools::OracleJdbc(p, _) => Connections::Jdbc(p.acquire()?),
+            ConnectionPools::OracleJdbc(p, _) => Connections::OracleJdbc(p.acquire()?),
             ConnectionPools::Memory(p, _) => Connections::Memory(p.acquire()?),
         })
     }
@@ -173,7 +173,7 @@ impl Connection for Connections {
 
     fn prepare(&mut self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
         Ok(match (self, query) {
-            (Connections::Jdbc(c), Queries::Jdbc(q)) => QueryHandles::Jdbc(c.prepare(q)?),
+            (Connections::OracleJdbc(c), Queries::Jdbc(q)) => QueryHandles::OracleJdbc(c.prepare(q)?),
             (Connections::Memory(c), Queries::Memory(q)) => QueryHandles::Memory(c.prepare(q)?),
             (_, _) => bail!("Type mismatch between connection and query",),
         })
@@ -181,7 +181,7 @@ impl Connection for Connections {
 
     fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager> {
         let supports_transactions = match self {
-            Connections::Jdbc(c) => c.transaction_manager().is_some(),
+            Connections::OracleJdbc(c) => c.transaction_manager().is_some(),
             Connections::Memory(c) => c.transaction_manager().is_some(),
         };
 
@@ -196,28 +196,28 @@ impl Connection for Connections {
 impl TransactionManager for Connections {
     fn is_in_transaction(&mut self) -> Result<bool> {
         match self {
-            Connections::Jdbc(t) => t.transaction_manager().unwrap().is_in_transaction(),
+            Connections::OracleJdbc(t) => t.transaction_manager().unwrap().is_in_transaction(),
             Connections::Memory(t) => t.transaction_manager().unwrap().is_in_transaction(),
         }
     }
 
     fn begin_transaction(&mut self) -> Result<()> {
         match self {
-            Connections::Jdbc(t) => t.transaction_manager().unwrap().begin_transaction(),
+            Connections::OracleJdbc(t) => t.transaction_manager().unwrap().begin_transaction(),
             Connections::Memory(t) => t.transaction_manager().unwrap().begin_transaction(),
         }
     }
 
     fn rollback_transaction(&mut self) -> Result<()> {
         match self {
-            Connections::Jdbc(t) => t.transaction_manager().unwrap().rollback_transaction(),
+            Connections::OracleJdbc(t) => t.transaction_manager().unwrap().rollback_transaction(),
             Connections::Memory(t) => t.transaction_manager().unwrap().rollback_transaction(),
         }
     }
 
     fn commit_transaction(&mut self) -> Result<()> {
         match self {
-            Connections::Jdbc(t) => t.transaction_manager().unwrap().commit_transaction(),
+            Connections::OracleJdbc(t) => t.transaction_manager().unwrap().commit_transaction(),
             Connections::Memory(t) => t.transaction_manager().unwrap().commit_transaction(),
         }
     }
@@ -228,28 +228,28 @@ impl QueryHandle for QueryHandles {
 
     fn get_structure(&self) -> Result<super::QueryInputStructure> {
         match self {
-            QueryHandles::Jdbc(h) => h.get_structure(),
+            QueryHandles::OracleJdbc(h) => h.get_structure(),
             QueryHandles::Memory(h) => h.get_structure(),
         }
     }
 
     fn write(&mut self, buff: &[u8]) -> Result<usize> {
         match self {
-            QueryHandles::Jdbc(h) => h.write(buff),
+            QueryHandles::OracleJdbc(h) => h.write(buff),
             QueryHandles::Memory(h) => h.write(buff),
         }
     }
 
     fn restart(&mut self) -> Result<()> {
         match self {
-            QueryHandles::Jdbc(h) => h.restart(),
+            QueryHandles::OracleJdbc(h) => h.restart(),
             QueryHandles::Memory(h) => h.restart(),
         }
     }
 
     fn execute(&mut self) -> Result<Self::TResultSet> {
         Ok(match self {
-            QueryHandles::Jdbc(h) => ResultSets::Jdbc(h.execute()?),
+            QueryHandles::OracleJdbc(h) => ResultSets::OracleJdbc(h.execute()?),
             QueryHandles::Memory(h) => ResultSets::Memory(h.execute()?),
         })
     }
@@ -258,14 +258,14 @@ impl QueryHandle for QueryHandles {
 impl ResultSet for ResultSets {
     fn get_structure(&self) -> Result<super::RowStructure> {
         match self {
-            ResultSets::Jdbc(r) => r.get_structure(),
+            ResultSets::OracleJdbc(r) => r.get_structure(),
             ResultSets::Memory(r) => r.get_structure(),
         }
     }
 
     fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
         match self {
-            ResultSets::Jdbc(r) => r.read(buff),
+            ResultSets::OracleJdbc(r) => r.read(buff),
             ResultSets::Memory(r) => r.read(buff),
         }
     }

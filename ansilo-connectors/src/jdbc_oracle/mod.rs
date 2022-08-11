@@ -1,6 +1,6 @@
 use crate::{
     interface::Connector,
-    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet, JdbcTransactionManager}, common::entity::ConnectorEntityConfig,
+    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet, JdbcTransactionManager, JdbcDefaultTypeMapping}, common::entity::ConnectorEntityConfig,
 };
 
 mod conf;
@@ -23,17 +23,17 @@ pub use query_compiler::*;
 pub struct OracleJdbcConnector;
 
 impl Connector for OracleJdbcConnector {
-    type TConnectionPool = JdbcConnectionPool;
-    type TConnection = JdbcConnection;
+    type TConnectionPool = JdbcConnectionPool<JdbcDefaultTypeMapping>;
+    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
     type TConnectionConfig = OracleJdbcConnectionConfig;
     type TEntitySearcher = OracleJdbcEntitySearcher;
     type TEntityValidator = OracleJdbcEntityValidator;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
     type TQueryPlanner = OracleJdbcQueryPlanner;
     type TQueryCompiler = OracleJdbcQueryCompiler;
-    type TQueryHandle = JdbcPreparedQuery;
+    type TQueryHandle = JdbcPreparedQuery<JdbcDefaultTypeMapping>;
     type TQuery = JdbcQuery;
-    type TResultSet = JdbcResultSet;
+    type TResultSet = JdbcResultSet<JdbcDefaultTypeMapping>;
     type TTransactionManager = JdbcTransactionManager;
 
     const TYPE: &'static str = "jdbc.oracle";

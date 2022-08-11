@@ -17,6 +17,10 @@ public interface JdbcDataType {
     public static final int MODE_FIXED = 1;
     public static final int MODE_STREAM = 2;
 
+    /**
+     * If you update these constants make sure to update the rust constants:
+     *  @see ansilo-connectors/src/jdbc/data.rs
+     */
     public static final int TYPE_BIT = 1;
     public static final int TYPE_TINYINT = 2;
     public static final int TYPE_SMALLINT = 3;

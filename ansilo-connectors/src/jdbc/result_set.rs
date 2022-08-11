@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use ansilo_core::err::{Context, Result};
 use jni::{
@@ -9,26 +9,28 @@ use jni::{
 
 use crate::interface::{ResultSet, RowStructure};
 
-use super::{JdbcDataType, Jvm};
+use super::{JdbcType, JdbcTypeMapping, Jvm};
 
 /// Implementation of the JDBC result set
-pub struct JdbcResultSet {
+pub struct JdbcResultSet<TTypeMapping: JdbcTypeMapping> {
     pub jvm: Arc<Jvm>,
     pub jdbc_result_set: GlobalRef,
     pub read_method_id: Option<jmethodID>,
+    _p: PhantomData<TTypeMapping>,
 }
 
-impl JdbcResultSet {
+impl<TTypeMapping: JdbcTypeMapping> JdbcResultSet<TTypeMapping> {
     pub fn new(jvm: Arc<Jvm>, jdbc_result_set: GlobalRef) -> Self {
         Self {
             jvm,
             jdbc_result_set,
             read_method_id: None,
+            _p: PhantomData,
         }
     }
 }
 
-impl ResultSet for JdbcResultSet {
+impl<TTypeMapping: JdbcTypeMapping> ResultSet for JdbcResultSet<TTypeMapping> {
     fn get_structure(&self) -> Result<RowStructure> {
         self.jvm.with_local_frame(32, |env| {
             let jdbc_structure = env
@@ -74,16 +76,18 @@ impl ResultSet for JdbcResultSet {
                             .context("Failed to convert java string")
                     })?;
 
-                let data_type_id = env
+                let jdbc_type_id = env
                     .call_method(col, "getDataTypeId", "()I", &[])
                     .context("Failed to call JdbcRowColumnInfo::getDataTypeId")?
                     .i()
                     .context("Failed to convert to int")?;
                 self.jvm.check_exceptions(env)?;
 
-                structure
-                    .cols
-                    .push((name, JdbcDataType::try_from(data_type_id)?.0));
+                let jdbc_type = JdbcType::try_from(jdbc_type_id)?;
+                structure.cols.push((
+                    name,
+                    TTypeMapping::to_rust(jdbc_type).context("Failed to map JDBC result type")?,
+                ));
             }
 
             Ok(structure)
@@ -133,11 +137,16 @@ mod tests {
     use ansilo_core::data::{DataType, StringOptions};
     use jni::objects::{JObject, JValue};
 
-    use crate::jdbc::tests::create_sqlite_memory_connection;
+    use crate::jdbc::{tests::create_sqlite_memory_connection, JdbcDefaultTypeMapping};
 
     use super::*;
 
-    fn execute_query(jvm: &Arc<Jvm>, jdbc_con: JObject, query: &str) -> JdbcResultSet {
+
+    fn execute_query(
+        jvm: &Arc<Jvm>,
+        jdbc_con: JObject,
+        query: &str,
+    ) -> JdbcResultSet<JdbcDefaultTypeMapping> {
         let env = &jvm.env().unwrap();
 
         // create statement

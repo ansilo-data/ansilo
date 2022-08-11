@@ -11,7 +11,7 @@ use crate::{
         QueryHandle, QueryOperationResult, QueryPlanner, SelectQueryOperation,
         UpdateQueryOperation,
     },
-    jdbc::{JdbcConnection, JdbcQuery},
+    jdbc::{JdbcConnection, JdbcDefaultTypeMapping, JdbcQuery},
 };
 
 use super::{
@@ -22,12 +22,12 @@ use super::{
 pub struct OracleJdbcQueryPlanner {}
 
 impl QueryPlanner for OracleJdbcQueryPlanner {
-    type TConnection = JdbcConnection;
+    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
     type TQuery = JdbcQuery;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn estimate_size(
-        connection: &mut JdbcConnection,
+        connection: &mut Self::TConnection,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
     ) -> Result<OperationCost> {
         // TODO: custom query support
@@ -54,7 +54,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn get_row_id_exprs(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -66,7 +66,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn create_base_select(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -76,7 +76,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn apply_select_operation(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         select: &mut sql::Select,
         op: SelectQueryOperation,
@@ -102,7 +102,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn create_base_insert(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -119,7 +119,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn create_base_update(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -136,7 +136,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn create_base_delete(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
@@ -153,7 +153,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn apply_insert_operation(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         insert: &mut sql::Insert,
         op: InsertQueryOperation,
@@ -164,7 +164,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn apply_update_operation(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         update: &mut sql::Update,
         op: UpdateQueryOperation,
@@ -176,7 +176,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn apply_delete_operation(
-        _connection: &mut JdbcConnection,
+        _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
         delete: &mut sql::Delete,
         op: DeleteQueryOperation,
@@ -187,7 +187,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     }
 
     fn explain_query(
-        connection: &mut JdbcConnection,
+        connection: &mut Self::TConnection,
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         verbose: bool,

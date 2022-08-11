@@ -3,7 +3,7 @@ use ansilo_core::{
     err::Result,
 };
 
-use crate::{common::entity::EntitySource, interface::EntityValidator, jdbc::JdbcConnection};
+use crate::{common::entity::EntitySource, interface::EntityValidator, jdbc::{JdbcConnection, JdbcDefaultTypeMapping}};
 
 use super::OracleJdbcEntitySourceConfig;
 
@@ -11,11 +11,11 @@ use super::OracleJdbcEntitySourceConfig;
 pub struct OracleJdbcEntityValidator {}
 
 impl EntityValidator for OracleJdbcEntityValidator {
-    type TConnection = JdbcConnection;
+    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn validate(
-        connection: &mut JdbcConnection,
+        connection: &mut Self::TConnection,
         entity_version: &EntityVersionConfig,
         nc: &NodeConfig,
     ) -> Result<EntitySource<OracleJdbcEntitySourceConfig>> {
