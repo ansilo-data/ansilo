@@ -87,14 +87,21 @@ where
                         .context("Failed to parse decimal value")?,
                 ),
                 DataType::JSON => DataValue::JSON(self.read_string()?),
-                DataType::Date => DataValue::Date(self.read_date()?),
-                DataType::Time => DataValue::Time(self.read_time()?),
-                DataType::DateTime => DataValue::DateTime(self.read_date_time()?),
-                DataType::DateTimeWithTZ => DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
-                    self.read_date_time()?,
-                    Tz::from_str(&self.read_string()?)
+                DataType::Date => DataValue::Date(Self::read_date(self.read_exact()?)?),
+                DataType::Time => DataValue::Time(Self::read_time(self.read_exact()?)?),
+                DataType::DateTime => DataValue::DateTime(Self::read_date_time(self.read_exact()?)?),
+                DataType::DateTimeWithTZ => {
+                    let buff = self.read_stream()?;
+                    let (dt, tz) = buff.split_at(13);
+                    DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+                        Self::read_date_time(dt.try_into().unwrap())?,
+                        Tz::from_str(
+                            &String::from_utf8(tz.to_vec())
+                                .context("Failed to parse tz as UTF8")?,
+                        )
                         .map_err(|tz| Error::msg(format!("Unknown timezone: {tz}")))?,
-                )),
+                    ))
+                }
                 DataType::Uuid => DataValue::Uuid(Uuid::from_bytes(self.read_exact::<16>()?)),
                 DataType::Null => bail!("Found null data type with non-null byte"),
             }
@@ -111,14 +118,13 @@ where
         Ok(String::from_utf8(self.read_stream()?).context("Failed to parse bytes as UTF8")?)
     }
 
-    fn read_date_time(&mut self) -> Result<NaiveDateTime> {
-        let date = self.read_date()?;
-        let time = self.read_time()?;
+    fn read_date_time(buff: [u8; 13]) -> Result<NaiveDateTime> {
+        let date = Self::read_date(buff[..6].try_into().unwrap())?;
+        let time = Self::read_time(buff[6..].try_into().unwrap())?;
         Ok(NaiveDateTime::new(date, time))
     }
 
-    fn read_time(&mut self) -> Result<NaiveTime> {
-        let d = self.read_exact::<7>()?;
+    fn read_time(d: [u8; 7]) -> Result<NaiveTime> {
         Ok(NaiveTime::from_hms_nano(
             d[0] as _,
             d[1] as _,
@@ -127,8 +133,7 @@ where
         ))
     }
 
-    fn read_date(&mut self) -> Result<NaiveDate> {
-        let d = self.read_exact::<6>()?;
+    fn read_date(d: [u8; 6]) -> Result<NaiveDate> {
         Ok(NaiveDate::from_ymd(
             i32::from_ne_bytes([d[0], d[1], d[2], d[3]]),
             d[4] as _,
@@ -613,6 +618,7 @@ mod tests {
             vec![DataType::DateTimeWithTZ],
             [
                 vec![1u8],                                 // not null
+                vec![13u8],                                // dt (len)
                 2020_i32.to_ne_bytes().to_vec(),           // year
                 vec![10u8],                                // month
                 vec![21u8],                                // day
@@ -621,6 +627,38 @@ mod tests {
                 vec![23u8],                                // second
                 12345_u32.to_ne_bytes().to_vec(),          // nanosec
                 vec![19u8],                                // tz (len)
+                "Australia/Melbourne".as_bytes().to_vec(), // tz (name)
+                vec![0u8],                                 // tz (eof)
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_data_value().unwrap(),
+            Some(DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+                NaiveDateTime::new(
+                    NaiveDate::from_ymd(2020, 10, 21),
+                    NaiveTime::from_hms_nano(12, 45, 23, 12345)
+                ),
+                Tz::Australia__Melbourne
+            )))
+        );
+    }
+
+    #[test]
+    fn test_data_reader_date_time_with_tz_one_chunk() {
+        let mut res = create_data_reader(
+            vec![DataType::DateTimeWithTZ],
+            [
+                vec![1u8],                                 // not null
+                vec![13u8 + 19u8],                         // dt + tz (len)
+                2020_i32.to_ne_bytes().to_vec(),           // year
+                vec![10u8],                                // month
+                vec![21u8],                                // day
+                vec![12u8],                                // hour
+                vec![45u8],                                // minute
+                vec![23u8],                                // second
+                12345_u32.to_ne_bytes().to_vec(),          // nanosec
                 "Australia/Melbourne".as_bytes().to_vec(), // tz (name)
                 vec![0u8],                                 // tz (eof)
             ]

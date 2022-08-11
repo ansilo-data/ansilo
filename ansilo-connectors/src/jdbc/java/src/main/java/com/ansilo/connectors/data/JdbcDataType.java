@@ -116,6 +116,25 @@ public interface JdbcDataType {
             case Types.LONGNVARCHAR:
                 return new NVarcharDataType();
 
+            case Types.BINARY:
+            case Types.BLOB:
+                return new BinaryDataType();
+
+            case Types.DATE:
+                return new DateDataType();
+
+            case Types.TIME:
+                return new TimeDataType();
+
+            case Types.TIMESTAMP:
+                return new DateTimeDataType();
+
+            case Types.TIMESTAMP_WITH_TIMEZONE:
+                return new DateTimeWithTzDataType();
+
+            case Types.NULL:
+                return new NullDataType();
+
             default:
                 throw new SQLException(String.format("Unknown sql type: %d", sqlType));
         }
@@ -164,6 +183,25 @@ public interface JdbcDataType {
             case TYPE_NCLOB:
             case TYPE_LONGNVARCHAR:
                 return new NVarcharDataType();
+
+            case TYPE_BINARY:
+            case TYPE_BLOB:
+                return new BinaryDataType();
+
+            case TYPE_DATE:
+                return new DateDataType();
+
+            case TYPE_TIME:
+                return new TimeDataType();
+
+            case TYPE_TIMESTAMP:
+                return new DateTimeDataType();
+
+            case TYPE_TIMESTAMP_WITH_TIMEZONE:
+                return new DateTimeWithTzDataType();
+
+            case TYPE_NULL:
+                return new NullDataType();
 
             default:
                 throw new SQLException(String.format("Unknown data type id: %d", dataTypeId));

@@ -3,31 +3,29 @@ package com.ansilo.connectors.data;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 
 /**
- * The varchar data type
+ * The binary data type
  */
-public class VarcharDataType implements JdbcStreamDataType {
+public class BinaryDataType implements JdbcStreamDataType {
     @Override
     public int getTypeId() {
-        return TYPE_VARCHAR;
+        return TYPE_BINARY;
     }
 
     @Override
     public InputStream getStream(ResultSet resultSet, int colIndex) throws Exception {
-        var string = resultSet.getString(colIndex);
+        var data = resultSet.getBinaryStream(colIndex);
 
         if (resultSet.wasNull()) {
             return null;
         }
 
-        var buff = StandardCharsets.UTF_8.encode(string);
-        return new ByteArrayInputStream(buff.array(), 0, buff.limit());
+        return data;
     }
 
     @Override
@@ -36,9 +34,11 @@ public class VarcharDataType implements JdbcStreamDataType {
         boolean isNull = buff.get() == 0;
 
         if (isNull) {
-            statement.setNull(index, Types.VARCHAR);
+            statement.setNull(index, Types.BINARY);
         } else {
-            statement.setString(index, StandardCharsets.UTF_8.decode(buff).toString());
+            var bytes = new byte[buff.remaining()];
+            buff.get(bytes);
+            statement.setBinaryStream(index, new ByteArrayInputStream(bytes));
         }
     }
 }

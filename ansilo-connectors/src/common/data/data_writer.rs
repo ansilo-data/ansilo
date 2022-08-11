@@ -137,6 +137,9 @@ where
                 }
                 (None | Some(DataType::DateTimeWithTZ), DataValue::DateTimeWithTZ(val)) => {
                     self.write(&[1])?;
+                    // We write this as a stream type, so prefix the first chunk
+                    // with its length
+                    self.write(&[13])?;
                     self.write_date_time(val.dt)?;
                     self.write_stream(val.tz.name().as_bytes())?;
                 }
@@ -768,6 +771,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                                 // not null
+                vec![13u8],                                // dt len
                 2000_u32.to_ne_bytes().to_vec(),           // year
                 vec![10u8],                                // month
                 vec![24u8],                                // day

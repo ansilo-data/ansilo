@@ -114,7 +114,7 @@ impl TryFrom<i32> for JdbcType {
 
 pub(crate) fn default_type_to_jdbc(r#type: &DataType) -> Result<JdbcType> {
     Ok(match r#type {
-        DataType::Boolean => JdbcType::Bit,
+        DataType::Boolean => JdbcType::Boolean,
         DataType::Int8 => JdbcType::TinyInt,
         DataType::Int16 => JdbcType::SmallInt,
         DataType::Int32 => JdbcType::Integer,
