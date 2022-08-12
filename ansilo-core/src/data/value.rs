@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use chrono::{DateTime, TimeZone, LocalResult};
+use chrono::{DateTime, LocalResult, TimeZone};
 use serde::{Deserialize, Serialize};
 
 use super::DataType;
@@ -8,7 +8,7 @@ use super::DataType;
 #[derive(PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
 pub enum DataValue {
     Null,
-    Utf8String(Vec<u8>),
+    Utf8String(String),
     Binary(Vec<u8>),
     Boolean(bool),
     Int8(i8),
@@ -42,7 +42,7 @@ impl DataValue {
 
 impl From<&str> for DataValue {
     fn from(str: &str) -> Self {
-        DataValue::Utf8String(str.as_bytes().to_vec())
+        DataValue::Utf8String(str.to_string())
     }
 }
 
@@ -66,7 +66,7 @@ impl DateTimeWithTZ {
                 "Failed to parse local date/time '{:?}' in timezone '{}'",
                 self.dt,
                 self.tz.name()
-            )
+            ),
         }
     }
 }
@@ -81,10 +81,7 @@ impl std::fmt::Debug for DataValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Null => write!(f, "Null"),
-            Self::Utf8String(arg0) => f
-                .debug_tuple("Utf8String")
-                .field(&String::from_utf8_lossy(arg0))
-                .finish(),
+            Self::Utf8String(arg0) => f.debug_tuple("Utf8String").field(arg0).finish(),
             Self::Binary(arg0) => f.debug_tuple("Binary").field(arg0).finish(),
             Self::Boolean(arg0) => f.debug_tuple("Boolean").field(arg0).finish(),
             Self::Int8(arg0) => f.debug_tuple("Int8").field(arg0).finish(),

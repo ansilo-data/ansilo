@@ -32,11 +32,8 @@ pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValu
         pg_sys::FLOAT8OID => Ok(DataValue::Float64(f64::parse(datum)?)),
         pg_sys::NUMERICOID => Ok(from_numeric(datum)),
         // We assume UTF8 as we hard code this configuration during initdb
-        pg_sys::VARCHAROID => Ok(DataValue::Utf8String(
-            String::parse(datum)?.as_bytes().to_vec(),
-        )),
-        pg_sys::TEXTOID => Ok(DataValue::Utf8String(
-            String::parse(datum)?.as_bytes().to_vec(),
+        pg_sys::TEXTOID|pg_sys::VARCHAROID => Ok(DataValue::Utf8String(
+            String::parse(datum)?,
         )),
         // char is an internal type (i8) used by postgres, likely not portable
         // and should not be used across db's
@@ -340,7 +337,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 from_datum(pg_sys::VARCHAROID, "Example String".into_datum().unwrap()).unwrap(),
-                DataValue::Utf8String("Example String".as_bytes().to_vec())
+                DataValue::Utf8String("Example String".into())
             );
         }
     }
@@ -354,7 +351,7 @@ mod tests {
                     datum_from_query::<String>("SELECT 'Example String'")
                 )
                 .unwrap(),
-                DataValue::Utf8String("Example String".as_bytes().to_vec())
+                DataValue::Utf8String("Example String".into())
             );
         }
     }
@@ -364,7 +361,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 from_datum(pg_sys::TEXTOID, "Example Text".into_datum().unwrap()).unwrap(),
-                DataValue::Utf8String("Example Text".as_bytes().to_vec())
+                DataValue::Utf8String("Example Text".into())
             );
         }
     }
@@ -378,7 +375,7 @@ mod tests {
                     datum_from_query::<String>("SELECT 'Example Text'::text")
                 )
                 .unwrap(),
-                DataValue::Utf8String("Example Text".as_bytes().to_vec())
+                DataValue::Utf8String("Example Text".into())
             );
         }
     }

@@ -414,7 +414,7 @@ mod tests {
 
         assert_eq!(
             rs.read_data_value().unwrap(),
-            Some(DataValue::Utf8String("abc".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("abc".into()))
         );
         assert_eq!(rs.read_data_value().unwrap(), None);
     }

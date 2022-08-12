@@ -52,7 +52,7 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
 
     assert_eq!(
         res.read_data_value().unwrap(),
-        Some(DataValue::Utf8String("X".as_bytes().to_vec()))
+        Some(DataValue::Utf8String("X".into()))
     );
     assert_eq!(res.read_data_value().unwrap(), None);
 }

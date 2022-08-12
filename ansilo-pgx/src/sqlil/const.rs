@@ -50,7 +50,7 @@ mod tests {
     fn test_sqlil_convert_const_string() {
         assert_eq!(
             test::convert_simple_expr("SELECT 'hello from pg'::text").unwrap(),
-            sqlil::Expr::constant(DataValue::Utf8String("hello from pg".as_bytes().to_vec()))
+            sqlil::Expr::constant(DataValue::Utf8String("hello from pg".into()))
         );
     }
 

@@ -65,7 +65,7 @@ where
             match (self.current_data_type(), data) {
                 (None | Some(DataType::Utf8String(_)), DataValue::Utf8String(val)) => {
                     self.write(&[1])?;
-                    self.write_stream(val.as_slice())?;
+                    self.write_stream(val.as_bytes())?;
                 }
                 (None | Some(DataType::Binary), DataValue::Binary(val)) => {
                     self.write(&[1])?;
@@ -288,7 +288,7 @@ mod tests {
             create_data_writer(Some(vec![DataType::Utf8String(StringOptions::default())]));
 
         writer
-            .write_data_value(DataValue::Utf8String("abc".as_bytes().to_vec()))
+            .write_data_value(DataValue::Utf8String("abc".into()))
             .unwrap();
 
         let buff = writer.inner().into_inner();
@@ -311,7 +311,7 @@ mod tests {
             create_data_writer(Some(vec![DataType::Utf8String(StringOptions::default())]));
 
         writer
-            .write_data_value(DataValue::Utf8String("a".repeat(500).as_bytes().to_vec()))
+            .write_data_value(DataValue::Utf8String("a".repeat(500)))
             .unwrap();
 
         let buff = writer.inner().into_inner();
@@ -361,7 +361,7 @@ mod tests {
 
         writer.write_data_value(DataValue::Int32(123)).unwrap();
         writer
-            .write_data_value(DataValue::Utf8String("abc".as_bytes().to_vec()))
+            .write_data_value(DataValue::Utf8String("abc".into()))
             .unwrap();
 
         let buff = writer.inner().into_inner();
@@ -398,7 +398,7 @@ mod tests {
 
         writer.write_data_value(DataValue::Int32(123)).unwrap();
         writer
-            .write_data_value(DataValue::Utf8String("abc".as_bytes().to_vec()))
+            .write_data_value(DataValue::Utf8String("abc".into()))
             .unwrap();
         writer.write_data_value(DataValue::Int32(456)).unwrap();
         writer.write_data_value(DataValue::Null).unwrap();
@@ -441,7 +441,7 @@ mod tests {
     #[test]
     fn test_data_writer_to_vec_one() {
         let buff =
-            DataWriter::to_vec_one(DataValue::Utf8String("abc".as_bytes().to_vec())).unwrap();
+            DataWriter::to_vec_one(DataValue::Utf8String("abc".into())).unwrap();
 
         assert_eq!(
             buff,

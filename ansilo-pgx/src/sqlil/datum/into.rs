@@ -37,10 +37,10 @@ pub unsafe fn into_datum(
             pg_sys::VARCHAROID | pg_sys::TEXTOID,
             DataType::Utf8String(opts),
             DataValue::Utf8String(data),
-        ) => into_string(data, opts)?.into_datum().unwrap(),
+        ) => data.into_datum().unwrap(),
         //
         (pg_sys::BYTEAOID, DataType::Utf8String(_), DataValue::Utf8String(data)) => {
-            data.into_datum().unwrap()
+            data.as_bytes().to_vec().into_datum().unwrap()
         }
         (pg_sys::BYTEAOID, DataType::Binary, DataValue::Binary(data)) => data.into_datum().unwrap(),
         //
@@ -130,10 +130,6 @@ fn try_coerce_into(type_oid: Oid, val: DataValue) -> Result<DataValue> {
     let desired_type = from_pg_type(type_oid)?;
 
     val.try_coerce_into(&desired_type)
-}
-
-fn into_string(data: Vec<u8>, opts: &StringOptions) -> Result<String> {
-    Ok(String::from_utf8(data)?)
 }
 
 /// Converts the supplied DataValue into a pgalloc'd Datum
@@ -383,7 +379,7 @@ mod tests {
             let (is_null, datum) = into_datum_owned(
                 pg_sys::VARCHAROID,
                 DataType::Utf8String(StringOptions::default()),
-                DataValue::Utf8String("Hello world".as_bytes().to_vec()),
+                DataValue::Utf8String("Hello world".into()),
             )
             .unwrap();
             assert_eq!(is_null, false);
@@ -400,7 +396,7 @@ mod tests {
             let (is_null, datum) = into_datum_owned(
                 pg_sys::TEXTOID,
                 DataType::Utf8String(StringOptions::default()),
-                DataValue::Utf8String("Hello world".as_bytes().to_vec()),
+                DataValue::Utf8String("Hello world".into()),
             )
             .unwrap();
             assert_eq!(is_null, false);
@@ -614,7 +610,7 @@ mod tests {
             let (is_null, datum) = into_datum_owned(
                 pg_sys::BYTEAOID,
                 DataType::Utf8String(StringOptions::default()),
-                DataValue::Utf8String("Hello world".as_bytes().to_vec()),
+                DataValue::Utf8String("Hello world".into()),
             )
             .unwrap();
             assert_eq!(is_null, false);

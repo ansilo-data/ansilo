@@ -796,9 +796,8 @@ impl MemoryQueryExecutor {
                         let right = right.try_coerce_into(&string)?;
 
                         match (left, right) {
-                            (DataValue::Utf8String(mut left), DataValue::Utf8String(mut right)) => {
-                                left.append(&mut right);
-                                DataValue::Utf8String(left)
+                            (DataValue::Utf8String(left), DataValue::Utf8String(right)) => {
+                                DataValue::Utf8String(left + &right)
                             }
                             _ => unreachable!(),
                         }
@@ -1389,16 +1388,16 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into())
                     ],
                     vec![
-                        DataValue::Utf8String("John".as_bytes().to_vec()),
-                        DataValue::Utf8String("Smith".as_bytes().to_vec())
+                        DataValue::Utf8String("John".into()),
+                        DataValue::Utf8String("Smith".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Bennet".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Bennet".into())
                     ],
                 ]
             )
@@ -1458,9 +1457,9 @@ mod tests {
                     DataType::Utf8String(StringOptions::default())
                 ),],
                 vec![
-                    vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
-                    vec![DataValue::Utf8String("John".as_bytes().to_vec()),],
-                    vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("Mary".into()),],
+                    vec![DataValue::Utf8String("John".into()),],
+                    vec![DataValue::Utf8String("Mary".into()),],
                 ]
             )
             .unwrap()
@@ -1494,7 +1493,7 @@ mod tests {
                     "alias".to_string(),
                     DataType::Utf8String(StringOptions::default())
                 ),],
-                vec![vec![DataValue::Utf8String("John".as_bytes().to_vec()),],]
+                vec![vec![DataValue::Utf8String("John".into()),],]
             )
             .unwrap()
         )
@@ -1521,8 +1520,8 @@ mod tests {
                     DataType::Utf8String(StringOptions::default())
                 ),],
                 vec![
-                    vec![DataValue::Utf8String("John".as_bytes().to_vec()),],
-                    vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("John".into()),],
+                    vec![DataValue::Utf8String("Mary".into()),],
                 ]
             )
             .unwrap()
@@ -1549,7 +1548,7 @@ mod tests {
                     "alias".to_string(),
                     DataType::Utf8String(StringOptions::default())
                 ),],
-                vec![vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],]
+                vec![vec![DataValue::Utf8String("Mary".into()),],]
             )
             .unwrap()
         )
@@ -1578,8 +1577,8 @@ mod tests {
                     DataType::Utf8String(StringOptions::default())
                 ),],
                 vec![
-                    vec![DataValue::Utf8String("Mary".as_bytes().to_vec()),],
-                    vec![DataValue::Utf8String("John".as_bytes().to_vec()),],
+                    vec![DataValue::Utf8String("Mary".into()),],
+                    vec![DataValue::Utf8String("John".into()),],
                 ]
             )
             .unwrap()
@@ -1617,11 +1616,11 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
+                        DataValue::Utf8String("Mary".into()),
                         DataValue::UInt64(2)
                     ],
                     vec![
-                        DataValue::Utf8String("John".as_bytes().to_vec()),
+                        DataValue::Utf8String("John".into()),
                         DataValue::UInt64(1)
                     ],
                 ]
@@ -1674,9 +1673,9 @@ mod tests {
                     DataType::Utf8String(StringOptions::default()),
                 )],
                 vec![
-                    vec![DataValue::Utf8String("MaryJane".as_bytes().to_vec())],
-                    vec![DataValue::Utf8String("JohnSmith".as_bytes().to_vec())],
-                    vec![DataValue::Utf8String("MaryBennet".as_bytes().to_vec())]
+                    vec![DataValue::Utf8String("MaryJane".into())],
+                    vec![DataValue::Utf8String("JohnSmith".into())],
+                    vec![DataValue::Utf8String("MaryBennet".into())]
                 ]
             )
             .unwrap()
@@ -1716,15 +1715,15 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("MaryJane".as_bytes().to_vec()),
+                        DataValue::Utf8String("MaryJane".into()),
                         DataValue::UInt64(1)
                     ],
                     vec![
-                        DataValue::Utf8String("JohnSmith".as_bytes().to_vec()),
+                        DataValue::Utf8String("JohnSmith".into()),
                         DataValue::UInt64(1)
                     ],
                     vec![
-                        DataValue::Utf8String("MaryBennet".as_bytes().to_vec()),
+                        DataValue::Utf8String("MaryBennet".into()),
                         DataValue::UInt64(1)
                     ],
                 ]
@@ -1767,16 +1766,16 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("John".as_bytes().to_vec()),
-                        DataValue::Utf8String("Smith".as_bytes().to_vec())
+                        DataValue::Utf8String("John".into()),
+                        DataValue::Utf8String("Smith".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Bennet".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Bennet".into())
                     ],
                 ]
             )
@@ -1818,16 +1817,16 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Bennet".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Bennet".into())
                     ],
                     vec![
-                        DataValue::Utf8String("John".as_bytes().to_vec()),
-                        DataValue::Utf8String("Smith".as_bytes().to_vec())
+                        DataValue::Utf8String("John".into()),
+                        DataValue::Utf8String("Smith".into())
                     ],
                 ]
             )
@@ -1872,16 +1871,16 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("John".as_bytes().to_vec()),
-                        DataValue::Utf8String("Smith".as_bytes().to_vec())
+                        DataValue::Utf8String("John".into()),
+                        DataValue::Utf8String("Smith".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Bennet".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Bennet".into())
                     ],
                 ]
             )
@@ -1938,19 +1937,19 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec()),
-                        DataValue::Utf8String("Pepper".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into()),
+                        DataValue::Utf8String("Pepper".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec()),
-                        DataValue::Utf8String("Salt".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into()),
+                        DataValue::Utf8String("Salt".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Bennet".as_bytes().to_vec()),
-                        DataValue::Utf8String("Relish".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Bennet".into()),
+                        DataValue::Utf8String("Relish".into())
                     ],
                 ]
             )
@@ -2007,23 +2006,23 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec()),
-                        DataValue::Utf8String("Pepper".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into()),
+                        DataValue::Utf8String("Pepper".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec()),
-                        DataValue::Utf8String("Salt".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into()),
+                        DataValue::Utf8String("Salt".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Bennet".as_bytes().to_vec()),
-                        DataValue::Utf8String("Relish".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Bennet".into()),
+                        DataValue::Utf8String("Relish".into())
                     ],
                     vec![
-                        DataValue::Utf8String("John".as_bytes().to_vec()),
-                        DataValue::Utf8String("Smith".as_bytes().to_vec()),
+                        DataValue::Utf8String("John".into()),
+                        DataValue::Utf8String("Smith".into()),
                         DataValue::Null,
                     ],
                 ]
@@ -2081,24 +2080,24 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec()),
-                        DataValue::Utf8String("Pepper".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into()),
+                        DataValue::Utf8String("Pepper".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec()),
-                        DataValue::Utf8String("Salt".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into()),
+                        DataValue::Utf8String("Salt".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Bennet".as_bytes().to_vec()),
-                        DataValue::Utf8String("Relish".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Bennet".into()),
+                        DataValue::Utf8String("Relish".into())
                     ],
                     vec![
                         DataValue::Null,
                         DataValue::Null,
-                        DataValue::Utf8String("Luna".as_bytes().to_vec()),
+                        DataValue::Utf8String("Luna".into()),
                     ],
                 ]
             )
@@ -2155,29 +2154,29 @@ mod tests {
                 ],
                 vec![
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec()),
-                        DataValue::Utf8String("Pepper".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into()),
+                        DataValue::Utf8String("Pepper".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Jane".as_bytes().to_vec()),
-                        DataValue::Utf8String("Salt".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Jane".into()),
+                        DataValue::Utf8String("Salt".into())
                     ],
                     vec![
-                        DataValue::Utf8String("Mary".as_bytes().to_vec()),
-                        DataValue::Utf8String("Bennet".as_bytes().to_vec()),
-                        DataValue::Utf8String("Relish".as_bytes().to_vec())
+                        DataValue::Utf8String("Mary".into()),
+                        DataValue::Utf8String("Bennet".into()),
+                        DataValue::Utf8String("Relish".into())
                     ],
                     vec![
-                        DataValue::Utf8String("John".as_bytes().to_vec()),
-                        DataValue::Utf8String("Smith".as_bytes().to_vec()),
+                        DataValue::Utf8String("John".into()),
+                        DataValue::Utf8String("Smith".into()),
                         DataValue::Null,
                     ],
                     vec![
                         DataValue::Null,
                         DataValue::Null,
-                        DataValue::Utf8String("Luna".as_bytes().to_vec()),
+                        DataValue::Utf8String("Luna".into()),
                     ],
                 ]
             )
@@ -2210,7 +2209,7 @@ mod tests {
 
         let executor = create_executor(
             select,
-            [(1, DataValue::Utf8String("John".as_bytes().to_vec()))]
+            [(1, DataValue::Utf8String("John".into()))]
                 .into_iter()
                 .collect(),
         );
@@ -2231,8 +2230,8 @@ mod tests {
                     ),
                 ],
                 vec![vec![
-                    DataValue::Utf8String("John".as_bytes().to_vec()),
-                    DataValue::Utf8String("Smith".as_bytes().to_vec())
+                    DataValue::Utf8String("John".into()),
+                    DataValue::Utf8String("Smith".into())
                 ],]
             )
             .unwrap()

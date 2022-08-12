@@ -512,7 +512,7 @@ impl<TConnector: Connector> FdwConnectionState<TConnector> {
 mod tests {
     use std::{
         io,
-        sync::{atomic::Ordering, Arc},
+        sync::Arc,
         thread::{self, JoinHandle},
     };
 

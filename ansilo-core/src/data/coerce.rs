@@ -1,4 +1,6 @@
-use anyhow::{bail, Context, Result};
+use std::cmp;
+
+use anyhow::{bail, Result};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use rust_decimal::{
     prelude::{One, ToPrimitive},
@@ -44,96 +46,87 @@ impl DataValue {
         })
     }
 
-    fn try_coerce_utf8_string(data: Vec<u8>, r#type: &DataType) -> Result<DataValue> {
-        let string = || String::from_utf8(data.clone()).context("Failed to parse as utf8");
-
+    fn try_coerce_utf8_string(data: String, r#type: &DataType) -> Result<DataValue> {
         match r#type {
             DataType::Utf8String(_) => return Ok(Self::Utf8String(data)),
-            DataType::Binary => return Ok(Self::Binary(data)),
-            DataType::JSON if serde_json::from_slice::<serde_json::Value>(&data[..]).is_ok() => {
-                return Ok(Self::JSON(string()?))
+            DataType::Binary => return Ok(Self::Binary(data.as_bytes().to_vec())),
+            DataType::JSON if serde_json::from_str::<serde_json::Value>(&data).is_ok() => {
+                return Ok(Self::JSON(data))
             }
-            DataType::Boolean if &data[..] == b"1" => return Ok(Self::Boolean(true)),
-            DataType::Boolean if &data[..] == b"0" => return Ok(Self::Boolean(false)),
+            DataType::Boolean if data == "1" => return Ok(Self::Boolean(true)),
+            DataType::Boolean if data == "0" => return Ok(Self::Boolean(false)),
             DataType::UInt8 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::UInt8(n));
                 }
             }
             DataType::Int8 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::Int8(n));
                 }
             }
             DataType::UInt16 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::UInt16(n));
                 }
             }
             DataType::Int16 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::Int16(n));
                 }
             }
             DataType::UInt32 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::UInt32(n));
                 }
             }
             DataType::Int32 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::Int32(n));
                 }
             }
             DataType::UInt64 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::UInt64(n));
                 }
             }
             DataType::Int64 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::Int64(n));
                 }
             }
             DataType::Float32 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::Float32(n));
                 }
             }
             DataType::Float64 => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::Float64(n));
                 }
             }
             DataType::Decimal(_) => {
-                if let Ok(n) = string().and_then(|s| s.parse().context("")) {
+                if let Ok(n) = data.parse() {
                     return Ok(DataValue::Decimal(n));
                 }
             }
             DataType::Date => {
-                if let Ok(date) =
-                    string().and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").context(""))
-                {
+                if let Ok(date) = NaiveDate::parse_from_str(&data, "%Y-%m-%d") {
                     return Ok(Self::Date(date));
                 }
             }
             DataType::Time => {
-                if let Ok(time) =
-                    string().and_then(|s| NaiveTime::parse_from_str(&s, "%H:%M:%S").context(""))
-                {
+                if let Ok(time) = NaiveTime::parse_from_str(&data, "%H:%M:%S") {
                     return Ok(Self::Time(time));
                 }
             }
             DataType::DateTime => {
-                if let Ok(dt) = string().and_then(|s| {
-                    NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S").context("")
-                }) {
+                if let Ok(dt) = NaiveDateTime::parse_from_str(&data, "%Y-%m-%dT%H:%M:%S") {
                     return Ok(Self::DateTime(dt));
                 }
             }
             DataType::DateTimeWithTZ => {
-                if let Ok(dt) = string().and_then(|s| DateTime::parse_from_rfc3339(&s).context(""))
-                {
+                if let Ok(dt) = DateTime::parse_from_rfc3339(&data) {
                     return Ok(Self::DateTimeWithTZ(DateTimeWithTZ::new(
                         dt.naive_utc(),
                         chrono_tz::UTC,
@@ -141,7 +134,7 @@ impl DataValue {
                 }
             }
             DataType::Uuid => {
-                if let Ok(uuid) = Uuid::try_parse_ascii(&data[..]) {
+                if let Ok(uuid) = Uuid::try_parse(&data) {
                     return Ok(Self::Uuid(uuid));
                 }
             }
@@ -150,7 +143,7 @@ impl DataValue {
 
         bail!(
             "No type coercion exists from type 'UTF-8 String' (\"{}\") to {:?}",
-            String::from_utf8(data)?,
+            &data[..cmp::min(50, data.len())],
             r#type
         )
     }
@@ -160,7 +153,7 @@ impl DataValue {
             DataType::Binary => Self::Binary(data),
             DataType::Utf8String(_) => {
                 if let Ok(data) = String::from_utf8(data) {
-                    DataValue::Utf8String(data.into_bytes())
+                    DataValue::Utf8String(data)
                 } else {
                     bail!("Failed to coerce binary data into UTF-8 string: data is not valid utf-8 encoded")
                 }
@@ -186,9 +179,7 @@ impl DataValue {
             DataType::Float32 => Self::Float32(if data { 1.0 } else { 0.0 }),
             DataType::Float64 => Self::Float64(if data { 1.0 } else { 0.0 }),
             DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
-            DataType::Utf8String(_) => {
-                Self::Utf8String(if data { "1" } else { "0" }.as_bytes().to_vec())
-            }
+            DataType::Utf8String(_) => Self::Utf8String(if data { "1" } else { "0" }.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'boolean' to {:?}",
                 r#type
@@ -211,7 +202,7 @@ impl DataValue {
             DataType::Float32 => Self::Float32(data as f32),
             DataType::Float64 => Self::Float64(data as f64),
             DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'uint8' ({}) to {:?}",
                 data,
@@ -235,7 +226,7 @@ impl DataValue {
             DataType::Float32 => Self::Float32(data as f32),
             DataType::Float64 => Self::Float64(data as f64),
             DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'int8' ({}) to {:?}",
                 data,
@@ -261,7 +252,7 @@ impl DataValue {
             DataType::Float32 => Self::Float32(data as f32),
             DataType::Float64 => Self::Float64(data as f64),
             DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'uint16' ({}) to {:?}",
                 data,
@@ -289,7 +280,7 @@ impl DataValue {
             DataType::Float32 => Self::Float32(data as f32),
             DataType::Float64 => Self::Float64(data as f64),
             DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'int16' ({}) to {:?}",
                 data,
@@ -313,7 +304,7 @@ impl DataValue {
             DataType::Float32 if (data as f32) as u32 == data => Self::Float32(data as f32),
             DataType::Float64 if (data as f64) as u32 == data => Self::Float64(data as f64),
             DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'uint32' ({}) to {:?}",
                 data,
@@ -345,7 +336,7 @@ impl DataValue {
             DataType::Float32 if (data as f32) as i32 == data => Self::Float32(data as f32),
             DataType::Float64 if (data as f64) as i32 == data => Self::Float64(data as f64),
             DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'int32' ({}) to {:?}",
                 data,
@@ -371,7 +362,7 @@ impl DataValue {
             DataType::Decimal(_) if data <= i64::MAX as _ => {
                 Self::Decimal(Decimal::new(data as _, 0))
             }
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'uint64' ({}) to {:?}",
                 data,
@@ -407,7 +398,7 @@ impl DataValue {
             DataType::Float32 if (data as f32) as i64 == data => Self::Float32(data as f32),
             DataType::Float64 if (data as f64) as i64 == data => Self::Float64(data as f64),
             DataType::Decimal(_) => Self::Decimal(Decimal::new(data as _, 0)),
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'int64' ({}) to {:?}",
                 data,
@@ -480,9 +471,7 @@ impl DataValue {
                     return Ok(DataValue::Float64(val));
                 }
             }
-            DataType::Utf8String(_) => {
-                return Ok(Self::Utf8String(data.to_string().as_bytes().to_vec()))
-            }
+            DataType::Utf8String(_) => return Ok(Self::Utf8String(data.to_string())),
             _ => {}
         }
 
@@ -540,7 +529,7 @@ impl DataValue {
             DataType::Decimal(_) if Decimal::from_f32_retain(data).is_some() => {
                 Self::Decimal(Decimal::from_f32_retain(data).unwrap())
             }
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'float32' ({}) to {:?}",
                 data,
@@ -596,7 +585,7 @@ impl DataValue {
             DataType::Decimal(_) if Decimal::from_f64_retain(data).is_some() => {
                 Self::Decimal(Decimal::from_f64_retain(data).unwrap())
             }
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             _ => bail!(
                 "No type coercion exists from type 'float64' ({}) to {:?}",
                 data,
@@ -608,11 +597,11 @@ impl DataValue {
     fn try_coerce_json(data: String, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::JSON => Self::JSON(data),
-            DataType::Utf8String(_) => Self::Utf8String(data.as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data),
             DataType::Binary => Self::Binary(data.as_bytes().to_vec()),
             _ => bail!(
                 "No type coercion exists from type 'JSON' ({}) to {:?}",
-                &data[..50],
+                &data[..cmp::min(50, data.len())],
                 r#type
             ),
         })
@@ -621,9 +610,7 @@ impl DataValue {
     fn try_coerce_date(data: NaiveDate, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Date => Self::Date(data),
-            DataType::Utf8String(_) => {
-                Self::Utf8String(data.format("%Y-%m-%d").to_string().as_bytes().to_vec())
-            }
+            DataType::Utf8String(_) => Self::Utf8String(data.format("%Y-%m-%d").to_string()),
             _ => bail!(
                 "No type coercion exists from type 'date' ({}) to {:?}",
                 data,
@@ -635,9 +622,7 @@ impl DataValue {
     fn try_coerce_time(data: NaiveTime, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Time => Self::Time(data),
-            DataType::Utf8String(_) => {
-                Self::Utf8String(data.format("%H:%M:%S").to_string().as_bytes().to_vec())
-            }
+            DataType::Utf8String(_) => Self::Utf8String(data.format("%H:%M:%S").to_string()),
             _ => bail!(
                 "No type coercion exists from type 'time' ({}) to {:?}",
                 data,
@@ -649,12 +634,9 @@ impl DataValue {
     fn try_coerce_date_time(data: NaiveDateTime, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::DateTime => Self::DateTime(data),
-            DataType::Utf8String(_) => Self::Utf8String(
-                data.format("%Y-%m-%dT%H:%M:%S")
-                    .to_string()
-                    .as_bytes()
-                    .to_vec(),
-            ),
+            DataType::Utf8String(_) => {
+                Self::Utf8String(data.format("%Y-%m-%dT%H:%M:%S").to_string())
+            }
             _ => bail!(
                 "No type coercion exists from type 'date/time' ({}) to {:?}",
                 data,
@@ -667,7 +649,7 @@ impl DataValue {
         Ok(match r#type {
             DataType::DateTimeWithTZ => Self::DateTimeWithTZ(data),
             DataType::Utf8String(_) if data.tz == chrono_tz::UTC => {
-                Self::Utf8String(data.zoned()?.to_rfc3339().as_bytes().to_vec())
+                Self::Utf8String(data.zoned()?.to_rfc3339())
             }
             _ => bail!(
                 "No type coercion exists from type 'date/time with timezone' ({:?}) to {:?}",
@@ -680,7 +662,7 @@ impl DataValue {
     fn try_coerce_uuid(data: Uuid, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Uuid => Self::Uuid(data),
-            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
             DataType::Binary => Self::Binary(data.into_bytes().to_vec()),
             _ => bail!(
                 "No type coercion exists from type 'uuid' ({}) to {:?}",
@@ -702,7 +684,7 @@ mod tests {
     fn test_data_value_coerce_no_data_loss() {
         let test_cases = vec![
             (
-                vec![DataValue::Utf8String("Hello world".as_bytes().to_vec())],
+                vec![DataValue::Utf8String("Hello world".into())],
                 vec![DataType::Binary],
             ),
             (
@@ -885,8 +867,8 @@ mod tests {
             ),
             (
                 vec![
-                    DataValue::Utf8String("{}".as_bytes().to_vec()),
-                    DataValue::Utf8String("\"abc\"".as_bytes().to_vec()),
+                    DataValue::Utf8String("{}".into()),
+                    DataValue::Utf8String("\"abc\"".into()),
                 ],
                 vec![
                     DataType::Utf8String(StringOptions::default()),
@@ -966,39 +948,39 @@ mod tests {
 
     #[test]
     fn test_data_value_coerce_utf8_string() {
-        let data = "Hello".as_bytes().to_vec();
+        let data = "Hello".to_string();
 
         assert_eq!(
             DataValue::Utf8String(data.clone())
                 .try_coerce_into(&DataType::Binary)
                 .unwrap(),
-            DataValue::Binary(data.clone())
+            DataValue::Binary(data.as_bytes().to_vec())
         );
     }
 
     #[test]
     fn test_data_value_coerce_utf8_string_to_json() {
-        let data = "{\"hello\": \"world\"}".as_bytes().to_vec();
+        let data = "{\"hello\": \"world\"}".to_string();
 
         assert_eq!(
             DataValue::Utf8String(data.clone())
                 .try_coerce_into(&DataType::JSON)
                 .unwrap(),
-            DataValue::JSON(String::from_utf8(data).unwrap())
+            DataValue::JSON(data)
         );
 
-        DataValue::Utf8String("INVALID JSON".as_bytes().to_vec())
+        DataValue::Utf8String("INVALID JSON".into())
             .try_coerce_into(&DataType::JSON)
             .unwrap_err();
     }
 
     #[test]
     fn test_data_value_coerce_binary() {
-        let data = "Hello".as_bytes().to_vec();
+        let data = "Hello".to_string();
         let invalid_utf8_data = [0u8, 255u8].to_vec();
 
         assert_eq!(
-            DataValue::Binary(data.clone())
+            DataValue::Binary(data.as_bytes().to_vec().clone())
                 .try_coerce_into(&DataType::Utf8String(StringOptions::default()))
                 .unwrap(),
             DataValue::Utf8String(data.clone())

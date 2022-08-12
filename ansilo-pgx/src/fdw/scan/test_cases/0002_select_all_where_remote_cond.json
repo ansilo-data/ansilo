@@ -25,12 +25,7 @@
                         "right": {
                             "@type": "Constant",
                             "value": {
-                                "Utf8String": {
-                                    "0": 77,
-                                    "1": 97,
-                                    "2": 114,
-                                    "3": 121
-                                }
+                                "Utf8String": "Mary"
                             }
                         },
                         "type": "Equal"

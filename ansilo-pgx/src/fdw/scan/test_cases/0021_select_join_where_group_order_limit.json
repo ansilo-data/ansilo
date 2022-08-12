@@ -52,11 +52,7 @@
                         "right": {
                             "@type": "Constant",
                             "value": {
-                                "Utf8String": {
-                                    "0": 88,
-                                    "1": 88,
-                                    "2": 88
-                                }
+                                "Utf8String": "XXX"
                             }
                         },
                         "type": "NotEqual"

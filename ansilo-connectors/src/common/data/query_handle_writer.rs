@@ -184,7 +184,7 @@ mod tests {
         let structure = QueryInputStructure::new(vec![(1, DataType::Int32)]);
         let mut query = MockQueryHandle::new(structure.clone(), 1024);
 
-        let res = query.write_data_value(DataValue::Utf8String("invalid".as_bytes().to_vec()));
+        let res = query.write_data_value(DataValue::Utf8String("invalid".into()));
 
         assert!(res.is_err());
     }

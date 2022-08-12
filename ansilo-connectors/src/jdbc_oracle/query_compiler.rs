@@ -590,7 +590,7 @@ impl OracleJdbcQueryCompiler {
             }
             sql::AggregateCall::StringAgg(call) => {
                 params.push(JdbcQueryParam::Constant(DataValue::Utf8String(
-                    call.separator.as_bytes().to_vec(),
+                    call.separator.clone(),
                 )));
                 format!(
                     "LISTAGG({}, ?) WITHIN GROUP (ORDER BY NULL)",

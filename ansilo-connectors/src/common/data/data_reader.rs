@@ -65,7 +65,7 @@ where
 
         let res = if not_null.unwrap() != 0 {
             match self.current_data_type() {
-                DataType::Utf8String(_) => DataValue::Utf8String(self.read_stream()?),
+                DataType::Utf8String(_) => DataValue::Utf8String(self.read_string()?),
                 DataType::Binary => DataValue::Binary(self.read_stream()?),
                 DataType::Boolean => DataValue::Boolean(self.read_exact::<1>()?[0] != 0),
                 DataType::Int8 => DataValue::Int8(self.read_exact::<1>()?[0] as i8),
@@ -259,7 +259,7 @@ mod tests {
 
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Utf8String("abc".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("abc".into()))
         );
     }
 
@@ -280,7 +280,7 @@ mod tests {
 
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Utf8String("abc12345".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("abc12345".into()))
         );
     }
 
@@ -351,12 +351,12 @@ mod tests {
         assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int32(123)));
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Utf8String("abc".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("abc".into()))
         );
         assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int32(456)));
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Utf8String("123".as_bytes().to_vec()))
+            Some(DataValue::Utf8String("123".into()))
         );
         assert_eq!(res.read_data_value().unwrap(), None);
     }
