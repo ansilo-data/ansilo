@@ -1,3 +1,5 @@
+use anyhow::{bail, Result};
+use chrono::{DateTime, TimeZone, LocalResult};
 use serde::{Deserialize, Serialize};
 
 use super::DataType;
@@ -46,7 +48,7 @@ impl From<&str> for DataValue {
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct DateTimeWithTZ {
-    /// The UTC date time
+    /// The local date time
     pub dt: chrono::NaiveDateTime,
     /// The associated timezone
     pub tz: chrono_tz::Tz,
@@ -55,6 +57,17 @@ pub struct DateTimeWithTZ {
 impl DateTimeWithTZ {
     pub fn new(dt: chrono::NaiveDateTime, tz: chrono_tz::Tz) -> Self {
         Self { dt, tz }
+    }
+
+    pub fn zoned(&self) -> Result<DateTime<chrono_tz::Tz>> {
+        match self.tz.from_local_datetime(&self.dt) {
+            LocalResult::Single(dt) => Ok(dt),
+            _ => bail!(
+                "Failed to parse local date/time '{:?}' in timezone '{}'",
+                self.dt,
+                self.tz.name()
+            )
+        }
     }
 }
 

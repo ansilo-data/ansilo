@@ -1,12 +1,13 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
 use rust_decimal::{
     prelude::{One, ToPrimitive},
     Decimal,
 };
+use uuid::Uuid;
 
-use super::{DataType, DataValue};
+use super::{DataType, DataValue, DateTimeWithTZ};
 
-/// TODO: implement remaining coercions (all types + numeric type expansions)
 impl DataValue {
     /// Tries to coerce the data value supplied type.
     ///
@@ -34,25 +35,69 @@ impl DataValue {
             DataValue::Float32(data) => Self::try_coerce_float32(data, r#type)?,
             DataValue::Float64(data) => Self::try_coerce_float64(data, r#type)?,
             DataValue::Decimal(data) => Self::try_coerce_decimal(data, r#type)?,
-            // DataValue::JSON(data) => Self::try_coerce_json(data, r#type)?,
-            // DataValue::Date(data) => Self::try_coerce_date(data, r#type)?,
-            // DataValue::Time(data) => Self::try_coerce_time(data, r#type)?,
-            // DataValue::DateTime(data) => Self::try_coerce_date_time(data, r#type)?,
-            // DataValue::DateTimeWithTZ(data) => Self::try_coerce_date_time_with_tz(data, r#type)?,
-            // DataValue::Uuid(data) => Self::try_coerce_uuid(data, r#type)?,
-            _ => todo!(),
+            DataValue::JSON(data) => Self::try_coerce_json(data, r#type)?,
+            DataValue::Date(data) => Self::try_coerce_date(data, r#type)?,
+            DataValue::Time(data) => Self::try_coerce_time(data, r#type)?,
+            DataValue::DateTime(data) => Self::try_coerce_date_time(data, r#type)?,
+            DataValue::DateTimeWithTZ(data) => Self::try_coerce_date_time_with_tz(data, r#type)?,
+            DataValue::Uuid(data) => Self::try_coerce_uuid(data, r#type)?,
         })
     }
 
     fn try_coerce_utf8_string(data: Vec<u8>, r#type: &DataType) -> Result<DataValue> {
-        Ok(match r#type {
-            DataType::Utf8String(_) => Self::Utf8String(data),
-            DataType::Binary => Self::Binary(data),
-            _ => bail!(
-                "No type coercion exists from type 'UTF-8 String' to {:?}",
-                r#type
-            ),
-        })
+        match r#type {
+            DataType::Utf8String(_) => return Ok(Self::Utf8String(data)),
+            DataType::Binary => return Ok(Self::Binary(data)),
+            DataType::JSON if serde_json::from_slice::<serde_json::Value>(&data[..]).is_ok() => {
+                return Ok(Self::JSON(String::from_utf8(data)?))
+            }
+            DataType::Date => {
+                if let Ok(date) = String::from_utf8(data.clone())
+                    .context("")
+                    .and_then(|s| NaiveDate::parse_from_str(&s, "%Y-%m-%d").context(""))
+                {
+                    return Ok(Self::Date(date));
+                }
+            }
+            DataType::Time => {
+                if let Ok(time) = String::from_utf8(data.clone())
+                    .context("")
+                    .and_then(|s| NaiveTime::parse_from_str(&s, "%H:%M:%S").context(""))
+                {
+                    return Ok(Self::Time(time));
+                }
+            }
+            DataType::DateTime => {
+                if let Ok(dt) = String::from_utf8(data.clone()).context("").and_then(|s| {
+                    NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S").context("")
+                }) {
+                    return Ok(Self::DateTime(dt));
+                }
+            }
+            DataType::DateTimeWithTZ => {
+                if let Ok(dt) = String::from_utf8(data.clone())
+                    .context("")
+                    .and_then(|s| DateTime::parse_from_rfc3339(&s).context(""))
+                {
+                    return Ok(Self::DateTimeWithTZ(DateTimeWithTZ::new(
+                        dt.naive_utc(),
+                        chrono_tz::UTC,
+                    )));
+                }
+            }
+            DataType::Uuid => {
+                if let Ok(uuid) = Uuid::try_parse_ascii(&data[..]) {
+                    return Ok(Self::Uuid(uuid));
+                }
+            }
+            _ => {}
+        };
+
+        bail!(
+            "No type coercion exists from type 'UTF-8 String' (\"{}\") to {:?}",
+            String::from_utf8(data)?,
+            r#type
+        )
     }
 
     fn try_coerce_binary(data: Vec<u8>, r#type: &DataType) -> Result<DataValue> {
@@ -64,6 +109,9 @@ impl DataValue {
                 } else {
                     bail!("Failed to coerce binary data into UTF-8 string: data is not valid utf-8 encoded")
                 }
+            }
+            DataType::Uuid if data.len() == 16 => {
+                Self::Uuid(Uuid::from_bytes(data[..].try_into().unwrap()))
             }
             _ => bail!("No type coercion exists from type 'binary' to {:?}", r#type),
         })
@@ -485,12 +533,98 @@ impl DataValue {
             ),
         })
     }
+
+    fn try_coerce_json(data: String, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::JSON => Self::JSON(data),
+            DataType::Utf8String(_) => Self::Utf8String(data.as_bytes().to_vec()),
+            DataType::Binary => Self::Binary(data.as_bytes().to_vec()),
+            _ => bail!(
+                "No type coercion exists from type 'JSON' ({}) to {:?}",
+                &data[..50],
+                r#type
+            ),
+        })
+    }
+
+    fn try_coerce_date(data: NaiveDate, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::Date => Self::Date(data),
+            DataType::Utf8String(_) => {
+                Self::Utf8String(data.format("%Y-%m-%d").to_string().as_bytes().to_vec())
+            }
+            _ => bail!(
+                "No type coercion exists from type 'date' ({}) to {:?}",
+                data,
+                r#type
+            ),
+        })
+    }
+
+    fn try_coerce_time(data: NaiveTime, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::Time => Self::Time(data),
+            DataType::Utf8String(_) => {
+                Self::Utf8String(data.format("%H:%M:%S").to_string().as_bytes().to_vec())
+            }
+            _ => bail!(
+                "No type coercion exists from type 'time' ({}) to {:?}",
+                data,
+                r#type
+            ),
+        })
+    }
+
+    fn try_coerce_date_time(data: NaiveDateTime, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::DateTime => Self::DateTime(data),
+            DataType::Utf8String(_) => Self::Utf8String(
+                data.format("%Y-%m-%dT%H:%M:%S")
+                    .to_string()
+                    .as_bytes()
+                    .to_vec(),
+            ),
+            _ => bail!(
+                "No type coercion exists from type 'date/time' ({}) to {:?}",
+                data,
+                r#type
+            ),
+        })
+    }
+
+    fn try_coerce_date_time_with_tz(data: DateTimeWithTZ, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::DateTimeWithTZ => Self::DateTimeWithTZ(data),
+            DataType::Utf8String(_) if data.tz == chrono_tz::UTC => {
+                Self::Utf8String(data.zoned()?.to_rfc3339().as_bytes().to_vec())
+            }
+            _ => bail!(
+                "No type coercion exists from type 'date/time with timezone' ({:?}) to {:?}",
+                data,
+                r#type
+            ),
+        })
+    }
+
+    fn try_coerce_uuid(data: Uuid, r#type: &DataType) -> Result<DataValue> {
+        Ok(match r#type {
+            DataType::Uuid => Self::Uuid(data),
+            DataType::Utf8String(_) => Self::Utf8String(data.to_string().as_bytes().to_vec()),
+            DataType::Binary => Self::Binary(data.into_bytes().to_vec()),
+            _ => bail!(
+                "No type coercion exists from type 'uuid' ({}) to {:?}",
+                data,
+                r#type
+            ),
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use rust_decimal::Decimal;
+    use chrono_tz::Tz;
 
+    use super::*;
     use crate::data::*;
 
     #[test]
@@ -643,9 +777,7 @@ mod tests {
                 ],
             ),
             (
-                vec![
-                    DataValue::Float32(1234.5678),
-                ],
+                vec![DataValue::Float32(1234.5678)],
                 vec![
                     DataType::Float32,
                     DataType::Float64,
@@ -657,6 +789,52 @@ mod tests {
                 vec![
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::Utf8String("{}".as_bytes().to_vec()),
+                    DataValue::Utf8String("\"abc\"".as_bytes().to_vec()),
+                ],
+                vec![
+                    DataType::Utf8String(StringOptions::default()),
+                    DataType::JSON,
+                ],
+            ),
+            (
+                vec![
+                    DataValue::JSON("{}".to_string()),
+                    DataValue::JSON("\"abc\"".to_string()),
+                ],
+                vec![
+                    DataType::JSON,
+                    DataType::Utf8String(StringOptions::default()),
+                ],
+            ),
+            (
+                vec![
+                    DataValue::Date(NaiveDate::from_ymd(2020, 10, 25)),
+                    DataValue::Time(NaiveTime::from_hms(16, 54, 32)),
+                    DataValue::DateTime(NaiveDateTime::new(
+                        NaiveDate::from_ymd(2020, 10, 25),
+                        NaiveTime::from_hms(16, 54, 32),
+                    )),
+                    DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+                        NaiveDateTime::new(
+                            NaiveDate::from_ymd(2020, 10, 25),
+                            NaiveTime::from_hms(16, 54, 32),
+                        ),
+                        Tz::UTC,
+                    )),
+                ],
+                vec![DataType::Utf8String(StringOptions::default())],
+            ),
+            (
+                vec![DataValue::Uuid(Uuid::new_v4())],
+                vec![
+                    DataType::Uuid,
+                    DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
         ];
@@ -704,6 +882,22 @@ mod tests {
                 .unwrap(),
             DataValue::Binary(data.clone())
         );
+    }
+
+    #[test]
+    fn test_data_value_coerce_utf8_string_to_json() {
+        let data = "{\"hello\": \"world\"}".as_bytes().to_vec();
+
+        assert_eq!(
+            DataValue::Utf8String(data.clone())
+                .try_coerce_into(&DataType::JSON)
+                .unwrap(),
+            DataValue::JSON(String::from_utf8(data).unwrap())
+        );
+
+        DataValue::Utf8String("INVALID JSON".as_bytes().to_vec())
+            .try_coerce_into(&DataType::JSON)
+            .unwrap_err();
     }
 
     #[test]
