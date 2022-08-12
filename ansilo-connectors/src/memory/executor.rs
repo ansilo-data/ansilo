@@ -7,7 +7,11 @@ use std::{
 
 use ansilo_core::{
     config::EntityAttributeConfig,
-    data::{DataType, DataValue, StringOptions},
+    data::{
+        rust_decimal::{prelude::FromPrimitive, Decimal, MathematicalOps},
+        uuid::Uuid,
+        DataType, DataValue, DecimalOptions, StringOptions,
+    },
     err::{bail, Context, Error, Result},
     sqlil::{self},
 };
@@ -15,7 +19,7 @@ use itertools::Itertools;
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
 
-use super::{MemoryDatabase, MemoryConnectorEntitySourceConfig, MemoryResultSet};
+use super::{MemoryConnectorEntitySourceConfig, MemoryDatabase, MemoryResultSet};
 
 #[derive(Debug, Clone)]
 pub(crate) struct MemoryQueryExecutor {
@@ -163,7 +167,7 @@ impl MemoryQueryExecutor {
     fn run_delete(&self, delete: &sqlil::Delete) -> Result<MemoryResultSet> {
         self.update_entity_data(&delete.target, |rows| {
             let mut retained = vec![];
-            
+
             for row in rows.iter() {
                 if !self.satisfies_where(row)? {
                     retained.push(row.clone());
@@ -445,7 +449,41 @@ impl MemoryQueryExecutor {
                     .context("Unknown parameter id")?
                     .clone(),
             ),
-            sqlil::Expr::UnaryOp(_) => todo!(),
+            sqlil::Expr::UnaryOp(op) => {
+                let arg = self.evaluate(data, &op.expr)?.as_cell()?;
+
+                DataContext::Cell(match op.r#type {
+                    sqlil::UnaryOpType::LogicalNot => {
+                        match arg.try_coerce_into(&DataType::Boolean)? {
+                            DataValue::Boolean(v) => DataValue::Boolean(!v),
+                            _ => unreachable!(),
+                        }
+                    }
+                    sqlil::UnaryOpType::Negate => match arg {
+                        DataValue::Int8(v) => DataValue::Int8(-v),
+                        DataValue::Int16(v) => DataValue::Int16(-v),
+                        DataValue::Int32(v) => DataValue::Int32(-v),
+                        DataValue::Int64(v) => DataValue::Int64(-v),
+                        DataValue::Float32(v) => DataValue::Float32(-v),
+                        DataValue::Float64(v) => DataValue::Float64(-v),
+                        DataValue::Decimal(v) => DataValue::Decimal(-v),
+                        _ => bail!("Cannot negate type: {:?}", arg.r#type()),
+                    },
+                    sqlil::UnaryOpType::BitwiseNot => match arg {
+                        DataValue::Int8(v) => DataValue::Int8(!v),
+                        DataValue::UInt8(v) => DataValue::UInt8(!v),
+                        DataValue::Int16(v) => DataValue::Int16(!v),
+                        DataValue::UInt16(v) => DataValue::UInt16(!v),
+                        DataValue::Int32(v) => DataValue::Int32(!v),
+                        DataValue::UInt32(v) => DataValue::UInt32(!v),
+                        DataValue::Int64(v) => DataValue::Int64(!v),
+                        DataValue::UInt64(v) => DataValue::UInt64(!v),
+                        _ => bail!("Cannot bit-invert type: {:?}", arg.r#type()),
+                    },
+                    sqlil::UnaryOpType::IsNull => DataValue::Boolean(arg.is_null()),
+                    sqlil::UnaryOpType::IsNotNull => DataValue::Boolean(!arg.is_null()),
+                })
+            }
             sqlil::Expr::BinaryOp(op) => {
                 let left = self.evaluate(data, &op.left)?.as_cell()?;
                 let right = self.evaluate(data, &op.right)?.as_cell()?;
@@ -468,20 +506,290 @@ impl MemoryQueryExecutor {
                     (left, right)
                 };
 
-                DataContext::Cell(match op.r#type {
-                    sqlil::BinaryOpType::Add => todo!(),
-                    sqlil::BinaryOpType::Subtract => todo!(),
-                    sqlil::BinaryOpType::Multiply => todo!(),
-                    sqlil::BinaryOpType::Divide => todo!(),
-                    sqlil::BinaryOpType::Modulo => todo!(),
-                    sqlil::BinaryOpType::Exponent => todo!(),
-                    sqlil::BinaryOpType::LogicalAnd => todo!(),
-                    sqlil::BinaryOpType::LogicalOr => todo!(),
-                    sqlil::BinaryOpType::BitwiseAnd => todo!(),
-                    sqlil::BinaryOpType::BitwiseOr => todo!(),
-                    sqlil::BinaryOpType::BitwiseXor => todo!(),
-                    sqlil::BinaryOpType::BitwiseShiftLeft => todo!(),
-                    sqlil::BinaryOpType::BitwiseShiftRight => todo!(),
+                DataContext::Cell(match &op.r#type {
+                    sqlil::BinaryOpType::Add => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => {
+                            DataValue::Int16(l as i16 + r as i16)
+                        }
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => {
+                            DataValue::UInt16(l as u16 + r as u16)
+                        }
+                        (DataValue::Int16(l), DataValue::Int16(r)) => {
+                            DataValue::Int32(l as i32 + r as i32)
+                        }
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => {
+                            DataValue::UInt32(l as u32 + r as u32)
+                        }
+                        (DataValue::Int32(l), DataValue::Int32(r)) => {
+                            DataValue::Int64(l as i64 + r as i64)
+                        }
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => {
+                            DataValue::UInt64(l as u64 + r as u64)
+                        }
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Decimal(
+                            Decimal::from_i64(l).unwrap() + Decimal::from_i64(r).unwrap(),
+                        ),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Decimal(
+                            Decimal::from_u64(l).unwrap() + Decimal::from_u64(r).unwrap(),
+                        ),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => {
+                            DataValue::Float64(l as f64 + r as f64)
+                        }
+                        (DataValue::Float64(l), DataValue::Float64(r)) => DataValue::Float64(l + r),
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => DataValue::Decimal(l + r),
+                        (l, r) => bail!("Cannot add pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::Subtract => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => {
+                            DataValue::Int16(l as i16 - r as i16)
+                        }
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => {
+                            DataValue::Int16(l as i16 - r as i16)
+                        }
+                        (DataValue::Int16(l), DataValue::Int16(r)) => {
+                            DataValue::Int32(l as i32 - r as i32)
+                        }
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => {
+                            DataValue::Int32(l as i32 - r as i32)
+                        }
+                        (DataValue::Int32(l), DataValue::Int32(r)) => {
+                            DataValue::Int64(l as i64 - r as i64)
+                        }
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => {
+                            DataValue::Int64(l as i64 - r as i64)
+                        }
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Decimal(
+                            Decimal::from_i64(l).unwrap() - Decimal::from_i64(r).unwrap(),
+                        ),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Decimal(
+                            Decimal::from_u64(l).unwrap() - Decimal::from_u64(r).unwrap(),
+                        ),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => {
+                            DataValue::Float64(l as f64 - r as f64)
+                        }
+                        (DataValue::Float64(l), DataValue::Float64(r)) => DataValue::Float64(l - r),
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => DataValue::Decimal(l - r),
+                        (l, r) => bail!("Cannot subtract pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::Multiply => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Decimal(
+                            Decimal::from_i8(l).unwrap() * Decimal::from_i8(r).unwrap(),
+                        ),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::Decimal(
+                            Decimal::from_u8(l).unwrap() * Decimal::from_u8(r).unwrap(),
+                        ),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Decimal(
+                            Decimal::from_i16(l).unwrap() * Decimal::from_i16(r).unwrap(),
+                        ),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::Decimal(
+                            Decimal::from_u16(l).unwrap() * Decimal::from_u16(r).unwrap(),
+                        ),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Decimal(
+                            Decimal::from_i32(l).unwrap() * Decimal::from_i32(r).unwrap(),
+                        ),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::Decimal(
+                            Decimal::from_u32(l).unwrap() * Decimal::from_u32(r).unwrap(),
+                        ),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Decimal(
+                            Decimal::from_i64(l).unwrap() * Decimal::from_i64(r).unwrap(),
+                        ),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Decimal(
+                            Decimal::from_u64(l).unwrap() * Decimal::from_u64(r).unwrap(),
+                        ),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => {
+                            DataValue::Float64(l as f64 * r as f64)
+                        }
+                        (DataValue::Float64(l), DataValue::Float64(r)) => DataValue::Float64(l * r),
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => DataValue::Decimal(l * r),
+                        (l, r) => bail!("Cannot multiply pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::Divide => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Decimal(
+                            Decimal::from_i8(l).unwrap() / Decimal::from_i8(r).unwrap(),
+                        ),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::Decimal(
+                            Decimal::from_u8(l).unwrap() / Decimal::from_u8(r).unwrap(),
+                        ),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Decimal(
+                            Decimal::from_i16(l).unwrap() / Decimal::from_i16(r).unwrap(),
+                        ),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::Decimal(
+                            Decimal::from_u16(l).unwrap() / Decimal::from_u16(r).unwrap(),
+                        ),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Decimal(
+                            Decimal::from_i32(l).unwrap() / Decimal::from_i32(r).unwrap(),
+                        ),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::Decimal(
+                            Decimal::from_u32(l).unwrap() / Decimal::from_u32(r).unwrap(),
+                        ),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Decimal(
+                            Decimal::from_i64(l).unwrap() / Decimal::from_i64(r).unwrap(),
+                        ),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Decimal(
+                            Decimal::from_u64(l).unwrap() / Decimal::from_u64(r).unwrap(),
+                        ),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => {
+                            DataValue::Float64(l as f64 / r as f64)
+                        }
+                        (DataValue::Float64(l), DataValue::Float64(r)) => DataValue::Float64(l / r),
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => DataValue::Decimal(l / r),
+                        (l, r) => bail!("Cannot divide pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::Modulo => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Decimal(
+                            Decimal::from_i8(l).unwrap() % Decimal::from_i8(r).unwrap(),
+                        ),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::Decimal(
+                            Decimal::from_u8(l).unwrap() % Decimal::from_u8(r).unwrap(),
+                        ),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Decimal(
+                            Decimal::from_i16(l).unwrap() % Decimal::from_i16(r).unwrap(),
+                        ),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::Decimal(
+                            Decimal::from_u16(l).unwrap() % Decimal::from_u16(r).unwrap(),
+                        ),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Decimal(
+                            Decimal::from_i32(l).unwrap() % Decimal::from_i32(r).unwrap(),
+                        ),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::Decimal(
+                            Decimal::from_u32(l).unwrap() % Decimal::from_u32(r).unwrap(),
+                        ),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Decimal(
+                            Decimal::from_i64(l).unwrap() % Decimal::from_i64(r).unwrap(),
+                        ),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Decimal(
+                            Decimal::from_u64(l).unwrap() % Decimal::from_u64(r).unwrap(),
+                        ),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => {
+                            DataValue::Float64(l as f64 % r as f64)
+                        }
+                        (DataValue::Float64(l), DataValue::Float64(r)) => DataValue::Float64(l % r),
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => DataValue::Decimal(l % r),
+                        (l, r) => bail!("Cannot mod pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::Exponent => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Decimal(
+                            Decimal::from_i8(l)
+                                .unwrap()
+                                .powd(Decimal::from_i8(r).unwrap()),
+                        ),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::Decimal(
+                            Decimal::from_u8(l)
+                                .unwrap()
+                                .powd(Decimal::from_u8(r).unwrap()),
+                        ),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Decimal(
+                            Decimal::from_i16(l)
+                                .unwrap()
+                                .powd(Decimal::from_i16(r).unwrap()),
+                        ),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::Decimal(
+                            Decimal::from_u16(l)
+                                .unwrap()
+                                .powd(Decimal::from_u16(r).unwrap()),
+                        ),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Decimal(
+                            Decimal::from_i32(l)
+                                .unwrap()
+                                .powd(Decimal::from_i32(r).unwrap()),
+                        ),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::Decimal(
+                            Decimal::from_u32(l)
+                                .unwrap()
+                                .powd(Decimal::from_u32(r).unwrap()),
+                        ),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Decimal(
+                            Decimal::from_i64(l)
+                                .unwrap()
+                                .powd(Decimal::from_i64(r).unwrap()),
+                        ),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Decimal(
+                            Decimal::from_u64(l)
+                                .unwrap()
+                                .powd(Decimal::from_u64(r).unwrap()),
+                        ),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => {
+                            DataValue::Float64((l as f64).powf(r as f64))
+                        }
+                        (DataValue::Float64(l), DataValue::Float64(r)) => {
+                            DataValue::Float64(l.powf(r))
+                        }
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => {
+                            DataValue::Decimal(l.powd(r))
+                        }
+                        (l, r) => bail!("Cannot exponent pair ({:?}, {:?})", l, r),
+                    },
+                    r#type @ sqlil::BinaryOpType::LogicalAnd
+                    | r#type @ sqlil::BinaryOpType::LogicalOr => {
+                        match (
+                            left.clone().try_coerce_into(&DataType::Boolean),
+                            right.clone().try_coerce_into(&DataType::Boolean),
+                        ) {
+                            (Ok(DataValue::Boolean(l)), Ok(DataValue::Boolean(r))) => {
+                                DataValue::Boolean(match r#type {
+                                    sqlil::BinaryOpType::LogicalAnd => l && r,
+                                    sqlil::BinaryOpType::LogicalOr => l || r,
+                                    _ => unreachable!(),
+                                })
+                            }
+                            _ => bail!("Could not logical and pair ({:?}, {:?})", left, right),
+                        }
+                    }
+                    sqlil::BinaryOpType::BitwiseAnd => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Int8(l & r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::UInt8(l & r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Int16(l & r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::UInt16(l & r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Int32(l & r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::UInt32(l & r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Int64(l & r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::UInt64(l & r),
+                        (l, r) => bail!("Cannot bitwise-and pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::BitwiseOr => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Int8(l | r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::UInt8(l | r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Int16(l | r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::UInt16(l | r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Int32(l | r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::UInt32(l | r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Int64(l | r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::UInt64(l | r),
+                        (l, r) => bail!("Cannot bitwise-or pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::BitwiseXor => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Int8(l ^ r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::UInt8(l ^ r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Int16(l ^ r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::UInt16(l ^ r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Int32(l ^ r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::UInt32(l ^ r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Int64(l ^ r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::UInt64(l ^ r),
+                        (l, r) => bail!("Cannot bitwise-xor pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::BitwiseShiftLeft => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Int8(l << r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::UInt8(l << r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Int16(l << r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::UInt16(l << r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Int32(l << r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::UInt32(l << r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Int64(l << r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::UInt64(l << r),
+                        (l, r) => bail!("Cannot bitshift-left pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::BitwiseShiftRight => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Int8(l >> r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::UInt8(l >> r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Int16(l >> r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::UInt16(l >> r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Int32(l >> r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::UInt32(l >> r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Int64(l >> r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::UInt64(l >> r),
+                        (l, r) => bail!("Cannot bitshift-right pair ({:?}, {:?})", l, r),
+                    },
                     sqlil::BinaryOpType::Concat => {
                         let string = DataType::Utf8String(StringOptions::default());
                         let left = left.try_coerce_into(&string)?;
@@ -501,19 +809,141 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::Equal => DataValue::Boolean(left == right),
                     sqlil::BinaryOpType::NullSafeEqual => DataValue::Boolean(left == right),
                     sqlil::BinaryOpType::NotEqual => DataValue::Boolean(left != right),
-                    sqlil::BinaryOpType::GreaterThan => todo!(),
-                    sqlil::BinaryOpType::GreaterThanOrEqual => todo!(),
-                    sqlil::BinaryOpType::LessThan => todo!(),
-                    sqlil::BinaryOpType::LessThanOrEqual => todo!(),
+                    sqlil::BinaryOpType::GreaterThan => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Boolean(l > r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::Boolean(l > r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Boolean(l > r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::Boolean(l > r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Boolean(l > r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::Boolean(l > r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Boolean(l > r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Boolean(l > r),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => DataValue::Boolean(l > r),
+                        (DataValue::Float64(l), DataValue::Float64(r)) => DataValue::Boolean(l > r),
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => DataValue::Boolean(l > r),
+                        (l, r) => bail!("Cannot compare pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::GreaterThanOrEqual => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Boolean(l >= r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::Boolean(l >= r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Boolean(l >= r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::Boolean(l >= r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Boolean(l >= r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::Boolean(l >= r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Boolean(l >= r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Boolean(l >= r),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => {
+                            DataValue::Boolean(l >= r)
+                        }
+                        (DataValue::Float64(l), DataValue::Float64(r)) => {
+                            DataValue::Boolean(l >= r)
+                        }
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => {
+                            DataValue::Boolean(l >= r)
+                        }
+                        (l, r) => bail!("Cannot compare pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::LessThan => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Boolean(l < r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::Boolean(l < r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Boolean(l < r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::Boolean(l < r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Boolean(l < r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::Boolean(l < r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Boolean(l < r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Boolean(l < r),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => DataValue::Boolean(l < r),
+                        (DataValue::Float64(l), DataValue::Float64(r)) => DataValue::Boolean(l < r),
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => DataValue::Boolean(l < r),
+                        (l, r) => bail!("Cannot compare pair ({:?}, {:?})", l, r),
+                    },
+                    sqlil::BinaryOpType::LessThanOrEqual => match (left, right) {
+                        (DataValue::Int8(l), DataValue::Int8(r)) => DataValue::Boolean(l <= r),
+                        (DataValue::UInt8(l), DataValue::UInt8(r)) => DataValue::Boolean(l <= r),
+                        (DataValue::Int16(l), DataValue::Int16(r)) => DataValue::Boolean(l <= r),
+                        (DataValue::UInt16(l), DataValue::UInt16(r)) => DataValue::Boolean(l <= r),
+                        (DataValue::Int32(l), DataValue::Int32(r)) => DataValue::Boolean(l <= r),
+                        (DataValue::UInt32(l), DataValue::UInt32(r)) => DataValue::Boolean(l <= r),
+                        (DataValue::Int64(l), DataValue::Int64(r)) => DataValue::Boolean(l <= r),
+                        (DataValue::UInt64(l), DataValue::UInt64(r)) => DataValue::Boolean(l <= r),
+                        (DataValue::Float32(l), DataValue::Float32(r)) => {
+                            DataValue::Boolean(l <= r)
+                        }
+                        (DataValue::Float64(l), DataValue::Float64(r)) => {
+                            DataValue::Boolean(l <= r)
+                        }
+                        (DataValue::Decimal(l), DataValue::Decimal(r)) => {
+                            DataValue::Boolean(l <= r)
+                        }
+                        (l, r) => bail!("Cannot compare pair ({:?}, {:?})", l, r),
+                    },
                 })
             }
-            sqlil::Expr::Cast(_) => todo!(),
-            sqlil::Expr::FunctionCall(_) => todo!(),
-            sqlil::Expr::AggregateCall(sqlil::AggregateCall::Count) => {
-                DataContext::Cell(DataValue::UInt64(data.as_group_ref()?.len() as _))
+            sqlil::Expr::Cast(cast) => {
+                let val = self.evaluate(data, &cast.expr)?.as_cell()?;
+                DataContext::Cell(val.try_coerce_into(&cast.r#type)?)
             }
-            _ => todo!(),
+            sqlil::Expr::FunctionCall(call) => self.evaluate_func_call(data, call)?,
+            sqlil::Expr::AggregateCall(call) => self.evaluate_agg_call(data, call)?,
         })
+    }
+
+    fn evaluate_func_call(
+        &self,
+        data: &DataContext,
+        call: &sqlil::FunctionCall,
+    ) -> Result<DataContext> {
+        Ok(DataContext::Cell(match call {
+            sqlil::FunctionCall::Abs(arg) => match self.evaluate(data, arg)?.as_cell()? {
+                DataValue::Int8(v) => DataValue::Int8(v.abs()),
+                DataValue::UInt8(v) => DataValue::UInt8(v),
+                DataValue::Int16(v) => DataValue::Int16(v.abs()),
+                DataValue::UInt16(v) => DataValue::UInt16(v),
+                DataValue::Int32(v) => DataValue::Int32(v.abs()),
+                DataValue::UInt32(v) => DataValue::UInt32(v),
+                DataValue::Int64(v) => DataValue::Int64(v.abs()),
+                DataValue::UInt64(v) => DataValue::UInt64(v),
+                DataValue::Float32(v) => DataValue::Float32(v.abs()),
+                DataValue::Float64(v) => DataValue::Float64(v.abs()),
+                DataValue::Decimal(v) => DataValue::Decimal(v.abs()),
+                val => bail!("Cannot abs val: {:?}", val),
+            },
+            sqlil::FunctionCall::Length(arg) => match self
+                .evaluate(data, arg)?
+                .as_cell()?
+                .try_coerce_into(&DataType::Utf8String(StringOptions::default()))?
+            {
+                DataValue::Utf8String(data) => DataValue::UInt32(data.len() as _),
+                _ => unreachable!(),
+            },
+            sqlil::FunctionCall::Uppercase(arg) => match self
+                .evaluate(data, arg)?
+                .as_cell()?
+                .try_coerce_into(&DataType::Utf8String(StringOptions::default()))?
+            {
+                DataValue::Utf8String(data) => DataValue::Utf8String(todo!()),
+                _ => unreachable!(),
+            },
+            sqlil::FunctionCall::Lowercase(_) => todo!(),
+            sqlil::FunctionCall::Substring(_) => todo!(),
+            sqlil::FunctionCall::Uuid => DataValue::Uuid(Uuid::new_v4()),
+            sqlil::FunctionCall::Coalesce(_) => todo!(),
+        }))
+    }
+
+    fn evaluate_agg_call(
+        &self,
+        data: &DataContext,
+        call: &sqlil::AggregateCall,
+    ) -> Result<DataContext> {
+        Ok(DataContext::Cell(match call {
+            sqlil::AggregateCall::Sum(_) => todo!(),
+            sqlil::AggregateCall::Count => DataValue::UInt64(data.as_group_ref()?.len() as _),
+            sqlil::AggregateCall::CountDistinct(_) => todo!(),
+            sqlil::AggregateCall::Max(_) => todo!(),
+            sqlil::AggregateCall::Min(_) => todo!(),
+            sqlil::AggregateCall::StringAgg(_) => todo!(),
+        }))
     }
 
     fn cols(&self) -> Result<Vec<(String, DataType)>> {
@@ -531,42 +961,144 @@ impl MemoryQueryExecutor {
             sqlil::Expr::Attribute(a) => self.get_attr(a)?.r#type.clone(),
             sqlil::Expr::Constant(v) => (&v.value).into(),
             sqlil::Expr::Parameter(p) => p.r#type.clone(),
-            sqlil::Expr::UnaryOp(_) => todo!(),
+            sqlil::Expr::UnaryOp(op) => {
+                let arg = self.evaluate_type(&op.expr)?;
+
+                match &op.r#type {
+                    sqlil::UnaryOpType::LogicalNot => DataType::Boolean,
+                    sqlil::UnaryOpType::Negate => match &arg {
+                        DataType::Int8 => DataType::Int8,
+                        DataType::Int16 => DataType::Int16,
+                        DataType::Int32 => DataType::Int32,
+                        DataType::Int64 => DataType::Int64,
+                        DataType::Float32 => DataType::Float32,
+                        DataType::Float64 => DataType::Float64,
+                        DataType::Decimal(_) => DataType::Decimal(DecimalOptions::default()),
+                        _ => bail!("Cannot negate type: {:?}", arg),
+                    },
+                    sqlil::UnaryOpType::BitwiseNot => match &arg {
+                        DataType::Int8 => DataType::Int8,
+                        DataType::UInt8 => DataType::UInt8,
+                        DataType::Int16 => DataType::Int16,
+                        DataType::UInt16 => DataType::UInt16,
+                        DataType::Int32 => DataType::Int32,
+                        DataType::UInt32 => DataType::UInt32,
+                        DataType::Int64 => DataType::Int64,
+                        DataType::UInt64 => DataType::UInt64,
+                        _ => bail!("Cannot bitwise not type: {:?}", arg),
+                    },
+                    sqlil::UnaryOpType::IsNull => DataType::Boolean,
+                    sqlil::UnaryOpType::IsNotNull => DataType::Boolean,
+                }
+            }
             sqlil::Expr::BinaryOp(op) => {
-                let _left = self.evaluate_type(&op.left)?;
-                let _right = self.evaluate_type(&op.right)?;
+                let left = self.evaluate_type(&op.left)?;
+                let right = self.evaluate_type(&op.right)?;
 
                 match op.r#type {
-                    sqlil::BinaryOpType::Add => todo!(),
-                    sqlil::BinaryOpType::Subtract => todo!(),
-                    sqlil::BinaryOpType::Multiply => todo!(),
-                    sqlil::BinaryOpType::Divide => todo!(),
-                    sqlil::BinaryOpType::Modulo => todo!(),
-                    sqlil::BinaryOpType::Exponent => todo!(),
+                    sqlil::BinaryOpType::Add => match &left {
+                        DataType::Int8 => DataType::Int16,
+                        DataType::UInt8 => DataType::UInt16,
+                        DataType::Int16 => DataType::Int32,
+                        DataType::UInt16 => DataType::UInt32,
+                        DataType::Int32 => DataType::Int64,
+                        DataType::UInt32 => DataType::UInt64,
+                        DataType::Int64 => DataType::Decimal(DecimalOptions::default()),
+                        DataType::UInt64 => DataType::Decimal(DecimalOptions::default()),
+                        DataType::Float32 => DataType::Float64,
+                        DataType::Float64 => DataType::Float64,
+                        DataType::Decimal(_) => DataType::Decimal(DecimalOptions::default()),
+                        _ => bail!("Cannot add types ({:?}, {:?}", left, right),
+                    },
+                    sqlil::BinaryOpType::Subtract => match &left {
+                        DataType::Int8 => DataType::Int16,
+                        DataType::UInt8 => DataType::Int16,
+                        DataType::Int16 => DataType::Int32,
+                        DataType::UInt16 => DataType::Int32,
+                        DataType::Int32 => DataType::Int64,
+                        DataType::UInt32 => DataType::Int64,
+                        DataType::Int64 => DataType::Decimal(DecimalOptions::default()),
+                        DataType::UInt64 => DataType::Decimal(DecimalOptions::default()),
+                        DataType::Float32 => DataType::Float64,
+                        DataType::Float64 => DataType::Float64,
+                        DataType::Decimal(_) => DataType::Decimal(DecimalOptions::default()),
+                        _ => bail!("Cannot subtract types ({:?}, {:?}", left, right),
+                    },
+                    sqlil::BinaryOpType::Multiply
+                    | sqlil::BinaryOpType::Divide
+                    | sqlil::BinaryOpType::Modulo
+                    | sqlil::BinaryOpType::Exponent => match &left {
+                        DataType::Int8
+                        | DataType::UInt8
+                        | DataType::Int16
+                        | DataType::UInt16
+                        | DataType::Int32
+                        | DataType::UInt32
+                        | DataType::Int64
+                        | DataType::UInt64
+                        | DataType::Float32
+                        | DataType::Float64
+                        | DataType::Decimal(_) => DataType::Decimal(DecimalOptions::default()),
+                        _ => bail!(
+                            "Cannot divide/multiply/mod/exp types ({:?}, {:?}",
+                            left,
+                            right
+                        ),
+                    },
                     sqlil::BinaryOpType::LogicalAnd => DataType::Boolean,
                     sqlil::BinaryOpType::LogicalOr => DataType::Boolean,
-                    sqlil::BinaryOpType::BitwiseAnd => todo!(),
-                    sqlil::BinaryOpType::BitwiseOr => todo!(),
-                    sqlil::BinaryOpType::BitwiseXor => todo!(),
-                    sqlil::BinaryOpType::BitwiseShiftLeft => todo!(),
-                    sqlil::BinaryOpType::BitwiseShiftRight => todo!(),
+                    sqlil::BinaryOpType::BitwiseAnd
+                    | sqlil::BinaryOpType::BitwiseOr
+                    | sqlil::BinaryOpType::BitwiseXor
+                    | sqlil::BinaryOpType::BitwiseShiftLeft
+                    | sqlil::BinaryOpType::BitwiseShiftRight => match &left {
+                        DataType::Int8 => DataType::Int8,
+                        DataType::UInt8 => DataType::UInt8,
+                        DataType::Int16 => DataType::Int16,
+                        DataType::UInt16 => DataType::UInt16,
+                        DataType::Int32 => DataType::Int32,
+                        DataType::UInt32 => DataType::UInt32,
+                        DataType::Int64 => DataType::Int64,
+                        DataType::UInt64 => DataType::UInt64,
+                        _ => bail!(
+                            "Cannot bitwise-(and/or/xor/shift) pair ({:?}, {:?})",
+                            left,
+                            right
+                        ),
+                    },
                     sqlil::BinaryOpType::Concat => DataType::Utf8String(StringOptions::default()),
-                    sqlil::BinaryOpType::Regexp => todo!(),
-                    sqlil::BinaryOpType::In => todo!(),
-                    sqlil::BinaryOpType::NotIn => todo!(),
+                    sqlil::BinaryOpType::Regexp => DataType::Boolean,
+                    sqlil::BinaryOpType::In => DataType::Boolean,
+                    sqlil::BinaryOpType::NotIn => DataType::Boolean,
                     sqlil::BinaryOpType::Equal => DataType::Boolean,
                     sqlil::BinaryOpType::NullSafeEqual => DataType::Boolean,
                     sqlil::BinaryOpType::NotEqual => DataType::Boolean,
-                    sqlil::BinaryOpType::GreaterThan => todo!(),
-                    sqlil::BinaryOpType::GreaterThanOrEqual => todo!(),
-                    sqlil::BinaryOpType::LessThan => todo!(),
-                    sqlil::BinaryOpType::LessThanOrEqual => todo!(),
+                    sqlil::BinaryOpType::GreaterThan => DataType::Boolean,
+                    sqlil::BinaryOpType::GreaterThanOrEqual => DataType::Boolean,
+                    sqlil::BinaryOpType::LessThan => DataType::Boolean,
+                    sqlil::BinaryOpType::LessThanOrEqual => DataType::Boolean,
                 }
             }
-            sqlil::Expr::Cast(_) => todo!(),
-            sqlil::Expr::FunctionCall(_) => todo!(),
-            sqlil::Expr::AggregateCall(sqlil::AggregateCall::Count) => DataType::UInt64,
-            _ => todo!(),
+            sqlil::Expr::Cast(cast) => cast.r#type.clone(),
+            sqlil::Expr::FunctionCall(call) => match call {
+                sqlil::FunctionCall::Abs(arg) => self.evaluate_type(arg)?,
+                sqlil::FunctionCall::Length(_) => DataType::Int32,
+                sqlil::FunctionCall::Uppercase(_) => DataType::Utf8String(StringOptions::default()),
+                sqlil::FunctionCall::Lowercase(_) => DataType::Utf8String(StringOptions::default()),
+                sqlil::FunctionCall::Substring(_) => DataType::Utf8String(StringOptions::default()),
+                sqlil::FunctionCall::Uuid => DataType::Uuid,
+                sqlil::FunctionCall::Coalesce(args) => self.evaluate_type(&args[0])?,
+            },
+            sqlil::Expr::AggregateCall(call) => match call {
+                sqlil::AggregateCall::Sum(arg) => DataType::Decimal(DecimalOptions::default()),
+                sqlil::AggregateCall::Count => DataType::UInt64,
+                sqlil::AggregateCall::CountDistinct(_) => DataType::UInt64,
+                sqlil::AggregateCall::Max(_) => DataType::Decimal(DecimalOptions::default()),
+                sqlil::AggregateCall::Min(_) => DataType::Decimal(DecimalOptions::default()),
+                sqlil::AggregateCall::StringAgg(_) => {
+                    DataType::Utf8String(StringOptions::default())
+                }
+            },
         })
     }
 

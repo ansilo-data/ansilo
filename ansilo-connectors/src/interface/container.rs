@@ -7,11 +7,11 @@ use ansilo_core::{
 
 use crate::{
     common::entity::ConnectorEntityConfig,
-    jdbc::{JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet},
+    jdbc::JdbcQuery,
     jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector, OracleJdbcEntitySourceConfig},
     memory::{
-        MemoryConnection, MemoryDatabase, MemoryConnectionPool, MemoryConnector,
-        MemoryConnectorEntitySourceConfig, MemoryQuery, MemoryQueryHandle, MemoryResultSet,
+        MemoryConnection, MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
+        MemoryDatabase, MemoryQuery, MemoryQueryHandle, MemoryResultSet,
     },
 };
 
@@ -173,7 +173,9 @@ impl Connection for Connections {
 
     fn prepare(&mut self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
         Ok(match (self, query) {
-            (Connections::OracleJdbc(c), Queries::Jdbc(q)) => QueryHandles::OracleJdbc(c.prepare(q)?),
+            (Connections::OracleJdbc(c), Queries::Jdbc(q)) => {
+                QueryHandles::OracleJdbc(c.prepare(q)?)
+            }
             (Connections::Memory(c), Queries::Memory(q)) => QueryHandles::Memory(c.prepare(q)?),
             (_, _) => bail!("Type mismatch between connection and query",),
         })

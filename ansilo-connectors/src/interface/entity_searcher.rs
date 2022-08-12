@@ -1,8 +1,5 @@
 use crate::common::entity::EntitySource;
-use ansilo_core::{
-    config::{self, NodeConfig},
-    err::Result,
-};
+use ansilo_core::{config::NodeConfig, err::Result};
 
 use super::Connection;
 

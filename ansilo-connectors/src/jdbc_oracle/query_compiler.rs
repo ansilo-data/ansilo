@@ -1,11 +1,12 @@
 use ansilo_core::{
+    data::{DataType, DataValue},
     err::{bail, Context, Result},
     sqlil as sql,
 };
 
 use crate::{
     interface::QueryCompiler,
-    jdbc::{JdbcConnection, JdbcQuery, JdbcQueryParam, JdbcDefaultTypeMapping},
+    jdbc::{JdbcConnection, JdbcDefaultTypeMapping, JdbcQuery, JdbcQueryParam},
 };
 
 use super::{
@@ -217,9 +218,9 @@ impl OracleJdbcQueryCompiler {
 
         Ok(match join.r#type {
             sql::JoinType::Inner => format!("INNER JOIN {} ON {}", target, cond),
-            sql::JoinType::Left => todo!(),
-            sql::JoinType::Right => todo!(),
-            sql::JoinType::Full => todo!(),
+            sql::JoinType::Left => format!("LEFT JOIN {} ON {}", target, cond),
+            sql::JoinType::Right => format!("RIGHT JOIN {} ON {}", target, cond),
+            sql::JoinType::Full => format!("FULL JOIN {} ON {}", target, cond),
         })
     }
 
@@ -464,7 +465,6 @@ impl OracleJdbcQueryCompiler {
         let l = Self::compile_expr(conf, query, &*op.left, params)?;
         let r = Self::compile_expr(conf, query, &*op.right, params)?;
 
-        // TODO
         Ok(match op.r#type {
             sql::BinaryOpType::Add => format!("({}) + ({})", l, r),
             sql::BinaryOpType::Subtract => format!("({}) - ({})", l, r),
@@ -472,24 +472,26 @@ impl OracleJdbcQueryCompiler {
             sql::BinaryOpType::Divide => format!("({}) / ({})", l, r),
             sql::BinaryOpType::LogicalAnd => format!("({}) AND ({})", l, r),
             sql::BinaryOpType::LogicalOr => format!("({}) OR ({})", l, r),
-            sql::BinaryOpType::Modulo => todo!(),
-            sql::BinaryOpType::Exponent => todo!(),
-            sql::BinaryOpType::BitwiseAnd => todo!(),
-            sql::BinaryOpType::BitwiseOr => todo!(),
-            sql::BinaryOpType::BitwiseXor => todo!(),
-            sql::BinaryOpType::BitwiseShiftLeft => todo!(),
-            sql::BinaryOpType::BitwiseShiftRight => todo!(),
-            sql::BinaryOpType::Concat => todo!(),
-            sql::BinaryOpType::Regexp => todo!(),
-            sql::BinaryOpType::In => todo!(),
-            sql::BinaryOpType::NotIn => todo!(),
+            sql::BinaryOpType::Modulo => format!("MOD({}, {})", l, r),
+            sql::BinaryOpType::Exponent => format!("POWER({}, {})", l, r),
+            sql::BinaryOpType::BitwiseAnd => format!("UTL_RAW.BIT_AND({}, {})", l, r),
+            sql::BinaryOpType::BitwiseOr => format!("UTL_RAW.BIT_OR({}, {})", l, r),
+            sql::BinaryOpType::BitwiseXor => format!("UTL_RAW.BIT_XOR({}, {})", l, r),
+            sql::BinaryOpType::BitwiseShiftLeft => unimplemented!(),
+            sql::BinaryOpType::BitwiseShiftRight => unimplemented!(),
+            sql::BinaryOpType::Concat => format!("({}) || ({})", l, r),
+            sql::BinaryOpType::Regexp => format!("REGEXP_LIKE({}, {})", l, r),
+            sql::BinaryOpType::In => format!("({}) IN ({})", l, r),
+            sql::BinaryOpType::NotIn => format!("({}) NOT IN ({})", l, r),
             sql::BinaryOpType::Equal => format!("({}) = ({})", l, r),
-            sql::BinaryOpType::NullSafeEqual => todo!(),
-            sql::BinaryOpType::NotEqual => todo!(),
-            sql::BinaryOpType::GreaterThan => todo!(),
-            sql::BinaryOpType::GreaterThanOrEqual => todo!(),
-            sql::BinaryOpType::LessThan => todo!(),
-            sql::BinaryOpType::LessThanOrEqual => todo!(),
+            sql::BinaryOpType::NullSafeEqual => {
+                format!("SYS_OP_MAP_NONNULL({}) = SYS_OP_MAP_NONNULL({})", l, r)
+            }
+            sql::BinaryOpType::NotEqual => format!("({}) != ({})", l, r),
+            sql::BinaryOpType::GreaterThan => format!("({}) > ({})", l, r),
+            sql::BinaryOpType::GreaterThanOrEqual => format!("({}) >= ({})", l, r),
+            sql::BinaryOpType::LessThan => format!("({}) < ({})", l, r),
+            sql::BinaryOpType::LessThanOrEqual => format!("({}) <= ({})", l, r),
         })
     }
 
@@ -499,7 +501,31 @@ impl OracleJdbcQueryCompiler {
         cast: &sql::Cast,
         params: &mut Vec<JdbcQueryParam>,
     ) -> Result<String> {
-        todo!()
+        let arg = Self::compile_expr(conf, query, &cast.expr, params)?;
+
+        Ok(match &cast.r#type {
+            DataType::Utf8String(_) => format!("TO_NCHAR({})", arg),
+            DataType::Binary => format!("UTL_RAW.CAST_TO_RAW({})", arg),
+            DataType::Boolean => format!("CASE WHEN ({}) THEN TRUE ELSE FALSE END", arg),
+            DataType::Int8
+            | DataType::UInt8
+            | DataType::Int16
+            | DataType::UInt16
+            | DataType::Int32
+            | DataType::UInt32
+            | DataType::Int64
+            | DataType::UInt64
+            | DataType::Decimal(_) => format!("TO_NUMBER({})", arg),
+            DataType::Float32 => format!("TO_BINARY_FLOAT({})", arg),
+            DataType::Float64 => format!("TO_BINARY_DOUBLE({})", arg),
+            DataType::JSON => format!("JSON_SERIALIZE({})", arg),
+            DataType::Date => format!("TO_DATE({})", arg),
+            DataType::DateTime => format!("TO_TIMESTAMP({})", arg),
+            DataType::DateTimeWithTZ => format!("TO_TIMESTAMP_TZ({})", arg),
+            DataType::Null => format!("CASE WHEN ({}) THEN NULL ELSE NULL END", arg),
+            DataType::Uuid => unimplemented!(),
+            DataType::Time => unimplemented!(),
+        })
     }
 
     fn compile_function_call(
@@ -515,12 +541,29 @@ impl OracleJdbcQueryCompiler {
                     Self::compile_expr(conf, query, &*arg, params)?
                 )
             }
-            sql::FunctionCall::Abs(_) => todo!(),
-            sql::FunctionCall::Uppercase(_) => todo!(),
-            sql::FunctionCall::Lowercase(_) => todo!(),
-            sql::FunctionCall::Substring(_) => todo!(),
-            sql::FunctionCall::Uuid => todo!(),
-            sql::FunctionCall::Coalesce(_) => todo!(),
+            sql::FunctionCall::Abs(arg) => {
+                format!("ABS({})", Self::compile_expr(conf, query, &*arg, params)?)
+            }
+            sql::FunctionCall::Uppercase(arg) => {
+                format!("UPPER({})", Self::compile_expr(conf, query, &*arg, params)?)
+            }
+            sql::FunctionCall::Lowercase(arg) => {
+                format!("LOWER({})", Self::compile_expr(conf, query, &*arg, params)?)
+            }
+            sql::FunctionCall::Substring(call) => format!(
+                "SUBSTR({}, {}, {})",
+                Self::compile_expr(conf, query, &*call.string, params)?,
+                Self::compile_expr(conf, query, &*call.start, params)?,
+                Self::compile_expr(conf, query, &*call.len, params)?
+            ),
+            sql::FunctionCall::Uuid => "SYS_GUID()".into(),
+            sql::FunctionCall::Coalesce(args) => format!(
+                "COALECSE({})",
+                args.iter()
+                    .map(|arg| Self::compile_expr(conf, query, &**arg, params))
+                    .collect::<Result<Vec<_>>>()?
+                    .join(", ")
+            ),
         })
     }
 
@@ -534,11 +577,26 @@ impl OracleJdbcQueryCompiler {
             sql::AggregateCall::Sum(arg) => {
                 format!("SUM({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
-            sql::AggregateCall::Count => todo!(),
-            sql::AggregateCall::CountDistinct(_) => todo!(),
-            sql::AggregateCall::Max(_) => todo!(),
-            sql::AggregateCall::Min(_) => todo!(),
-            sql::AggregateCall::StringAgg(_) => todo!(),
+            sql::AggregateCall::Count => "COUNT(*)".into(),
+            sql::AggregateCall::CountDistinct(arg) => format!(
+                "COUNT(DISTINCT {})",
+                Self::compile_expr(conf, query, &*arg, params)?
+            ),
+            sql::AggregateCall::Max(arg) => {
+                format!("MAX({})", Self::compile_expr(conf, query, &*arg, params)?)
+            }
+            sql::AggregateCall::Min(arg) => {
+                format!("MIN({})", Self::compile_expr(conf, query, &*arg, params)?)
+            }
+            sql::AggregateCall::StringAgg(call) => {
+                params.push(JdbcQueryParam::Constant(DataValue::Utf8String(
+                    call.separator.as_bytes().to_vec(),
+                )));
+                format!(
+                    "LISTAGG({}, ?) WITHIN GROUP (ORDER BY NULL)",
+                    Self::compile_expr(conf, query, &call.expr, params)?,
+                )
+            }
         })
     }
 }
@@ -661,7 +719,7 @@ mod tests {
     }
 
     #[test]
-    fn test_oracle_jdbc_compile_select_join() {
+    fn test_oracle_jdbc_compile_select_inner_join() {
         let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
         select
             .cols
@@ -681,6 +739,84 @@ mod tests {
             compiled,
             JdbcQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" INNER JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_left_join() {
+        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        select
+            .cols
+            .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
+        select.joins.push(sql::Join::new(
+            sql::JoinType::Left,
+            sql::source("other", "v1", "other"),
+            vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
+                sql::Expr::attr("entity", "attr1"),
+                sql::BinaryOpType::Equal,
+                sql::Expr::attr("other", "otherattr1"),
+            ))],
+        ));
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" LEFT JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_right_join() {
+        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        select
+            .cols
+            .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
+        select.joins.push(sql::Join::new(
+            sql::JoinType::Right,
+            sql::source("other", "v1", "other"),
+            vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
+                sql::Expr::attr("entity", "attr1"),
+                sql::BinaryOpType::Equal,
+                sql::Expr::attr("other", "otherattr1"),
+            ))],
+        ));
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" RIGHT JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_select_full_join() {
+        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        select
+            .cols
+            .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
+        select.joins.push(sql::Join::new(
+            sql::JoinType::Full,
+            sql::source("other", "v1", "other"),
+            vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
+                sql::Expr::attr("entity", "attr1"),
+                sql::BinaryOpType::Equal,
+                sql::Expr::attr("other", "otherattr1"),
+            ))],
+        ));
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" FULL JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
         );

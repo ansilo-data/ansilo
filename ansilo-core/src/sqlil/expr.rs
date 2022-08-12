@@ -15,8 +15,6 @@ pub enum Expr {
     Cast(Cast),
     FunctionCall(FunctionCall),
     AggregateCall(AggregateCall),
-    // TODO:
-    // SubSelect(SubSelect)
 }
 
 type SubExpr = Box<Expr>;
@@ -307,13 +305,25 @@ impl Expr {
         }
     }
 
-    /// Returns whether any of the expression in the tree pass the supplied
+    /// Returns whether any of the expressions in the tree pass the supplied
     /// filter callback
     pub fn walk_any<T: Fn(&Expr) -> bool>(&self, cb: T) -> bool {
         let mut flag = false;
 
         self.walk(&mut |e| {
             flag = flag || cb(e);
+        });
+
+        flag
+    }
+
+    /// Returns whether all of the expressions in the tree pass the supplied
+    /// filter callback
+    pub fn walk_all<T: Fn(&Expr) -> bool>(&self, cb: T) -> bool {
+        let mut flag = true;
+
+        self.walk(&mut |e| {
+            flag = flag && cb(e);
         });
 
         flag

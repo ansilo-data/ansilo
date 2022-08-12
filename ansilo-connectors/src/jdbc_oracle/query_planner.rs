@@ -208,16 +208,28 @@ impl OracleJdbcQueryPlanner {
         expr: sql::Expr,
         alias: String,
     ) -> Result<QueryOperationResult> {
+        if !Self::expr_supported(&expr) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         select.cols.push((alias, expr));
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_where(select: &mut sql::Select, expr: sql::Expr) -> Result<QueryOperationResult> {
+        if !Self::expr_supported(&expr) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         select.r#where.push(expr);
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn select_add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
+        if !Self::exprs_supported(&join.conds[..]) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         select.joins.push(join);
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
@@ -226,6 +238,10 @@ impl OracleJdbcQueryPlanner {
         select: &mut sql::Select,
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
+        if !Self::expr_supported(&expr) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         select.group_bys.push(expr);
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
@@ -234,6 +250,10 @@ impl OracleJdbcQueryPlanner {
         select: &mut sql::Select,
         ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
+        if !Self::expr_supported(&ordering.expr) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         select.order_bys.push(ordering);
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
@@ -267,6 +287,10 @@ impl OracleJdbcQueryPlanner {
         col: String,
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
+        if !Self::expr_supported(&expr) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         insert.cols.push((col, expr));
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
@@ -276,18 +300,50 @@ impl OracleJdbcQueryPlanner {
         col: String,
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
+        if !Self::expr_supported(&expr) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         update.cols.push((col, expr));
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn update_add_where(update: &mut sql::Update, cond: sql::Expr) -> Result<QueryOperationResult> {
+        if !Self::expr_supported(&cond) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         update.r#where.push(cond);
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 
     fn delete_add_where(delete: &mut sql::Delete, cond: sql::Expr) -> Result<QueryOperationResult> {
+        if !Self::expr_supported(&cond) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
         delete.r#where.push(cond);
         Ok(QueryOperationResult::Ok(OperationCost::default()))
+    }
+
+    fn expr_supported(expr: &sql::Expr) -> bool {
+        expr.walk_all(|e| match e {
+            sql::Expr::BinaryOp(op) => match &op.r#type {
+                sql::BinaryOpType::BitwiseShiftLeft => false,
+                sql::BinaryOpType::BitwiseShiftRight => false,
+                _ => true,
+            },
+            sql::Expr::Cast(cast) => match &cast.r#type {
+                DataType::Uuid => false,
+                DataType::Time => false,
+                _ => true,
+            },
+            _ => true,
+        })
+    }
+
+    fn exprs_supported(expr: &[sql::Expr]) -> bool {
+        expr.iter().all(Self::expr_supported)
     }
 }
 

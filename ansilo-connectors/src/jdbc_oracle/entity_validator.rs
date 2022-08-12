@@ -15,9 +15,9 @@ impl EntityValidator for OracleJdbcEntityValidator {
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn validate(
-        connection: &mut Self::TConnection,
-        entity_version: &EntityVersionConfig,
-        nc: &NodeConfig,
+        _connection: &mut Self::TConnection,
+        _entity_version: &EntityVersionConfig,
+        _nc: &NodeConfig,
     ) -> Result<EntitySource<OracleJdbcEntitySourceConfig>> {
         todo!()
     }
