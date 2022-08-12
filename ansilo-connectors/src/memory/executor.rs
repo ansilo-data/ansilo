@@ -920,13 +920,52 @@ impl MemoryQueryExecutor {
                 .as_cell()?
                 .try_coerce_into(&DataType::Utf8String(StringOptions::default()))?
             {
-                DataValue::Utf8String(data) => DataValue::Utf8String(todo!()),
+                DataValue::Utf8String(data) => DataValue::Utf8String(data.to_uppercase()),
                 _ => unreachable!(),
             },
-            sqlil::FunctionCall::Lowercase(_) => todo!(),
-            sqlil::FunctionCall::Substring(_) => todo!(),
+            sqlil::FunctionCall::Lowercase(arg) => match self
+                .evaluate(data, arg)?
+                .as_cell()?
+                .try_coerce_into(&DataType::Utf8String(StringOptions::default()))?
+            {
+                DataValue::Utf8String(data) => DataValue::Utf8String(data.to_lowercase()),
+                _ => unreachable!(),
+            },
+            sqlil::FunctionCall::Substring(call) => {
+                let string = self
+                    .evaluate(data, &call.string)?
+                    .as_cell()?
+                    .try_coerce_into(&DataType::Utf8String(StringOptions::default()))?;
+                let start = self
+                    .evaluate(data, &call.start)?
+                    .as_cell()?
+                    .try_coerce_into(&DataType::UInt64)?;
+                let len = self
+                    .evaluate(data, &call.len)?
+                    .as_cell()?
+                    .try_coerce_into(&DataType::UInt64)?;
+
+                match (string, start, len) {
+                    (
+                        DataValue::Utf8String(data),
+                        DataValue::UInt64(start),
+                        DataValue::UInt64(len),
+                    ) => DataValue::Utf8String(data[(start as usize - 1)..(len as usize)].into()),
+                    _ => unreachable!(),
+                }
+            }
             sqlil::FunctionCall::Uuid => DataValue::Uuid(Uuid::new_v4()),
-            sqlil::FunctionCall::Coalesce(_) => todo!(),
+            sqlil::FunctionCall::Coalesce(args) => {
+                for arg in args {
+                    let arg = self.evaluate(data, arg)?.as_cell()?;
+
+                    if !arg.is_null() {
+                        return Ok(DataContext::Cell(arg));
+                    }
+                }
+
+                DataValue::Null
+            }
         }))
     }
 
@@ -936,13 +975,102 @@ impl MemoryQueryExecutor {
         call: &sqlil::AggregateCall,
     ) -> Result<DataContext> {
         Ok(DataContext::Cell(match call {
-            sqlil::AggregateCall::Sum(_) => todo!(),
+            sqlil::AggregateCall::Sum(arg) => self
+                .evaluate_group(data, arg)
+                .and_then(|group| {
+                    self.agg_reduce(group, |a, b| {
+                        sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                            sqlil::Expr::constant(a),
+                            sqlil::BinaryOpType::Add,
+                            sqlil::Expr::constant(b),
+                        ))
+                    })
+                })
+                .and_then(|res| {
+                    res.try_coerce_into(&DataType::Decimal(DecimalOptions::default()))
+                })?,
             sqlil::AggregateCall::Count => DataValue::UInt64(data.as_group_ref()?.len() as _),
-            sqlil::AggregateCall::CountDistinct(_) => todo!(),
-            sqlil::AggregateCall::Max(_) => todo!(),
-            sqlil::AggregateCall::Min(_) => todo!(),
-            sqlil::AggregateCall::StringAgg(_) => todo!(),
+            sqlil::AggregateCall::CountDistinct(arg) => {
+                self.evaluate_group(data, arg).map(|group| {
+                    DataValue::UInt64(group.into_iter().unique().collect::<Vec<_>>().len() as _)
+                })?
+            }
+            sqlil::AggregateCall::Max(arg) => self.evaluate_group(data, arg).and_then(|group| {
+                Ok(group
+                    .into_iter()
+                    .map(|v| v.try_coerce_into(&DataType::Decimal(DecimalOptions::default())))
+                    .collect::<Result<Vec<_>>>()?
+                    .into_iter()
+                    .max_by_key(|a| match a {
+                        DataValue::Decimal(v) => v.clone(),
+                        _ => unreachable!(),
+                    })
+                    .unwrap_or(DataValue::Null))
+            })?,
+            sqlil::AggregateCall::Min(arg) => self.evaluate_group(data, arg).and_then(|group| {
+                Ok(group
+                    .into_iter()
+                    .map(|v| v.try_coerce_into(&DataType::Decimal(DecimalOptions::default())))
+                    .collect::<Result<Vec<_>>>()?
+                    .into_iter()
+                    .min_by_key(|a| match a {
+                        DataValue::Decimal(v) => v.clone(),
+                        _ => unreachable!(),
+                    })
+                    .unwrap_or(DataValue::Null))
+            })?,
+            sqlil::AggregateCall::StringAgg(call) => {
+                self.evaluate_group(data, &call.expr).and_then(|group| {
+                    Ok(DataValue::Utf8String(
+                        group
+                            .into_iter()
+                            .map(|v| {
+                                v.try_coerce_into(&DataType::Utf8String(StringOptions::default()))
+                            })
+                            .collect::<Result<Vec<_>>>()?
+                            .into_iter()
+                            .map(|v| match v {
+                                DataValue::Utf8String(s) => s,
+                                _ => unreachable!(),
+                            })
+                            .join(&call.separator),
+                    ))
+                })?
+            }
         }))
+    }
+
+    fn evaluate_group(&self, data: &DataContext, expr: &sqlil::Expr) -> Result<Vec<DataValue>> {
+        data.as_group_ref()?
+            .clone()
+            .into_iter()
+            .map(|row| {
+                let ctx = DataContext::Row(row);
+                self.evaluate(&ctx, expr).and_then(|res| res.as_cell())
+            })
+            .collect::<Result<Vec<_>>>()
+    }
+
+    fn agg_reduce(
+        &self,
+        vals: Vec<DataValue>,
+        cb: impl Fn(DataValue, DataValue) -> sqlil::Expr,
+    ) -> Result<DataValue> {
+        if vals.is_empty() {
+            return Ok(DataValue::Null);
+        }
+
+        let mut iter = vals.into_iter();
+        let mut curr = iter.next().unwrap();
+
+        for next in iter {
+            let expr = cb(curr, next);
+            curr = self
+                .evaluate(&DataContext::Cell(DataValue::Null), &expr)?
+                .as_cell()?;
+        }
+
+        Ok(curr)
     }
 
     fn cols(&self) -> Result<Vec<(String, DataType)>> {
@@ -1089,7 +1217,7 @@ impl MemoryQueryExecutor {
                 sqlil::FunctionCall::Coalesce(args) => self.evaluate_type(&args[0])?,
             },
             sqlil::Expr::AggregateCall(call) => match call {
-                sqlil::AggregateCall::Sum(arg) => DataType::Decimal(DecimalOptions::default()),
+                sqlil::AggregateCall::Sum(_) => DataType::Decimal(DecimalOptions::default()),
                 sqlil::AggregateCall::Count => DataType::UInt64,
                 sqlil::AggregateCall::CountDistinct(_) => DataType::UInt64,
                 sqlil::AggregateCall::Max(_) => DataType::Decimal(DecimalOptions::default()),
@@ -1615,14 +1743,8 @@ mod tests {
                     ("count".to_string(), DataType::UInt64,)
                 ],
                 vec![
-                    vec![
-                        DataValue::Utf8String("Mary".into()),
-                        DataValue::UInt64(2)
-                    ],
-                    vec![
-                        DataValue::Utf8String("John".into()),
-                        DataValue::UInt64(1)
-                    ],
+                    vec![DataValue::Utf8String("Mary".into()), DataValue::UInt64(2)],
+                    vec![DataValue::Utf8String("John".into()), DataValue::UInt64(1)],
                 ]
             )
             .unwrap()

@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use anyhow::{bail, Result};
 use chrono::{DateTime, LocalResult, TimeZone};
 use serde::{Deserialize, Serialize};
@@ -46,7 +48,7 @@ impl From<&str> for DataValue {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct DateTimeWithTZ {
     /// The local date time
     pub dt: chrono::NaiveDateTime,
@@ -103,4 +105,36 @@ impl std::fmt::Debug for DataValue {
             Self::Uuid(arg0) => f.debug_tuple("Uuid").field(arg0).finish(),
         }
     }
+}
+
+impl Hash for DataValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+        match self {
+            DataValue::Null => {},
+            DataValue::Utf8String(data) => data.hash(state),
+            DataValue::Binary(data) => data.hash(state),
+            DataValue::Boolean(data) => data.hash(state),
+            DataValue::Int8(data) => data.hash(state),
+            DataValue::UInt8(data) => data.hash(state),
+            DataValue::Int16(data) => data.hash(state),
+            DataValue::UInt16(data) => data.hash(state),
+            DataValue::Int32(data) => data.hash(state),
+            DataValue::UInt32(data) => data.hash(state),
+            DataValue::Int64(data) => data.hash(state),
+            DataValue::UInt64(data) => data.hash(state),
+            DataValue::Float32(data) => data.to_string().hash(state),
+            DataValue::Float64(data) => data.to_string().hash(state),
+            DataValue::Decimal(data) => data.hash(state),
+            DataValue::JSON(data) => data.hash(state),
+            DataValue::Date(data) => data.hash(state),
+            DataValue::Time(data) => data.hash(state),
+            DataValue::DateTime(data) => data.hash(state),
+            DataValue::DateTimeWithTZ(data) => data.hash(state),
+            DataValue::Uuid(data) => data.hash(state),
+        }
+    }
+}
+
+impl Eq for DataValue {
 }
