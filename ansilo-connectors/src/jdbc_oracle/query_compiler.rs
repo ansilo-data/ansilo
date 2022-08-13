@@ -481,8 +481,6 @@ impl OracleJdbcQueryCompiler {
             sql::BinaryOpType::BitwiseShiftRight => unimplemented!(),
             sql::BinaryOpType::Concat => format!("({}) || ({})", l, r),
             sql::BinaryOpType::Regexp => format!("REGEXP_LIKE({}, {})", l, r),
-            sql::BinaryOpType::In => format!("({}) IN ({})", l, r),
-            sql::BinaryOpType::NotIn => format!("({}) NOT IN ({})", l, r),
             sql::BinaryOpType::Equal => format!("({}) = ({})", l, r),
             sql::BinaryOpType::NullSafeEqual => {
                 format!("SYS_OP_MAP_NONNULL({}) = SYS_OP_MAP_NONNULL({})", l, r)

@@ -103,7 +103,7 @@ impl UnaryOp {
 }
 
 /// Supported unary operators
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub enum UnaryOpType {
     LogicalNot,
     Negate,
@@ -134,7 +134,7 @@ impl BinaryOp {
 }
 
 /// Supported binary operators
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub enum BinaryOpType {
     Add,
     Subtract,
@@ -151,8 +151,6 @@ pub enum BinaryOpType {
     BitwiseShiftRight,
     Concat,
     Regexp,
-    In,
-    NotIn,
     Equal,
     NullSafeEqual,
     NotEqual,

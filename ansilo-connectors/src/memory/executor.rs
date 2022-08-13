@@ -803,8 +803,6 @@ impl MemoryQueryExecutor {
                         }
                     }
                     sqlil::BinaryOpType::Regexp => todo!(),
-                    sqlil::BinaryOpType::In => todo!(),
-                    sqlil::BinaryOpType::NotIn => todo!(),
                     sqlil::BinaryOpType::Equal => DataValue::Boolean(left == right),
                     sqlil::BinaryOpType::NullSafeEqual => DataValue::Boolean(left == right),
                     sqlil::BinaryOpType::NotEqual => DataValue::Boolean(left != right),
@@ -1195,8 +1193,6 @@ impl MemoryQueryExecutor {
                     },
                     sqlil::BinaryOpType::Concat => DataType::Utf8String(StringOptions::default()),
                     sqlil::BinaryOpType::Regexp => DataType::Boolean,
-                    sqlil::BinaryOpType::In => DataType::Boolean,
-                    sqlil::BinaryOpType::NotIn => DataType::Boolean,
                     sqlil::BinaryOpType::Equal => DataType::Boolean,
                     sqlil::BinaryOpType::NullSafeEqual => DataType::Boolean,
                     sqlil::BinaryOpType::NotEqual => DataType::Boolean,
