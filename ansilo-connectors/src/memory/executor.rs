@@ -1017,6 +1017,26 @@ impl MemoryQueryExecutor {
                     })
                     .unwrap_or(DataValue::Null))
             })?,
+            sqlil::AggregateCall::Average(arg) => {
+                self.evaluate_group(data, arg).and_then(|group| {
+                    let len = group.len();
+                    Ok(DataValue::Decimal(
+                        group
+                            .into_iter()
+                            .map(|v| {
+                                v.try_coerce_into(&DataType::Decimal(DecimalOptions::default()))
+                            })
+                            .collect::<Result<Vec<_>>>()?
+                            .into_iter()
+                            .map(|a| match a {
+                                DataValue::Decimal(v) => v.clone(),
+                                _ => unreachable!(),
+                            })
+                            .sum::<Decimal>()
+                            / Decimal::from_u64(len as _).unwrap(),
+                    ))
+                })?
+            }
             sqlil::AggregateCall::StringAgg(call) => {
                 self.evaluate_group(data, &call.expr).and_then(|group| {
                     Ok(DataValue::Utf8String(
@@ -1218,6 +1238,7 @@ impl MemoryQueryExecutor {
                 sqlil::AggregateCall::CountDistinct(_) => DataType::UInt64,
                 sqlil::AggregateCall::Max(_) => DataType::Decimal(DecimalOptions::default()),
                 sqlil::AggregateCall::Min(_) => DataType::Decimal(DecimalOptions::default()),
+                sqlil::AggregateCall::Average(_) => DataType::Decimal(DecimalOptions::default()),
                 sqlil::AggregateCall::StringAgg(_) => {
                     DataType::Utf8String(StringOptions::default())
                 }

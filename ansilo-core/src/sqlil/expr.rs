@@ -239,6 +239,7 @@ pub enum AggregateCall {
     CountDistinct(SubExpr),
     Max(SubExpr),
     Min(SubExpr),
+    Average(SubExpr),
     // String functions
     StringAgg(StringAggCall),
 }
@@ -251,6 +252,7 @@ impl AggregateCall {
             AggregateCall::CountDistinct(e) => e.walk(cb),
             AggregateCall::Max(e) => e.walk(cb),
             AggregateCall::Min(e) => e.walk(cb),
+            AggregateCall::Average(e) => e.walk(cb),
             AggregateCall::StringAgg(e) => e.expr.walk(cb),
         }
     }
@@ -263,6 +265,12 @@ pub struct StringAggCall {
     pub expr: SubExpr,
     /// The seperator used during aggregation
     pub separator: String,
+}
+
+impl StringAggCall {
+    pub fn new(expr: SubExpr, separator: String) -> Self {
+        Self { expr, separator }
+    }
 }
 
 /// Constructurs a new entity expression

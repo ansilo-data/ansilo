@@ -33,7 +33,6 @@ pub(super) unsafe fn convert_const(
 #[pg_schema]
 mod tests {
     use super::*;
-    use pgx::*;
 
     use crate::sqlil::test;
     use ansilo_core::data::rust_decimal::Decimal;

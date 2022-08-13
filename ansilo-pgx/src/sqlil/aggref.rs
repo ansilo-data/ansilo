@@ -1,13 +1,17 @@
 use ansilo_core::{
+    data::DataValue,
     err::{bail, Context, Result},
-    sqlil,
+    sqlil::{self, StringAggCall},
 };
 use pgx::{
     pg_sys::{self, Node, Oid},
     *,
 };
 
-use crate::{fdw::ctx::{FdwContext, PlannerContext}, util::syscache::PgSysCacheItem};
+use crate::{
+    fdw::ctx::{FdwContext, PlannerContext},
+    util::syscache::PgSysCacheItem,
+};
 
 use super::*;
 
@@ -67,7 +71,32 @@ pub unsafe fn convert_aggref(
         match (func_name.as_str(), args.len()) {
             ("count", _) if (*node).aggstar => sqlil::AggregateCall::Count,
             ("sum", 1) => sqlil::AggregateCall::Sum(Box::new(args.remove(0))),
-            _ => bail!("Aggregate function '{}' is not supported", func_name),
+            ("min", 1) => sqlil::AggregateCall::Min(Box::new(args.remove(0))),
+            ("max", 1) => sqlil::AggregateCall::Max(Box::new(args.remove(0))),
+            ("avg", 1) => sqlil::AggregateCall::Average(Box::new(args.remove(0))),
+            ("string_agg", 2)
+                if matches!(
+                    args.get(1).unwrap(),
+                    sqlil::Expr::Constant(sqlil::Constant {
+                        value: DataValue::Utf8String(_),
+                    }),
+                ) =>
+            {
+                sqlil::AggregateCall::StringAgg(StringAggCall::new(
+                    Box::new(args.remove(0)),
+                    match args.remove(0) {
+                        sqlil::Expr::Constant(sqlil::Constant {
+                            value: DataValue::Utf8String(c),
+                        }) => c,
+                        _ => unreachable!(),
+                    },
+                ))
+            }
+            _ => bail!(
+                "Aggregate function '{}' ({} args) is not supported",
+                func_name,
+                args.len()
+            ),
         },
     ))
 }
@@ -129,5 +158,95 @@ mod tests {
                 sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 1))
             )))
         );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_aggref_min() {
+        let mut ctx = ConversionContext::new();
+        let expr = test::convert_simple_expr_with_context(
+            "SELECT MIN($1)",
+            &mut ctx,
+            vec![DataType::Int32],
+        )
+        .unwrap();
+
+        assert_eq!(
+            expr,
+            sqlil::Expr::AggregateCall(sqlil::AggregateCall::Min(Box::new(
+                sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 1))
+            )))
+        );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_aggref_max() {
+        let mut ctx = ConversionContext::new();
+        let expr = test::convert_simple_expr_with_context(
+            "SELECT MAX($1)",
+            &mut ctx,
+            vec![DataType::Int32],
+        )
+        .unwrap();
+
+        assert_eq!(
+            expr,
+            sqlil::Expr::AggregateCall(sqlil::AggregateCall::Max(Box::new(
+                sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 1))
+            )))
+        );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_aggref_avg() {
+        let mut ctx = ConversionContext::new();
+        let expr = test::convert_simple_expr_with_context(
+            "SELECT AVG($1)",
+            &mut ctx,
+            vec![DataType::Int32],
+        )
+        .unwrap();
+
+        assert_eq!(
+            expr,
+            sqlil::Expr::AggregateCall(sqlil::AggregateCall::Average(Box::new(
+                sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 1))
+            )))
+        );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_aggref_string_agg() {
+        let mut ctx = ConversionContext::new();
+        let expr = test::convert_simple_expr_with_context(
+            "SELECT STRING_AGG($1, '::')",
+            &mut ctx,
+            vec![DataType::Utf8String(StringOptions::default())],
+        )
+        .unwrap();
+
+        assert_eq!(
+            expr,
+            sqlil::Expr::AggregateCall(sqlil::AggregateCall::StringAgg(StringAggCall::new(
+                Box::new(sqlil::Expr::Parameter(sqlil::Parameter::new(
+                    DataType::Utf8String(StringOptions::default()),
+                    1
+                ))),
+                "::".into()
+            )))
+        );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_aggref_string_agg_dynamic_delimiter_fails() {
+        let mut ctx = ConversionContext::new();
+        test::convert_simple_expr_with_context(
+            "SELECT STRING_AGG($1, $2)",
+            &mut ctx,
+            vec![
+                DataType::Utf8String(StringOptions::default()),
+                DataType::Utf8String(StringOptions::default()),
+            ],
+        )
+        .unwrap_err();
     }
 }

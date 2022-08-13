@@ -1,4 +1,4 @@
-use ansilo_core::{err::Result, sqlil};
+use ansilo_core::{err::{Result, bail}, sqlil};
 use pgx::{*, pg_sys};
 
 use crate::fdw::ctx::{FdwContext, PlannerContext};
@@ -11,17 +11,17 @@ pub unsafe fn convert_case_expr(
     planner: &PlannerContext,
     fdw: &FdwContext,
 ) -> Result<sqlil::Expr> {
-    todo!()
+    bail!("Case expressions are not supported")
 }
 
-#[cfg(any(test, feature = "pg_test"))]
-#[pg_schema]
-mod tests {
-    use super::*;
-    use pgx::*;
+// #[cfg(any(test, feature = "pg_test"))]
+// #[pg_schema]
+// mod tests {
+//     use super::*;
+//     use pgx::*;
 
-    use crate::sqlil::test;
+//     use crate::sqlil::test;
 
-    #[pg_test]
-    fn test_sqlil_convert_case() {}
-}
+//     #[pg_test]
+//     fn test_sqlil_convert_case() {}
+// }

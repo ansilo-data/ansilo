@@ -1,7 +1,4 @@
-use ansilo_core::{
-    err::{bail, Result},
-    sqlil,
-};
+use ansilo_core::{err::Result, sqlil};
 use pgx::{
     pg_sys::{self, Node},
     *,

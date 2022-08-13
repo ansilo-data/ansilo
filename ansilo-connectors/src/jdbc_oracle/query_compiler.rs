@@ -586,6 +586,9 @@ impl OracleJdbcQueryCompiler {
             sql::AggregateCall::Min(arg) => {
                 format!("MIN({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
+            sql::AggregateCall::Average(arg) => {
+                format!("AVG({})", Self::compile_expr(conf, query, &*arg, params)?)
+            }
             sql::AggregateCall::StringAgg(call) => {
                 params.push(JdbcQueryParam::Constant(DataValue::Utf8String(
                     call.separator.clone(),

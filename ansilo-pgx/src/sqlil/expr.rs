@@ -25,12 +25,18 @@ pub unsafe fn convert(
         pg_sys::NodeTag_T_FuncExpr => {
             convert_func_expr(node as *const pg_sys::FuncExpr, ctx, planner, fdw)
         }
+        pg_sys::NodeTag_T_CoalesceExpr => {
+            convert_coalesce_expr(node as *const pg_sys::CoalesceExpr, ctx, planner, fdw)
+        }
         pg_sys::NodeTag_T_OpExpr => {
             convert_op_expr(node as *const pg_sys::OpExpr, ctx, planner, fdw)
         }
-        pg_sys::NodeTag_T_ScalarArrayOpExpr => {
-            convert_scalar_op_array_expr(node as *const pg_sys::ScalarArrayOpExpr, ctx, planner, fdw)
-        }
+        pg_sys::NodeTag_T_ScalarArrayOpExpr => convert_scalar_op_array_expr(
+            node as *const pg_sys::ScalarArrayOpExpr,
+            ctx,
+            planner,
+            fdw,
+        ),
         pg_sys::NodeTag_T_DistinctExpr => {
             convert_distinct_expr(node as *const pg_sys::DistinctExpr, ctx, planner, fdw)
         }
