@@ -1,4 +1,4 @@
-use pgx::{pg_sys, *};
+use pgx::pg_sys;
 
 /// Retrieves a datum from a tuple
 /// Reimplementation of hidden pg symbol:

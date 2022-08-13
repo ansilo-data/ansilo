@@ -113,7 +113,7 @@ pub(crate) unsafe fn begin_remote_transaction(con: &Arc<FdwIpcConnection>) -> Re
 }
 
 /// Handles transaction events from postgres
-unsafe extern "C" fn handle_transaction_event(event: XactEvent, arg: *mut c_void) {
+unsafe extern "C" fn handle_transaction_event(event: XactEvent, _arg: *mut c_void) {
     match event {
         // If we are committing the postgres transaction we try
         // commit any active remote transactions
@@ -211,10 +211,10 @@ fn rollback_remote_transactions() -> Result<()> {
 ///
 /// Currently we disallow sub transactions.
 unsafe extern "C" fn handle_sub_transaction_event(
-    event: SubXactEvent,
-    my_subid: SubTransactionId,
-    parent_subid: SubTransactionId,
-    arg: *mut ::std::os::raw::c_void,
+    _event: SubXactEvent,
+    _my_subid: SubTransactionId,
+    _parent_subid: SubTransactionId,
+    _arg: *mut ::std::os::raw::c_void,
 ) {
     pgx::error!("Sub-transactions are not supported within ansilo remote data sources.")
 }

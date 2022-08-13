@@ -39,6 +39,7 @@ impl ConversionContext {
     }
 
     /// Gets all rel id's and aliases in the query
+    #[allow(unused)]
     pub(crate) fn aliases(&self) -> &HashMap<u32, String> {
         &self.aliases
     }

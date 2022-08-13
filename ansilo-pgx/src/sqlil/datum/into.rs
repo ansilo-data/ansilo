@@ -35,7 +35,7 @@ pub unsafe fn into_datum(
         //
         (
             pg_sys::VARCHAROID | pg_sys::TEXTOID,
-            DataType::Utf8String(opts),
+            DataType::Utf8String(_),
             DataValue::Utf8String(data),
         ) => data.into_datum().unwrap(),
         //
@@ -124,12 +124,6 @@ pub unsafe fn into_datum(
     };
 
     Ok(())
-}
-
-fn try_coerce_into(type_oid: Oid, val: DataValue) -> Result<DataValue> {
-    let desired_type = from_pg_type(type_oid)?;
-
-    val.try_coerce_into(&desired_type)
 }
 
 /// Converts the supplied DataValue into a pgalloc'd Datum

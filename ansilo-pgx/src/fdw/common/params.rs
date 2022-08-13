@@ -21,7 +21,7 @@ pub(crate) unsafe fn prepare_query_params(
         .iter_ptr()
         .zip(param_nodes.into_iter())
         .enumerate()
-        .flat_map(|(idx, (expr, node))| {
+        .flat_map(|(_idx, (expr, node))| {
             query
                 .cvt
                 .param_ids(node)
@@ -54,11 +54,11 @@ pub(crate) unsafe fn send_query_params(
         let param_exprs = scan.param_exprs.as_ref().unwrap();
         let econtext = (*node).ss.ps.ps_ExprContext;
 
-        PgMemoryContexts::For((*econtext).ecxt_per_tuple_memory).switch_to(|context| {
+        PgMemoryContexts::For((*econtext).ecxt_per_tuple_memory).switch_to(|_context| {
             input_structure
                 .params
                 .iter()
-                .map(|(id, r#type)| {
+                .map(|(id, _type)| {
                     let (expr, type_oid) = *param_exprs.get(id).unwrap();
                     let mut is_null = false;
 

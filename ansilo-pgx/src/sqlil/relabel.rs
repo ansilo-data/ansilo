@@ -6,7 +6,7 @@ use crate::fdw::ctx::{FdwContext, PlannerContext};
 use super::*;
 
 /// RelabelType represents a "dummy" type coercion between two binary-compatible datatypes
-pub unsafe fn convert_relabel_type(
+pub(super) unsafe fn convert_relabel_type(
     node: *const pg_sys::RelabelType,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,

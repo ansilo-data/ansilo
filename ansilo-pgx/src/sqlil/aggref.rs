@@ -16,7 +16,7 @@ use crate::{
 use super::*;
 
 /// @see https://doxygen.postgresql.org/deparse_8c.html#a35a84c656589f8c52bf9a2c5917a9468
-pub unsafe fn convert_aggref(
+pub(super) unsafe fn convert_aggref(
     node: *const pg_sys::Aggref,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,

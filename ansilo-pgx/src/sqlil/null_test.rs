@@ -2,17 +2,14 @@ use ansilo_core::{
     err::{bail, Result},
     sqlil,
 };
-use pgx::{
-    pg_sys::{self, Node},
-    *,
-};
+use pgx::*;
 
 use crate::fdw::ctx::{FdwContext, PlannerContext};
 
 use super::*;
 
 /// @see https://doxygen.postgresql.org/deparse_8c.html#a5c4650fb1a80edba78ada8ef67b24d49
-pub unsafe fn convert_null_test(
+pub(super) unsafe fn convert_null_test(
     node: *const pg_sys::NullTest,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,

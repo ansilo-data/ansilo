@@ -11,7 +11,7 @@ use crate::fdw::ctx::{FdwContext, PlannerContext};
 
 use super::*;
 
-pub unsafe fn convert_bool_expr(
+pub(super) unsafe fn convert_bool_expr(
     node: *const pg_sys::BoolExpr,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,

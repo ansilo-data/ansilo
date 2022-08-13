@@ -14,7 +14,7 @@ use crate::{
 
 use super::*;
 
-pub unsafe fn convert_op_expr(
+pub(super) unsafe fn convert_op_expr(
     node: *const pg_sys::OpExpr,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,
@@ -33,7 +33,7 @@ pub unsafe fn convert_op_expr(
     bail!("Unknown operator kind: {}", op.oprkind)
 }
 
-pub unsafe fn convert_unary_op_expr(
+pub(super) unsafe fn convert_unary_op_expr(
     node: *const pg_sys::OpExpr,
     op: PgSysCacheItem<FormData_pg_operator>,
     ctx: &mut ConversionContext,
@@ -55,7 +55,7 @@ pub unsafe fn convert_unary_op_expr(
     )))
 }
 
-pub unsafe fn convert_binary_op_expr(
+pub(super) unsafe fn convert_binary_op_expr(
     node: *const pg_sys::OpExpr,
     op: PgSysCacheItem<FormData_pg_operator>,
     ctx: &mut ConversionContext,
@@ -76,7 +76,7 @@ pub unsafe fn convert_binary_op_expr(
     )))
 }
 
-pub unsafe fn convert_scalar_op_array_expr(
+pub(super) unsafe fn convert_scalar_op_array_expr(
     node: *const pg_sys::ScalarArrayOpExpr,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,

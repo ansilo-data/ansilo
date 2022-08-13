@@ -4,8 +4,8 @@ mod auth;
 mod params;
 mod transaction;
 
-pub use connect::*;
-pub use options::*;
-pub use auth::*;
-pub use params::*;
-pub use transaction::*;
+pub(crate) use connect::*;
+pub(crate) use options::*;
+pub(crate) use auth::*;
+pub(crate) use params::*;
+pub(crate) use transaction::*;

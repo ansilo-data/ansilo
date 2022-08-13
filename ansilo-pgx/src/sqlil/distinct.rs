@@ -8,7 +8,7 @@ use crate::fdw::ctx::{FdwContext, PlannerContext};
 
 use super::*;
 
-pub unsafe fn convert_distinct_expr(
+pub(super) unsafe fn convert_distinct_expr(
     node: *const pg_sys::DistinctExpr,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,

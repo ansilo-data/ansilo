@@ -26,6 +26,7 @@ pub(crate) unsafe fn pg_scan_scoped<T>(
 
 /// Stores the supplied value in memory managed by postgres.
 /// This value is dropped at the end of the current memory context.
+#[allow(unused)]
 pub(crate) unsafe fn pg_current_scoped<T>(v: T) -> PgBox<T, AllocatedByPostgres> {
     pg_scoped(PgMemoryContexts::CurrentMemoryContext, v)
 }

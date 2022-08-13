@@ -1,10 +1,10 @@
 mod connection;
-mod query;
 mod fdw_private;
-mod planner;
 pub mod mem;
+mod planner;
+mod query;
 
 pub use connection::*;
-pub use query::*;
-pub use fdw_private::*;
+pub(crate) use fdw_private::*;
 pub use planner::*;
+pub use query::*;

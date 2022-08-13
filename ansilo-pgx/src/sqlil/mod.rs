@@ -1,36 +1,35 @@
-/// Functions for converting postgres query tree exprs to SQLIL
-
-mod expr;
+mod aggref;
+mod bool;
+mod case;
+mod r#const;
 mod ctx;
 mod datum;
-mod table;
-mod func;
-mod var;
-mod r#const;
-mod param;
-mod op;
 mod distinct;
-mod relabel;
-mod bool;
+/// Functions for converting postgres query tree exprs to SQLIL
+mod expr;
+mod func;
 mod null_test;
-mod case;
-mod aggref;
+mod op;
+mod param;
+mod relabel;
+mod table;
+mod var;
 
 #[cfg(any(test, feature = "pg_test"))]
 pub mod test;
 
-pub use datum::*;
-pub use expr::*;
-pub use ctx::*;
-pub use table::*;
-pub use func::*;
-pub use var::*;
-pub use r#const::*;
-pub use param::*;
-pub use op::*;
-pub use distinct::*;
-pub use relabel::*;
-pub use self::bool::*;
-pub use null_test::*;
-pub use case::*;
-pub use aggref::*;
+pub(crate) use ctx::*;
+pub(crate) use datum::*;
+pub(crate) use expr::*;
+pub(crate) use table::*;
+pub(self) use self::bool::*;
+pub(self) use aggref::*;
+pub(self) use case::*;
+pub(self) use distinct::*;
+pub(self) use func::*;
+pub(self) use null_test::*;
+pub(self) use op::*;
+pub(self) use param::*;
+pub(self) use r#const::*;
+pub(self) use relabel::*;
+pub(self) use var::*;

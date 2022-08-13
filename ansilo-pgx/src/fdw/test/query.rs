@@ -1,4 +1,4 @@
-use pgx::{FromDatum, Json, Spi, SpiHeapTupleData};
+use pgx::{Json, Spi, SpiHeapTupleData};
 use serde::{de::DeserializeOwned, Serialize};
 
 pub(crate) fn execute_query<
@@ -14,32 +14,6 @@ pub(crate) fn execute_query<
             .select(query.as_str(), None, None)
             .map(f)
             .collect::<Vec<R>>();
-        let res = serde_json::to_string(&res).unwrap();
-
-        Ok(Some(res))
-    })
-    .unwrap();
-
-    serde_json::from_str(json.as_str()).unwrap()
-}
-
-pub(crate) fn execute_sql(query: impl Into<String>) {
-    let query = query.into();
-    Spi::connect(|mut client| {
-        client.update(query.as_str(), None, None);
-        Ok(Some(()))
-    });
-}
-
-pub(crate) fn execute_modify<R: DeserializeOwned + Serialize + Clone + FromDatum>(
-    query: impl Into<String>,
-) -> R {
-    let query = query.into();
-    let json = Spi::connect(|mut client| {
-        let res = client
-            .update(query.as_str(), None, None)
-            .first()
-            .get_one::<R>();
         let res = serde_json::to_string(&res).unwrap();
 
         Ok(Some(res))

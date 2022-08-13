@@ -12,7 +12,7 @@ use crate::fdw::ctx::{FdwContext, PlannerContext};
 use super::*;
 
 /// Try convert a postgres expression to a SQLIL expr
-pub unsafe fn convert(
+pub(crate) unsafe fn convert(
     node: *const Node,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,
@@ -59,7 +59,7 @@ pub unsafe fn convert(
     }
 }
 
-pub unsafe fn convert_list(
+pub(crate) unsafe fn convert_list(
     list: *const List,
     ctx: &mut ConversionContext,
     planner: &PlannerContext,

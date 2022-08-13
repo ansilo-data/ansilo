@@ -1,11 +1,8 @@
 use std::ffi::c_void;
 
-use pgx::pg_sys::{
-    self, JoinPathExtraData, JoinType, Node, PlannerInfo, RelOptInfo, UpperRelationKind,
-};
+use pgx::pg_sys::{self, JoinPathExtraData, JoinType, PlannerInfo, RelOptInfo, UpperRelationKind};
 
 use crate::fdw::ctx::from_fdw_private_rel;
-
 
 /// Query planner and optimizer context needed to perform conversion of postgres nodes to sqlil
 #[derive(Clone)]
