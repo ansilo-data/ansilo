@@ -13,6 +13,7 @@ use ansilo_connectors::{
     interface::*,
 };
 use ansilo_core::{
+    config::{EntityConfig, NodeConfig},
     data::DataType,
     err::{bail, Context, Result},
     sqlil::{self, EntityId},
@@ -26,6 +27,8 @@ use super::{
 
 /// A single connection from the FDW
 pub(crate) struct FdwConnection<TConnector: Connector> {
+    /// Global config
+    nc: &'static NodeConfig,
     /// The unix socket the server listens on
     chan: Option<IpcServerChannel>,
     /// Entity config
@@ -57,11 +60,13 @@ enum FdwQueryState<TConnector: Connector> {
 
 impl<TConnector: Connector> FdwConnection<TConnector> {
     pub(crate) fn new(
+        nc: &'static NodeConfig,
         chan: IpcServerChannel,
         entities: ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
         pool: TConnector::TConnectionPool,
     ) -> Self {
         Self {
+            nc,
             chan: Some(chan),
             entities,
             pool,
@@ -97,6 +102,9 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
     fn handle_message(&mut self, message: ClientMessage) -> Result<Option<ServerMessage>> {
         Ok(Some(match message {
+            ClientMessage::DiscoverEntities => {
+                ServerMessage::DiscoveredEntitiesResult(self.discover_entities()?)
+            }
             ClientMessage::EstimateSize(entity) => {
                 ServerMessage::EstimatedSizeResult(self.estimate_size(&entity)?)
             }
@@ -144,7 +152,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             }
             ClientQueryMessage::Execute => ServerQueryMessage::Executed(self.execute(query_id)?),
             ClientQueryMessage::Read(len) => {
-                // TODO: remove copy
+                // TODO[low]: remove copy
                 let mut buff = vec![0u8; len as usize];
                 let read = self.read(query_id, &mut buff[..])?;
                 ServerQueryMessage::ResultData(buff[..read].to_vec())
@@ -178,6 +186,15 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         query_id: QueryId,
     ) -> Result<&mut FdwQueryState<TConnector>> {
         queries.get_mut(&query_id).context("Invalid query id")
+    }
+
+    fn discover_entities(&mut self) -> Result<Vec<EntityConfig>> {
+        self.connect()?;
+
+        Ok(TConnector::TEntitySearcher::discover(
+            self.connection.get()?,
+            self.nc,
+        )?)
     }
 
     fn estimate_size(&mut self, entity: &EntityId) -> Result<OperationCost> {
@@ -527,12 +544,17 @@ mod tests {
         config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
         data::{DataType, DataValue},
     };
+    use lazy_static::lazy_static;
 
     use crate::fdw::{
         channel::IpcClientChannel, proto::AuthDataSource, test::create_tmp_ipc_channel,
     };
 
     use super::*;
+
+    lazy_static! {
+        static ref NODE_CONFIG: NodeConfig = NodeConfig::default();
+    }
 
     fn create_memory_connection_pool(
         db_conf: MemoryDatabaseConf,
@@ -565,8 +587,7 @@ mod tests {
             ],
         );
 
-        let pool =
-            MemoryConnector::create_connection_pool(data, &NodeConfig::default(), &conf).unwrap();
+        let pool = MemoryConnector::create_connection_pool(data, &NODE_CONFIG, &conf).unwrap();
 
         (conf, pool)
     }
@@ -580,7 +601,8 @@ mod tests {
         let (client_chan, server_chan) = create_tmp_ipc_channel(name);
 
         let thread = thread::spawn(move || {
-            let mut fdw = FdwConnection::<MemoryConnector>::new(server_chan, entities, pool);
+            let mut fdw =
+                FdwConnection::<MemoryConnector>::new(&NODE_CONFIG, server_chan, entities, pool);
 
             fdw.process()?;
 
@@ -607,6 +629,28 @@ mod tests {
         assert_eq!(
             res,
             ServerMessage::EstimatedSizeResult(OperationCost::new(Some(3), None, None, None))
+        );
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_discover_entities() {
+        let (thread, mut client) = create_mock_connection("connection_discover_entities");
+
+        let res = client.send(ClientMessage::DiscoverEntities).unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::DiscoveredEntitiesResult(vec![EntityConfig::minimal(
+                "people",
+                vec![
+                    EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
+                    EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
+                ],
+                EntitySourceConfig::minimal(""),
+            ),])
         );
 
         client.close().unwrap();
@@ -747,7 +791,7 @@ mod tests {
 
     #[test]
     fn test_fdw_connection_select_with_restart_query() {
-        let (thread, mut client) = create_mock_connection("connection_select");
+        let (thread, mut client) = create_mock_connection("connection_select_with_restart_query");
 
         let res = client
             .send(ClientMessage::CreateQuery(
@@ -1116,9 +1160,7 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_get_row_ids");
 
         let res = client
-            .send(ClientMessage::GetRowIds(sqlil::source(
-                "people", "people",
-            )))
+            .send(ClientMessage::GetRowIds(sqlil::source("people", "people")))
             .unwrap();
 
         assert_eq!(

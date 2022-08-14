@@ -50,7 +50,8 @@ pub fn into_pg_type(r#type: &DataType) -> Result<pg_sys::Oid> {
         DataType::Float32 => Ok(pg_sys::FLOAT4OID),
         DataType::Float64 => Ok(pg_sys::FLOAT8OID),
         DataType::Decimal(_) => Ok(pg_sys::NUMERICOID),
-        DataType::Utf8String(_) => Ok(pg_sys::VARCHAROID),
+        DataType::Utf8String(opt) if opt.length.is_some() => Ok(pg_sys::VARCHAROID),
+        DataType::Utf8String(_) => Ok(pg_sys::TEXTOID),
         //
         DataType::Binary => Ok(pg_sys::BYTEAOID),
         //
@@ -66,6 +67,41 @@ pub fn into_pg_type(r#type: &DataType) -> Result<pg_sys::Oid> {
         DataType::Uuid => Ok(pg_sys::UUIDOID),
         DataType::Null => Ok(pg_sys::UNKNOWNOID),
     }
+}
+
+/// Converts the supplied data type to the matching pg type name for use in DDL
+pub fn to_pg_type_name(r#type: &DataType) -> Result<String> {
+    Ok(match r#type {
+        DataType::Int8 => "SMALLINT".into(),
+        DataType::Int16 => "SMALLINT".into(),
+        DataType::Int32 => "INTEGER".into(),
+        DataType::Int64 => "BIGINT".into(),
+        DataType::UInt8 => "SMALLINT".into(),
+        DataType::UInt16 => "INTEGER".into(),
+        DataType::UInt32 => "BIGINT".into(),
+        DataType::UInt64 => "NUMERIC".into(),
+        DataType::Float32 => "REAL".into(),
+        DataType::Float64 => "DOUBLE PRECISION".into(),
+        DataType::Decimal(_) => "NUMERIC".into(),
+        DataType::Utf8String(opt) if opt.length.is_some() => {
+            format!("VARCHAR({})", opt.length.unwrap())
+        }
+        DataType::Utf8String(_) => "TEXT".into(),
+        //
+        DataType::Binary => "BYTEA".into(),
+        //
+        DataType::Boolean => "BOOLEAN".into(),
+        //
+        DataType::JSON => "JSON".into(),
+        //
+        DataType::Date => "DATE".into(),
+        DataType::Time => "TIME".into(),
+        DataType::DateTime => "TIMESTAMP".into(),
+        DataType::DateTimeWithTZ => "TIMESTAMPTZ".into(),
+        //
+        DataType::Uuid => "UUID".into(),
+        DataType::Null => "BOOLEAN".into(),
+    })
 }
 
 #[cfg(test)]

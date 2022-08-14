@@ -66,7 +66,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     // We scope the connection to the top-level transaction
     // so all queries use the same connection which is required
     // for remote transactions or locking.
-    let mut ctx = pg_transaction_scoped(common::connect(foreigntableid));
+    let mut ctx = pg_transaction_scoped(common::connect_table(foreigntableid));
 
     let planner = pg_query_scoped(root, PlannerContext::base_rel(root, baserel));
 

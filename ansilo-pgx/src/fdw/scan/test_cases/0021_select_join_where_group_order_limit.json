@@ -12,7 +12,7 @@
             "Local Conds": [],
             "Remote Conds": [
                 "(p.id = pets.owner_id)",
-                "((pets.pet_name)::text <> 'XXX'::text)"
+                "(pets.pet_name <> 'XXX'::text)"
             ],
             "Remote Ops": [
                 {

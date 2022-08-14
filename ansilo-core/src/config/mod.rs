@@ -5,6 +5,7 @@ pub use serde_yaml::{
 };
 
 mod ari;
+mod bincode;
 pub use ari::*;
 mod networking;
 pub use networking::*;

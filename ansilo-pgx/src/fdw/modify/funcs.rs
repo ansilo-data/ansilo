@@ -35,7 +35,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     target_rte: *mut RangeTblEntry,
     target_relation: Relation,
 ) {
-    let mut ctx = pg_transaction_scoped(common::connect((*target_relation).rd_id));
+    let mut ctx = pg_transaction_scoped(common::connect_table((*target_relation).rd_id));
 
     let row_ids = match ctx.get_row_id_exprs("unused") {
         Ok(r) => r,
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn plan_foreign_modify(
     // We scope the connection to the top-level transaction
     // so all queries use the same connection which is required
     // for remote transactions or locking.
-    let mut ctx = pg_transaction_scoped(common::connect(table.rd_id));
+    let mut ctx = pg_transaction_scoped(common::connect_table(table.rd_id));
 
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_INSERT => {
@@ -521,7 +521,7 @@ pub unsafe extern "C" fn plan_direct_modify(
 
     let table = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
 
-    let mut ctx = pg_transaction_scoped(common::connect(table.rd_id));
+    let mut ctx = pg_transaction_scoped(common::connect_table(table.rd_id));
 
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_UPDATE => plan_direct_foreign_update(

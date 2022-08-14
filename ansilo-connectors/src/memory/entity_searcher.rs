@@ -1,6 +1,9 @@
-use ansilo_core::{config::NodeConfig, err::Result};
+use ansilo_core::{
+    config::{EntityConfig, NodeConfig},
+    err::Result,
+};
 
-use crate::{common::entity::EntitySource, interface::EntitySearcher};
+use crate::interface::EntitySearcher;
 
 use super::{MemoryConnection, MemoryConnectorEntitySourceConfig};
 
@@ -10,10 +13,11 @@ impl EntitySearcher for MemoryEntitySearcher {
     type TConnection = MemoryConnection;
     type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
-    fn discover(
-        connection: &mut MemoryConnection,
-        _nc: &NodeConfig,
-    ) -> Result<Vec<EntitySource<MemoryConnectorEntitySourceConfig>>> {
-        Ok(connection.conf.entities().cloned().collect::<Vec<_>>())
+    fn discover(connection: &mut MemoryConnection, _nc: &NodeConfig) -> Result<Vec<EntityConfig>> {
+        Ok(connection
+            .conf
+            .entities()
+            .map(|i| i.conf.clone())
+            .collect::<Vec<_>>())
     }
 }

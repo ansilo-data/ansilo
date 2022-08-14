@@ -147,21 +147,8 @@ mod tests {
                     data_source 'memory'
                 );
 
-                CREATE FOREIGN TABLE "people" (
-                    id BIGINT,
-                    first_name VARCHAR,
-                    last_name VARCHAR
-                ) SERVER test_srv;
-
-                CREATE FOREIGN TABLE "pets" (
-                    id BIGINT,
-                    owner_id BIGINT,
-                    pet_name VARCHAR
-                ) SERVER test_srv;
-
-                CREATE FOREIGN TABLE "large" (
-                    x BIGINT
-                ) SERVER test_srv;
+                IMPORT FOREIGN SCHEMA memory 
+                FROM SERVER test_srv INTO public;
                 "#
                 )
                 .as_str(),

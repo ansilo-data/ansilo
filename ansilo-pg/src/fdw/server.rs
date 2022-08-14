@@ -13,7 +13,10 @@ use ansilo_connectors::{
     jdbc_oracle::OracleJdbcConnector,
     memory::MemoryConnector,
 };
-use ansilo_core::err::{bail, Context, Result};
+use ansilo_core::{
+    config::NodeConfig,
+    err::{bail, Context, Result},
+};
 use ansilo_logging::{error, warn};
 
 use super::{
@@ -55,6 +58,9 @@ use super::{
 
 /// Handles connections back from postgres
 pub struct FdwServer {
+    /// Global node configuration
+    #[allow(unused)]
+    nc: &'static NodeConfig,
     /// The path of the socket which the server is listening on
     path: PathBuf,
     /// Listener thread
@@ -63,10 +69,14 @@ pub struct FdwServer {
 
 impl FdwServer {
     /// Starts a new server instance listening at the specified path
-    pub fn start(path: PathBuf, pools: HashMap<String, ConnectionPools>) -> Result<Self> {
-        let thread = Self::start_listening_thread(path.as_path(), pools)?;
+    pub fn start(
+        nc: &'static NodeConfig,
+        path: PathBuf,
+        pools: HashMap<String, ConnectionPools>,
+    ) -> Result<Self> {
+        let thread = Self::start_listening_thread(nc, path.as_path(), pools)?;
 
-        Ok(Self { path, thread })
+        Ok(Self { nc, path, thread })
     }
 
     /// Gets the mapping of data source ids to their paths
@@ -84,6 +94,7 @@ impl FdwServer {
     }
 
     fn start_listening_thread(
+        nc: &'static NodeConfig,
         path: &Path,
         pools: HashMap<String, ConnectionPools>,
     ) -> Result<JoinHandle<()>> {
@@ -92,7 +103,7 @@ impl FdwServer {
             .with_context(|| format!("Failed to bind socket at {}", path.display()))?;
 
         let thread = thread::spawn(move || {
-            let res = FdwListener::bind(listener, pools).listen();
+            let res = FdwListener::bind(nc, listener, pools).listen();
 
             if let Err(err) = res {
                 error!("FDW listener error: {}", err);
@@ -105,6 +116,8 @@ impl FdwServer {
 
 /// Handles connections from postgres, serving data from a connector
 pub struct FdwListener {
+    /// Global node configuration
+    nc: &'static NodeConfig,
     /// The unix socket the server listens on
     listener: UnixListener,
     /// The connection pools keyed by their data source id
@@ -113,8 +126,13 @@ pub struct FdwListener {
 
 impl FdwListener {
     /// Starts a server which listens
-    pub fn bind(listener: UnixListener, pools: HashMap<String, ConnectionPools>) -> Self {
+    pub fn bind(
+        nc: &'static NodeConfig,
+        listener: UnixListener,
+        pools: HashMap<String, ConnectionPools>,
+    ) -> Self {
         Self {
+            nc,
             listener,
             pools: Arc::new(pools),
         }
@@ -132,6 +150,7 @@ impl FdwListener {
     /// Starts the thread responsible for processing the supplied connection
     fn start(&self, socket: UnixStream) -> Result<()> {
         let pool = Arc::clone(&self.pools);
+        let nc = self.nc;
 
         let _ = thread::spawn(move || {
             let mut chan = IpcServerChannel::new(socket);
@@ -146,10 +165,10 @@ impl FdwListener {
 
             match pool {
                 ConnectionPools::OracleJdbc(pool, entities) => {
-                    Self::process::<OracleJdbcConnector>(chan, pool, entities)
+                    Self::process::<OracleJdbcConnector>(nc, chan, pool, entities)
                 }
                 ConnectionPools::Memory(pool, entities) => {
-                    Self::process::<MemoryConnector>(chan, pool, entities)
+                    Self::process::<MemoryConnector>(nc, chan, pool, entities)
                 }
             };
         });
@@ -189,11 +208,12 @@ impl FdwListener {
     }
 
     fn process<TConnector: Connector>(
+        nc: &'static NodeConfig,
         chan: IpcServerChannel,
         pool: TConnector::TConnectionPool,
         entities: ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
     ) {
-        let mut fdw_con = FdwConnection::<TConnector>::new(chan, entities, pool);
+        let mut fdw_con = FdwConnection::<TConnector>::new(nc, chan, entities, pool);
 
         if let Err(err) = fdw_con.process() {
             error!("Error while processing FDW connection: {}", err);
@@ -217,6 +237,7 @@ mod tests {
         data::{DataType, DataValue},
         sqlil,
     };
+    use lazy_static::lazy_static;
 
     use crate::fdw::{
         channel::IpcClientChannel,
@@ -224,6 +245,10 @@ mod tests {
     };
 
     use super::*;
+
+    lazy_static! {
+        static ref NODE_CONFIG: NodeConfig = NodeConfig::default();
+    }
 
     fn create_memory_connection_pool() -> (
         ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
@@ -253,8 +278,7 @@ mod tests {
             ],
         );
 
-        let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
-            .unwrap();
+        let pool = MemoryConnector::create_connection_pool(conf, &NODE_CONFIG, &entities).unwrap();
 
         (entities, pool)
     }
@@ -265,8 +289,12 @@ mod tests {
         let path = PathBuf::from(format!("/tmp/ansilo/fdw_server/{test_name}"));
         fs::create_dir_all(path.parent().unwrap().clone()).unwrap();
 
-        let server =
-            FdwServer::start(path, [("memory".to_string(), pool)].into_iter().collect()).unwrap();
+        let server = FdwServer::start(
+            &NODE_CONFIG,
+            path,
+            [("memory".to_string(), pool)].into_iter().collect(),
+        )
+        .unwrap();
         thread::sleep(Duration::from_millis(10));
 
         server

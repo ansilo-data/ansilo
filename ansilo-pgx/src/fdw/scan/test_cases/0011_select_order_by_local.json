@@ -7,10 +7,10 @@
                 "id",
                 "first_name",
                 "last_name",
-                "(md5((first_name)::text))"
+                "(md5(first_name))"
             ],
             "Sort Key": [
-                "(md5((people.first_name)::text))"
+                "(md5(people.first_name))"
             ],
             "Plans": [
                 {
@@ -22,7 +22,7 @@
                         "id",
                         "first_name",
                         "last_name",
-                        "md5((first_name)::text)"
+                        "md5(first_name)"
                     ],
                     "Local Conds": [],
                     "Remote Conds": [],

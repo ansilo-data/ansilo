@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use ansilo_core::{
+    config::EntityConfig,
     data::DataType,
     err::{anyhow, Context, Error, Result},
     sqlil,
@@ -37,6 +38,17 @@ impl FdwContext {
 
     fn send(&mut self, req: ClientMessage) -> Result<ServerMessage> {
         self.connection.send(req)
+    }
+
+    pub fn discover_entities(&mut self) -> Result<Vec<EntityConfig>> {
+        let res = self.send(ClientMessage::DiscoverEntities).unwrap();
+
+        let entities = match res {
+            ServerMessage::DiscoveredEntitiesResult(e) => e,
+            _ => return Err(unexpected_response(res).context("Discover Entities")),
+        };
+
+        Ok(entities)
     }
 
     pub fn estimate_size(&mut self) -> Result<OperationCost> {

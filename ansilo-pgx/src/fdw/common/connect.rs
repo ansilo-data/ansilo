@@ -78,7 +78,7 @@ impl Drop for FdwIpcConnection {
 }
 
 /// Returns a connection to the data source for the supplied foreign table
-pub(crate) unsafe fn connect(foreign_table_relid: Oid) -> FdwContext {
+pub(crate) unsafe fn connect_table(foreign_table_relid: Oid) -> FdwContext {
     // Look up the foreign table from its relid
     let table = GetForeignTable(foreign_table_relid);
 
@@ -89,21 +89,21 @@ pub(crate) unsafe fn connect(foreign_table_relid: Oid) -> FdwContext {
     // Find the corrosponding entity / version id from the table name
     let entity = get_entity_id_from_foreign_table(foreign_table_relid).unwrap();
 
+    connect_server((*table).serverid, entity)
+}
+
+/// Returns a connection to the data source for the supplied foreign server
+pub unsafe fn connect_server(server_oid: Oid, entity: ansilo_core::sqlil::EntityId) -> FdwContext {
     // Retrieves the foreign server for the table
-    let server = GetForeignServer((*table).serverid);
-
+    let server = GetForeignServer(server_oid);
     if server.is_null() {
-        panic!("Could not find server with oid: {}", (*table).serverid);
+        panic!("Could not find server with oid: {}", server_oid);
     }
-
     // Parse the options defined on the server, namely the data source id
     let opts = ServerOptions::parse(PgList::<DefElem>::from_pg((*server).options))
         .expect("Failed to parse server options");
-
     let con = get_connection(opts).unwrap();
-
     let ctx = FdwContext::new(con, entity);
-
     ctx
 }
 

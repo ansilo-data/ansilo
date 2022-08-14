@@ -6,9 +6,9 @@
 #[allow(unused)]
 mod analyze;
 #[allow(unused)]
-mod explain;
-#[allow(unused)]
 mod r#async;
+#[allow(unused)]
+mod explain;
 #[allow(unused)]
 mod import;
 #[allow(unused)]
@@ -22,13 +22,12 @@ pub mod ctx;
 #[cfg(any(test, feature = "pg_test"))]
 pub mod test;
 
-use scan::*;
 use analyze::*;
 use explain::*;
-use r#async::*;
 use import::*;
 use modify::*;
-
+use r#async::*;
+use scan::*;
 
 use pgx::{
     pg_sys::{self, FdwRoutine},
@@ -75,7 +74,7 @@ fn ansilo_fdw_handler() -> pg_sys::Datum {
     handler.ExplainForeignModify = Some(self::explain_foreign_modify);
     handler.ExplainDirectModify = Some(self::explain_direct_modify);
     handler.AnalyzeForeignTable = None; // Some(self::analyze_foreign_table);
-    handler.ImportForeignSchema = None; // Some(self::import_foreign_schema);
+    handler.ImportForeignSchema = Some(self::import_foreign_schema);
     handler.ExecForeignTruncate = None; // Some(self::exec_foreign_truncate);
     handler.IsForeignScanParallelSafe = None; // Some(self::is_foreign_scan_parallel_safe);
     handler.EstimateDSMForeignScan = None; // Some(self::estimate_dsm_foreign_scan);

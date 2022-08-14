@@ -6,10 +6,10 @@
             "Strategy": "Hashed",
             "Partial Mode": "Simple",
             "Output": [
-                "(md5((first_name)::text))"
+                "(md5(first_name))"
             ],
             "Group Key": [
-                "md5((people.first_name)::text)"
+                "md5(people.first_name)"
             ],
             "Plans": [
                 {
@@ -18,7 +18,7 @@
                     "Relation Name": "people",
                     "Plan Width": 32,
                     "Output": [
-                        "md5((first_name)::text)"
+                        "md5(first_name)"
                     ],
                     "Local Conds": [],
                     "Remote Conds": [],

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use crate::data::DataType;
 
 /// An entity is a typed and documented dataset to be exposed by this ansilo node
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct EntityConfig {
     /// The ID of the entity
     pub id: String,
@@ -48,7 +49,7 @@ impl EntityConfig {
 
 /// A tag attached to an entity.
 /// These are key-value pairs use for custom categorisation
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct TagValueConfig {
     /// The tag key
     pub key: String,
@@ -57,7 +58,7 @@ pub struct TagValueConfig {
 }
 
 /// An attribute of an entity
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct EntityAttributeConfig {
     /// The ID of the attribute
     pub id: String,
@@ -84,14 +85,14 @@ impl EntityAttributeConfig {
 }
 
 /// A constraint on the entity
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub enum EntityConstraintConfig {
     ForeignKey(ForeignKeyConstraintConfig),
     Unique(UniqueConstraintConfig),
 }
 
 /// A foreign key constraint
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct ForeignKeyConstraintConfig {
     /// Foreign entity ID
     pub target_entity_id: String,
@@ -100,7 +101,7 @@ pub struct ForeignKeyConstraintConfig {
 }
 
 /// A unique constraint config
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct UniqueConstraintConfig {
     /// List of local attributes within the unique constraint
     pub attributes: Vec<String>,
@@ -116,6 +117,13 @@ pub struct EntitySourceConfig {
 }
 
 impl EntitySourceConfig {
+    pub fn new(data_source_id: String, options: serde_yaml::Value) -> Self {
+        Self {
+            data_source_id,
+            options,
+        }
+    }
+
     pub fn minimal(data_source_id: impl Into<String>) -> Self {
         Self {
             data_source_id: data_source_id.into(),
@@ -125,7 +133,7 @@ impl EntitySourceConfig {
 }
 
 /// The levels of accessibility of an entity
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
 pub enum EntityAccessiblity {
     /// The entity can only be accessed from the node itself
     Internal,

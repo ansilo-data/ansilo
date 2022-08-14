@@ -1,10 +1,13 @@
-use ansilo_connectors::common::entity::ConnectorEntityConfig;
 pub use ansilo_connectors::interface::{
     DeleteQueryOperation, InsertQueryOperation, OperationCost, QueryInputStructure, QueryOperation,
     QueryOperationResult, RowStructure, SelectQueryOperation, UpdateQueryOperation,
 };
 
-use ansilo_core::{sqlil::{self, EntityId}, data::DataType};
+use ansilo_core::{
+    config::EntityConfig,
+    data::DataType,
+    sqlil::{self, EntityId},
+};
 use bincode::{Decode, Encode};
 
 pub type QueryId = u32;
@@ -15,7 +18,7 @@ pub enum ClientMessage {
     /// Send authentication token
     AuthDataSource(AuthDataSource),
     /// Discovers entities from the remote data source
-    // DiscoverEntities,
+    DiscoverEntities,
     /// Estimates the number of entities from the source
     EstimateSize(EntityId),
     /// Requests the row id expressions for the entity source
@@ -85,7 +88,7 @@ pub enum ServerMessage {
     /// Token was accepted
     AuthAccepted,
     /// Entities discovered from the data source
-    // DiscoveredEntitiesResult(ConnectorEntityConfig<>),
+    DiscoveredEntitiesResult(Vec<EntityConfig>),
     /// Estimated size result
     EstimatedSizeResult(OperationCost),
     /// The returned row id expressions
@@ -127,5 +130,5 @@ pub enum ServerQueryMessage {
     /// Query duplicated
     Duplicated(QueryId),
     /// Query removed
-    Discarded
+    Discarded,
 }

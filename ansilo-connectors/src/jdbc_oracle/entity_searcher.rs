@@ -1,6 +1,12 @@
-use ansilo_core::{config::NodeConfig, err::Result};
+use ansilo_core::{
+    config::{EntityConfig, NodeConfig},
+    err::Result,
+};
 
-use crate::{common::entity::EntitySource, interface::EntitySearcher, jdbc::{JdbcConnection, JdbcDefaultTypeMapping}};
+use crate::{
+    interface::EntitySearcher,
+    jdbc::{JdbcConnection, JdbcDefaultTypeMapping},
+};
 
 use super::OracleJdbcEntitySourceConfig;
 
@@ -14,7 +20,7 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
     fn discover(
         _connection: &mut Self::TConnection,
         _nc: &NodeConfig,
-    ) -> Result<Vec<EntitySource<OracleJdbcEntitySourceConfig>>> {
+    ) -> Result<Vec<EntityConfig>> {
         todo!()
     }
 }

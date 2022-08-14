@@ -43,7 +43,7 @@
                     "Operation": "Select",
                     "Relation Name": "people",
                     "Output": [
-                        "('Updated: '::text || md5((first_name)::text))",
+                        "('Updated: '::text || md5(first_name))",
                         "ctid",
                         "people.*"
                     ],
