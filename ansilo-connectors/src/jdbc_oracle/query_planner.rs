@@ -33,7 +33,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         // TODO: custom query support
         // TODO: multiple sample options
 
-        let table = OracleJdbcQueryCompiler::compile_source_identifier(&entity.source_conf)?;
+        let table = OracleJdbcQueryCompiler::compile_source_identifier(&entity.source)?;
 
         let mut query = connection.prepare(JdbcQuery::new(
             format!("SELECT COUNT(*) * 1000 FROM {} SAMPLE(0.1)", table),
@@ -107,7 +107,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Insert)> {
-        match &entity.source_conf {
+        match &entity.source {
             OracleJdbcEntitySourceConfig::Table(_) => {}
             OracleJdbcEntitySourceConfig::CustomQueries(q) if q.insert_query.is_some() => {}
             _ => bail!(
@@ -124,7 +124,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Update)> {
-        match &entity.source_conf {
+        match &entity.source {
             OracleJdbcEntitySourceConfig::Table(_) => {}
             OracleJdbcEntitySourceConfig::CustomQueries(q) if q.update_query.is_some() => {}
             _ => bail!(
@@ -141,7 +141,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Delete)> {
-        match &entity.source_conf {
+        match &entity.source {
             OracleJdbcEntitySourceConfig::Table(_) => {}
             OracleJdbcEntitySourceConfig::CustomQueries(q) if q.delete_query.is_some() => {}
             _ => bail!(

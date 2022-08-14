@@ -4,7 +4,7 @@
 
 // use ansilo_core::{
 //     data::DataType,
-//     config::{self, EntityVersionConfig, NodeConfig},
+//     config::{self, EntityConfig, NodeConfig},
 //     err::{Error, Result},
 //     sqlil as sql,
 // };

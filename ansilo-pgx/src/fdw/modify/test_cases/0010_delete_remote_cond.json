@@ -1,17 +1,17 @@
 {
-    "SQL": "DELETE FROM \"people:1.0\" WHERE id = 4;",
+    "SQL": "DELETE FROM \"people\" WHERE id = 4;",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
             "Operation": "Delete",
-            "Relation Name": "people:1.0",
+            "Relation Name": "people",
             "Plans": [
                 {
                     "Node Type": "Foreign Scan",
                     "Operation": "Delete",
-                    "Relation Name": "people:1.0",
+                    "Relation Name": "people",
                     "Remote Conds": [
-                        "(\"people:1.0\".id = 4)"
+                        "(people.id = 4)"
                     ],
                     "Remote Ops": [
                         {

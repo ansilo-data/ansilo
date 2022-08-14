@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT p.first_name, p.last_name, COUNT(*) as pets FROM \"people:1.0\" p INNER JOIN \"pets:1.0\" pets ON pets.owner_id = p.id WHERE pets.pet_name != 'XXX' GROUP BY p.first_name, p.last_name ORDER BY pets DESC LIMIT 3",
+    "SQL": "SELECT p.first_name, p.last_name, COUNT(*) as pets FROM \"people\" p INNER JOIN \"pets\" pets ON pets.owner_id = p.id WHERE pets.pet_name != 'XXX' GROUP BY p.first_name, p.last_name ORDER BY pets DESC LIMIT 3",
     "Expected": {
         "Plan": {
             "Node Type": "Foreign Scan",
@@ -35,7 +35,6 @@
                         ],
                         "target": {
                             "entity_id": "pets",
-                            "version_id": "1.0",
                             "alias": "t2"
                         },
                         "type": "Inner"

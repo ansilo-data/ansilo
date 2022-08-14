@@ -1,15 +1,15 @@
 {
-    "SQL": "UPDATE \"people:1.0\" SET first_name = 'Updated: ' || first_name WHERE id = 4;",
+    "SQL": "UPDATE \"people\" SET first_name = 'Updated: ' || first_name WHERE id = 4;",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
             "Operation": "Update",
-            "Relation Name": "people:1.0",
+            "Relation Name": "people",
             "Plans": [
                 {
                     "Node Type": "Foreign Scan",
                     "Operation": "Update",
-                    "Relation Name": "people:1.0",
+                    "Relation Name": "people",
                     "Remote Conds": [],
                     "Remote Ops": [
                         {

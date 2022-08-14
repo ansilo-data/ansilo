@@ -243,7 +243,7 @@ mod tests {
         memory::{MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase},
     };
     use ansilo_core::{
-        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
         data::{DataType, DataValue},
     };
 
@@ -251,17 +251,16 @@ mod tests {
         let conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
-        entities.add(EntitySource::minimal(
-            "x",
-            EntityVersionConfig::minimal(
-                "1.0",
+        entities.add(EntitySource::new(
+            EntityConfig::minimal(
+                "x",
                 vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
                 EntitySourceConfig::minimal(""),
             ),
             MemoryConnectorEntitySourceConfig::new(None),
         ));
 
-        conf.set_data("x", "1.0", vec![vec![DataValue::UInt32(1)]]);
+        conf.set_data("x", vec![vec![DataValue::UInt32(1)]]);
 
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
             .unwrap();
@@ -294,7 +293,7 @@ mod tests {
                     data_source 'memory'
                 );
 
-                CREATE FOREIGN TABLE "x:1.0" (
+                CREATE FOREIGN TABLE "x" (
                     x BIGINT
                 ) SERVER {test_name}_test_srv;
                 "#
@@ -321,13 +320,13 @@ mod tests {
             .batch_execute(
                 r#"
             DO $$BEGIN
-                ASSERT (SELECT x FROM "x:1.0") = 1;
+                ASSERT (SELECT x FROM "x") = 1;
             END$$;
 
-            UPDATE "x:1.0" SET x = 123;
+            UPDATE "x" SET x = 123;
 
             DO $$BEGIN
-                ASSERT (SELECT x FROM "x:1.0") = 123;
+                ASSERT (SELECT x FROM "x") = 123;
             END$$;
         "#,
             )
@@ -343,16 +342,16 @@ mod tests {
                 r#"
             BEGIN;
 
-            UPDATE "x:1.0" SET x = 123;
+            UPDATE "x" SET x = 123;
 
             DO $$BEGIN
-                ASSERT (SELECT x FROM "x:1.0") = 123;
+                ASSERT (SELECT x FROM "x") = 123;
             END$$;
 
             COMMIT;
 
             DO $$BEGIN
-                ASSERT (SELECT x FROM "x:1.0") = 123;
+                ASSERT (SELECT x FROM "x") = 123;
             END$$;
             
             BEGIN;
@@ -370,16 +369,16 @@ mod tests {
                 r#"
             BEGIN;
 
-            UPDATE "x:1.0" SET x = 123;
+            UPDATE "x" SET x = 123;
 
             DO $$BEGIN
-                ASSERT (SELECT x FROM "x:1.0") = 123;
+                ASSERT (SELECT x FROM "x") = 123;
             END$$;
 
             ROLLBACK;
 
             DO $$BEGIN
-                ASSERT (SELECT x FROM "x:1.0") = 1;
+                ASSERT (SELECT x FROM "x") = 1;
             END$$;
         "#,
             )

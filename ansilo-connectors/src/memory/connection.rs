@@ -45,7 +45,7 @@ impl ConnectionPool for MemoryConnectionPool {
 
 pub struct MemoryConnection {
     pub data: Arc<MemoryDatabase>,
-    conf: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+    pub(super) conf: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     transaction: Option<TransactionState>,
 }
 
@@ -141,7 +141,7 @@ impl TransactionManager for MemoryConnection {
 #[cfg(test)]
 mod tests {
     use ansilo_core::{
-        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig},
+        config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig},
         data::{DataType, DataValue},
     };
 
@@ -156,17 +156,16 @@ mod tests {
         let data = MemoryDatabase::new();
         let mut conf = ConnectorEntityConfig::new();
 
-        conf.add(EntitySource::minimal(
-            "dummy",
-            EntityVersionConfig::minimal(
-                "1.0",
+        conf.add(EntitySource::new(
+            EntityConfig::minimal(
+                "dummy",
                 vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
                 EntitySourceConfig::minimal(""),
             ),
             MemoryConnectorEntitySourceConfig::default(),
         ));
 
-        data.set_data("dummy", "1.0", vec![vec![DataValue::UInt32(1)]]);
+        data.set_data("dummy", vec![vec![DataValue::UInt32(1)]]);
 
         (conf, data)
     }
@@ -199,14 +198,14 @@ mod tests {
     fn test_memory_connector_connection_transaction_rollback() {
         let mut con = setup_connection();
 
-        let orig = con.data.get_data("dummy", "1.0").unwrap();
+        let orig = con.data.get_data("dummy").unwrap();
 
         assert_eq!(con.is_in_transaction().unwrap(), false);
         con.begin_transaction().unwrap();
         assert_eq!(con.is_in_transaction().unwrap(), true);
 
         con.data
-            .with_data_mut("dummy", "1.0", |data| {
+            .with_data_mut("dummy", |data| {
                 data[0][0] = DataValue::UInt32(123);
                 ()
             })
@@ -215,7 +214,7 @@ mod tests {
         con.rollback_transaction().unwrap();
         assert_eq!(con.is_in_transaction().unwrap(), false);
 
-        let after_rollback = con.data.get_data("dummy", "1.0").unwrap();
+        let after_rollback = con.data.get_data("dummy").unwrap();
 
         assert_eq!(after_rollback, orig);
     }
@@ -233,7 +232,7 @@ mod tests {
             .as_mut()
             .unwrap()
             .commit_state
-            .with_data_mut("dummy", "1.0", |data| {
+            .with_data_mut("dummy", |data| {
                 data[0][0] = DataValue::UInt32(123);
                 ()
             })
@@ -242,7 +241,7 @@ mod tests {
         con.commit_transaction().unwrap();
         assert_eq!(con.is_in_transaction().unwrap(), false);
 
-        let after_commit = con.data.get_data("dummy", "1.0").unwrap();
+        let after_commit = con.data.get_data("dummy").unwrap();
 
         assert_eq!(after_commit, vec![vec![DataValue::UInt32(123)],]);
     }

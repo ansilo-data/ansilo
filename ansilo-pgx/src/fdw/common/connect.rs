@@ -16,7 +16,7 @@ use pgx::{
     *,
 };
 
-use crate::{fdw::ctx::FdwContext, sqlil::parse_entity_version_id_from_foreign_table};
+use crate::{fdw::ctx::FdwContext, sqlil::get_entity_id_from_foreign_table};
 
 use super::{current_auth_token, ServerOptions};
 
@@ -87,7 +87,7 @@ pub(crate) unsafe fn connect(foreign_table_relid: Oid) -> FdwContext {
     }
 
     // Find the corrosponding entity / version id from the table name
-    let entity = parse_entity_version_id_from_foreign_table(foreign_table_relid).unwrap();
+    let entity = get_entity_id_from_foreign_table(foreign_table_relid).unwrap();
 
     // Retrieves the foreign server for the table
     let server = GetForeignServer((*table).serverid);

@@ -7,7 +7,7 @@ use crate::data::{DataType, DataValue};
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 #[serde(tag = "@type")]
 pub enum Expr {
-    Attribute(AttributeIdentifier),
+    Attribute(AttributeId),
     Constant(Constant),
     Parameter(Parameter),
     UnaryOp(UnaryOp),
@@ -21,32 +21,29 @@ type SubExpr = Box<Expr>;
 
 /// A reference to an entity version
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
-pub struct EntityVersionIdentifier {
+pub struct EntityId {
     /// The ID of the referenced entity
     pub entity_id: String,
-    /// The referenced version
-    pub version_id: String,
 }
 
-impl EntityVersionIdentifier {
-    pub fn new(entity_id: impl Into<String>, version_id: impl Into<String>) -> Self {
+impl EntityId {
+    pub fn new(entity_id: impl Into<String>) -> Self {
         Self {
             entity_id: entity_id.into(),
-            version_id: version_id.into(),
         }
     }
 }
 
 /// A reference to an attribute from an entity version
 #[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
-pub struct AttributeIdentifier {
+pub struct AttributeId {
     /// The referenced entity alias
     pub entity_alias: String,
     /// The referenced attribute id
     pub attribute_id: String,
 }
 
-impl AttributeIdentifier {
+impl AttributeId {
     pub fn new(entity_alias: impl Into<String>, attribute_id: impl Into<String>) -> Self {
         Self {
             entity_alias: entity_alias.into(),
@@ -274,13 +271,13 @@ impl StringAggCall {
 }
 
 /// Constructurs a new entity expression
-pub fn entity(entity_id: impl Into<String>, version: impl Into<String>) -> EntityVersionIdentifier {
-    EntityVersionIdentifier::new(entity_id, version)
+pub fn entity(entity_id: impl Into<String>) -> EntityId {
+    EntityId::new(entity_id)
 }
 
 /// Constructurs a new entity attribute expression
-pub fn attr(alias: impl Into<String>, attr_id: impl Into<String>) -> AttributeIdentifier {
-    AttributeIdentifier::new(alias, attr_id)
+pub fn attr(alias: impl Into<String>, attr_id: impl Into<String>) -> AttributeId {
+    AttributeId::new(alias, attr_id)
 }
 
 impl Expr {

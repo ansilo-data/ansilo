@@ -1,5 +1,5 @@
 use ansilo_core::{
-    config::{EntityVersionConfig, NodeConfig},
+    config::{EntityConfig, NodeConfig},
     err::Result,
 };
 
@@ -15,7 +15,7 @@ impl EntityValidator for MemoryEntityValidator {
 
     fn validate(
         _connection: &mut MemoryConnection,
-        _entity_version: &EntityVersionConfig,
+        _entity_version: &EntityConfig,
         _nc: &NodeConfig,
     ) -> Result<EntitySource<MemoryConnectorEntitySourceConfig>> {
         todo!()

@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT * FROM \"people:1.0\" p INNER JOIN \"pets:1.0\" pets ON MD5(pets.owner_id::text) = MD5(p.id::text)",
+    "SQL": "SELECT * FROM \"people\" p INNER JOIN \"pets\" pets ON MD5(pets.owner_id::text) = MD5(p.id::text)",
     "Expected": {
         "Plan": {
             "Node Type": "Hash Join",
@@ -18,7 +18,7 @@
                 {
                     "Node Type": "Foreign Scan",
                     "Operation": "Select",
-                    "Relation Name": "people:1.0",
+                    "Relation Name": "people",
                     "Output": [
                         "p.id",
                         "p.first_name",
@@ -70,7 +70,7 @@
                         {
                             "Node Type": "Foreign Scan",
                             "Operation": "Select",
-                            "Relation Name": "pets:1.0",
+                            "Relation Name": "pets",
                             "Output": [
                                 "pets.id",
                                 "pets.owner_id",

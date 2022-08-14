@@ -1,10 +1,10 @@
 {
-    "SQL": "SELECT * FROM \"people:1.0\" LIMIT 2",
+    "SQL": "SELECT * FROM \"people\" LIMIT 2",
     "Expected": {
         "Plan": {
             "Node Type": "Foreign Scan",
             "Operation": "Select",
-            "Relation Name": "people:1.0",
+            "Relation Name": "people",
             "Output": [
                 "id",
                 "first_name",

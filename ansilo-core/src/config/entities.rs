@@ -15,23 +15,33 @@ pub struct EntityConfig {
     pub description: String,
     /// The tags attached to the entity for categorisation
     pub tags: Vec<TagValueConfig>,
-    /// The versions of the entity
-    pub versions: Vec<EntityVersionConfig>,
+    /// The list of attributes exposed by this entity
+    pub attributes: Vec<EntityAttributeConfig>,
+    /// The list of constraints (fk or unique) on this entity
+    pub constraints: Vec<EntityConstraintConfig>,
+    /// The source-specific config for reading or writing to this entity
+    pub source: EntitySourceConfig,
     /// The accessility of the entity
     pub accessibility: EntityAccessiblity,
 }
 
 impl EntityConfig {
-    pub fn minimal(id: impl Into<String>, versions: Vec<EntityVersionConfig>) -> Self {
-        let id: String = id.into();
+    pub fn minimal(
+        id: impl Into<String>,
+        attrs: Vec<EntityAttributeConfig>,
+        source: EntitySourceConfig,
+    ) -> Self {
+        let id = id.into();
 
         Self {
             id: id.clone(),
             name: id,
             description: "".to_string(),
             tags: vec![],
-            versions,
             accessibility: EntityAccessiblity::Internal,
+            attributes: attrs,
+            constraints: vec![],
+            source,
         }
     }
 }
@@ -44,35 +54,6 @@ pub struct TagValueConfig {
     pub key: String,
     /// The tag value
     pub value: String,
-}
-
-/// A version of the entity schema
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct EntityVersionConfig {
-    /// The version number
-    /// It is recommended to follow semantic versioning eg `{major}.{minor}.{patch}`
-    pub version: String,
-    /// The list of attributes exposed by this entity
-    pub attributes: Vec<EntityAttributeConfig>,
-    /// The list of constraints (fk or unique) on this entity
-    pub constraints: Vec<EntityConstraintConfig>,
-    /// The source-specific config for reading or writing to this entity
-    pub source: EntitySourceConfig,
-}
-
-impl EntityVersionConfig {
-    pub fn minimal(
-        id: impl Into<String>,
-        attrs: Vec<EntityAttributeConfig>,
-        source: EntitySourceConfig,
-    ) -> Self {
-        Self {
-            version: id.into(),
-            attributes: attrs,
-            constraints: vec![],
-            source,
-        }
-    }
 }
 
 /// An attribute of an entity

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MemoryDatabase {
     /// The in-memory data queried by the connector
-    /// This 2D tabular data keyed by the respective the string "{entity_id}-{version_id}"
+    /// This 2D tabular data keyed by the respective entity id
     data: RwLock<HashMap<String, Vec<Vec<DataValue>>>>,
     /// We also keep track of row id's to ensure they are uniquely assigned for each entity
     row_ids: RwLock<HashMap<String, u64>>,
@@ -55,31 +55,23 @@ impl MemoryDatabase {
         cb(&mut conf);
     }
 
-    pub fn set_data(
-        &self,
-        entity_id: impl Into<String>,
-        version_id: impl Into<String>,
-        mut rows: Vec<Vec<DataValue>>,
-    ) {
+    pub fn set_data(&self, entity_id: impl Into<String>, mut rows: Vec<Vec<DataValue>>) {
         let mut data = self.data.write().unwrap();
         let entity_id: String = entity_id.into();
-        let version_id: String = version_id.into();
         self.append_row_ids(
             &entity_id,
-            &version_id,
             rows.iter_mut().collect::<Vec<_>>().as_mut_slice(),
         );
-        data.insert(format!("{}-{}", entity_id, version_id), rows);
+        data.insert(entity_id, rows);
     }
 
     pub fn with_data_mut<F: FnOnce(&mut Vec<Vec<DataValue>>) -> R, R>(
         &self,
         entity_id: impl Into<String>,
-        version_id: impl Into<String>,
         cb: F,
     ) -> Option<R> {
         let mut data = self.data.write().unwrap();
-        let rows = data.get_mut(&format!("{}-{}", entity_id.into(), version_id.into()))?;
+        let rows = data.get_mut(&entity_id.into())?;
 
         Some(cb(rows))
     }
@@ -87,21 +79,16 @@ impl MemoryDatabase {
     pub fn with_data<F: FnOnce(&Vec<Vec<DataValue>>) -> R, R>(
         &self,
         entity_id: impl Into<String>,
-        version_id: impl Into<String>,
         cb: F,
     ) -> Option<R> {
         let data = self.data.read().unwrap();
-        let rows = data.get(&format!("{}-{}", entity_id.into(), version_id.into()))?;
+        let rows = data.get(&entity_id.into())?;
 
         Some(cb(rows))
     }
 
-    pub fn get_data(
-        &self,
-        entity_id: impl Into<String>,
-        version_id: impl Into<String>,
-    ) -> Option<Vec<Vec<DataValue>>> {
-        self.with_data(entity_id, version_id, |rows| {
+    pub fn get_data(&self, entity_id: impl Into<String>) -> Option<Vec<Vec<DataValue>>> {
+        self.with_data(entity_id, |rows| {
             let mut rows = rows.clone();
             self.remove_row_ids(&mut rows);
             rows
@@ -111,13 +98,12 @@ impl MemoryDatabase {
     pub(super) fn append_row_ids(
         &self,
         entity_id: impl Into<String>,
-        version_id: impl Into<String>,
         rows: &mut [&mut Vec<DataValue>],
     ) {
         let mut row_ids = self.row_ids.write().unwrap();
 
         let id = {
-            let key = format!("{}-{}", entity_id.into(), version_id.into());
+            let key = entity_id.into();
 
             if !row_ids.contains_key(&key) {
                 row_ids.insert(key.to_string(), 0);
@@ -165,14 +151,10 @@ mod tests {
     fn test_memory_connector_connection_config() {
         let conf = MemoryDatabase::new();
 
-        conf.set_data(
-            "a",
-            "1.0",
-            vec![vec![DataValue::Null], vec![DataValue::Null]],
-        );
+        conf.set_data("a", vec![vec![DataValue::Null], vec![DataValue::Null]]);
 
         // should append row ids
-        let rows = conf.with_data("a", "1.0", |data| data.clone());
+        let rows = conf.with_data("a", |data| data.clone());
 
         assert_eq!(
             rows,
@@ -182,10 +164,10 @@ mod tests {
             ])
         );
 
-        assert!(conf.with_data("a", "2.0", |_| ()).is_none());
+        assert!(conf.with_data("b", |_| ()).is_none());
 
         // should remove row ids
-        let rows = conf.get_data("a", "1.0");
+        let rows = conf.get_data("a");
 
         assert_eq!(
             rows,

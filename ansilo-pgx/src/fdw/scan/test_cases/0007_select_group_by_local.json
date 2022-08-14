@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT MD5(first_name) FROM \"people:1.0\" GROUP BY MD5(first_name)",
+    "SQL": "SELECT MD5(first_name) FROM \"people\" GROUP BY MD5(first_name)",
     "Expected": {
         "Plan": {
             "Node Type": "Aggregate",
@@ -9,13 +9,13 @@
                 "(md5((first_name)::text))"
             ],
             "Group Key": [
-                "md5((\"people:1.0\".first_name)::text)"
+                "md5((people.first_name)::text)"
             ],
             "Plans": [
                 {
                     "Node Type": "Foreign Scan",
                     "Operation": "Select",
-                    "Relation Name": "people:1.0",
+                    "Relation Name": "people",
                     "Plan Width": 32,
                     "Output": [
                         "md5((first_name)::text)"

@@ -14,23 +14,24 @@ mod tests {
     use super::*;
 
     use crate::{
+        assert_query_plan_expected,
         fdw::test::{
             query::{execute_query, explain_query_verbose},
             server::start_fdw_server,
         },
-        sqlil::test, assert_query_plan_expected,
+        sqlil::test,
     };
     use ansilo_connectors::{
         common::entity::{ConnectorEntityConfig, EntitySource},
         interface::{container::ConnectionPools, Connector, OperationCost},
         memory::{
-            MemoryDatabase, MemoryConnectionPool, MemoryConnector,
-            MemoryConnectorEntitySourceConfig,
+            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
+            MemoryDatabase,
         },
     };
     use ansilo_core::data::*;
     use ansilo_core::{
-        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
         data::{DataType, DataValue},
         sqlil,
     };
@@ -43,10 +44,9 @@ mod tests {
         let mut conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
-        entities.add(EntitySource::minimal(
-            "people",
-            EntityVersionConfig::minimal(
-                "1.0",
+        entities.add(EntitySource::new(
+            EntityConfig::minimal(
+                "people",
                 vec![
                     EntityAttributeConfig::minimal("id", DataType::UInt32),
                     EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
@@ -64,10 +64,9 @@ mod tests {
             ))),
         ));
 
-        entities.add(EntitySource::minimal(
-            "pets",
-            EntityVersionConfig::minimal(
-                "1.0",
+        entities.add(EntitySource::new(
+            EntityConfig::minimal(
+                "pets",
                 vec![
                     EntityAttributeConfig::minimal("id", DataType::UInt32),
                     EntityAttributeConfig::minimal("owner_id", DataType::UInt32),
@@ -78,10 +77,9 @@ mod tests {
             MemoryConnectorEntitySourceConfig::default(),
         ));
 
-        entities.add(EntitySource::minimal(
-            "large",
-            EntityVersionConfig::minimal(
-                "1.0",
+        entities.add(EntitySource::new(
+            EntityConfig::minimal(
+                "large",
                 vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
                 EntitySourceConfig::minimal(""),
             ),
@@ -90,7 +88,6 @@ mod tests {
 
         conf.set_data(
             "people",
-            "1.0",
             vec![
                 vec![
                     DataValue::UInt32(1),
@@ -117,7 +114,6 @@ mod tests {
 
         conf.set_data(
             "pets",
-            "1.0",
             vec![
                 vec![
                     DataValue::UInt32(1),
@@ -144,7 +140,6 @@ mod tests {
 
         conf.set_data(
             "large",
-            "1.0",
             (0..1_000_000)
                 .into_iter()
                 .map(|x| vec![DataValue::UInt32(x)])
@@ -169,19 +164,19 @@ mod tests {
                     data_source 'memory'
                 );
 
-                CREATE FOREIGN TABLE "people:1.0" (
+                CREATE FOREIGN TABLE "people" (
                     id BIGINT,
                     first_name VARCHAR,
                     last_name VARCHAR
                 ) SERVER test_srv;
 
-                CREATE FOREIGN TABLE "pets:1.0" (
+                CREATE FOREIGN TABLE "pets" (
                     id BIGINT,
                     owner_id BIGINT,
                     pet_name VARCHAR
                 ) SERVER test_srv;
 
-                CREATE FOREIGN TABLE "large:1.0" (
+                CREATE FOREIGN TABLE "large" (
                     x BIGINT
                 ) SERVER test_srv;
                 "#
@@ -204,7 +199,7 @@ mod tests {
     fn test_fdw_scan_select_all() {
         setup_test("scan_select_all");
 
-        let results = execute_query(r#"SELECT * FROM "people:1.0""#, |i| {
+        let results = execute_query(r#"SELECT * FROM "people""#, |i| {
             (
                 i["first_name"].value::<String>().unwrap(),
                 i["last_name"].value::<String>().unwrap(),
@@ -232,7 +227,7 @@ mod tests {
         setup_test("scan_select_all_remote_cond");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" WHERE first_name = 'Mary'"#,
+            r#"SELECT * FROM "people" WHERE first_name = 'Mary'"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -260,7 +255,7 @@ mod tests {
         setup_test("scan_select_all_local_cond");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" WHERE MD5(first_name) = MD5('John')"#,
+            r#"SELECT * FROM "people" WHERE MD5(first_name) = MD5('John')"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -281,7 +276,7 @@ mod tests {
     fn test_fdw_scan_select_count_all() {
         setup_test("scan_select_count_all");
 
-        let results = execute_query(r#"SELECT COUNT(*) as count FROM "people:1.0""#, |i| {
+        let results = execute_query(r#"SELECT COUNT(*) as count FROM "people""#, |i| {
             (i["count"].value::<i64>().unwrap(),)
         });
 
@@ -298,7 +293,7 @@ mod tests {
         setup_test("scan_select_group_by_name");
 
         let results = execute_query(
-            r#"SELECT first_name FROM "people:1.0" GROUP BY first_name"#,
+            r#"SELECT first_name FROM "people" GROUP BY first_name"#,
             |i| (i["first_name"].value::<String>().unwrap(),),
         );
 
@@ -318,7 +313,7 @@ mod tests {
         setup_test("scan_select_group_by_name_with_count");
 
         let results = execute_query(
-            r#"SELECT first_name, COUNT(*) as count FROM "people:1.0" GROUP BY first_name"#,
+            r#"SELECT first_name, COUNT(*) as count FROM "people" GROUP BY first_name"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -343,7 +338,7 @@ mod tests {
         setup_test("scan_select_group_by_local");
 
         let mut results = execute_query(
-            r#"SELECT MD5(first_name) as hash FROM "people:1.0" GROUP BY MD5(first_name)"#,
+            r#"SELECT MD5(first_name) as hash FROM "people" GROUP BY MD5(first_name)"#,
             |i| (i["hash"].value::<String>().unwrap(),),
         );
 
@@ -369,7 +364,7 @@ mod tests {
     fn test_fdw_scan_select_order_by_single_col() {
         setup_test("scan_select_order_by_single_col");
 
-        let results = execute_query(r#"SELECT * FROM "people:1.0" ORDER BY first_name"#, |i| {
+        let results = execute_query(r#"SELECT * FROM "people" ORDER BY first_name"#, |i| {
             (
                 i["first_name"].value::<String>().unwrap(),
                 i["last_name"].value::<String>().unwrap(),
@@ -397,7 +392,7 @@ mod tests {
         setup_test("scan_select_order_by_single_col_desc");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" ORDER BY first_name DESC"#,
+            r#"SELECT * FROM "people" ORDER BY first_name DESC"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -427,7 +422,7 @@ mod tests {
         setup_test("scan_select_order_by_multiple_cols");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" ORDER BY first_name, last_name DESC"#,
+            r#"SELECT * FROM "people" ORDER BY first_name, last_name DESC"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -457,7 +452,7 @@ mod tests {
         setup_test("scan_select_order_by_local");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" ORDER BY MD5(first_name), last_name"#,
+            r#"SELECT * FROM "people" ORDER BY MD5(first_name), last_name"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -486,7 +481,7 @@ mod tests {
     fn test_fdw_scan_select_limit() {
         setup_test("scan_select_limit");
 
-        let results = execute_query(r#"SELECT * FROM "people:1.0" LIMIT 2"#, |i| {
+        let results = execute_query(r#"SELECT * FROM "people" LIMIT 2"#, |i| {
             (
                 i["first_name"].value::<String>().unwrap(),
                 i["last_name"].value::<String>().unwrap(),
@@ -511,7 +506,7 @@ mod tests {
     fn test_fdw_scan_select_offset() {
         setup_test("scan_select_offset");
 
-        let results = execute_query(r#"SELECT * FROM "people:1.0" OFFSET 2"#, |i| {
+        let results = execute_query(r#"SELECT * FROM "people" OFFSET 2"#, |i| {
             (
                 i["first_name"].value::<String>().unwrap(),
                 i["last_name"].value::<String>().unwrap(),
@@ -536,7 +531,7 @@ mod tests {
     fn test_fdw_scan_select_limit_offset() {
         setup_test("scan_select_limit_offset");
 
-        let results = execute_query(r#"SELECT * FROM "people:1.0" LIMIT 2 OFFSET 1"#, |i| {
+        let results = execute_query(r#"SELECT * FROM "people" LIMIT 2 OFFSET 1"#, |i| {
             (
                 i["first_name"].value::<String>().unwrap(),
                 i["last_name"].value::<String>().unwrap(),
@@ -567,7 +562,7 @@ mod tests {
         setup_test("scan_select_inner_join");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" p INNER JOIN "pets:1.0" pets ON pets.owner_id = p.id"#,
+            r#"SELECT * FROM "people" p INNER JOIN "pets" pets ON pets.owner_id = p.id"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -597,7 +592,7 @@ mod tests {
         setup_test("scan_select_left_join");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" p LEFT JOIN "pets:1.0" pets ON pets.owner_id = p.id"#,
+            r#"SELECT * FROM "people" p LEFT JOIN "pets" pets ON pets.owner_id = p.id"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -629,7 +624,7 @@ mod tests {
         setup_test("scan_select_right_join");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" p RIGHT JOIN "pets:1.0" pets ON pets.owner_id = p.id"#,
+            r#"SELECT * FROM "people" p RIGHT JOIN "pets" pets ON pets.owner_id = p.id"#,
             |i| {
                 (
                     i["first_name"].value::<String>(),
@@ -660,7 +655,7 @@ mod tests {
         setup_test("scan_select_full_join");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" p FULL JOIN "pets:1.0" pets ON pets.owner_id = p.id"#,
+            r#"SELECT * FROM "people" p FULL JOIN "pets" pets ON pets.owner_id = p.id"#,
             |i| {
                 (
                     i["first_name"].value::<String>(),
@@ -705,7 +700,7 @@ mod tests {
         setup_test("scan_select_inner_join_local");
 
         let results = execute_query(
-            r#"SELECT * FROM "people:1.0" p INNER JOIN "pets:1.0" pets ON MD5(pets.owner_id::text) = MD5(p.id::text)"#,
+            r#"SELECT * FROM "people" p INNER JOIN "pets" pets ON MD5(pets.owner_id::text) = MD5(p.id::text)"#,
             |i| {
                 (
                     i["first_name"].value::<String>().unwrap(),
@@ -737,8 +732,8 @@ mod tests {
         let results = execute_query(
             r#"
             SELECT p.first_name, p.last_name, COUNT(*) as pets 
-            FROM "people:1.0" p 
-            INNER JOIN "pets:1.0" pets ON pets.owner_id = p.id
+            FROM "people" p 
+            INNER JOIN "pets" pets ON pets.owner_id = p.id
             WHERE pets.pet_name != 'XXX'
             GROUP BY p.first_name, p.last_name
             ORDER BY pets DESC
@@ -774,7 +769,7 @@ mod tests {
         let results = execute_query(
             r#"
             SELECT 
-                (SELECT first_name FROM "people:1.0" WHERE id = x) as first_name
+                (SELECT first_name FROM "people" WHERE id = x) as first_name
             FROM generate_series(1, 2) as x
             "#,
             |i| (i["first_name"].value::<String>().unwrap(),),

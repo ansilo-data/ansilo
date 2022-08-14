@@ -1,5 +1,5 @@
 use ansilo_core::{
-    config::{EntityVersionConfig, NodeConfig},
+    config::{EntityConfig, NodeConfig},
     err::Result,
 };
 
@@ -16,7 +16,7 @@ impl EntityValidator for OracleJdbcEntityValidator {
 
     fn validate(
         _connection: &mut Self::TConnection,
-        _entity_version: &EntityVersionConfig,
+        _entity_version: &EntityConfig,
         _nc: &NodeConfig,
     ) -> Result<EntitySource<OracleJdbcEntitySourceConfig>> {
         todo!()

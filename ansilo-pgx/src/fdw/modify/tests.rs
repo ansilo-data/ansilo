@@ -25,13 +25,13 @@ mod tests {
         common::entity::{ConnectorEntityConfig, EntitySource},
         interface::{container::ConnectionPools, Connector, OperationCost},
         memory::{
-            MemoryDatabase, MemoryConnectionPool, MemoryConnector,
-            MemoryConnectorEntitySourceConfig,
+            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
+            MemoryDatabase,
         },
     };
     use ansilo_core::data::*;
     use ansilo_core::{
-        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
         data::{DataType, DataValue},
         sqlil,
     };
@@ -44,10 +44,9 @@ mod tests {
         let mut conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
-        entities.add(EntitySource::minimal(
-            "people",
-            EntityVersionConfig::minimal(
-                "1.0",
+        entities.add(EntitySource::new(
+            EntityConfig::minimal(
+                "people",
                 vec![
                     EntityAttributeConfig::minimal("id", DataType::UInt32),
                     EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
@@ -65,10 +64,9 @@ mod tests {
             ))),
         ));
 
-        entities.add(EntitySource::minimal(
-            "pets",
-            EntityVersionConfig::minimal(
-                "1.0",
+        entities.add(EntitySource::new(
+            EntityConfig::minimal(
+                "pets",
                 vec![
                     EntityAttributeConfig::minimal("id", DataType::UInt32),
                     EntityAttributeConfig::minimal("owner_id", DataType::UInt32),
@@ -81,7 +79,6 @@ mod tests {
 
         conf.set_data(
             "people",
-            "1.0",
             vec![
                 vec![
                     DataValue::UInt32(1),
@@ -108,7 +105,6 @@ mod tests {
 
         conf.set_data(
             "pets",
-            "1.0",
             vec![
                 vec![
                     DataValue::UInt32(1),
@@ -151,19 +147,19 @@ mod tests {
                     data_source 'memory'
                 );
 
-                CREATE FOREIGN TABLE "people:1.0" (
+                CREATE FOREIGN TABLE "people" (
                     id BIGINT,
                     first_name VARCHAR,
                     last_name VARCHAR
                 ) SERVER test_srv;
 
-                CREATE FOREIGN TABLE "pets:1.0" (
+                CREATE FOREIGN TABLE "pets" (
                     id BIGINT,
                     owner_id BIGINT,
                     pet_name VARCHAR
                 ) SERVER test_srv;
 
-                CREATE FOREIGN TABLE "large:1.0" (
+                CREATE FOREIGN TABLE "large" (
                     x BIGINT
                 ) SERVER test_srv;
                 "#
@@ -188,10 +184,10 @@ mod tests {
 
         let results = execute_query(
             r#"
-            INSERT INTO "people:1.0" (id, first_name, last_name) 
+            INSERT INTO "people" (id, first_name, last_name) 
             VALUES (123, 'Barry', 'Diploma');
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -225,10 +221,10 @@ mod tests {
 
         let results = execute_query(
             r#"
-            INSERT INTO "people:1.0" (id, first_name, last_name) 
+            INSERT INTO "people" (id, first_name, last_name) 
             VALUES (123, 'Barry', 'Diploma'), (456, 'Harry', 'Potter'), (789, 'Ron', 'Weasly');
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -259,10 +255,10 @@ mod tests {
 
         let results = execute_query(
             r#"
-            INSERT INTO "people:1.0" (id, first_name, last_name) 
-            SELECT id + 10, last_name, first_name FROM "people:1.0";
+            INSERT INTO "people" (id, first_name, last_name) 
+            SELECT id + 10, last_name, first_name FROM "people";
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -299,9 +295,9 @@ mod tests {
 
         let results = execute_query(
             r#"
-            UPDATE "people:1.0" SET first_name = 'Updated: ' || MD5(first_name);
+            UPDATE "people" SET first_name = 'Updated: ' || MD5(first_name);
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -315,10 +311,26 @@ mod tests {
         assert_eq!(
             results,
             vec![
-                (1, "Updated: e39e74fb4e80ba656f773669ed50315a".into(), "Jane".into()),
-                (2, "Updated: 61409aa1fd47d4a5332de23cbf59a36f".into(), "Smith".into()),
-                (3, "Updated: 01d4848202a3c7697ec037b02b4ee4e8".into(), "Gregson".into()),
-                (4, "Updated: e39e74fb4e80ba656f773669ed50315a".into(), "Bennet".into()),
+                (
+                    1,
+                    "Updated: e39e74fb4e80ba656f773669ed50315a".into(),
+                    "Jane".into()
+                ),
+                (
+                    2,
+                    "Updated: 61409aa1fd47d4a5332de23cbf59a36f".into(),
+                    "Smith".into()
+                ),
+                (
+                    3,
+                    "Updated: 01d4848202a3c7697ec037b02b4ee4e8".into(),
+                    "Gregson".into()
+                ),
+                (
+                    4,
+                    "Updated: e39e74fb4e80ba656f773669ed50315a".into(),
+                    "Bennet".into()
+                ),
             ]
         );
     }
@@ -334,9 +346,9 @@ mod tests {
 
         let results = execute_query(
             r#"
-            UPDATE "people:1.0" SET first_name = 'Updated: ' || MD5(first_name) WHERE id = 3;
+            UPDATE "people" SET first_name = 'Updated: ' || MD5(first_name) WHERE id = 3;
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -352,7 +364,11 @@ mod tests {
             vec![
                 (1, "Mary".into(), "Jane".into()),
                 (2, "John".into(), "Smith".into()),
-                (3, "Updated: 01d4848202a3c7697ec037b02b4ee4e8".into(), "Gregson".into()),
+                (
+                    3,
+                    "Updated: 01d4848202a3c7697ec037b02b4ee4e8".into(),
+                    "Gregson".into()
+                ),
                 (4, "Mary".into(), "Bennet".into()),
             ]
         );
@@ -369,9 +385,9 @@ mod tests {
 
         let results = execute_query(
             r#"
-            UPDATE "people:1.0" SET first_name = 'Updated: ' || first_name WHERE MD5(id::text) = MD5('3');
+            UPDATE "people" SET first_name = 'Updated: ' || first_name WHERE MD5(id::text) = MD5('3');
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -404,9 +420,9 @@ mod tests {
 
         let results = execute_query(
             r#"
-            DELETE FROM "people:1.0";
+            DELETE FROM "people";
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -431,9 +447,9 @@ mod tests {
 
         let results = execute_query(
             r#"
-            DELETE FROM "people:1.0" WHERE MD5(id::text) = MD5('3');
+            DELETE FROM "people" WHERE MD5(id::text) = MD5('3');
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -465,9 +481,9 @@ mod tests {
 
         let results = execute_query(
             r#"
-            UPDATE "people:1.0" SET first_name = 'Updated: ' || first_name;
+            UPDATE "people" SET first_name = 'Updated: ' || first_name;
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -500,9 +516,9 @@ mod tests {
 
         let results = execute_query(
             r#"
-            UPDATE "people:1.0" SET first_name = 'Updated: ' || first_name WHERE id = 4;
+            UPDATE "people" SET first_name = 'Updated: ' || first_name WHERE id = 4;
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (
@@ -535,9 +551,9 @@ mod tests {
 
         let results = execute_query(
             r#"
-            DELETE FROM "people:1.0" WHERE id = 4;
+            DELETE FROM "people" WHERE id = 4;
 
-            SELECT * FROM "people:1.0";
+            SELECT * FROM "people";
             "#,
             |i| {
                 (

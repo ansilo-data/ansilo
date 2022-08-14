@@ -1,5 +1,5 @@
 use ansilo_core::{
-    config::{EntityVersionConfig, NodeConfig},
+    config::{EntityConfig, NodeConfig},
     err::Result,
 };
 
@@ -15,7 +15,7 @@ pub trait EntityValidator {
     /// Validate the supplied entity config
     fn validate(
         connection: &mut Self::TConnection,
-        entity_version: &EntityVersionConfig,
+        entity_version: &EntityConfig,
         nc: &NodeConfig,
     ) -> Result<EntitySource<Self::TEntitySourceConfig>>;
 }

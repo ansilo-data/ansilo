@@ -1,10 +1,10 @@
 {
-    "SQL": "INSERT INTO \"people:1.0\" (id, first_name, last_name) VALUES (123, 'Barry', 'Diploma');",
+    "SQL": "INSERT INTO \"people\" (id, first_name, last_name) VALUES (123, 'Barry', 'Diploma');",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
             "Operation": "Insert",
-            "Relation Name": "people:1.0",
+            "Relation Name": "people",
             "Remote Ops": [
                 {
                     "AddColumn": {

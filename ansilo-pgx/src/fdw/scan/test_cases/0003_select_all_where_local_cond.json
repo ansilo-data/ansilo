@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT * FROM \"people:1.0\" WHERE MD5(first_name) = MD5('John')",
+    "SQL": "SELECT * FROM \"people\" WHERE MD5(first_name) = MD5('John')",
     "Expected": {
         "Plan": {
             "Node Type": "Foreign Scan",
@@ -10,7 +10,7 @@
                 "last_name"
             ],
             "Local Conds": [
-                "(md5((\"people:1.0\".first_name)::text) = '61409aa1fd47d4a5332de23cbf59a36f'::text)"
+                "(md5((people.first_name)::text) = '61409aa1fd47d4a5332de23cbf59a36f'::text)"
             ],
             "Remote Conds": [],
             "Remote Ops": [

@@ -1,15 +1,15 @@
 {
-    "SQL": "DELETE FROM \"people:1.0\";",
+    "SQL": "DELETE FROM \"people\";",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
             "Operation": "Delete",
-            "Relation Name": "people:1.0",
+            "Relation Name": "people",
             "Plans": [
                 {
                     "Node Type": "Foreign Scan",
                     "Operation": "Delete",
-                    "Relation Name": "people:1.0",
+                    "Relation Name": "people",
                     "Remote Conds": [],
                     "Remote Ops": []
                 }

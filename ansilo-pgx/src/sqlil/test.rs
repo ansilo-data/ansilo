@@ -1,4 +1,9 @@
-use std::{ffi::CString, os::unix::{net::UnixStream, prelude::FromRawFd}, ptr, sync::Arc};
+use std::{
+    ffi::CString,
+    os::unix::{net::UnixStream, prelude::FromRawFd},
+    ptr,
+    sync::Arc,
+};
 
 use ansilo_core::{data::DataType, err::Result, sqlil};
 use ansilo_pg::fdw::channel::IpcClientChannel;
@@ -34,7 +39,7 @@ pub(super) fn convert_simple_expr_with_context(
         let client = IpcClientChannel::new(UnixStream::from_raw_fd(1234));
         let con = FdwIpcConnection::new("data_source", client);
 
-        let fdw = FdwContext::new(Arc::new(con), sqlil::entity("entity", "version"));
+        let fdw = FdwContext::new(Arc::new(con), sqlil::entity("entity"));
 
         super::convert(node.as_ptr() as *const _, ctx, &planner, &fdw)
     }

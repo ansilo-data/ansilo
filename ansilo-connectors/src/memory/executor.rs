@@ -121,11 +121,8 @@ impl MemoryQueryExecutor {
                 .map(|(t, a)| a.and_then(|a| a.try_coerce_into(t)))
                 .collect::<Result<Vec<_>>>()?;
 
-            self.data.append_row_ids(
-                &insert.target.entity.entity_id,
-                &insert.target.entity.version_id,
-                &mut [&mut row],
-            );
+            self.data
+                .append_row_ids(&insert.target.entity.entity_id, &mut [&mut row]);
             rows.push(row);
 
             Ok(())
@@ -184,9 +181,7 @@ impl MemoryQueryExecutor {
 
     fn get_entity_data(&self, s: &sqlil::EntitySource) -> Result<Vec<Vec<DataValue>>> {
         self.data
-            .with_data(&s.entity.entity_id, &s.entity.version_id, |rows| {
-                rows.clone()
-            })
+            .with_data(&s.entity.entity_id, |rows| rows.clone())
             .ok_or(Error::msg("Could not find entity"))
     }
 
@@ -196,9 +191,7 @@ impl MemoryQueryExecutor {
         cb: impl FnOnce(&mut Vec<Vec<DataValue>>) -> Result<()>,
     ) -> Result<()> {
         self.data
-            .with_data_mut(&s.entity.entity_id, &s.entity.version_id, move |rows| {
-                cb(rows)
-            })
+            .with_data_mut(&s.entity.entity_id, move |rows| cb(rows))
             .ok_or(Error::msg("Could not find entity"))?
     }
 
@@ -1248,7 +1241,7 @@ impl MemoryQueryExecutor {
 
     fn get_conf(
         &self,
-        e: &sqlil::EntityVersionIdentifier,
+        e: &sqlil::EntityId,
     ) -> Result<&EntitySource<MemoryConnectorEntitySourceConfig>> {
         let entity = self
             .entities
@@ -1258,12 +1251,12 @@ impl MemoryQueryExecutor {
         Ok(entity)
     }
 
-    fn get_attrs(&self, a: &sqlil::EntityVersionIdentifier) -> Result<&Vec<EntityAttributeConfig>> {
+    fn get_attrs(&self, a: &sqlil::EntityId) -> Result<&Vec<EntityAttributeConfig>> {
         let entity = self.get_conf(a)?;
-        Ok(&entity.version().attributes)
+        Ok(&entity.conf.attributes)
     }
 
-    fn get_attr(&self, a: &sqlil::AttributeIdentifier) -> Result<EntityAttributeConfig> {
+    fn get_attr(&self, a: &sqlil::AttributeId) -> Result<EntityAttributeConfig> {
         let entity = self.query.get_entity(&a.entity_alias)?;
 
         if a.attribute_id == "ROWIDX" {
@@ -1277,7 +1270,7 @@ impl MemoryQueryExecutor {
             .ok_or_else(|| Error::msg(format!("Could not find attr: {:?}", a)))
     }
 
-    fn get_attr_index(&self, a: &sqlil::AttributeIdentifier) -> Result<usize> {
+    fn get_attr_index(&self, a: &sqlil::AttributeId) -> Result<usize> {
         let pos: usize = self
             .query
             .get_entity_sources()
@@ -1399,7 +1392,7 @@ impl<T: PartialOrd> PartialOrd for Ordered<T> {
 #[cfg(test)]
 mod tests {
     use ansilo_core::{
-        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig},
+        config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig},
         data::StringOptions,
         sqlil::{AggregateCall, Ordering},
     };
@@ -1413,10 +1406,9 @@ mod tests {
         let data = MemoryDatabase::new();
         let mut conf = ConnectorEntityConfig::new();
 
-        conf.add(EntitySource::minimal(
-            "people",
-            EntityVersionConfig::minimal(
-                "1.0",
+        conf.add(EntitySource::new(
+            EntityConfig::minimal(
+                "people",
                 vec![
                     EntityAttributeConfig::minimal("id", DataType::UInt32),
                     EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
@@ -1427,10 +1419,9 @@ mod tests {
             MemoryConnectorEntitySourceConfig::default(),
         ));
 
-        conf.add(EntitySource::minimal(
-            "pets",
-            EntityVersionConfig::minimal(
-                "1.0",
+        conf.add(EntitySource::new(
+            EntityConfig::minimal(
+                "pets",
                 vec![
                     EntityAttributeConfig::minimal("id", DataType::UInt32),
                     EntityAttributeConfig::minimal("owner_id", DataType::UInt32),
@@ -1443,7 +1434,6 @@ mod tests {
 
         data.set_data(
             "people",
-            "1.0",
             vec![
                 vec![
                     DataValue::UInt32(1),
@@ -1465,7 +1455,6 @@ mod tests {
 
         data.set_data(
             "pets",
-            "1.0",
             vec![
                 vec![
                     DataValue::UInt32(1),
@@ -1504,7 +1493,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_all() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "first_name".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1552,16 +1541,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_invalid_entity() {
-        let select = sqlil::Select::new(sqlil::source("invalid", "1.0", "i"));
-
-        let executor = create_executor(select, HashMap::new());
-
-        executor.run().unwrap_err();
-    }
-
-    #[test]
-    fn test_memory_connector_executor_select_invalid_version() {
-        let select = sqlil::Select::new(sqlil::source("people", "invalid", "i"));
+        let select = sqlil::Select::new(sqlil::source("invalid", "i"));
 
         let executor = create_executor(select, HashMap::new());
 
@@ -1570,7 +1550,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_no_cols() {
-        let select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let select = sqlil::Select::new(sqlil::source("people", "people"));
 
         let executor = create_executor(select, HashMap::new());
 
@@ -1584,7 +1564,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_single_column() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "alias".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1613,7 +1593,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_where_equals() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "alias".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1646,7 +1626,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_skip_row() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "alias".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1675,7 +1655,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_row_limit() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "alias".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1701,7 +1681,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_group_by_column_key() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "alias".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1732,7 +1712,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_group_by_column_key_with_count() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "alias".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1770,7 +1750,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_count_implicit_group_by() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "count".to_string(),
             sqlil::Expr::AggregateCall(AggregateCall::Count),
@@ -1791,7 +1771,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_bin_op_concat() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "full_name".to_string(),
             sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
@@ -1823,7 +1803,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_group_by_expr_key_with_count() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         let full_name = sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
             sqlil::Expr::attr("people", "first_name"),
             sqlil::BinaryOpType::Concat,
@@ -1873,7 +1853,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_order_by_single() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "first_name".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1924,7 +1904,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_order_by_single_desc() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "first_name".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -1975,7 +1955,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_order_by_multiple() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "first_name".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -2029,11 +2009,11 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_inner_join() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
 
         select.joins.push(sqlil::Join::new(
             sqlil::JoinType::Inner,
-            sqlil::source("pets", "1.0", "pets"),
+            sqlil::source("pets", "pets"),
             vec![sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
                 sqlil::Expr::attr("people", "id"),
                 sqlil::BinaryOpType::Equal,
@@ -2098,11 +2078,11 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_left_join() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
 
         select.joins.push(sqlil::Join::new(
             sqlil::JoinType::Left,
-            sqlil::source("pets", "1.0", "pets"),
+            sqlil::source("pets", "pets"),
             vec![sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
                 sqlil::Expr::attr("people", "id"),
                 sqlil::BinaryOpType::Equal,
@@ -2172,11 +2152,11 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_right_join() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
 
         select.joins.push(sqlil::Join::new(
             sqlil::JoinType::Right,
-            sqlil::source("pets", "1.0", "pets"),
+            sqlil::source("pets", "pets"),
             vec![sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
                 sqlil::Expr::attr("people", "id"),
                 sqlil::BinaryOpType::Equal,
@@ -2246,11 +2226,11 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_full_join() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
 
         select.joins.push(sqlil::Join::new(
             sqlil::JoinType::Full,
-            sqlil::source("pets", "1.0", "pets"),
+            sqlil::source("pets", "pets"),
             vec![sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
                 sqlil::Expr::attr("people", "id"),
                 sqlil::BinaryOpType::Equal,
@@ -2325,7 +2305,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_where_parameter() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select.cols.push((
             "first_name".to_string(),
             sqlil::Expr::attr("people", "first_name"),
@@ -2379,7 +2359,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_insert_empty_row() {
-        let insert = sqlil::Insert::new(sqlil::source("people", "1.0", "people"));
+        let insert = sqlil::Insert::new(sqlil::source("people", "people"));
 
         let executor = create_executor(insert, HashMap::new());
 
@@ -2389,7 +2369,7 @@ mod tests {
 
         executor
             .data
-            .with_data("people", "1.0", |data| {
+            .with_data("people", |data| {
                 assert_eq!(
                     data.iter().last().unwrap(),
                     &vec![
@@ -2405,7 +2385,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_insert_row_with_values_row() {
-        let mut insert = sqlil::Insert::new(sqlil::source("people", "1.0", "people"));
+        let mut insert = sqlil::Insert::new(sqlil::source("people", "people"));
 
         insert
             .cols
@@ -2427,7 +2407,7 @@ mod tests {
 
         executor
             .data
-            .with_data("people", "1.0", |data| {
+            .with_data("people", |data| {
                 assert_eq!(
                     data.iter().last().unwrap(),
                     &vec![
@@ -2443,12 +2423,12 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_update_no_set() {
-        let update = sqlil::Update::new(sqlil::source("people", "1.0", "people"));
+        let update = sqlil::Update::new(sqlil::source("people", "people"));
 
         let executor = create_executor(update, HashMap::new());
         let orig_data = executor
             .data
-            .with_data("people", "1.0", |data| data.clone())
+            .with_data("people", |data| data.clone())
             .unwrap();
 
         let results = executor.run().unwrap();
@@ -2457,7 +2437,7 @@ mod tests {
 
         executor
             .data
-            .with_data("people", "1.0", |data| {
+            .with_data("people", |data| {
                 assert_eq!(data, &orig_data);
             })
             .unwrap();
@@ -2465,7 +2445,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_update_all_rows() {
-        let mut update = sqlil::Update::new(sqlil::source("people", "1.0", "people"));
+        let mut update = sqlil::Update::new(sqlil::source("people", "people"));
 
         update.cols.push((
             "first_name".into(),
@@ -2480,7 +2460,7 @@ mod tests {
 
         executor
             .data
-            .with_data("people", "1.0", |data| {
+            .with_data("people", |data| {
                 assert!(data.into_iter().all(|r| r[1] == DataValue::from("New")))
             })
             .unwrap();
@@ -2488,7 +2468,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_update_where() {
-        let mut update = sqlil::Update::new(sqlil::source("people", "1.0", "people"));
+        let mut update = sqlil::Update::new(sqlil::source("people", "people"));
 
         update.cols.push((
             "first_name".into(),
@@ -2511,7 +2491,7 @@ mod tests {
 
         executor
             .data
-            .with_data("people", "1.0", |data| {
+            .with_data("people", |data| {
                 assert_eq!(
                     data.into_iter()
                         .map(|row| row[1].clone())
@@ -2528,7 +2508,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_delete_all() {
-        let delete = sqlil::Delete::new(sqlil::source("people", "1.0", "people"));
+        let delete = sqlil::Delete::new(sqlil::source("people", "people"));
 
         let executor = create_executor(delete, HashMap::new());
 
@@ -2538,7 +2518,7 @@ mod tests {
 
         executor
             .data
-            .with_data("people", "1.0", |data| {
+            .with_data("people", |data| {
                 assert_eq!(data, &Vec::<Vec<_>>::new());
             })
             .unwrap();
@@ -2546,7 +2526,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_delete_where() {
-        let mut delete = sqlil::Delete::new(sqlil::source("people", "1.0", "people"));
+        let mut delete = sqlil::Delete::new(sqlil::source("people", "people"));
 
         delete
             .r#where
@@ -2564,7 +2544,7 @@ mod tests {
 
         executor
             .data
-            .with_data("people", "1.0", |data| {
+            .with_data("people", |data| {
                 assert_eq!(
                     data.into_iter().map(|r| r[0].clone()).collect::<Vec<_>>(),
                     vec![DataValue::UInt32(2), DataValue::UInt32(3)]
@@ -2575,7 +2555,7 @@ mod tests {
 
     #[test]
     fn test_memory_connector_executor_select_row_id() {
-        let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+        let mut select = sqlil::Select::new(sqlil::source("people", "people"));
         select
             .cols
             .push(("row_id".to_string(), sqlil::Expr::attr("people", "ROWIDX")));

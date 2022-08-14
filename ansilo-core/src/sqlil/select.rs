@@ -3,7 +3,7 @@ use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    expr::{EntityVersionIdentifier, Expr},
+    expr::{EntityId, Expr},
     EntitySource, Join, Ordering,
 };
 
@@ -62,7 +62,7 @@ impl Select {
     }
 
     /// Gets the source entity ID from the referenced alias
-    pub fn get_entity(&self, alias: &str) -> Result<&EntityVersionIdentifier> {
+    pub fn get_entity(&self, alias: &str) -> Result<&EntityId> {
         self.get_entity_source(alias).map(|s| &s.entity)
     }
 

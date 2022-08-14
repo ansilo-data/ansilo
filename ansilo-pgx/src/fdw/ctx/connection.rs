@@ -21,11 +21,11 @@ pub struct FdwContext {
     /// The ID of the data source for this FDW connection
     pub data_source_id: String,
     /// The initial entity of fdw context
-    pub entity: sqlil::EntityVersionIdentifier,
+    pub entity: sqlil::EntityId,
 }
 
 impl FdwContext {
-    pub fn new(connection: Arc<FdwIpcConnection>, entity: sqlil::EntityVersionIdentifier) -> Self {
+    pub fn new(connection: Arc<FdwIpcConnection>, entity: sqlil::EntityId) -> Self {
         let data_source_id = connection.data_source_id.clone();
 
         Self {

@@ -1,34 +1,38 @@
 use ansilo_connectors::{
     common::entity::{ConnectorEntityConfig, EntitySource},
     interface::{Connection, ConnectionPool, Connector, QueryHandle},
-    memory::{MemoryDatabase, MemoryConnector, MemoryQuery, MemoryResultSet, MemoryConnectorEntitySourceConfig},
+    memory::{
+        MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase, MemoryQuery,
+        MemoryResultSet,
+    },
 };
 use ansilo_core::{
+    config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
     data::{DataType, DataValue},
-    config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
     sqlil,
 };
 
-fn mock_data() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryDatabase) {
+fn mock_data() -> (
+    ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+    MemoryDatabase,
+) {
     let conf = MemoryDatabase::new();
     let mut entities = ConnectorEntityConfig::new();
 
-    entities.add(EntitySource::minimal(
-        "people",
-        EntityVersionConfig::minimal(
-            "1.0",
+    entities.add(EntitySource::new(
+        EntityConfig::minimal(
+            "people",
             vec![
                 EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
                 EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
             ],
             EntitySourceConfig::minimal(""),
         ),
-        MemoryConnectorEntitySourceConfig::default()
+        MemoryConnectorEntitySourceConfig::default(),
     ));
 
     conf.set_data(
         "people",
-        "1.0",
         vec![
             vec![DataValue::from("Mary"), DataValue::from("Jane")],
             vec![DataValue::from("John"), DataValue::from("Smith")],
@@ -48,7 +52,7 @@ fn test_memory_select_query_execution() {
 
     let mut connection = pool.acquire().unwrap();
 
-    let mut select = sqlil::Select::new(sqlil::source("people", "1.0", "people"));
+    let mut select = sqlil::Select::new(sqlil::source("people", "people"));
     select.cols.push((
         "first_name".to_string(),
         sqlil::Expr::attr("people", "first_name"),

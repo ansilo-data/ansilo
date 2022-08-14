@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT COUNT(*) FROM \"people:1.0\"",
+    "SQL": "SELECT COUNT(*) FROM \"people\"",
     "Expected": {
         "Plan": {
             "Node Type": "Foreign Scan",

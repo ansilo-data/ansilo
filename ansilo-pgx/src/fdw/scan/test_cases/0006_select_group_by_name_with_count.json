@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT first_name, COUNT(*) as count FROM \"people:1.0\" GROUP BY first_name",
+    "SQL": "SELECT first_name, COUNT(*) as count FROM \"people\" GROUP BY first_name",
     "Expected": {
         "Plan": {
             "Node Type": "Foreign Scan",

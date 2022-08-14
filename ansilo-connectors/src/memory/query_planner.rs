@@ -27,7 +27,7 @@ impl QueryPlanner for MemoryQueryPlanner {
         connection: &mut MemoryConnection,
         entity: &EntitySource<MemoryConnectorEntitySourceConfig>,
     ) -> Result<OperationCost> {
-        if let Some(mock_size) = &entity.source_conf.mock_entity_size {
+        if let Some(mock_size) = &entity.source.mock_entity_size {
             return Ok(mock_size.clone());
         }
 
@@ -35,7 +35,7 @@ impl QueryPlanner for MemoryQueryPlanner {
             Some(
                 connection
                     .data
-                    .with_data(&entity.conf.id, &entity.version_id, |rows| rows.len())
+                    .with_data(&entity.conf.id, |rows| rows.len())
                     .ok_or(Error::msg("Could not find entity"))? as _,
             ),
             None,

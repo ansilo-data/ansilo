@@ -1,10 +1,10 @@
 {
-    "SQL": "UPDATE \"people:1.0\" SET first_name = 'Updated: ' || first_name WHERE MD5(id::text) = MD5('3');",
+    "SQL": "UPDATE \"people\" SET first_name = 'Updated: ' || first_name WHERE MD5(id::text) = MD5('3');",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
             "Operation": "Update",
-            "Relation Name": "people:1.0",
+            "Relation Name": "people",
             "Remote Ops": [
                 {
                     "AddSet": {
@@ -41,14 +41,14 @@
                 {
                     "Node Type": "Foreign Scan",
                     "Operation": "Select",
-                    "Relation Name": "people:1.0",
+                    "Relation Name": "people",
                     "Output": [
                         "('Updated: '::text || (first_name)::text)",
                         "ctid",
-                        "\"people:1.0\".*"
+                        "people.*"
                     ],
                     "Local Conds": [
-                        "(md5((\"people:1.0\".id)::text) = 'eccbc87e4b5ce2fe28308fd9f2a7baf3'::text)"
+                        "(md5((people.id)::text) = 'eccbc87e4b5ce2fe28308fd9f2a7baf3'::text)"
                     ],
                     "Remote Conds": [],
                     "Remote Ops": [

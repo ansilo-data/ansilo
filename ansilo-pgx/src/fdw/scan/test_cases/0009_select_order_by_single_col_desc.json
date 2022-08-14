@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT * FROM \"people:1.0\" ORDER BY first_name DESC",
+    "SQL": "SELECT * FROM \"people\" ORDER BY first_name DESC",
     "Expected": {
         "Plan": {
             "Node Type": "Foreign Scan",

@@ -33,7 +33,7 @@ use crate::{
     },
     sqlil::{
         convert, convert_list, from_datum, into_datum, into_pg_type,
-        parse_entity_version_id_from_foreign_table, parse_entity_version_id_from_rel,
+        get_entity_id_from_foreign_table, parse_entity_id_from_rel,
         ConversionContext,
     },
     util::{list::vec_to_pg_list, string::to_pg_cstr, table::PgTable},

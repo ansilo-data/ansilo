@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT * FROM \"people:1.0\" ORDER BY MD5(first_name)",
+    "SQL": "SELECT * FROM \"people\" ORDER BY MD5(first_name)",
     "Expected": {
         "Plan": {
             "Node Type": "Sort",
@@ -10,14 +10,14 @@
                 "(md5((first_name)::text))"
             ],
             "Sort Key": [
-                "(md5((\"people:1.0\".first_name)::text))"
+                "(md5((people.first_name)::text))"
             ],
             "Plans": [
                 {
                     "Node Type": "Foreign Scan",
                     "Operation": "Select",
                     "Parent Relationship": "Outer",
-                    "Relation Name": "people:1.0",
+                    "Relation Name": "people",
                     "Output": [
                         "id",
                         "first_name",

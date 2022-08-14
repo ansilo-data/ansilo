@@ -24,13 +24,13 @@ mod tests {
         common::entity::{ConnectorEntityConfig, EntitySource},
         interface::{container::ConnectionPools, Connector, OperationCost},
         memory::{
-            MemoryDatabase, MemoryConnectionPool, MemoryConnector,
-            MemoryConnectorEntitySourceConfig,
+            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
+            MemoryDatabase,
         },
     };
     use ansilo_core::data::*;
     use ansilo_core::{
-        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
         data::{DataType, DataValue},
         sqlil,
     };
@@ -43,17 +43,16 @@ mod tests {
         let mut conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
-        entities.add(EntitySource::minimal(
-            "dummy",
-            EntityVersionConfig::minimal(
-                "1.0",
+        entities.add(EntitySource::new(
+            EntityConfig::minimal(
+                "dummy",
                 vec![EntityAttributeConfig::minimal("x", DataType::UInt32)],
                 EntitySourceConfig::minimal(""),
             ),
             MemoryConnectorEntitySourceConfig::new(None),
         ));
 
-        conf.set_data("dummy", "1.0", vec![vec![DataValue::UInt32(123)]]);
+        conf.set_data("dummy", vec![vec![DataValue::UInt32(123)]]);
 
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
             .unwrap();
@@ -73,7 +72,7 @@ mod tests {
                     data_source 'memory'
                 );
 
-                CREATE FOREIGN TABLE "dummy:1.0" (
+                CREATE FOREIGN TABLE "dummy" (
                     x BIGINT
                 ) SERVER test_srv;
                 "#
@@ -96,7 +95,7 @@ mod tests {
     fn test_fdw_explain_select() {
         setup_test("explain_select");
 
-        let results = explain_query(r#"SELECT * FROM "dummy:1.0""#);
+        let results = explain_query(r#"SELECT * FROM "dummy""#);
 
         assert_eq!(
             results["Plan"]["Remote Query"]["Select"]
@@ -123,7 +122,7 @@ mod tests {
     fn test_fdw_explain_verbose_select() {
         setup_test("explain_verbose_select");
 
-        let results = explain_query_verbose(r#"SELECT * FROM "dummy:1.0""#);
+        let results = explain_query_verbose(r#"SELECT * FROM "dummy""#);
 
         assert_eq!(
             results["Plan"]["Remote Query"]

@@ -208,12 +208,12 @@ mod tests {
     use ansilo_connectors::{
         common::entity::EntitySource,
         memory::{
-            MemoryDatabase, MemoryConnectionPool, MemoryConnector,
-            MemoryConnectorEntitySourceConfig,
+            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
+            MemoryDatabase,
         },
     };
     use ansilo_core::{
-        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
         data::{DataType, DataValue},
         sqlil,
     };
@@ -225,14 +225,16 @@ mod tests {
 
     use super::*;
 
-    fn create_memory_connection_pool() -> (ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>, MemoryConnectionPool) {
+    fn create_memory_connection_pool() -> (
+        ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
+        MemoryConnectionPool,
+    ) {
         let conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
-        entities.add(EntitySource::minimal(
-            "people",
-            EntityVersionConfig::minimal(
-                "1.0",
+        entities.add(EntitySource::new(
+            EntityConfig::minimal(
+                "people",
                 vec![
                     EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
                     EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
@@ -244,7 +246,6 @@ mod tests {
 
         conf.set_data(
             "people",
-            "1.0",
             vec![
                 vec![DataValue::from("Mary"), DataValue::from("Jane")],
                 vec![DataValue::from("John"), DataValue::from("Smith")],
@@ -313,7 +314,7 @@ mod tests {
         send_auth_token(&mut client, "memory");
 
         let res = client
-            .send(ClientMessage::EstimateSize(sqlil::entity("people", "1.0")))
+            .send(ClientMessage::EstimateSize(sqlil::entity("people")))
             .unwrap();
 
         assert_eq!(

@@ -15,7 +15,7 @@ use ansilo_connectors::{
 use ansilo_core::{
     data::DataType,
     err::{bail, Context, Result},
-    sqlil::{self, EntityVersionIdentifier},
+    sqlil::{self, EntityId},
 };
 use ansilo_logging::warn;
 
@@ -180,7 +180,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         queries.get_mut(&query_id).context("Invalid query id")
     }
 
-    fn estimate_size(&mut self, entity: &EntityVersionIdentifier) -> Result<OperationCost> {
+    fn estimate_size(&mut self, entity: &EntityId) -> Result<OperationCost> {
         self.connect()?;
         Ok(TConnector::TQueryPlanner::estimate_size(
             self.connection.get()?,
@@ -457,7 +457,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
     fn get_entity_config<'a, 'b>(
         entities: &'a ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
-        entity: &'b EntityVersionIdentifier,
+        entity: &'b EntityId,
     ) -> Result<&'a EntitySource<TConnector::TEntitySourceConfig>> {
         entities
             .find(entity)
@@ -524,7 +524,7 @@ mod tests {
         },
     };
     use ansilo_core::{
-        config::{EntityAttributeConfig, EntitySourceConfig, EntityVersionConfig, NodeConfig},
+        config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
         data::{DataType, DataValue},
     };
 
@@ -544,10 +544,9 @@ mod tests {
         data.update_conf(move |conf| *conf = db_conf);
         let mut conf = ConnectorEntityConfig::new();
 
-        conf.add(EntitySource::minimal(
-            "people",
-            EntityVersionConfig::minimal(
-                "1.0",
+        conf.add(EntitySource::new(
+            EntityConfig::minimal(
+                "people",
                 vec![
                     EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
                     EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
@@ -559,7 +558,6 @@ mod tests {
 
         data.set_data(
             "people",
-            "1.0",
             vec![
                 vec![DataValue::from("Mary"), DataValue::from("Jane")],
                 vec![DataValue::from("John"), DataValue::from("Smith")],
@@ -603,7 +601,7 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_estimate_size");
 
         let res = client
-            .send(ClientMessage::EstimateSize(sqlil::entity("people", "1.0")))
+            .send(ClientMessage::EstimateSize(sqlil::entity("people")))
             .unwrap();
 
         assert_eq!(
@@ -621,7 +619,7 @@ mod tests {
             create_mock_connection("connection_estimate_size_unknown_entity");
 
         let res = client
-            .send(ClientMessage::EstimateSize(sqlil::entity("unknown", "1.0")))
+            .send(ClientMessage::EstimateSize(sqlil::entity("unknown")))
             .unwrap();
 
         assert_eq!(
@@ -639,7 +637,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Select,
             ))
             .unwrap();
@@ -753,7 +751,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Select,
             ))
             .unwrap();
@@ -844,7 +842,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Select,
             ))
             .unwrap();
@@ -895,7 +893,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Insert,
             ))
             .unwrap();
@@ -967,7 +965,7 @@ mod tests {
         let entities = thread.join().unwrap().unwrap();
 
         // Assert row was actually inserted
-        let rows = entities.get_data("people", "1.0").unwrap();
+        let rows = entities.get_data("people").unwrap();
         assert_eq!(
             rows.iter().last().unwrap().clone(),
             vec![DataValue::from("New"), DataValue::from("Man")]
@@ -980,7 +978,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Update,
             ))
             .unwrap();
@@ -1032,7 +1030,7 @@ mod tests {
         let entities = thread.join().unwrap().unwrap();
 
         // Assert rows were all updated
-        let rows = entities.get_data("people", "1.0").unwrap();
+        let rows = entities.get_data("people").unwrap();
         assert_eq!(
             rows,
             vec![
@@ -1049,7 +1047,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Delete,
             ))
             .unwrap();
@@ -1102,7 +1100,7 @@ mod tests {
         let entities = thread.join().unwrap().unwrap();
 
         // Assert row was deleted
-        let rows = entities.get_data("people", "1.0").unwrap();
+        let rows = entities.get_data("people").unwrap();
 
         assert_eq!(
             rows,
@@ -1119,7 +1117,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::GetRowIds(sqlil::source(
-                "people", "1.0", "people",
+                "people", "people",
             )))
             .unwrap();
 
@@ -1143,7 +1141,7 @@ mod tests {
             .map(|i| {
                 let res = client
                     .send(ClientMessage::CreateQuery(
-                        sqlil::source("people", "1.0", "people"),
+                        sqlil::source("people", "people"),
                         sqlil::QueryType::Select,
                     ))
                     .unwrap();
@@ -1255,7 +1253,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Select,
             ))
             .unwrap();
@@ -1290,7 +1288,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Select,
             ))
             .unwrap();
@@ -1402,7 +1400,7 @@ mod tests {
         // Trigger DELETE FROM "people:1.0"
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Delete,
             ))
             .unwrap();
@@ -1439,7 +1437,7 @@ mod tests {
         let entities = thread.join().unwrap().unwrap();
 
         // Assert delete was rolled back
-        let rows = entities.get_data("people", "1.0").unwrap();
+        let rows = entities.get_data("people").unwrap();
         assert_eq!(
             rows,
             vec![
@@ -1461,7 +1459,7 @@ mod tests {
         // Trigger DELETE FROM "people:1.0"
         let res = client
             .send(ClientMessage::CreateQuery(
-                sqlil::source("people", "1.0", "people"),
+                sqlil::source("people", "people"),
                 sqlil::QueryType::Delete,
             ))
             .unwrap();
@@ -1497,7 +1495,7 @@ mod tests {
         let entities = thread.join().unwrap().unwrap();
 
         // Assert delete was committed
-        let rows = entities.get_data("people", "1.0").unwrap();
+        let rows = entities.get_data("people").unwrap();
         assert_eq!(rows, Vec::<Vec<DataValue>>::new());
     }
 }

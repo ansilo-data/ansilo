@@ -1,9 +1,9 @@
 use std::collections::{hash_map::Values, HashMap};
 
 use ansilo_core::{
-    config::{EntityConfig, EntityVersionConfig, NodeConfig},
-    err::{bail, Result},
-    sqlil::EntityVersionIdentifier,
+    config::{EntityConfig, NodeConfig},
+    err::Result,
+    sqlil::EntityId,
 };
 
 use crate::interface::Connector;
@@ -16,7 +16,7 @@ where
 {
     /// The configuration of all the entities attached to this connector
     /// Keyed by the tuple of (entity id, version id)
-    entities: HashMap<(String, String), EntitySource<TEntitySourceConfig>>,
+    entities: HashMap<String, EntitySource<TEntitySourceConfig>>,
 }
 
 /// Metadata about an entity version
@@ -27,50 +27,19 @@ where
 {
     /// The entity config
     pub conf: EntityConfig,
-    /// The ID of the entity version
-    pub version_id: String,
     /// The connector-specific source config
-    pub source_conf: TEntitySourceConfig,
+    pub source: TEntitySourceConfig,
 }
 
 impl<TEntitySourceConfig> EntitySource<TEntitySourceConfig>
 where
     TEntitySourceConfig: Sized,
 {
-    pub fn new(
-        conf: EntityConfig,
-        version_id: String,
-        source_conf: TEntitySourceConfig,
-    ) -> Result<Self> {
-        if !conf.versions.iter().any(|i| i.version == version_id) {
-            bail!("No version {} found in entity {}", version_id, conf.id)
-        }
-
-        Ok(Self {
-            conf,
-            version_id,
-            source_conf,
-        })
-    }
-
-    pub fn minimal(
-        entity_id: impl Into<String>,
-        version: EntityVersionConfig,
-        source_conf: TEntitySourceConfig,
-    ) -> Self {
+    pub fn new(conf: EntityConfig, source_conf: TEntitySourceConfig) -> Self {
         Self {
-            conf: EntityConfig::minimal(entity_id, vec![version.clone()]),
-            version_id: version.version,
-            source_conf,
+            conf,
+            source: source_conf,
         }
-    }
-
-    pub fn version(&self) -> &EntityVersionConfig {
-        self.conf
-            .versions
-            .iter()
-            .find(|i| i.version == self.version_id)
-            .unwrap()
     }
 }
 
@@ -90,44 +59,38 @@ where
     ) -> Result<ConnectorEntityConfig<TConnector::TEntitySourceConfig>> {
         let mut conf = ConnectorEntityConfig::<TConnector::TEntitySourceConfig>::new();
 
-        for entity in nc.entities.iter() {
-            for version in entity
-                .versions
-                .iter()
-                .filter(|i| i.source.data_source_id == data_source_id)
-            {
-                let source =
-                    TConnector::parse_entity_source_options(version.source.options.clone())?;
+        for entity in nc
+            .entities
+            .iter()
+            .filter(|e| &e.source.data_source_id == data_source_id)
+        {
+            let source = TConnector::parse_entity_source_options(entity.source.options.clone())?;
 
-                conf.add(EntitySource::<TConnector::TEntitySourceConfig>::new(
-                    entity.clone(),
-                    version.version.clone(),
-                    source,
-                )?);
-            }
+            conf.add(EntitySource::<TConnector::TEntitySourceConfig>::new(
+                entity.clone(),
+                source,
+            ));
         }
 
         Ok(conf)
     }
 
     pub fn add(&mut self, entity: EntitySource<T>) {
-        self.entities
-            .insert((entity.conf.id.clone(), entity.version_id.clone()), entity);
+        self.entities.insert(entity.conf.id.clone(), entity);
     }
 
-    pub fn entities(&self) -> Values<(String, String), EntitySource<T>> {
+    pub fn entities(&self) -> Values<String, EntitySource<T>> {
         self.entities.values()
     }
 
-    pub fn find(&self, id: &EntityVersionIdentifier) -> Option<&EntitySource<T>> {
-        self.entities
-            .get(&(id.entity_id.clone(), id.version_id.clone()))
+    pub fn find(&self, id: &EntityId) -> Option<&EntitySource<T>> {
+        self.entities.get(&id.entity_id)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::config::{EntitySourceConfig, EntityVersionConfig};
+    use ansilo_core::config::{EntityConfig, EntitySourceConfig};
 
     use super::*;
 
@@ -141,22 +104,17 @@ mod tests {
     #[test]
     fn test_connector_entity_config_add_and_find() {
         let mut conf = ConnectorEntityConfig::<()>::new();
-        let entity_source = EntitySource::minimal(
-            "entity_id",
-            EntityVersionConfig::minimal("version_id", vec![], EntitySourceConfig::minimal("")),
+        let entity_source = EntitySource::new(
+            EntityConfig::minimal("entity_id", vec![], EntitySourceConfig::minimal("")),
             (),
         );
 
         conf.add(entity_source.clone());
 
         assert_eq!(
-            conf.entities
-                .get(&("entity_id".to_string(), "version_id".to_string())),
+            conf.entities.get(&("entity_id".to_string())),
             Some(&entity_source)
         );
-        assert_eq!(
-            conf.find(&EntityVersionIdentifier::new("entity_id", "version_id")),
-            Some(&entity_source)
-        );
+        assert_eq!(conf.find(&EntityId::new("entity_id")), Some(&entity_source));
     }
 }

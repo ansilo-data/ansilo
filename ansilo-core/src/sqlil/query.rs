@@ -3,7 +3,7 @@ use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    expr::{EntityVersionIdentifier, Expr},
+    expr::{EntityId, Expr},
     Delete, Insert, Select, Update,
 };
 
@@ -47,7 +47,7 @@ impl Query {
     }
 
     /// Gets the source entity ID from the referenced alias
-    pub fn get_entity(&self, alias: &str) -> Result<&EntityVersionIdentifier> {
+    pub fn get_entity(&self, alias: &str) -> Result<&EntityId> {
         self.get_entity_source(alias).map(|s| &s.entity)
     }
 
@@ -172,13 +172,13 @@ impl From<Delete> for Query {
 pub struct EntitySource {
     /// The source entity
     #[serde(flatten)]
-    pub entity: EntityVersionIdentifier,
+    pub entity: EntityId,
     /// The alias of the source, referenced in expressions
     pub alias: String,
 }
 
 impl EntitySource {
-    pub fn new(entity: EntityVersionIdentifier, alias: impl Into<String>) -> Self {
+    pub fn new(entity: EntityId, alias: impl Into<String>) -> Self {
         Self {
             entity,
             alias: alias.into(),
@@ -187,12 +187,8 @@ impl EntitySource {
 }
 
 /// Creates a new entity source
-pub fn source(
-    entity_id: impl Into<String>,
-    version_id: impl Into<String>,
-    alias: impl Into<String>,
-) -> EntitySource {
-    EntitySource::new(EntityVersionIdentifier::new(entity_id, version_id), alias)
+pub fn source(entity_id: impl Into<String>, alias: impl Into<String>) -> EntitySource {
+    EntitySource::new(EntityId::new(entity_id), alias)
 }
 
 /// A join clause

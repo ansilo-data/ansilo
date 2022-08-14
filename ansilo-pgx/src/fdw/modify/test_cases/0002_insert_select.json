@@ -1,10 +1,10 @@
 {
-    "SQL": "INSERT INTO \"people:1.0\" SELECT * FROM \"people:1.0\";",
+    "SQL": "INSERT INTO \"people\" SELECT * FROM \"people\";",
     "Expected": {
         "Plan": {
             "Node Type": "ModifyTable",
             "Operation": "Insert",
-            "Relation Name": "people:1.0",
+            "Relation Name": "people",
             "Remote Ops": [
                 {
                     "AddColumn": {
@@ -49,7 +49,7 @@
                 {
                     "Node Type": "Foreign Scan",
                     "Operation": "Select",
-                    "Relation Name": "people:1.0",
+                    "Relation Name": "people",
                     "Local Conds": [],
                     "Remote Conds": [],
                     "Remote Ops": [

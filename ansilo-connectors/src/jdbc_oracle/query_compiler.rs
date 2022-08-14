@@ -84,7 +84,7 @@ impl OracleJdbcQueryCompiler {
                     .map(|(col, _)| Self::compile_attribute_identifier(
                         conf,
                         query,
-                        &sql::AttributeIdentifier::new(&insert.target.alias, col),
+                        &sql::AttributeId::new(&insert.target.alias, col),
                         false
                     ))
                     .collect::<Result<Vec<_>>>()?
@@ -125,7 +125,7 @@ impl OracleJdbcQueryCompiler {
                         Self::compile_attribute_identifier(
                             conf,
                             query,
-                            &sql::AttributeIdentifier::new(&update.target.alias, col),
+                            &sql::AttributeId::new(&update.target.alias, col),
                             false
                         )?,
                         Self::compile_expr(conf, query, expr, &mut params)?
@@ -352,7 +352,7 @@ impl OracleJdbcQueryCompiler {
             .find(&source.entity)
             .with_context(|| format!("Failed to find entity {:?}", source.entity.clone()))?;
 
-        let id = Self::compile_source_identifier(&entity.source_conf)?;
+        let id = Self::compile_source_identifier(&entity.source)?;
 
         Ok(if include_alias {
             let alias = Self::compile_identifier(source.alias.clone())?;
@@ -387,7 +387,7 @@ impl OracleJdbcQueryCompiler {
     fn compile_attribute_identifier(
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
-        eva: &sql::AttributeIdentifier,
+        eva: &sql::AttributeId,
         include_table: bool,
     ) -> Result<String> {
         let source = query.get_entity_source(&eva.entity_alias)?;
@@ -396,7 +396,7 @@ impl OracleJdbcQueryCompiler {
             .with_context(|| format!("Failed to find entity {:?}", source.entity.clone()))?;
 
         // TODO: custom query
-        let table = match &entity.source_conf {
+        let table = match &entity.source {
             OracleJdbcEntitySourceConfig::Table(table) => table,
             OracleJdbcEntitySourceConfig::CustomQueries(_) => todo!(),
         };
@@ -607,7 +607,7 @@ mod tests {
     use std::collections::HashMap;
 
     use ansilo_core::{
-        config::{EntitySourceConfig, EntityVersionConfig},
+        config::{EntityConfig, EntitySourceConfig},
         data::{DataType, DataValue},
     };
 
@@ -641,16 +641,10 @@ mod tests {
 
     fn create_entity_config(
         id: &str,
-        version: &str,
         source: OracleJdbcEntitySourceConfig,
     ) -> EntitySource<OracleJdbcEntitySourceConfig> {
-        EntitySource::minimal(
-            id,
-            EntityVersionConfig::minimal(
-                version.to_string(),
-                vec![],
-                EntitySourceConfig::minimal(""),
-            ),
+        EntitySource::new(
+            EntityConfig::minimal(id, vec![], EntitySourceConfig::minimal("")),
             source,
         )
     }
@@ -660,7 +654,6 @@ mod tests {
 
         conf.add(create_entity_config(
             "entity",
-            "v1",
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions::new(
                 None,
                 "table".to_string(),
@@ -669,7 +662,6 @@ mod tests {
         ));
         conf.add(create_entity_config(
             "other",
-            "v1",
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions::new(
                 None,
                 "other".to_string(),
@@ -682,7 +674,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
@@ -699,7 +691,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_where() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
@@ -721,13 +713,13 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_inner_join() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
         select.joins.push(sql::Join::new(
             sql::JoinType::Inner,
-            sql::source("other", "v1", "other"),
+            sql::source("other", "other"),
             vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
                 sql::Expr::attr("entity", "attr1"),
                 sql::BinaryOpType::Equal,
@@ -747,13 +739,13 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_left_join() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
         select.joins.push(sql::Join::new(
             sql::JoinType::Left,
-            sql::source("other", "v1", "other"),
+            sql::source("other", "other"),
             vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
                 sql::Expr::attr("entity", "attr1"),
                 sql::BinaryOpType::Equal,
@@ -773,13 +765,13 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_right_join() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
         select.joins.push(sql::Join::new(
             sql::JoinType::Right,
-            sql::source("other", "v1", "other"),
+            sql::source("other", "other"),
             vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
                 sql::Expr::attr("entity", "attr1"),
                 sql::BinaryOpType::Equal,
@@ -799,13 +791,13 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_full_join() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
         select.joins.push(sql::Join::new(
             sql::JoinType::Full,
-            sql::source("other", "v1", "other"),
+            sql::source("other", "other"),
             vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
                 sql::Expr::attr("entity", "attr1"),
                 sql::BinaryOpType::Equal,
@@ -825,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_group_by() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
@@ -846,7 +838,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_order_by() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
@@ -871,7 +863,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_row_skip_and_limit() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
@@ -890,7 +882,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_row_skip() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
@@ -908,7 +900,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_row_limit() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
             .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
@@ -926,7 +918,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_function_call() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select.cols.push((
             "COL".to_string(),
             sql::Expr::FunctionCall(sql::FunctionCall::Length(Box::new(sql::Expr::attr(
@@ -947,7 +939,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_aggregate_call() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select.cols.push((
             "COL".to_string(),
             sql::Expr::AggregateCall(sql::AggregateCall::Sum(Box::new(sql::Expr::attr(
@@ -968,7 +960,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_select_for_update() {
-        let mut select = sql::Select::new(sql::source("entity", "v1", "entity"));
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
         select.cols.push((
             "COL".to_string(),
             sql::Expr::AggregateCall(sql::AggregateCall::Sum(Box::new(sql::Expr::attr(
@@ -989,7 +981,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_insert_query() {
-        let mut insert = sql::Insert::new(sql::source("entity", "v1", "entity"));
+        let mut insert = sql::Insert::new(sql::source("entity", "entity"));
         insert.cols.push((
             "attr1".to_string(),
             sql::Expr::Parameter(sql::Parameter::new(DataType::Int8, 1)),
@@ -1008,7 +1000,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_update_query() {
-        let mut update = sql::Update::new(sql::source("entity", "v1", "entity"));
+        let mut update = sql::Update::new(sql::source("entity", "entity"));
         update
             .cols
             .push(("attr1".to_string(), sql::Expr::constant(DataValue::Int8(1))));
@@ -1026,7 +1018,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_update_where_query() {
-        let mut update = sql::Update::new(sql::source("entity", "v1", "entity"));
+        let mut update = sql::Update::new(sql::source("entity", "entity"));
         update
             .cols
             .push(("attr1".to_string(), sql::Expr::constant(DataValue::Int8(1))));
@@ -1053,7 +1045,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_delete_query() {
-        let delete = sql::Delete::new(sql::source("entity", "v1", "entity"));
+        let delete = sql::Delete::new(sql::source("entity", "entity"));
         let compiled = compile_delete(delete, mock_entity_table());
 
         assert_eq!(compiled, JdbcQuery::new(r#"DELETE FROM "table""#, vec![]));
@@ -1061,7 +1053,7 @@ mod tests {
 
     #[test]
     fn test_oracle_jdbc_compile_delete_where_query() {
-        let mut delete = sql::Delete::new(sql::source("entity", "v1", "entity"));
+        let mut delete = sql::Delete::new(sql::source("entity", "entity"));
 
         delete.r#where.push(sql::Expr::BinaryOp(sql::BinaryOp::new(
             sql::Expr::attr("entity", "attr1"),

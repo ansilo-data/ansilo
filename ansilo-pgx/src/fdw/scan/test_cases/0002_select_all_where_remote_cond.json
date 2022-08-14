@@ -1,5 +1,5 @@
 {
-    "SQL": "SELECT * FROM \"people:1.0\" WHERE first_name = 'Mary'",
+    "SQL": "SELECT * FROM \"people\" WHERE first_name = 'Mary'",
     "Expected": {
         "Plan": {
             "Node Type": "Foreign Scan",
@@ -11,7 +11,7 @@
             ],
             "Local Conds": [],
             "Remote Conds": [
-                "((\"people:1.0\".first_name)::text = 'Mary'::text)"
+                "((people.first_name)::text = 'Mary'::text)"
             ],
             "Remote Ops": [
                 {
