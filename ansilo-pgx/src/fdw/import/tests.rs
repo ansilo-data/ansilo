@@ -18,19 +18,20 @@ mod tests {
         sqlil::test,
         util::string::{parse_to_owned_utf8_string, to_pg_cstr},
     };
-    use ansilo_connectors::{
+    use ansilo_connectors_all::ConnectionPools;
+    use ansilo_connectors_base::{
         common::entity::{ConnectorEntityConfig, EntitySource},
-        interface::{container::ConnectionPools, Connector, OperationCost},
-        memory::{
-            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
-            MemoryDatabase,
-        },
+        interface::Connector,
+    };
+    use ansilo_connectors_memory::{
+        MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase,
     };
     use ansilo_core::{
         config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
         data::{uuid::Uuid, DataType, DataValue, DecimalOptions, StringOptions},
         sqlil,
     };
+    use ansilo_pg::fdw::proto::OperationCost;
 
     fn create_memory_connection_pool(confs: Vec<EntityConfig>) -> ConnectionPools {
         let mut conf = MemoryDatabase::new();

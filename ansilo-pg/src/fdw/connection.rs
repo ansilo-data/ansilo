@@ -5,7 +5,7 @@ use std::{
     mem,
 };
 
-use ansilo_connectors::{
+use ansilo_connectors_base::{
     common::{
         data::{QueryHandleWrite, ResultSetRead},
         entity::{ConnectorEntityConfig, EntitySource},
@@ -533,12 +533,10 @@ mod tests {
         thread::{self, JoinHandle},
     };
 
-    use ansilo_connectors::{
-        common::{data::DataReader, entity::EntitySource},
-        memory::{
-            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
-            MemoryDatabase, MemoryDatabaseConf,
-        },
+    use ansilo_connectors_base::common::{data::DataReader, entity::EntitySource};
+    use ansilo_connectors_memory::{
+        MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase,
+        MemoryDatabaseConf,
     };
     use ansilo_core::{
         config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},

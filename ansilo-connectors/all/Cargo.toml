@@ -1,0 +1,15 @@
+[package]
+name = "ansilo-connectors-all"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansilo-core = { path = "../../ansilo-core" }
+ansilo-logging = { path = "../../ansilo-logging" }
+ansilo-connectors-base = { path = "../base" }
+ansilo-connectors-memory = { path = "../memory" }
+ansilo-connectors-jdbc-base = { path = "../jdbc-base" }
+ansilo-connectors-jdbc-oracle = { path = "../jdbc-oracle" }
+

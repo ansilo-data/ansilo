@@ -10,7 +10,7 @@ members = [
     "ansilo-proxy",
     "ansilo-catalog",
     "ansilo-jobs",
-    "ansilo-connectors",
+    "ansilo-connectors/*",
     "ansilo-workbench",
     "ansilo-deploy",
     "ansilo-logging",

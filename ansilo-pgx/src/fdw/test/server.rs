@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf, thread, time::Duration};
 
-use ansilo_connectors::interface::container::ConnectionPools;
+use ansilo_connectors_all::ConnectionPools;
 use ansilo_core::config::NodeConfig;
 use ansilo_pg::fdw::server::FdwServer;
 use lazy_static::lazy_static;

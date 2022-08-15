@@ -7,12 +7,8 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use ansilo_connectors::{
-    common::entity::ConnectorEntityConfig,
-    interface::{container::ConnectionPools, *},
-    jdbc_oracle::OracleJdbcConnector,
-    memory::MemoryConnector,
-};
+use ansilo_connectors_all::*;
+use ansilo_connectors_base::{common::entity::ConnectorEntityConfig, interface::Connector};
 use ansilo_core::{
     config::NodeConfig,
     err::{bail, Context, Result},
@@ -225,12 +221,9 @@ impl FdwListener {
 mod tests {
     use std::{fs, time::Duration};
 
-    use ansilo_connectors::{
-        common::entity::EntitySource,
-        memory::{
-            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
-            MemoryDatabase,
-        },
+    use ansilo_connectors_base::{common::entity::EntitySource, interface::OperationCost};
+    use ansilo_connectors_memory::{
+        MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase,
     };
     use ansilo_core::{
         config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},

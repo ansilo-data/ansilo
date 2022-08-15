@@ -20,13 +20,13 @@ mod tests {
         },
         sqlil::test,
     };
-    use ansilo_connectors::{
+    use ansilo_connectors_all::ConnectionPools;
+    use ansilo_connectors_base::{
         common::entity::{ConnectorEntityConfig, EntitySource},
-        interface::{container::ConnectionPools, Connector, OperationCost},
-        memory::{
-            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
-            MemoryDatabase,
-        },
+        interface::Connector,
+    };
+    use ansilo_connectors_memory::{
+        MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase,
     };
     use ansilo_core::data::*;
     use ansilo_core::{

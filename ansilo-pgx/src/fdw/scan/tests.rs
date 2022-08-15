@@ -21,13 +21,13 @@ mod tests {
         },
         sqlil::test,
     };
-    use ansilo_connectors::{
+    use ansilo_connectors_all::ConnectionPools;
+    use ansilo_connectors_base::{
         common::entity::{ConnectorEntityConfig, EntitySource},
-        interface::{container::ConnectionPools, Connector, OperationCost},
-        memory::{
-            MemoryConnectionPool, MemoryConnector, MemoryConnectorEntitySourceConfig,
-            MemoryDatabase,
-        },
+        interface::Connector,
+    };
+    use ansilo_connectors_memory::{
+        MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase,
     };
     use ansilo_core::data::*;
     use ansilo_core::{
@@ -35,7 +35,7 @@ mod tests {
         data::{DataType, DataValue},
         sqlil,
     };
-    use ansilo_pg::fdw::server::FdwServer;
+    use ansilo_pg::fdw::{server::FdwServer, proto::OperationCost};
     use assert_json_diff::*;
     use serde::{de::DeserializeOwned, Serialize};
     use serde_json::json;

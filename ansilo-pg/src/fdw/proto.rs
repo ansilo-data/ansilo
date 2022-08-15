@@ -1,4 +1,4 @@
-pub use ansilo_connectors::interface::{
+pub use ansilo_connectors_base::interface::{
     DeleteQueryOperation, InsertQueryOperation, OperationCost, QueryInputStructure, QueryOperation,
     QueryOperationResult, RowStructure, SelectQueryOperation, UpdateQueryOperation,
 };

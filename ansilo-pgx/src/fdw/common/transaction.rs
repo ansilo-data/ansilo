@@ -237,10 +237,13 @@ mod tests {
     use super::*;
 
     use crate::fdw::test::server::start_fdw_server;
-    use ansilo_connectors::{
+    use ansilo_connectors_all::ConnectionPools;
+    use ansilo_connectors_base::{
         common::entity::{ConnectorEntityConfig, EntitySource},
-        interface::{container::ConnectionPools, Connector},
-        memory::{MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase},
+        interface::Connector,
+    };
+    use ansilo_connectors_memory::{
+        MemoryConnector, MemoryConnectorEntitySourceConfig, MemoryDatabase,
     };
     use ansilo_core::{
         config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
