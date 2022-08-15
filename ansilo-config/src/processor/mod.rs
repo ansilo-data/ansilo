@@ -24,10 +24,11 @@ pub(crate) enum ConfigStringExpr {
 }
 
 /// Result from parsing config expression
+#[allow(unused)]
 #[derive(Debug, PartialEq)]
 pub(crate) enum ConfigExprResult {
     Expr(ConfigStringExpr),
-    Yaml(serde_yaml::Value)
+    Yaml(serde_yaml::Value),
 }
 
 pub(crate) mod env;

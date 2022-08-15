@@ -14,10 +14,6 @@ extension_sql!(
         -- Register our FDW
         CREATE FUNCTION "ansilo_fdw_handler_typed"() RETURNS fdw_handler STRICT LANGUAGE c AS 'MODULE_PATHNAME', 'ansilo_fdw_handler_wrapper';
         CREATE FOREIGN DATA WRAPPER ansilo_fdw HANDLER ansilo_fdw_handler_typed;
-        -- Create the server (TODO)
-        -- CREATE SERVER IF NOT EXISTS ansilo_srv FOREIGN DATA WRAPPER ansilo_fdw OPTIONS (sock '/var/run/ansilo.sock');
-        -- Import the foreign schema (TODO)
-        -- IMPORT FOREIGN SCHEMA _ FROM SERVER ansilo_srv INTO public;
 "#,
     name = "ansilo_fdw"
 );

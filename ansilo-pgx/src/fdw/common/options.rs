@@ -1,6 +1,6 @@
 use ansilo_core::err::{Context, Result};
 use cstr::cstr;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use pgx::{
     pg_sys::{strcmp, DefElem},
@@ -33,9 +33,12 @@ impl ServerOptions {
         }
 
         let data_source =
-            data_source.context("Server option 'data_source' must be defined on foreign table")?;
-        let socket =
-            socket.context("Server option 'socket_path' must be defined on foreign table")?;
+            data_source.context("Server option 'data_source' must be defined on CREATE SERVER")?;
+        let socket = socket
+            .or(env::var("ANSILO_PG_FDW_SOCKET_PATH").ok())
+            .context(
+            "Server option 'socket_path' must be defined on CREATE SERVER or provided through env",
+        )?;
         let socket = PathBuf::from(socket);
 
         Ok(Self {

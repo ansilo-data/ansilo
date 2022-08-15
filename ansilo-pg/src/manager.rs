@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use ansilo_core::err::{bail, Context, Result, Error};
+use ansilo_core::err::{Context, Error, Result};
 use ansilo_logging::{error, info};
 use nix::{sys::signal::Signal, unistd::Pid};
 
@@ -72,9 +72,13 @@ impl PostgresServerManager {
     }
 
     /// Terminates the postgres instance and blocks until it has completed
-    pub fn terminate(&mut self) -> Result<()> {
+    pub fn terminate(mut self) -> Result<()> {
+        self.terminate_mut()
+    }
+
+    fn terminate_mut(&mut self) -> Result<()> {
         if self.thread.is_none() {
-            bail!("Instance already terminated")
+            return Ok(());
         }
 
         let pid = self.state.pid.load(Ordering::SeqCst);
@@ -103,8 +107,10 @@ impl PostgresServerManager {
 
 impl Drop for PostgresServerManager {
     fn drop(&mut self) {
-        if let Err(err) = self.terminate() {
-            error!("Failed to terminate postgres instance: {}", err);
+        if self.thread.is_some() {
+            if let Err(err) = self.terminate_mut() {
+                error!("Failed to terminate postgres instance: {}", err);
+            }
         }
     }
 }
@@ -133,7 +139,7 @@ mod tests {
     fn test_postgres_manager_invalid_conf() {
         let conf = test_pg_config("invalid");
 
-        let mut manager = PostgresServerManager::new(conf);
+        let manager = PostgresServerManager::new(conf);
         thread::sleep(Duration::from_secs(1));
 
         // the postgres should have failed to boot and should now be sleeping
@@ -141,7 +147,6 @@ mod tests {
 
         // terminate should still succeed
         manager.terminate().unwrap();
-        assert!(manager.thread.is_none())
     }
 
     #[test]
@@ -173,7 +178,7 @@ mod tests {
             .complete()
             .unwrap();
 
-        let mut manager = PostgresServerManager::new(conf);
+        let manager = PostgresServerManager::new(conf);
         thread::sleep(Duration::from_secs(1));
 
         let pid = manager.state.pid.load(Ordering::SeqCst);
@@ -182,7 +187,6 @@ mod tests {
         manager.terminate().unwrap();
 
         assert_not_running(pid);
-        assert!(manager.thread.is_none())
     }
 
     #[test]

@@ -28,19 +28,22 @@ impl PostgresServer {
             .arg(format!("port={}", PG_PORT))
             .arg("-c")
             .arg(format!(
+                "data_directory={}",
+                conf.data_dir.to_str().context("Failed to parse data_dir")?
+            ))
+            .arg("-c")
+            .arg(format!(
                 "unix_socket_directories={}",
                 conf.socket_dir_path
                     .to_str()
-                    .context("Failed to parse pg_socket_dir_path as utf8")?
+                    .context("Failed to parse socket_dir_path as utf8")?
             ))
             .env("ANSILO_PG_FDW_SOCKET_PATH", conf.fdw_socket_path.clone());
 
         let proc = ChildProc::new("[postgres]", Signal::SIGINT, Duration::from_secs(3), cmd)
             .context("Failed to start postgres server process")?;
 
-        Ok(Self {
-            proc,
-        })
+        Ok(Self { proc })
     }
 
     /// Waits for the process to exit and streams any stdout/stderr to the logs

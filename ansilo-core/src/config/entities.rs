@@ -11,19 +11,19 @@ pub struct EntityConfig {
     /// The ID of the entity
     pub id: String,
     /// The name of the entity
-    pub name: String,
+    pub name: Option<String>,
     /// The description of the entity
-    pub description: String,
+    pub description: Option<String>,
     /// The tags attached to the entity for categorisation
+    #[serde(default)]
     pub tags: Vec<TagValueConfig>,
     /// The list of attributes exposed by this entity
     pub attributes: Vec<EntityAttributeConfig>,
     /// The list of constraints (fk or unique) on this entity
+    #[serde(default)]
     pub constraints: Vec<EntityConstraintConfig>,
     /// The source-specific config for reading or writing to this entity
     pub source: EntitySourceConfig,
-    /// The accessility of the entity
-    pub accessibility: EntityAccessiblity,
 }
 
 impl EntityConfig {
@@ -36,10 +36,9 @@ impl EntityConfig {
 
         Self {
             id: id.clone(),
-            name: id,
-            description: "".to_string(),
+            name: None,
+            description: None,
             tags: vec![],
-            accessibility: EntityAccessiblity::Internal,
             attributes: attrs,
             constraints: vec![],
             source,
@@ -63,12 +62,14 @@ pub struct EntityAttributeConfig {
     /// The ID of the attribute
     pub id: String,
     /// A description of the attribute
-    pub description: String,
+    pub description: Option<String>,
     /// The data type of the attribute
     pub r#type: DataType,
     /// Whether the attribute is part of the entity's primary key
+    #[serde(default)]
     pub primary_key: bool,
     /// Whether the attribute is nullable
+    #[serde(default)]
     pub nullable: bool,
 }
 
@@ -76,7 +77,7 @@ impl EntityAttributeConfig {
     pub fn minimal(id: impl Into<String>, r#type: DataType) -> Self {
         Self {
             id: id.into(),
-            description: "".to_string(),
+            description: None,
             r#type,
             primary_key: false,
             nullable: false,
@@ -130,13 +131,4 @@ impl EntitySourceConfig {
             options: serde_yaml::Value::Null,
         }
     }
-}
-
-/// The levels of accessibility of an entity
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
-pub enum EntityAccessiblity {
-    /// The entity can only be accessed from the node itself
-    Internal,
-    /// The entity is accessible from other nodes
-    Public,
 }

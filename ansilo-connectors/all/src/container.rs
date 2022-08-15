@@ -77,6 +77,14 @@ pub enum ResultSets {
 }
 
 impl Connectors {
+    pub fn from_type(r#type: &str) -> Option<Self> {
+        Some(match r#type {
+            OracleJdbcConnector::TYPE => Connectors::OracleJdbc,
+            MemoryConnector::TYPE => Connectors::Memory,
+            _ => return None
+        })
+    }
+
     pub fn r#type(&self) -> &'static str {
         match self {
             Connectors::OracleJdbc => OracleJdbcConnector::TYPE,

@@ -6,6 +6,7 @@ use ansilo_connectors_base::{
 };
 use ansilo_core::{
     config::{self, NodeConfig},
+    data::DataValue,
     err::Result,
 };
 pub use conf::*;
@@ -45,8 +46,39 @@ impl Connector for MemoryConnector {
 
     const TYPE: &'static str = "test.memory";
 
-    fn parse_options(_options: config::Value) -> Result<Self::TConnectionConfig> {
-        Ok(MemoryDatabase::new())
+    fn parse_options(options: config::Value) -> Result<Self::TConnectionConfig> {
+        let db = MemoryDatabase::new();
+
+        if let Some(data) = options.as_mapping() {
+            for (id, data) in data.iter() {
+                if let (Some(id), Some(rows)) = (id.as_str(), data.as_sequence()) {
+                    let rows = rows
+                        .iter()
+                        .filter_map(|r| r.as_sequence())
+                        .map(|r| {
+                            r.iter()
+                                .map(|d| match d {
+                                    config::Value::Null => DataValue::Null,
+                                    config::Value::Bool(b) => DataValue::Boolean(*b),
+                                    config::Value::Number(n) if n.is_i64() => {
+                                        DataValue::Int64(n.as_i64().unwrap())
+                                    }
+                                    config::Value::Number(n) if n.is_f64() => {
+                                        DataValue::Float64(n.as_f64().unwrap())
+                                    }
+                                    config::Value::String(s) => DataValue::Utf8String(s.clone()),
+                                    v => DataValue::Utf8String(serde_json::to_string(v).unwrap()),
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>();
+
+                    db.set_data(id, rows);
+                }
+            }
+        }
+
+        Ok(db)
     }
 
     fn parse_entity_source_options(_options: config::Value) -> Result<Self::TEntitySourceConfig> {

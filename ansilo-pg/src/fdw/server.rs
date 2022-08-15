@@ -3,7 +3,10 @@ use std::{
     fs,
     os::unix::net::{UnixListener, UnixStream},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     thread::{self, JoinHandle},
 };
 
@@ -60,7 +63,9 @@ pub struct FdwServer {
     /// The path of the socket which the server is listening on
     path: PathBuf,
     /// Listener thread
-    thread: JoinHandle<()>,
+    thread: Option<JoinHandle<()>>,
+    /// Whether the server is terminated
+    terminated: Arc<AtomicBool>,
 }
 
 impl FdwServer {
@@ -70,9 +75,14 @@ impl FdwServer {
         path: PathBuf,
         pools: HashMap<String, ConnectionPools>,
     ) -> Result<Self> {
-        let thread = Self::start_listening_thread(nc, path.as_path(), pools)?;
+        let (thread, terminated) = Self::start_listening_thread(nc, path.as_path(), pools)?;
 
-        Ok(Self { nc, path, thread })
+        Ok(Self {
+            nc,
+            path,
+            thread: Some(thread),
+            terminated,
+        })
     }
 
     /// Gets the mapping of data source ids to their paths
@@ -81,32 +91,68 @@ impl FdwServer {
     }
 
     /// Waits for the listener thread complete
-    pub fn wait(self) -> Result<()> {
-        if let Err(_) = self.thread.join() {
+    pub fn wait(&mut self) -> Result<()> {
+        if let Err(_) = self.thread.take().unwrap().join() {
             bail!("Error occurred while waiting for listener thread")
         }
 
         Ok(())
     }
 
+    /// Terminates the current server
+    pub fn terminate(mut self) -> Result<()> {
+        self.terminate_mut()
+    }
+
+    fn terminate_mut(&mut self) -> Result<()> {
+        if self.terminated.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+
+        self.terminated.store(true, Ordering::SeqCst);
+
+        // Run a throw-away thread to trigger a bind to the unix socket
+        // in order to trigger its shutdown
+        {
+            let path = self.path.clone();
+            thread::spawn(move || {
+                if let Err(err) = UnixStream::connect(&path) {
+                    warn!(
+                        "Failed to connect to fdw unix socket during termination procedure: {:?}",
+                        err
+                    );
+                }
+            });
+        }
+
+        self.wait()
+    }
+
     fn start_listening_thread(
         nc: &'static NodeConfig,
         path: &Path,
         pools: HashMap<String, ConnectionPools>,
-    ) -> Result<JoinHandle<()>> {
-        let _ = fs::remove_file(&path);
-        let listener = UnixListener::bind(path)
-            .with_context(|| format!("Failed to bind socket at {}", path.display()))?;
+    ) -> Result<(JoinHandle<()>, Arc<AtomicBool>)> {
+        let terminated = Arc::new(AtomicBool::new(false));
 
-        let thread = thread::spawn(move || {
-            let res = FdwListener::bind(nc, listener, pools).listen();
+        let thread = {
+            let _ = fs::remove_file(&path);
+            fs::create_dir_all(path.parent().context("Failed to get path parent")?)
+                .context("Could not create parent path")?;
+            let listener = UnixListener::bind(path)
+                .with_context(|| format!("Failed to bind socket at {}", path.display()))?;
+            let terminated = Arc::clone(&terminated);
 
-            if let Err(err) = res {
-                error!("FDW listener error: {}", err);
-            }
-        });
+            thread::spawn(move || {
+                let res = FdwListener::bind(nc, listener, pools, terminated).listen();
 
-        Ok(thread)
+                if let Err(err) = res {
+                    error!("FDW listener error: {}", err);
+                }
+            })
+        };
+
+        Ok((thread, terminated))
     }
 }
 
@@ -118,6 +164,8 @@ pub struct FdwListener {
     listener: UnixListener,
     /// The connection pools keyed by their data source id
     pools: Arc<HashMap<String, ConnectionPools>>,
+    /// Whether the server is terminated
+    terminated: Arc<AtomicBool>,
 }
 
 impl FdwListener {
@@ -126,17 +174,23 @@ impl FdwListener {
         nc: &'static NodeConfig,
         listener: UnixListener,
         pools: HashMap<String, ConnectionPools>,
+        terminated: Arc<AtomicBool>,
     ) -> Self {
         Self {
             nc,
             listener,
             pools: Arc::new(pools),
+            terminated,
         }
     }
 
     /// Starts processing incoming connections
     pub fn listen(&mut self) -> Result<()> {
         for con in self.listener.incoming() {
+            if self.terminated.load(Ordering::SeqCst) {
+                break;
+            }
+
             self.start(con.context("Failed to accept incoming connection")?)?;
         }
 
@@ -213,6 +267,14 @@ impl FdwListener {
 
         if let Err(err) = fdw_con.process() {
             error!("Error while processing FDW connection: {}", err);
+        }
+    }
+}
+
+impl Drop for FdwServer {
+    fn drop(&mut self) {
+        if let Err(err) = self.terminate_mut() {
+            warn!("Error while terminating fdw server: {:?}", err)
         }
     }
 }
@@ -305,6 +367,13 @@ mod tests {
             )))
             .unwrap();
         assert_eq!(res, ServerMessage::AuthAccepted);
+    }
+
+    #[test]
+    fn test_fdw_server_terminate() {
+        let server = create_server("terminate");
+
+        server.terminate().unwrap();
     }
 
     #[test]

@@ -1,0 +1,36 @@
+name: Memory
+
+networking:
+  port: 1234
+
+entities:
+  - id: animals
+    source:
+      data_source_id: mem
+      options: null
+    attributes:
+      - id: type
+        type: !Utf8String
+      - id: name
+        type: !Utf8String
+      - id: age
+        type: Int64
+
+sources:
+  - id: mem
+    type: test.memory
+    options:
+      animals:
+        - ["Hippo", "Harry", 17]
+        - ["Cat", "Luna", 4]
+        - ["Turtle", "Gerald", 112]
+
+
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    config_path: /efs/workspace/elliot/ansilo/ansilo-main/tests/confs/memory/postgres.conf
+    data_dir: /tmp/ansilo/pg-main/memory/data/
+    listen_socket_dir_path: /tmp/ansilo/pg-main/memory/
+    fdw_socket_path: /tmp/ansilo/pg-main/memory/fdw.sock
+    init_sql_path: /efs/workspace/elliot/ansilo/ansilo-main/tests/confs/memory/sql/*.sql
+    build_info_path: /tmp/ansilo/pg-main/memory/build-info.json

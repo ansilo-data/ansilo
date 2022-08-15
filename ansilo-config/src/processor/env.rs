@@ -6,19 +6,12 @@ use ansilo_logging::warn;
 use crate::loader::ConfigLoader;
 
 use super::{
-    util::{expression_to_string, match_interpolation},
-    ConfigExprProcessor, ConfigExprResult, ConfigStringExpr as X,
+    util::match_interpolation, ConfigExprProcessor, ConfigExprResult, ConfigStringExpr as X,
 };
 
 /// Interpolates configuration using environment variables
 #[derive(Default)]
 pub struct EnvConfigProcessor {}
-
-impl EnvConfigProcessor {
-    fn new() -> Self {
-        Self {}
-    }
-}
 
 impl ConfigExprProcessor for EnvConfigProcessor {
     fn display_name(&self) -> &str {
@@ -64,7 +57,7 @@ mod tests {
     #[test]
     fn test_env_processor_ignores_constants() {
         let loader = ConfigLoader::mock();
-        let processor = EnvConfigProcessor::new();
+        let processor = EnvConfigProcessor::default();
 
         let input = X::Constant("test".to_owned());
         let result = processor.process(&loader, input.clone());
@@ -75,7 +68,7 @@ mod tests {
     #[test]
     fn test_env_processor_ignores_unknown_prefix() {
         let loader = ConfigLoader::mock();
-        let processor = EnvConfigProcessor::new();
+        let processor = EnvConfigProcessor::default();
 
         let input = X::Interpolation(vec![X::Constant("test".to_owned())]);
         let result = processor.process(&loader, input.clone());
@@ -86,7 +79,7 @@ mod tests {
     #[test]
     fn test_env_processor_replaces_env_var() {
         let loader = ConfigLoader::mock();
-        let processor = EnvConfigProcessor::new();
+        let processor = EnvConfigProcessor::default();
 
         env::set_var("ANSILO_TEST_VAR1", "FROM_ENV");
         let input = X::Interpolation(vec![
@@ -104,12 +97,12 @@ mod tests {
     #[test]
     fn test_env_processor_default_value() {
         let loader = ConfigLoader::mock();
-        let processor = EnvConfigProcessor::new();
+        let processor = EnvConfigProcessor::default();
 
         let input = X::Interpolation(vec![
             X::Constant("env".to_owned()),
             X::Constant("ANSILO_TEST_VAR2".to_owned()),
-            X::Constant("DEFAULT_VAL".to_owned())
+            X::Constant("DEFAULT_VAL".to_owned()),
         ]);
         let result = processor.process(&loader, input.clone());
 
@@ -122,13 +115,13 @@ mod tests {
     #[test]
     fn test_env_processor_uses_default_value_if_env_var_is_empty() {
         let loader = ConfigLoader::mock();
-        let processor = EnvConfigProcessor::new();
+        let processor = EnvConfigProcessor::default();
 
         env::set_var("ANSILO_TEST_VAR3", "");
         let input = X::Interpolation(vec![
             X::Constant("env".to_owned()),
             X::Constant("ANSILO_TEST_VAR3".to_owned()),
-            X::Constant("DEFAULT_VAL".to_owned())
+            X::Constant("DEFAULT_VAL".to_owned()),
         ]);
         let result = processor.process(&loader, input.clone());
 

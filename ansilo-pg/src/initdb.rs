@@ -54,13 +54,20 @@ impl PostgresInitDb {
         let status = self.proc.wait()?;
 
         if status.success() {
+            // Copy the postgres.conf file if it exists
             if let Some(conf_path) = self.conf.postgres_conf_path.as_ref() {
                 let dest_path = self.conf.data_dir.join("postgresql.conf");
                 fs::copy(conf_path.as_path(), dest_path.as_path())
                     .context("Failed to copy the postgres.conf config")?;
                 fs::set_permissions(dest_path.as_path(), Permissions::from_mode(0o600))
                     .context("Failed to set perms on postgres.conf file")?;
+
             }
+
+            // Default postgres.conf files have "include_dir 'conf.d'"
+            // lets make sure it doesn't break our install
+            fs::create_dir_all(self.conf.data_dir.join("conf.d"))
+                .context("Failed to create conf.d directory in postgres install dir")?;
         }
 
         Ok(status)

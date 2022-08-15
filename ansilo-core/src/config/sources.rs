@@ -6,7 +6,7 @@ pub struct DataSourceConfig {
     /// The ID of the data source
     pub id: String,
     /// The name of the data source
-    pub name: String,
+    pub name: Option<String>,
     /// The type of the data source. This is the type of the underlying platform.
     /// eg "postgres", "oracle", "mysql" etc
     pub r#type: String,

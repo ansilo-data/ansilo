@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use ansilo_core::err::Result;
+use ansilo_logging::info;
 use conf::PostgresConf;
 use configure::configure;
 use connection::{PostgresConnection, PostgresConnectionPool};
@@ -15,11 +16,11 @@ use manager::PostgresServerManager;
 /// ansilo process over a unix socket.
 pub mod conf;
 pub mod connection;
+pub mod fdw;
 pub mod initdb;
 pub mod manager;
 pub mod proc;
 pub mod server;
-pub mod fdw;
 
 mod configure;
 #[cfg(test)]
@@ -40,7 +41,6 @@ pub(crate) const PG_ADMIN_USER: &str = "ansiloadmin";
 
 /// The username of the app user which has DML access to all tables
 pub(crate) const PG_APP_USER: &str = "ansiloapp";
-
 
 /// The entrypoint for managing our postgres instance
 #[derive(Debug)]
@@ -63,13 +63,20 @@ pub struct PostgresConnectionPools {
 }
 
 impl PostgresInstance {
-    /// Boots and initialises a new postgres instance based on the
+    /// Boots an already-initialised postgres instance based on the
     /// supplied configuration
-    pub fn new(conf: PostgresConf) -> Result<Self> {
-        let connect_timeout = Duration::from_secs(15);
+    pub fn start(conf: &PostgresConf) -> Result<Self> {
+        let server = PostgresServerManager::new(conf.clone());
 
-        // TODO[maybe]: the initdb/configure steps should be handled by PostgresServerManager?
-        // in case it needs to be rebuilt on crash?
+        Self::connect(conf, server)
+    }
+
+    /// Boots and initialises postgres instance based on the
+    /// supplied configuration
+    pub fn configure(conf: &PostgresConf) -> Result<Self> {
+        let connect_timeout = Duration::from_secs(5);
+
+        info!("Running initdb...");
         PostgresInitDb::reset(&conf)?;
         PostgresInitDb::run(conf.clone())?.complete()?;
         let server = PostgresServerManager::new(conf.clone());
@@ -77,7 +84,15 @@ impl PostgresInstance {
         let superuser_con =
             PostgresConnectionPool::new(&conf, PG_SUPER_USER, PG_DATABASE, 1, 1, connect_timeout)?
                 .acquire()?;
-        configure(&conf, superuser_con)?;
+
+        info!("Configuring postgres...");
+        configure(conf, superuser_con)?;
+
+        Self::connect(conf, server)
+    }
+
+    fn connect(conf: &PostgresConf, server: PostgresServerManager) -> Result<Self> {
+        let connect_timeout = Duration::from_secs(5);
 
         // TODO: configurable pool sizes
         Ok(Self {
@@ -85,15 +100,15 @@ impl PostgresInstance {
             server,
             pools: PostgresConnectionPools {
                 admin: PostgresConnectionPool::new(
-                    &conf,
+                    conf,
                     PG_ADMIN_USER,
                     PG_DATABASE,
+                    1,
                     5,
-                    10,
                     connect_timeout,
                 )?,
                 app: PostgresConnectionPool::new(
-                    &conf,
+                    conf,
                     PG_APP_USER,
                     PG_DATABASE,
                     5,
@@ -105,8 +120,8 @@ impl PostgresInstance {
     }
 
     /// Gets the connection pools for this instance
-    pub fn connections(&self) -> &PostgresConnectionPools {
-        &self.pools
+    pub fn connections(&mut self) -> &mut PostgresConnectionPools {
+        &mut self.pools
     }
 
     /// Gets the configuration for this instance
@@ -115,7 +130,7 @@ impl PostgresInstance {
     }
 
     /// Terminates the postgres instance, waiting for shutdown to complete
-    pub fn terminate(&mut self) -> Result<()> {
+    pub fn terminate(self) -> Result<()> {
         self.server.terminate()
     }
 }
@@ -151,12 +166,33 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_instance_init() {
+    fn test_postgres_instance_configure() {
         ansilo_logging::init_for_tests();
 
-        let conf = test_pg_config("init");
-        let instance = PostgresInstance::new(conf).unwrap();
+        let conf = test_pg_config("configure");
+        let instance = PostgresInstance::configure(&conf).unwrap();
 
+        assert!(instance.server.running());
+    }
+
+    #[test]
+    fn test_postgres_instance_start_without_configure() {
+        ansilo_logging::init_for_tests();
+
+        let conf = test_pg_config("start_without_configure");
+        PostgresInstance::start(&conf).unwrap_err();
+    }
+
+    #[test]
+    fn test_postgres_instance_configure_then_init() {
+        ansilo_logging::init_for_tests();
+
+        let conf = test_pg_config("configure_then_start");
+        let instance = PostgresInstance::configure(&conf).unwrap();
+        assert!(instance.server.running());
+        drop(instance);
+
+        let instance = PostgresInstance::start(&conf).unwrap();
         assert!(instance.server.running());
     }
 }
