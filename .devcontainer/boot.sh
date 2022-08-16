@@ -20,6 +20,8 @@ sudo ln -s /efs/workspace/$DEV_USER /workspace
 sudo chown $USER:$USER /efs/workspace/$DEV_USER
 sudo chown $USER:$USER /efs/workspace/$DEV_USER/ansilo
 sudo chown $USER:$USER /workspace
+echo "export DEV_USER=\"$DEV_USER\"" | tee -a ~/.bashrc ~/.zshrc 
+echo "export EFS_HOME=\"/efs/workspace/$DEV_USER\"" | tee -a ~/.bashrc ~/.zshrc 
 
 echo "Configuring facls"
 sudo setfacl -m u:$USER:rwx /usr/share/postgresql/14/extension/ /usr/lib/postgresql/14/lib/
