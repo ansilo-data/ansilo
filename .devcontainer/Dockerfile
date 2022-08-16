@@ -77,8 +77,6 @@ RUN sudo apt install -y gdb
 
 # Install facl and add some perms
 RUN sudo apt install -y acl
-# So we can run "cargo pgx install" direct from vscode user
-RUN sudo setfacl -m u:vscode:rwx /usr/share/postgresql/14/extension/ /usr/lib/postgresql/14/lib/
 
 # Add boot.sh file
 COPY ./boot.sh /boot.sh

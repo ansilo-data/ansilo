@@ -21,6 +21,9 @@ sudo chown $USER:$USER /efs/workspace/$DEV_USER
 sudo chown $USER:$USER /efs/workspace/$DEV_USER/ansilo
 sudo chown $USER:$USER /workspace
 
+echo "Configuring facls"
+sudo setfacl -m u:$USER:rwx /usr/share/postgresql/14/extension/ /usr/lib/postgresql/14/lib/
+
 echo "Running sshd on port 2222 ..."
 sudo /usr/sbin/sshd -De -o ListenAddress=127.0.0.1 -p 2222 &
 SSHD_PID=$$
