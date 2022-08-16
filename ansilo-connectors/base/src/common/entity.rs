@@ -62,7 +62,7 @@ where
         for entity in nc
             .entities
             .iter()
-            .filter(|e| &e.source.data_source_id == data_source_id)
+            .filter(|e| &e.source.data_source == data_source_id)
         {
             let source = TConnector::parse_entity_source_options(entity.source.options.clone())?;
 

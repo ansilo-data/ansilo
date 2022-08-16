@@ -81,6 +81,11 @@ impl PostgresServerManager {
             return Ok(());
         }
 
+        // Set terminate flag to true before the kill
+        // to prevent a race condition with the supervisor thread from
+        // restarting postgres 
+        self.state.terminate.store(true, Ordering::SeqCst);
+
         let pid = self.state.pid.load(Ordering::SeqCst);
 
         if pid != 0 {
@@ -94,7 +99,6 @@ impl PostgresServerManager {
             info!("Postgres instance is not running");
         }
 
-        self.state.terminate.store(true, Ordering::SeqCst);
         self.thread
             .take()
             .unwrap()

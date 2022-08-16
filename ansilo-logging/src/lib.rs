@@ -1,10 +1,13 @@
-use ansilo_core::{config::NodeConfig, err::Result};
-pub use log::*;
+use ansilo_core::err::Result;
 pub use env_logger::{init, init_from_env};
+pub use log::*;
 
 /// Configures the logger for this ansilo node
 /// Currently this is a null-op by may implement different logging settings in future
-pub fn init_logging(_config: &NodeConfig) -> Result<()> {
+pub fn init_logging() -> Result<()> {
+    env_logger::init_from_env(
+        env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
+    );
     Ok(())
 }
 
@@ -26,8 +29,8 @@ mod tests {
     fn test_init_logging() {
         let conf = NodeConfig::default();
 
-        let res = init_logging(&conf);
-        
+        let res = init_logging();
+
         assert!(res.is_ok());
     }
 }

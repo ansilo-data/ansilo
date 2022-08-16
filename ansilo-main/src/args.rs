@@ -9,6 +9,7 @@ use clap::Parser;
 #[clap(author, version, about, long_about = None)]
 pub(crate) enum Command {
     Run(Args),
+    Dev(Args),
     Build(Args),
 }
 
@@ -25,6 +26,31 @@ impl Command {
         match self {
             Command::Run(args) => args,
             Command::Build(args) => args,
+            Command::Dev(args) => args,
         }
+    }
+
+    /// Returns `true` if the command is [`Run`].
+    ///
+    /// [`Run`]: Command::Run
+    #[must_use]
+    pub(crate) fn is_run(&self) -> bool {
+        matches!(self, Self::Run(..))
+    }
+
+    /// Returns `true` if the command is [`Dev`].
+    ///
+    /// [`Dev`]: Command::Dev
+    #[must_use]
+    pub(crate) fn is_dev(&self) -> bool {
+        matches!(self, Self::Dev(..))
+    }
+
+    /// Returns `true` if the command is [`Build`].
+    ///
+    /// [`Build`]: Command::Build
+    #[must_use]
+    pub(crate) fn is_build(&self) -> bool {
+        matches!(self, Self::Build(..))
     }
 }

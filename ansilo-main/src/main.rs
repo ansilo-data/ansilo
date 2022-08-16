@@ -31,7 +31,7 @@ pub fn conf() -> &'static NodeConfig {
 /// This is the entrypoint to booting Ansilo.
 /// Here, we initial launch sequence.
 fn main() {
-    ansilo_logging::init();
+    ansilo_logging::init_logging().unwrap();
     info!("Hi, thanks for using Ansilo!");
 
     // Parse arguments
@@ -50,11 +50,80 @@ fn main() {
             .unwrap()
     });
 
-    match command {
-        Command::Run(_) => run(),
-        Command::Build(_) => build().map(|_| ()),
+    run(command).unwrap()
+}
+
+/// Runs postgres and the fdw server
+fn run(command: Command) -> Result<()> {
+    let pools = conf()
+        .sources
+        .iter()
+        .map(|i| {
+            info!("Initializing connector: {}", i.id);
+            let connector = Connectors::from_type(&i.r#type)
+                .with_context(|| format!("Unknown connector type: {}", i.r#type))
+                .unwrap();
+            let options = connector
+                .parse_options(i.options.clone())
+                .context("Failed to parse options")
+                .unwrap();
+
+            let pool = connector
+                .create_connection_pool(conf(), &i.id, options)
+                .context("Failed to create connection pool")
+                .unwrap();
+
+            (i.id.clone(), pool)
+        })
+        .collect();
+
+    info!("Starting fdw listener...");
+    let fdw_server = FdwServer::start(conf(), pg_conf().fdw_socket_path.clone(), pools)
+        .context("Failed to start fdw server")?;
+
+    let postgres = if let (Command::Run(_), Some(build_info)) = (&command, BuildInfo::fetch()?) {
+        info!("Build occurred at {}", build_info.built_at().to_rfc3339());
+        info!("Starting postgres...");
+        PostgresInstance::start(&pg_conf())?
+    } else {
+        build()?
+    };
+
+    if command.is_build() {
+        info!("Build complete...");
+        return Ok(());
     }
-    .unwrap();
+
+    // TODO: Create postgres proxy
+
+    info!("Start up complete...");
+
+    // TODO: dev mode to restart on file change
+    // Now we wait for any signals on the main thread that
+    // indicates we should terminate
+    let mut sigs = Signals::new(&[SIGINT, SIGTERM]).context("Failed to attach signal handler")?;
+    for sig in sigs.forever() {
+        info!(
+            "Received {}",
+            match sig {
+                SIGINT => "SIGINT".into(),
+                SIGTERM => "SIGTERM".into(),
+                _ => format!("unkown signal {}", sig),
+            }
+        );
+        break;
+    }
+
+    info!("Terminating...");
+    postgres
+        .terminate()
+        .context("Failed to terminate postgres")?;
+    fdw_server
+        .terminate()
+        .context("Failed to terminate fdw server")?;
+
+    info!("Graceful shutdown complete");
+    Ok(())
 }
 
 /// Initialises the postgres database
@@ -93,73 +162,6 @@ fn build() -> Result<PostgresInstance> {
     info!("Build complete...");
 
     Ok(postgres)
-}
-
-/// Runs postgres and the fdw server
-fn run() -> Result<()> {
-    let pools = conf()
-        .sources
-        .iter()
-        .map(|i| {
-            info!("Initializing connector: {}", i.id);
-            let connector = Connectors::from_type(&i.r#type)
-                .with_context(|| format!("Unknown connector type: {}", i.r#type))
-                .unwrap();
-            let options = connector
-                .parse_options(i.options.clone())
-                .context("Failed to parse options")
-                .unwrap();
-
-            let pool = connector
-                .create_connection_pool(conf(), &i.id, options)
-                .context("Failed to create connection pool")
-                .unwrap();
-
-            (i.id.clone(), pool)
-        })
-        .collect();
-
-    info!("Starting fdw listener...");
-    let fdw_server = FdwServer::start(conf(), pg_conf().fdw_socket_path.clone(), pools)
-        .context("Failed to start fdw server")?;
-
-    let postgres = if let Some(build_info) = BuildInfo::fetch()? {
-        info!("Build occurred at {}", build_info.built_at().to_rfc3339());
-        info!("Starting postgres...");
-        PostgresInstance::start(&pg_conf())?
-    } else {
-        build()?
-    };
-
-    // TODO: Create postgres proxy
-
-    info!("Start up complete...");
-
-    // Now we wait for any signals on the main thread that
-    // indicates we should terminate
-    let mut sigs = Signals::new(&[SIGINT, SIGTERM]).context("Failed to attach signal handler")?;
-    for sig in sigs.forever() {
-        info!(
-            "Received {}",
-            match sig {
-                SIGINT => "SIGINT".into(),
-                SIGTERM => "SIGTERM".into(),
-                _ => format!("unkown signal {}", sig),
-            }
-        );
-        break;
-    }
-
-    info!("Terminating...");
-    postgres
-        .terminate()
-        .context("Failed to terminate postgres")?;
-    fdw_server
-        .terminate()
-        .context("Failed to terminate fdw server")?;
-
-    info!("Graceful shutdown complete");
-    Ok(())
 }
 
 fn pg_conf() -> PostgresConf {

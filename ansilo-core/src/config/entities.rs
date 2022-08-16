@@ -112,22 +112,22 @@ pub struct UniqueConstraintConfig {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct EntitySourceConfig {
     /// The ID of the data source this entity is retrieved from
-    pub data_source_id: String,
+    pub data_source: String,
     /// The data source specific options for reading/writing to the entity
     pub options: serde_yaml::Value,
 }
 
 impl EntitySourceConfig {
-    pub fn new(data_source_id: String, options: serde_yaml::Value) -> Self {
+    pub fn new(data_source: String, options: serde_yaml::Value) -> Self {
         Self {
-            data_source_id,
+            data_source,
             options,
         }
     }
 
-    pub fn minimal(data_source_id: impl Into<String>) -> Self {
+    pub fn minimal(data_source: impl Into<String>) -> Self {
         Self {
-            data_source_id: data_source_id.into(),
+            data_source: data_source.into(),
             options: serde_yaml::Value::Null,
         }
     }

@@ -6,7 +6,7 @@ networking:
 entities:
   - id: animals
     source:
-      data_source_id: mem
+      data_source: memory
       options: null
     attributes:
       - id: type
@@ -17,7 +17,7 @@ entities:
         type: Int64
 
 sources:
-  - id: mem
+  - id: memory
     type: test.memory
     options:
       animals:

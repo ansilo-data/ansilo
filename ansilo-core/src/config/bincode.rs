@@ -9,7 +9,7 @@ use super::EntitySourceConfig;
 
 impl Encode for EntitySourceConfig {
     fn encode<E: Encoder>(&self, encoder: &mut E) -> Result<(), EncodeError> {
-        self.data_source_id.encode(encoder)?;
+        self.data_source.encode(encoder)?;
         serde_yaml::to_string(&self.options)
             .map_err(|e| EncodeError::OtherString(e.to_string()))?
             .encode(encoder)?;
@@ -20,7 +20,7 @@ impl Encode for EntitySourceConfig {
 impl Decode for EntitySourceConfig {
     fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, DecodeError> {
         Ok(Self {
-            data_source_id: String::decode(decoder)?,
+            data_source: String::decode(decoder)?,
             options: serde_yaml::from_str(&String::decode(decoder)?)
                 .map_err(|e| DecodeError::OtherString(e.to_string()))?,
         })
@@ -53,7 +53,7 @@ mod tests {
     fn test_bincode_entity_source_config_with_yaml() {
         let config = bincode::config::standard();
         let data = EntitySourceConfig {
-            data_source_id: "test".into(),
+            data_source: "test".into(),
             options: serde_yaml::from_str("a: b\nc: d\n").unwrap(),
         };
 
