@@ -34,6 +34,7 @@ impl Command {
     ///
     /// [`Run`]: Command::Run
     #[must_use]
+    #[allow(unused)]
     pub(crate) fn is_run(&self) -> bool {
         matches!(self, Self::Run(..))
     }

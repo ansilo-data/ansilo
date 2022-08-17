@@ -5,10 +5,54 @@ use std::{
 };
 
 use ansilo_core::err::{Context, Result};
+use ansilo_logging::info;
+use ansilo_pg::PostgresInstance;
 use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
 
-use crate::conf;
+use crate::conf::*;
+
+/// Initialises the postgres database
+pub fn build() -> Result<PostgresInstance> {
+    info!("Running build...");
+    let conf = conf();
+    let pg_conf = pg_conf();
+
+    // Initialize postgres via initdb
+    let mut postgres =
+        PostgresInstance::configure(&pg_conf).context("Failed to initialise postgres")?;
+
+    // Connect to it
+    let mut con = postgres
+        .connections()
+        .admin()
+        .context("Failed to connect to postgres")?;
+
+    // Run sql init scripts
+    let init_sql_path = conf
+        .postgres
+        .clone()
+        .unwrap_or_default()
+        .init_sql_path
+        .unwrap_or("/etc/ansilo/sql/*.sql".into());
+
+    info!("Running scripts {}", init_sql_path.display());
+
+    for script in glob::glob(init_sql_path.to_str().context("Invalid init sql path")?)
+        .context("Failed to glob init sql path")?
+    {
+        let script = script.context("Failed to read sql file")?;
+
+        info!("Running {}", script.display());
+        let sql = fs::read_to_string(script).context("Failed to read sql file")?;
+        con.batch_execute(&sql).context("Failed to execute sql")?;
+    }
+
+    BuildInfo::new().store()?;
+    info!("Build complete...");
+
+    Ok(postgres)
+}
 
 /// Captures information about the build
 #[derive(Debug, Clone, Serialize, Deserialize)]

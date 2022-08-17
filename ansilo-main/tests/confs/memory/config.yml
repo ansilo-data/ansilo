@@ -34,3 +34,4 @@ postgres:
     fdw_socket_path: /tmp/ansilo/pg-main/memory/fdw.sock
     init_sql_path: /efs/workspace/elliot/ansilo/ansilo-main/tests/confs/memory/sql/*.sql
     build_info_path: /tmp/ansilo/pg-main/memory/build-info.json
+    

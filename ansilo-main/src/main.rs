@@ -1,32 +1,24 @@
-use std::fs;
+use std::thread;
 
 use crate::{args::Command, build::BuildInfo};
-use ansilo_config::loader::ConfigLoader;
 use ansilo_connectors_all::Connectors;
-use ansilo_core::{
-    config::NodeConfig,
-    err::{Context, Result},
-};
+use ansilo_core::err::{Context, Result};
 use ansilo_logging::info;
-use ansilo_pg::{conf::PostgresConf, fdw::server::FdwServer, PostgresInstance};
+use ansilo_pg::{fdw::server::FdwServer, PostgresInstance};
 use clap::Parser;
-use once_cell::sync::OnceCell;
+use nix::libc::SIGUSR1;
 use signal_hook::{
     consts::{SIGINT, SIGTERM},
     iterator::Signals,
 };
 
-mod args;
+pub mod args;
 pub mod build;
+pub mod conf;
+pub mod dev;
 
-/// We store our node configuration in a global static variable
-static NODE_CONFIG: OnceCell<NodeConfig> = OnceCell::new();
-
-pub fn conf() -> &'static NodeConfig {
-    NODE_CONFIG
-        .get()
-        .expect("Tried to retrieve node config before initialised")
-}
+use build::*;
+use conf::*;
 
 /// This is the entrypoint to booting Ansilo.
 /// Here, we initial launch sequence.
@@ -39,43 +31,15 @@ fn main() {
     let args = command.args();
 
     // Load configuration
-    info!("Loading configuration...");
-    NODE_CONFIG.get_or_init(|| {
-        let config_path = args.config.clone().unwrap_or("/etc/ansilo/main.yml".into());
-        let config_loader = ConfigLoader::new();
-
-        config_loader
-            .load(&config_path)
-            .context("Failed to load configuration")
-            .unwrap()
-    });
+    let config_path = args.config.clone().unwrap_or("/etc/ansilo/main.yml".into());
+    init_conf(&config_path);
 
     run(command).unwrap()
 }
 
 /// Runs postgres and the fdw server
 fn run(command: Command) -> Result<()> {
-    let pools = conf()
-        .sources
-        .iter()
-        .map(|i| {
-            info!("Initializing connector: {}", i.id);
-            let connector = Connectors::from_type(&i.r#type)
-                .with_context(|| format!("Unknown connector type: {}", i.r#type))
-                .unwrap();
-            let options = connector
-                .parse_options(i.options.clone())
-                .context("Failed to parse options")
-                .unwrap();
-
-            let pool = connector
-                .create_connection_pool(conf(), &i.id, options)
-                .context("Failed to create connection pool")
-                .unwrap();
-
-            (i.id.clone(), pool)
-        })
-        .collect();
+    let pools = init_connectors();
 
     info!("Starting fdw listener...");
     let fdw_server = FdwServer::start(conf(), pg_conf().fdw_socket_path.clone(), pools)
@@ -98,21 +62,25 @@ fn run(command: Command) -> Result<()> {
 
     info!("Start up complete...");
 
-    // TODO: dev mode to restart on file change
-    // Now we wait for any signals on the main thread that
-    // indicates we should terminate
-    let mut sigs = Signals::new(&[SIGINT, SIGTERM]).context("Failed to attach signal handler")?;
-    for sig in sigs.forever() {
-        info!(
-            "Received {}",
-            match sig {
-                SIGINT => "SIGINT".into(),
-                SIGTERM => "SIGTERM".into(),
-                _ => format!("unkown signal {}", sig),
-            }
-        );
-        break;
+    if command.is_dev() {
+        thread::spawn(|| {
+            dev::signal_on_config_update();
+        });
     }
+
+    let mut sigs =
+        Signals::new(&[SIGINT, SIGTERM, SIGUSR1]).context("Failed to attach signal handler")?;
+    let sig = sigs.forever().next().unwrap();
+
+    info!(
+        "Received {}",
+        match sig {
+            SIGINT => "SIGINT".into(),
+            SIGTERM => "SIGTERM".into(),
+            SIGUSR1 => "SIGUSR1".into(),
+            _ => format!("unkown signal {}", sig),
+        }
+    );
 
     info!("Terminating...");
     postgres
@@ -123,67 +91,36 @@ fn run(command: Command) -> Result<()> {
         .context("Failed to terminate fdw server")?;
 
     info!("Graceful shutdown complete");
+
+    if command.is_dev() && sig == SIGUSR1 {
+        dev::restart();
+    }
+
     Ok(())
 }
 
-/// Initialises the postgres database
-fn build() -> Result<PostgresInstance> {
-    info!("Running build...");
-    let conf = conf();
-    let pg_conf = pg_conf();
+fn init_connectors() -> std::collections::HashMap<String, ansilo_connectors_all::ConnectionPools> {
+    info!("Initializing connectors...");
+    let pools = conf()
+        .sources
+        .iter()
+        .map(|i| {
+            info!("Initializing connector: {}", i.id);
+            let connector = Connectors::from_type(&i.r#type)
+                .with_context(|| format!("Unknown connector type: {}", i.r#type))
+                .unwrap();
+            let options = connector
+                .parse_options(i.options.clone())
+                .context("Failed to parse options")
+                .unwrap();
 
-    let mut postgres =
-        PostgresInstance::configure(&pg_conf).context("Failed to initialise postgres")?;
-    let mut con = postgres
-        .connections()
-        .admin()
-        .context("Failed to connect to postgres")?;
+            let pool = connector
+                .create_connection_pool(conf(), &i.id, options)
+                .context("Failed to create connection pool")
+                .unwrap();
 
-    let init_sql_path = conf
-        .postgres
-        .clone()
-        .unwrap_or_default()
-        .init_sql_path
-        .unwrap_or("/etc/ansilo/sql/*.sql".into());
-
-    info!("Running scripts {}", init_sql_path.display());
-
-    for script in glob::glob(init_sql_path.to_str().context("Invalid init sql path")?)
-        .context("Failed to glob init sql path")?
-    {
-        let script = script.context("Failed to read sql file")?;
-
-        info!("Running {}", script.display());
-        let sql = fs::read_to_string(script).context("Failed to read sql file")?;
-        con.batch_execute(&sql).context("Failed to execute sql")?;
-    }
-
-    BuildInfo::new().store()?;
-    info!("Build complete...");
-
-    Ok(postgres)
-}
-
-fn pg_conf() -> PostgresConf {
-    let pg_conf = conf().postgres.clone().unwrap_or_default();
-
-    PostgresConf {
-        install_dir: pg_conf
-            .install_dir
-            .unwrap_or("/usr/lib/postgresql/14/".into()),
-        postgres_conf_path: Some(
-            pg_conf
-                .config_path
-                .unwrap_or("/etc/postgresql/14/main/postgresql.conf".into()),
-        ),
-        data_dir: pg_conf
-            .data_dir
-            .unwrap_or("/var/run/postgresql/ansilo/data".into()),
-        socket_dir_path: pg_conf
-            .listen_socket_dir_path
-            .unwrap_or("/var/run/postgresql/ansilo/".into()),
-        fdw_socket_path: pg_conf
-            .fdw_socket_path
-            .unwrap_or("/var/run/postgresql/ansilo/fdw.sock".into()),
-    }
+            (i.id.clone(), pool)
+        })
+        .collect();
+    pools
 }

@@ -48,7 +48,7 @@ impl PostgresServerManager {
     }
 
     fn supervise(conf: PostgresConf, state: Arc<State>) -> Result<()> {
-        while !state.terminate.load(Ordering::SeqCst) {
+        loop {
             info!("Booting postgres instance...");
 
             let mut server = PostgresServer::boot(conf.clone())?;
@@ -59,6 +59,11 @@ impl PostgresServerManager {
             state.pid.store(0, Ordering::SeqCst);
 
             info!("Postgres terminated with status {}", result?);
+
+            if state.terminate.load(Ordering::SeqCst) {
+                break;
+            }
+
             thread::sleep(Duration::from_secs(3));
         }
 
@@ -83,7 +88,7 @@ impl PostgresServerManager {
 
         // Set terminate flag to true before the kill
         // to prevent a race condition with the supervisor thread from
-        // restarting postgres 
+        // restarting postgres
         self.state.terminate.store(true, Ordering::SeqCst);
 
         let pid = self.state.pid.load(Ordering::SeqCst);

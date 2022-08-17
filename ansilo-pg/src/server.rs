@@ -85,7 +85,7 @@ mod tests {
         let pid = server.proc.pid();
 
         let server_thread = thread::spawn(move || server.wait());
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_secs(1));
 
         // assert listening on expected socket path
         assert!(conf.pg_socket_path().exists());

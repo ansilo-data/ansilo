@@ -4,4 +4,4 @@ OPTIONS (
     data_source 'memory'
 );
 
-IMPORT FOREIGN SCHEMA "all" FROM SERVER memory INTO public;
+-- IMPORT FOREIGN SCHEMA "all" FROM SERVER memory INTO public;

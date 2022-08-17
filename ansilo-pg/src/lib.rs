@@ -92,7 +92,7 @@ impl PostgresInstance {
     }
 
     fn connect(conf: &PostgresConf, server: PostgresServerManager) -> Result<Self> {
-        let connect_timeout = Duration::from_secs(5);
+        let connect_timeout = Duration::from_secs(10);
 
         // TODO: configurable pool sizes
         Ok(Self {
