@@ -5,13 +5,14 @@ use std::{
         Arc,
     },
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
 use ansilo_core::err::{bail, Context, Result};
 use ansilo_logging::{debug, error, warn};
 use socket2::{Domain, Socket};
 
-use crate::conf::ProxyConf;
+use crate::{conf::ProxyConf, connection::Connection};
 
 /// The multi-protocol proxy server
 pub struct ProxyServer {
@@ -112,6 +113,13 @@ impl ProxyListener {
             .context("Failed to set SO_REUSEADDR")?;
 
         socket
+            .set_read_timeout(Some(Duration::from_secs(30)))
+            .context("Failed to set socket read timeout")?;
+        socket
+            .set_write_timeout(Some(Duration::from_secs(30)))
+            .context("Failed to set socket write timeout")?;
+
+        socket
             .bind(&addr.into())
             .context("Failed to bind to address")?;
         socket.listen(128)?;
@@ -129,13 +137,22 @@ impl ProxyListener {
         }))
     }
 
+    /// Accepts new connections
     fn accept(&mut self) -> Result<()> {
         loop {
-            let (_con, _) = self.listener.accept().context("Failed to listen to addr")?;
+            let (con, _) = self.listener.accept().context("Failed to listen to addr")?;
 
             if self.terminated.load(Ordering::SeqCst) {
                 return Ok(());
             }
+
+            // TODO[sec]: We should probably limit the max number of threads via a thread pool
+            let conf = self.conf;
+            thread::spawn(move || {
+                if let Err(err) = Connection::new(conf, con).handle() {
+                    warn!("Error while handling connection: {:?}", err);
+                }
+            });
         }
     }
 }
@@ -155,12 +172,33 @@ mod tests {
     use std::{
         io::Write,
         net::{Ipv4Addr, SocketAddrV4},
-        sync::atomic::AtomicU16,
+        sync::{atomic::AtomicU16, Mutex},
     };
+
+    use crate::{conf::HandlerConf, handler::ConnectionHandler, stream::IOStream};
 
     use super::*;
 
     static PORT: AtomicU16 = AtomicU16::new(61000);
+
+    struct MockConnectionHandler {
+        pub received: Mutex<Vec<Box<dyn IOStream>>>,
+    }
+
+    impl MockConnectionHandler {
+        fn new() -> Self {
+            Self {
+                received: Mutex::new(vec![]),
+            }
+        }
+    }
+    impl ConnectionHandler for MockConnectionHandler {
+        fn handle(&self, con: Box<dyn IOStream>) -> Result<()> {
+            let mut received = self.received.lock().unwrap();
+            received.push(con);
+            Ok(())
+        }
+    }
 
     fn create_server(conf: ProxyConf) -> ProxyServer {
         let conf = Box::leak(Box::new(conf));
@@ -174,7 +212,11 @@ mod tests {
         ProxyConf {
             addrs: vec![SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))],
             tls: None,
-            auth: vec![],
+            handlers: HandlerConf::new(
+                MockConnectionHandler::new(),
+                MockConnectionHandler::new(),
+                MockConnectionHandler::new(),
+            ),
         }
     }
 
