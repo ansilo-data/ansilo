@@ -1,0 +1,144 @@
+use std::{
+    fs, io,
+    net::SocketAddr,
+    os::unix::{net::UnixStream, prelude::FromRawFd},
+    path::Path,
+    sync::atomic::Ordering,
+    time::Duration,
+};
+
+use ansilo_core::err::Result;
+use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
+
+use crate::{
+    conf::{ProxyConf, TlsConf},
+    peekable::Peekable,
+};
+
+use std::{
+    net::{Ipv4Addr, SocketAddrV4},
+    sync::{atomic::AtomicU16, Mutex},
+};
+
+use crate::{conf::HandlerConf, handler::ConnectionHandler, stream::IOStream};
+
+static PORT: AtomicU16 = AtomicU16::new(61000);
+
+pub struct MockConnectionHandler {
+    pub received: Mutex<Vec<Box<dyn IOStream>>>,
+}
+
+impl MockConnectionHandler {
+    pub fn new() -> Self {
+        Self {
+            received: Mutex::new(vec![]),
+        }
+    }
+
+    pub fn from_boxed(i: &Box<dyn ConnectionHandler>) -> &Self {
+        i.as_any().downcast_ref().unwrap()
+    }
+
+    pub fn num_received(&self) -> usize {
+        self.received.lock().unwrap().len()
+    }
+}
+
+impl ConnectionHandler for MockConnectionHandler {
+    fn handle(&self, con: Box<dyn IOStream>) -> Result<()> {
+        let mut received = self.received.lock().unwrap();
+        received.push(con);
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+pub fn mock_config_no_tls() -> &'static ProxyConf {
+    let port = PORT.fetch_add(1, Ordering::Relaxed);
+
+    let conf = ProxyConf {
+        addrs: vec![SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))],
+        tls: None,
+        handlers: HandlerConf::new(
+            MockConnectionHandler::new(),
+            MockConnectionHandler::new(),
+            MockConnectionHandler::new(),
+        ),
+    };
+
+    Box::leak(Box::new(conf))
+}
+
+pub fn mock_config_tls() -> &'static ProxyConf {
+    let port = PORT.fetch_add(1, Ordering::Relaxed);
+
+    let conf = ProxyConf {
+        addrs: vec![SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))],
+        tls: Some(
+            TlsConf::new(
+                &Path::new(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/src/mock-certs/mock.test-key.pem"
+                )),
+                &Path::new(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/src/mock-certs/mock.test.pem"
+                )),
+            )
+            .unwrap(),
+        ),
+        handlers: HandlerConf::new(
+            MockConnectionHandler::new(),
+            MockConnectionHandler::new(),
+            MockConnectionHandler::new(),
+        ),
+    };
+
+    Box::leak(Box::new(conf))
+}
+
+pub fn mock_tls_client_config() -> rustls::ClientConfig {
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.add_parsable_certificates(
+        rustls_pemfile::certs(&mut io::BufReader::new(
+            fs::File::open(Path::new(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/src/mock-certs/rootCA.pem"
+            )))
+            .unwrap(),
+        ))
+        .unwrap()
+        .as_slice(),
+    );
+
+    rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_root_certificates(root_store)
+        .with_no_client_auth()
+}
+
+pub fn create_socket_pair() -> (UnixStream, UnixStream) {
+    let (fd1, fd2) = socketpair(
+        AddressFamily::Unix,
+        SockType::Stream,
+        None,
+        SockFlag::empty(),
+    )
+    .unwrap();
+
+    let (s1, s2) = unsafe { (UnixStream::from_raw_fd(fd1), UnixStream::from_raw_fd(fd2)) };
+
+    s1.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+    s2.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+
+    (s1, s2)
+}
+
+impl From<Vec<u8>> for Peekable<io::Cursor<Vec<u8>>> {
+    fn from(data: Vec<u8>) -> Self {
+        Peekable::new(io::Cursor::new(data))
+    }
+}

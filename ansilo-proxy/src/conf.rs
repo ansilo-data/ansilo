@@ -1,10 +1,4 @@
-use std::{
-    fs,
-    io::{BufReader},
-    net::SocketAddr,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{fs, io::BufReader, net::SocketAddr, path::Path, sync::Arc};
 
 use ansilo_core::err::{bail, Context, Result};
 
@@ -28,15 +22,15 @@ pub struct TlsConf {
 }
 
 impl TlsConf {
-    pub fn new(private_key_path: PathBuf, certificate_path: PathBuf) -> Result<Self> {
+    pub fn new(private_key_path: &Path, certificate_path: &Path) -> Result<Self> {
         Ok(Self {
             server_config: Arc::new(Self::server_config(private_key_path, certificate_path)?),
         })
     }
 
     fn server_config(
-        private_key_path: PathBuf,
-        certificate_path: PathBuf,
+        private_key_path: &Path,
+        certificate_path: &Path,
     ) -> Result<rustls::ServerConfig> {
         let mut cert_rdr = BufReader::new(fs::File::open(certificate_path)?);
         let cert = rustls_pemfile::certs(&mut cert_rdr)

@@ -169,60 +169,19 @@ impl Drop for ProxyServer {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::Write,
-        net::{Ipv4Addr, SocketAddrV4},
-        sync::{atomic::AtomicU16, Mutex},
-    };
+    use std::io::Write;
 
-    use crate::{conf::HandlerConf, handler::ConnectionHandler, stream::IOStream};
+    use crate::test::mock_config_no_tls;
 
     use super::*;
 
-    static PORT: AtomicU16 = AtomicU16::new(61000);
-
-    struct MockConnectionHandler {
-        pub received: Mutex<Vec<Box<dyn IOStream>>>,
-    }
-
-    impl MockConnectionHandler {
-        fn new() -> Self {
-            Self {
-                received: Mutex::new(vec![]),
-            }
-        }
-    }
-    impl ConnectionHandler for MockConnectionHandler {
-        fn handle(&self, con: Box<dyn IOStream>) -> Result<()> {
-            let mut received = self.received.lock().unwrap();
-            received.push(con);
-            Ok(())
-        }
-    }
-
-    fn create_server(conf: ProxyConf) -> ProxyServer {
-        let conf = Box::leak(Box::new(conf));
-
+    fn create_server(conf: &'static ProxyConf) -> ProxyServer {
         ProxyServer::new(conf)
-    }
-
-    fn mock_config() -> ProxyConf {
-        let port = PORT.fetch_add(1, Ordering::Relaxed);
-
-        ProxyConf {
-            addrs: vec![SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))],
-            tls: None,
-            handlers: HandlerConf::new(
-                MockConnectionHandler::new(),
-                MockConnectionHandler::new(),
-                MockConnectionHandler::new(),
-            ),
-        }
     }
 
     #[test]
     fn test_server_new_and_drop() {
-        let server = create_server(mock_config());
+        let server = create_server(mock_config_no_tls());
 
         assert!(server.listeners.is_none());
         assert_eq!(server.terminated.load(Ordering::SeqCst), false);
@@ -232,7 +191,7 @@ mod tests {
 
     #[test]
     fn test_server_start_and_connect_then_terminate() {
-        let mut server = create_server(mock_config());
+        let mut server = create_server(mock_config_no_tls());
 
         server.start().unwrap();
         assert_eq!(server.listeners.as_ref().unwrap().len(), 1);
@@ -249,12 +208,12 @@ mod tests {
         assert_eq!(server.terminated.load(Ordering::SeqCst), true);
 
         // Connection should now fail
-        con.write_all(&[1]).unwrap_err();
+        con.write_all(&[1]).and_then(|_| con.flush()).unwrap_err();
     }
 
     #[test]
     fn test_server_start_and_connect_then_drop() {
-        let mut server = create_server(mock_config());
+        let mut server = create_server(mock_config_no_tls());
 
         server.start().unwrap();
         assert_eq!(server.listeners.as_ref().unwrap().len(), 1);
@@ -267,6 +226,6 @@ mod tests {
         drop(server);
 
         // Connection should now fail
-        con.write_all(&[1]).unwrap_err();
+        con.write_all(&[1]).and_then(|_| con.flush()).unwrap_err();
     }
 }

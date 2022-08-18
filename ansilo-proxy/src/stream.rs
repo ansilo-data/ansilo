@@ -3,7 +3,11 @@ use std::io::{self, Read, Write};
 /// An IO stream
 pub struct Stream<S: Read + Write>(pub S);
 
-pub trait IOStream: Read + Write + Send {}
+pub trait IOStream: Read + Write + Send {
+    /// Returns a downcastable Any of the handler
+    #[cfg(test)]
+    fn as_any(&mut self) -> &mut dyn std::any::Any;
+}
 
 impl<S: Read + Write> Read for Stream<S> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -21,4 +25,9 @@ impl<S: Read + Write> Write for Stream<S> {
     }
 }
 
-impl<S: Read + Write + Send> IOStream for Stream<S> {}
+impl<S: Read + Write + Send + 'static> IOStream for Stream<S> {
+    #[cfg(test)]
+    fn as_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}

@@ -6,7 +6,7 @@ use std::{
 /// Connection to make a stream "peekable".
 /// Eg we can look ahead at the incoming data without consuming it for future reads.
 pub struct Peekable<S: Read + Write> {
-    inner: S,
+    pub(crate) inner: S,
     peeked: Vec<u8>,
 }
 
@@ -27,9 +27,10 @@ impl<S: Read + Write> Peekable<S> {
     /// This will read exactly the requested number of bytes
     /// or fail if the underlying stream ends prematurely.
     pub fn peek(&mut self, buf: &mut [u8]) -> io::Result<()> {
-        if self.peeked.len() < buf.len() {
+        let cur_peeked = self.peeked.len();
+        if cur_peeked < buf.len() {
             self.peeked.resize(buf.len(), 0);
-            self.inner.read_exact(&mut self.peeked[..])?;
+            self.inner.read_exact(&mut self.peeked[cur_peeked..])?;
         }
 
         buf.copy_from_slice(&self.peeked[..]);
@@ -208,5 +209,20 @@ mod tests {
         assert_eq!(buf, [3, 4]);
         assert_eq!(s.read(&mut buf).unwrap(), 1);
         assert_eq!(buf, [5, 4]);
+    }
+
+    #[test]
+    fn test_multiple_peeks() {
+        let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
+        let mut peek = [0u8; 5];
+
+        s.peek(&mut peek[..1]).unwrap();
+        assert_eq!(peek, [1, 0, 0, 0, 0]);
+
+        s.peek(&mut peek[..2]).unwrap();
+        assert_eq!(peek, [1, 2, 0, 0, 0]);
+
+        s.peek(&mut peek[..]).unwrap();
+        assert_eq!(peek, [1, 2, 3, 4, 5]);
     }
 }

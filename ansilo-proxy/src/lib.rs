@@ -9,3 +9,5 @@ pub(crate) mod proto;
 pub mod handler;
 pub mod stream;
 
+#[cfg(test)]
+pub(crate) mod test;

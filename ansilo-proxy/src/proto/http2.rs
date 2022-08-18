@@ -26,7 +26,9 @@ const HTTP_PRI: [u8; 24] = *b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 impl<S: Read + Write + Send + 'static> Protocol<S> for Http2Protocol {
     fn matches(&self, con: &mut Peekable<S>) -> Result<bool> {
         let mut buf = [0u8; 24];
-        con.peek(&mut buf[..])?;
+        if let Err(_) = con.peek(&mut buf[..]) {
+            return Ok(false);
+        }
 
         if buf == HTTP_PRI {
             return Ok(true);
@@ -37,5 +39,33 @@ impl<S: Read + Write + Send + 'static> Protocol<S> for Http2Protocol {
 
     fn handle(&mut self, con: Peekable<S>) -> Result<()> {
         self.conf.handlers.http2.handle(Box::new(Stream(con)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test::mock_config_no_tls;
+
+    use super::*;
+
+    #[test]
+    fn test_proto_http2_matches() {
+        let proto = Http2Protocol::new(mock_config_no_tls());
+
+        assert_eq!(proto.matches(&mut vec![0u8].into()).unwrap(), false);
+        assert_eq!(proto.matches(&mut b"abc".to_vec().into()).unwrap(), false);
+        assert_eq!(
+            proto
+                .matches(&mut b"GET / HTTP/1.1".to_vec().into())
+                .unwrap(),
+            false
+        );
+        assert_eq!(
+            proto
+                .matches(&mut b"POST /abc HTTP/1.1".to_vec().into())
+                .unwrap(),
+            false
+        );
+        assert_eq!(proto.matches(&mut HTTP_PRI.to_vec().into()).unwrap(), true);
     }
 }

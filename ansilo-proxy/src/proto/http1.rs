@@ -36,7 +36,9 @@ const PEEK_LENGTH: usize = "CONNECTION ".len();
 impl<S: Read + Write + Send + 'static> Protocol<S> for Http1Protocol {
     fn matches(&self, con: &mut Peekable<S>) -> Result<bool> {
         let mut buf = [0u8; PEEK_LENGTH];
-        con.peek(&mut buf[..])?;
+        if let Err(_) = con.peek(&mut buf[..]) {
+            return Ok(false);
+        }
 
         for method in HTTP_METHODS {
             if &buf[..method.len()] == method.as_bytes() {
@@ -49,5 +51,25 @@ impl<S: Read + Write + Send + 'static> Protocol<S> for Http1Protocol {
 
     fn handle(&mut self, con: Peekable<S>) -> Result<()> {
         self.conf.handlers.http1.handle(Box::new(Stream(con)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test::mock_config_no_tls;
+
+    use super::*;
+
+    #[test]
+    fn test_proto_http1_matches() {
+        let proto = Http1Protocol::new(mock_config_no_tls());
+
+        assert_eq!(proto.matches(&mut vec![0u8].into()).unwrap(), false);
+        assert_eq!(proto.matches(&mut b"abc".to_vec().into()).unwrap(), false);
+        assert_eq!(proto.matches(&mut b"GET / HTTP/1.1".to_vec().into()).unwrap(), true);
+        assert_eq!(
+            proto.matches(&mut b"POST /abc HTTP/1.1".to_vec().into()).unwrap(),
+            true
+        );
     }
 }
