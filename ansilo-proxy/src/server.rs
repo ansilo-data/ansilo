@@ -1,23 +1,26 @@
 use std::{
-    net::{SocketAddr, TcpListener, TcpStream},
+    net::SocketAddr,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    thread::{self, JoinHandle},
     time::Duration,
 };
 
 use ansilo_core::err::{bail, Context, Result};
 use ansilo_logging::{debug, error, warn};
 use socket2::{Domain, Socket};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    runtime::Runtime,
+};
 
 use crate::{conf::ProxyConf, connection::Connection};
 
 /// The multi-protocol proxy server
 pub struct ProxyServer {
     conf: &'static ProxyConf,
-    listeners: Option<Vec<(JoinHandle<()>, SocketAddr)>>,
+    runtime: Option<Runtime>,
     terminated: Arc<AtomicBool>,
 }
 
@@ -25,28 +28,47 @@ impl ProxyServer {
     pub fn new(conf: &'static ProxyConf) -> Self {
         Self {
             conf,
-            listeners: None,
+            runtime: None,
             terminated: Arc::new(AtomicBool::new(false)),
         }
     }
 
     /// Starts the proxy server
     pub fn start(&mut self) -> Result<()> {
-        if self.listeners.is_some() {
+        if self.runtime.is_some() {
             bail!("Server already listening");
         }
 
-        self.listeners = Some(
-            self.conf
-                .addrs
-                .iter()
-                .cloned()
-                .map(|addr| {
-                    ProxyListener::start(self.conf, addr, Arc::clone(&self.terminated))
-                        .map(|l| (l, addr))
-                })
-                .collect::<Result<Vec<_>>>()?,
-        );
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .thread_name("proxy-server")
+            .enable_io()
+            .build()
+            .context("Failed to create tokio runtime")?;
+
+        let listeners = self
+            .conf
+            .addrs
+            .iter()
+            .cloned()
+            .map(|addr| {
+                runtime.block_on(ProxyListener::start(
+                    self.conf,
+                    addr,
+                    Arc::clone(&self.terminated),
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        for mut listener in listeners {
+            runtime.spawn(async move {
+                if let Err(err) = listener.accept().await {
+                    error!("Failed to listen on addr: {:?}", err)
+                }
+            });
+        }
+
+        self.runtime = Some(runtime);
 
         Ok(())
     }
@@ -58,7 +80,7 @@ impl ProxyServer {
 
     /// Terminates the proxy server
     fn terminate_mut(&mut self) -> Result<()> {
-        if self.listeners.is_none() {
+        if self.runtime.is_none() {
             bail!("Server not listening");
         }
 
@@ -70,9 +92,9 @@ impl ProxyServer {
 
         // Trigger a TCP connection to each of the listeners to unblock them
         // in order to terminate
-        for (listener, addr) in self.listeners.take().unwrap().into_iter() {
-            thread::spawn(move || {
-                if let Err(err) = TcpStream::connect(addr.clone()) {
+        for addr in self.conf.addrs.iter().cloned() {
+            self.runtime.as_ref().unwrap().spawn(async move {
+                if let Err(err) = TcpStream::connect(addr).await {
                     debug!(
                         "Failed to connect to {:?} while terminating: {:?}",
                         addr, err
@@ -80,9 +102,10 @@ impl ProxyServer {
                 }
             });
 
-            if let Err(_) = listener.join() {
-                warn!("Failed to join listener thread while terminating");
-            }
+            self.runtime
+                .take()
+                .unwrap()
+                .shutdown_timeout(Duration::from_secs(3));
         }
 
         Ok(())
@@ -90,18 +113,18 @@ impl ProxyServer {
 }
 
 /// Binds to a socket and accepts new connections
-pub struct ProxyListener {
+struct ProxyListener {
     conf: &'static ProxyConf,
     listener: TcpListener,
     terminated: Arc<AtomicBool>,
 }
 
 impl ProxyListener {
-    pub fn start(
+    async fn start(
         conf: &'static ProxyConf,
         addr: SocketAddr,
         terminated: Arc<AtomicBool>,
-    ) -> Result<JoinHandle<()>> {
+    ) -> Result<Self> {
         let socket = Socket::new(
             Domain::for_address(addr),
             socket2::Type::STREAM,
@@ -124,42 +147,40 @@ impl ProxyListener {
             .context("Failed to bind to address")?;
         socket.listen(128)?;
 
-        let mut listener = Self {
+        socket
+            .set_nonblocking(true)
+            .context("Failed to set socket to non-blocking mode")?;
+
+        let listener = Self {
             conf,
-            listener: socket.into(),
+            listener: TcpListener::from_std(socket.into())?,
             terminated,
         };
 
-        Ok(thread::spawn(move || {
-            if let Err(err) = listener.accept() {
-                error!("Error while listening on addr {}: {:?}", addr, err)
-            }
-        }))
+        Ok(listener)
     }
 
     /// Accepts new connections
-    fn accept(&mut self) -> Result<()> {
+    async fn accept(&mut self) -> Result<()> {
         loop {
-            let (con, _) = self.listener.accept().context("Failed to listen to addr")?;
+            let (con, _) = self
+                .listener
+                .accept()
+                .await
+                .context("Failed to listen to addr")?;
 
             if self.terminated.load(Ordering::SeqCst) {
                 return Ok(());
             }
 
-            // TODO[sec]: We should probably limit the max number of threads via a thread pool
-            let conf = self.conf;
-            thread::spawn(move || {
-                if let Err(err) = Connection::new(conf, con).handle() {
-                    warn!("Error while handling connection: {:?}", err);
-                }
-            });
+            tokio::spawn(Connection::new(self.conf, con).handle());
         }
     }
 }
 
 impl Drop for ProxyServer {
     fn drop(&mut self) {
-        if self.listeners.is_some() {
+        if self.runtime.is_some() {
             if let Err(err) = self.terminate_mut() {
                 warn!("Failed to terminate proxy server: {:?}", err);
             }
@@ -169,7 +190,7 @@ impl Drop for ProxyServer {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
+    use std::{io::Write, net::TcpStream};
 
     use crate::test::mock_config_no_tls;
 
@@ -183,7 +204,7 @@ mod tests {
     fn test_server_new_and_drop() {
         let server = create_server(mock_config_no_tls());
 
-        assert!(server.listeners.is_none());
+        assert!(server.runtime.is_none());
         assert_eq!(server.terminated.load(Ordering::SeqCst), false);
 
         TcpStream::connect(server.conf.addrs[0]).unwrap_err();
@@ -194,7 +215,7 @@ mod tests {
         let mut server = create_server(mock_config_no_tls());
 
         server.start().unwrap();
-        assert_eq!(server.listeners.as_ref().unwrap().len(), 1);
+        assert_eq!(server.runtime.is_some(), true);
 
         let mut con = TcpStream::connect(server.conf.addrs[0]).unwrap();
 
@@ -204,7 +225,7 @@ mod tests {
 
         server.terminate_mut().unwrap();
 
-        assert!(server.listeners.is_none());
+        assert!(server.runtime.is_none());
         assert_eq!(server.terminated.load(Ordering::SeqCst), true);
 
         // Connection should now fail
@@ -216,7 +237,7 @@ mod tests {
         let mut server = create_server(mock_config_no_tls());
 
         server.start().unwrap();
-        assert_eq!(server.listeners.as_ref().unwrap().len(), 1);
+        assert_eq!(server.runtime.is_some(), true);
 
         let mut con = TcpStream::connect(server.conf.addrs[0]).unwrap();
 

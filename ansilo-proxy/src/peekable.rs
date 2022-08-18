@@ -1,16 +1,20 @@
 use std::{
     cmp,
-    io::{self, Read, Write},
+    io::{self},
+    pin::Pin,
+    task::{Context, Poll},
 };
+
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf};
 
 /// Connection to make a stream "peekable".
 /// Eg we can look ahead at the incoming data without consuming it for future reads.
-pub struct Peekable<S: Read + Write> {
+pub struct Peekable<S: AsyncRead + AsyncWrite> {
     pub(crate) inner: S,
     peeked: Vec<u8>,
 }
 
-impl<S: Read + Write> Peekable<S> {
+impl<S: AsyncRead + AsyncWrite + Unpin> Peekable<S> {
     pub fn new(inner: S) -> Self {
         Self {
             inner,
@@ -27,11 +31,13 @@ impl<S: Read + Write> Peekable<S> {
     /// Peeks ahead of the current read position
     /// This will read exactly the requested number of bytes
     /// or fail if the underlying stream ends prematurely.
-    pub fn peek(&mut self, buf: &mut [u8]) -> io::Result<()> {
+    pub async fn peek(&mut self, buf: &mut [u8]) -> io::Result<()> {
         let cur_peeked = self.peeked.len();
         if cur_peeked < buf.len() {
             self.peeked.resize(buf.len(), 0);
-            self.inner.read_exact(&mut self.peeked[cur_peeked..])?;
+            self.inner
+                .read_exact(&mut self.peeked[cur_peeked..])
+                .await?;
         }
 
         buf.copy_from_slice(&self.peeked[..]);
@@ -39,191 +45,209 @@ impl<S: Read + Write> Peekable<S> {
     }
 }
 
-impl<S: Read + Write> Read for Peekable<S> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for Peekable<S> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
         let mut read = 0;
 
         if !self.peeked.is_empty() {
-            read += cmp::min(buf.len(), self.peeked.len());
-            buf[..read].copy_from_slice(&self.peeked[..read]);
+            read += cmp::min(buf.remaining(), self.peeked.len());
+            buf.put_slice(&self.peeked[..read]);
             self.peeked.drain(..read);
         }
 
-        if read < buf.len() {
-            read += self.inner.read(&mut buf[read..])?;
+        if buf.remaining() > 0 {
+            match Pin::new(&mut self.inner).poll_read(cx, buf) {
+                Poll::Ready(res) => Poll::Ready(res),
+                Poll::Pending if read > 0 => Poll::Ready(Ok(())),
+                Poll::Pending => Poll::Pending,
+            }
+        } else {
+            Poll::Ready(Ok(()))
         }
-
-        Ok(read)
     }
 }
 
-impl<S: Read + Write> Write for Peekable<S> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.inner.write(buf)
+impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for Peekable<S> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        Pin::new(&mut self.inner).poll_write(cx, buf)
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush()
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use tokio::io::AsyncWriteExt;
+
     use super::*;
 
     fn mock_peekable(data: Vec<u8>) -> Peekable<io::Cursor<Vec<u8>>> {
         Peekable::new(io::Cursor::new(data))
     }
 
-    #[test]
-    fn test_read_empty() {
+    #[tokio::test]
+    async fn test_read_empty() {
         let mut s = mock_peekable(vec![]);
         let mut buf = [0u8; 1024];
 
-        assert_eq!(s.read(&mut buf).unwrap(), 0);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 0);
     }
 
-    #[test]
-    fn test_read_data() {
+    #[tokio::test]
+    async fn test_read_data() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut buf = [0u8; 1024];
 
-        assert_eq!(s.read(&mut buf[..2]).unwrap(), 2);
-        assert_eq!(s.read(&mut buf[2..]).unwrap(), 3);
-        assert_eq!(s.read(&mut buf[..]).unwrap(), 0);
+        assert_eq!(s.read(&mut buf[..2]).await.unwrap(), 2);
+        assert_eq!(s.read(&mut buf[2..]).await.unwrap(), 3);
+        assert_eq!(s.read(&mut buf[..]).await.unwrap(), 0);
         assert_eq!(&buf[..5], [1, 2, 3, 4, 5]);
     }
 
-    #[test]
-    fn test_write_to_empty() {
+    #[tokio::test]
+    async fn test_write_to_empty() {
         let mut s = mock_peekable(vec![]);
 
-        s.write_all(&[1, 2, 3, 4, 5]).unwrap();
+        s.write_all(&[1, 2, 3, 4, 5]).await.unwrap();
 
         assert_eq!(s.inner().into_inner(), vec![1, 2, 3, 4, 5])
     }
 
-    #[test]
-    fn test_write_to_data() {
+    #[tokio::test]
+    async fn test_write_to_data() {
         let mut s = mock_peekable(vec![11, 12, 13, 14, 15, 16, 17, 18, 19]);
 
-        s.write_all(&[1, 2, 3, 4, 5]).unwrap();
+        s.write_all(&[1, 2, 3, 4, 5]).await.unwrap();
 
         assert_eq!(s.inner().into_inner(), vec![1, 2, 3, 4, 5, 16, 17, 18, 19])
     }
 
-    #[test]
-    fn test_peek_empty() {
+    #[tokio::test]
+    async fn test_peek_empty() {
         let mut s = mock_peekable(vec![]);
         let mut buf = [0u8; 1];
 
-        s.peek(&mut buf).unwrap_err();
+        s.peek(&mut buf).await.unwrap_err();
     }
 
-    #[test]
-    fn test_peek_past_end() {
+    #[tokio::test]
+    async fn test_peek_past_end() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut buf = [0u8; 10];
 
-        s.peek(&mut buf).unwrap_err();
+        s.peek(&mut buf).await.unwrap_err();
     }
 
-    #[test]
-    fn test_peek_partial() {
+    #[tokio::test]
+    async fn test_peek_partial() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut buf = [0u8; 3];
 
-        s.peek(&mut buf).unwrap();
+        s.peek(&mut buf).await.unwrap();
 
         assert_eq!(buf, [1, 2, 3]);
     }
 
-    #[test]
-    fn test_peek_all() {
+    #[tokio::test]
+    async fn test_peek_all() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut buf = [0u8; 5];
 
-        s.peek(&mut buf).unwrap();
+        s.peek(&mut buf).await.unwrap();
 
         assert_eq!(buf, [1, 2, 3, 4, 5]);
     }
 
-    #[test]
-    fn test_peek_partial_then_read() {
+    #[tokio::test]
+    async fn test_peek_partial_then_read() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut peek = [0u8; 3];
         let mut buf = [0u8; 10];
 
-        s.peek(&mut peek).unwrap();
+        s.peek(&mut peek).await.unwrap();
 
         assert_eq!(peek, [1, 2, 3]);
 
-        assert_eq!(s.read(&mut buf).unwrap(), 5);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 5);
         assert_eq!(buf, [1, 2, 3, 4, 5, 0, 0, 0, 0, 0]);
     }
 
-    #[test]
-    fn test_peek_all_then_read() {
+    #[tokio::test]
+    async fn test_peek_all_then_read() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut peek = [0u8; 5];
         let mut buf = [0u8; 10];
 
-        s.peek(&mut peek).unwrap();
+        s.peek(&mut peek).await.unwrap();
 
         assert_eq!(peek, [1, 2, 3, 4, 5]);
 
-        assert_eq!(s.read(&mut buf).unwrap(), 5);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 5);
         assert_eq!(buf, [1, 2, 3, 4, 5, 0, 0, 0, 0, 0]);
     }
 
-    #[test]
-    fn test_peek_partial_then_read_partial() {
+    #[tokio::test]
+    async fn test_peek_partial_then_read_partial() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut peek = [0u8; 3];
         let mut buf = [0u8; 2];
 
-        s.peek(&mut peek).unwrap();
+        s.peek(&mut peek).await.unwrap();
 
         assert_eq!(peek, [1, 2, 3]);
 
-        assert_eq!(s.read(&mut buf).unwrap(), 2);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 2);
         assert_eq!(buf, [1, 2]);
-        assert_eq!(s.read(&mut buf).unwrap(), 2);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 2);
         assert_eq!(buf, [3, 4]);
-        assert_eq!(s.read(&mut buf).unwrap(), 1);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 1);
         assert_eq!(buf, [5, 4]);
     }
 
-    #[test]
-    fn test_peek_all_then_read_partial() {
+    #[tokio::test]
+    async fn test_peek_all_then_read_partial() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut peek = [0u8; 5];
         let mut buf = [0u8; 2];
 
-        s.peek(&mut peek).unwrap();
+        s.peek(&mut peek).await.unwrap();
 
         assert_eq!(peek, [1, 2, 3, 4, 5]);
 
-        assert_eq!(s.read(&mut buf).unwrap(), 2);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 2);
         assert_eq!(buf, [1, 2]);
-        assert_eq!(s.read(&mut buf).unwrap(), 2);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 2);
         assert_eq!(buf, [3, 4]);
-        assert_eq!(s.read(&mut buf).unwrap(), 1);
+        assert_eq!(s.read(&mut buf).await.unwrap(), 1);
         assert_eq!(buf, [5, 4]);
     }
 
-    #[test]
-    fn test_multiple_peeks() {
+    #[tokio::test]
+    async fn test_multiple_peeks() {
         let mut s = mock_peekable(vec![1, 2, 3, 4, 5]);
         let mut peek = [0u8; 5];
 
-        s.peek(&mut peek[..1]).unwrap();
+        s.peek(&mut peek[..1]).await.unwrap();
         assert_eq!(peek, [1, 0, 0, 0, 0]);
 
-        s.peek(&mut peek[..2]).unwrap();
+        s.peek(&mut peek[..2]).await.unwrap();
         assert_eq!(peek, [1, 2, 0, 0, 0]);
 
-        s.peek(&mut peek[..]).unwrap();
+        s.peek(&mut peek[..]).await.unwrap();
         assert_eq!(peek, [1, 2, 3, 4, 5]);
     }
 }

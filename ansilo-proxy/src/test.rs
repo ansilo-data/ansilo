@@ -1,14 +1,12 @@
 use std::{
-    fs, io,
-    net::SocketAddr,
-    os::unix::{net::UnixStream, prelude::FromRawFd},
-    path::Path,
-    sync::atomic::Ordering,
-    time::Duration,
+    fs, io, net::SocketAddr, os::unix::net::UnixStream as StdUnixStream,
+    os::unix::prelude::FromRawFd, path::Path, sync::atomic::Ordering,
 };
 
 use ansilo_core::err::Result;
+use async_trait::async_trait;
 use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
+use tokio::net::UnixStream;
 
 use crate::{
     conf::{ProxyConf, TlsConf},
@@ -44,8 +42,9 @@ impl MockConnectionHandler {
     }
 }
 
+#[async_trait]
 impl ConnectionHandler for MockConnectionHandler {
-    fn handle(&self, con: Box<dyn IOStream>) -> Result<()> {
+    async fn handle(&self, con: Box<dyn IOStream>) -> Result<()> {
         let mut received = self.received.lock().unwrap();
         received.push(con);
         Ok(())
@@ -129,10 +128,20 @@ pub fn create_socket_pair() -> (UnixStream, UnixStream) {
     )
     .unwrap();
 
-    let (s1, s2) = unsafe { (UnixStream::from_raw_fd(fd1), UnixStream::from_raw_fd(fd2)) };
-
-    s1.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
-    s2.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+    let (s1, s2) = unsafe {
+        (
+            StdUnixStream::from_raw_fd(fd1),
+            StdUnixStream::from_raw_fd(fd2),
+        )
+    };
+    
+    s1.set_nonblocking(true).unwrap();
+    s2.set_nonblocking(true).unwrap();
+    
+    let (s1, s2) = (
+        UnixStream::from_std(s1).unwrap(),
+        UnixStream::from_std(s2).unwrap(),
+    );
 
     (s1, s2)
 }

@@ -1,31 +1,52 @@
-use std::io::{self, Read, Write};
+use std::{
+    io::{self},
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// An IO stream
-pub struct Stream<S: Read + Write>(pub S);
+pub struct Stream<S: AsyncRead + AsyncWrite + Unpin>(pub S);
 
-pub trait IOStream: Read + Write + Send {
+pub trait IOStream: AsyncRead + AsyncWrite + Send {
     /// Returns a downcastable Any of the handler
     #[cfg(test)]
     fn as_any(&mut self) -> &mut dyn std::any::Any;
 }
 
-impl<S: Read + Write> Read for Stream<S> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
+impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for Stream<S> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.0).poll_read(cx, buf)
     }
 }
 
-impl<S: Read + Write> Write for Stream<S> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.0.write(buf)
+impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for Stream<S> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        Pin::new(&mut self.0).poll_write(cx, buf)
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        self.0.flush()
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.0).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        Pin::new(&mut self.0).poll_shutdown(cx)
     }
 }
 
-impl<S: Read + Write + Send + 'static> IOStream for Stream<S> {
+impl<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> IOStream for Stream<S> {
     #[cfg(test)]
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self
