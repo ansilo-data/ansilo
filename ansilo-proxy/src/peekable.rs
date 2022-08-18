@@ -19,6 +19,7 @@ impl<S: Read + Write> Peekable<S> {
     }
 
     /// Returns the underlying stream
+    #[allow(unused)]
     pub fn inner(self) -> S {
         self.inner
     }
