@@ -1,10 +1,15 @@
 use std::thread;
 
-use crate::{args::Command, build::BuildInfo};
+use crate::{
+    args::Command,
+    build::BuildInfo,
+    handlers::{Http1ConnectionHandler, Http2ConnectionHandler, PostgresConnectionHandler},
+};
 use ansilo_connectors_all::Connectors;
 use ansilo_core::err::{Context, Result};
-use ansilo_logging::info;
+use ansilo_logging::{info, warn};
 use ansilo_pg::{fdw::server::FdwServer, PostgresInstance};
+use ansilo_proxy::{conf::HandlerConf, server::ProxyServer};
 use clap::Parser;
 use nix::libc::SIGUSR1;
 use signal_hook::{
@@ -16,6 +21,7 @@ pub mod args;
 pub mod build;
 pub mod conf;
 pub mod dev;
+pub mod handlers;
 
 use build::*;
 use conf::*;
@@ -45,7 +51,7 @@ fn run(command: Command) -> Result<()> {
     let fdw_server = FdwServer::start(conf(), pg_conf().fdw_socket_path.clone(), pools)
         .context("Failed to start fdw server")?;
 
-    let postgres = if let (Command::Run(_), Some(build_info)) = (&command, BuildInfo::fetch()?) {
+    let mut postgres = if let (Command::Run(_), Some(build_info)) = (&command, BuildInfo::fetch()?) {
         info!("Build occurred at {}", build_info.built_at().to_rfc3339());
         info!("Starting postgres...");
         PostgresInstance::start(&pg_conf())?
@@ -58,7 +64,15 @@ fn run(command: Command) -> Result<()> {
         return Ok(());
     }
 
-    // TODO: Create postgres proxy
+    info!("Starting proxy server...");
+    let conf = init_proxy_conf(HandlerConf::new(
+        PostgresConnectionHandler::new(postgres.connections().clone()),
+        Http2ConnectionHandler::new(postgres.connections().clone()),
+        Http1ConnectionHandler::new(postgres.connections().clone()),
+    ));
+
+    let mut proxy = ProxyServer::new(conf);
+    proxy.start().context("Failed to start proxy server")?;
 
     info!("Start up complete...");
 
@@ -72,6 +86,7 @@ fn run(command: Command) -> Result<()> {
         Signals::new(&[SIGINT, SIGTERM, SIGUSR1]).context("Failed to attach signal handler")?;
     let sig = sigs.forever().next().unwrap();
 
+    // TODO: better handling if critical threads fail
     info!(
         "Received {}",
         match sig {
@@ -83,15 +98,19 @@ fn run(command: Command) -> Result<()> {
     );
 
     info!("Terminating...");
-    postgres
-        .terminate()
-        .context("Failed to terminate postgres")?;
-    fdw_server
-        .terminate()
-        .context("Failed to terminate fdw server")?;
+    if let Err(err) = proxy.terminate() {
+        warn!("Failed to terminate proxy server: {}", err);
+    }
+    if let Err(err) = postgres.terminate() {
+        warn!("Failed to terminate postgres: {}", err);
+    }
+    if let Err(err) = fdw_server.terminate() {
+        warn!("Failed to terminate fdw server: {}", err);
+    }
 
-    info!("Graceful shutdown complete");
+    info!("Shutdown sequence complete");
 
+    // If we are running in dev-mode, restart the process
     if command.is_dev() && sig == SIGUSR1 {
         dev::restart();
     }

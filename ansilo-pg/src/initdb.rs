@@ -15,14 +15,14 @@ use crate::{conf::PostgresConf, proc::ChildProc, PG_SUPER_USER};
 #[derive(Debug)]
 pub(crate) struct PostgresInitDb {
     /// The configuration used to init the database
-    pub conf: PostgresConf,
+    pub conf: &'static PostgresConf,
     /// The child postgres process
     pub proc: ChildProc,
 }
 
 impl PostgresInitDb {
     /// Runs the initdb process
-    pub fn run(conf: PostgresConf) -> Result<Self> {
+    pub fn run(conf: &'static PostgresConf) -> Result<Self> {
         info!("Running initdb...");
         let mut cmd = Command::new(conf.install_dir.join("bin/initdb"));
         cmd.arg("-D")
@@ -32,7 +32,7 @@ impl PostgresInitDb {
             .arg(PG_SUPER_USER);
 
         Ok(Self {
-            conf: conf.clone(),
+            conf: conf,
             proc: ChildProc::new("[initdb]", Signal::SIGINT, Duration::from_secs(1), cmd)?,
         })
     }
@@ -61,7 +61,6 @@ impl PostgresInitDb {
                     .context("Failed to copy the postgres.conf config")?;
                 fs::set_permissions(dest_path.as_path(), Permissions::from_mode(0o600))
                     .context("Failed to set perms on postgres.conf file")?;
-
             }
 
             // Default postgres.conf files have "include_dir 'conf.d'"
@@ -80,22 +79,23 @@ mod tests {
 
     use super::*;
 
-    fn test_pg_config(test_name: &'static str) -> PostgresConf {
-        PostgresConf {
+    fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
+        let conf = PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/initdb-test/{}", test_name)),
             socket_dir_path: PathBuf::from("/tmp/"),
             fdw_socket_path: PathBuf::from("not-used"),
-        }
+        };
+        Box::leak(Box::new(conf))
     }
 
     #[test]
     fn test_initdb() {
         ansilo_logging::init_for_tests();
         let conf = test_pg_config("initdb");
-        PostgresInitDb::reset(&conf).unwrap();
-        let mut initdb = PostgresInitDb::run(conf.clone()).unwrap();
+        PostgresInitDb::reset(conf).unwrap();
+        let mut initdb = PostgresInitDb::run(conf).unwrap();
 
         assert!(initdb.complete().unwrap().success());
 
@@ -114,11 +114,12 @@ mod tests {
         let mut custom_conf = fs::File::create(custom_conf_path.as_path()).unwrap();
         custom_conf.write_all("custom".as_bytes()).unwrap();
 
-        let mut conf = test_pg_config("initdb_with_conf");
+        let mut conf = test_pg_config("initdb_with_conf").clone();
         conf.postgres_conf_path = Some(custom_conf_path);
+        let conf = Box::leak(Box::new(conf));
 
-        PostgresInitDb::reset(&conf).unwrap();
-        let mut initdb = PostgresInitDb::run(conf.clone()).unwrap();
+        PostgresInitDb::reset(conf).unwrap();
+        let mut initdb = PostgresInitDb::run(conf).unwrap();
 
         assert!(initdb.complete().unwrap().success());
 

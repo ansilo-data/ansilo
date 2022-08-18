@@ -65,8 +65,8 @@ mod tests {
 
     use super::*;
 
-    fn test_pg_config(test_name: &'static str) -> PostgresConf {
-        PostgresConf {
+    fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
+        let conf = PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!(
@@ -78,14 +78,15 @@ mod tests {
                 test_name
             )),
             fdw_socket_path: PathBuf::from("not-used"),
-        }
+        };
+        Box::leak(Box::new(conf))
     }
 
     #[test]
     fn test_postgres_connection_pool_new() {
         let conf = test_pg_config("new");
         let pool = PostgresConnectionPool::new(
-            &conf,
+            conf,
             PG_SUPER_USER,
             "postgres",
             0,
@@ -103,7 +104,7 @@ mod tests {
     fn test_postgres_connection_pool_without_server() {
         let conf = test_pg_config("down");
         PostgresConnectionPool::new(
-            &conf,
+            conf,
             PG_SUPER_USER,
             "postgres",
             1,
@@ -117,16 +118,13 @@ mod tests {
     fn test_postgres_connection_pool_with_running_server() {
         ansilo_logging::init_for_tests();
         let conf = test_pg_config("up");
-        PostgresInitDb::reset(&conf).unwrap();
-        PostgresInitDb::run(conf.clone())
-            .unwrap()
-            .complete()
-            .unwrap();
-        let mut _server = PostgresServer::boot(conf.clone()).unwrap();
+        PostgresInitDb::reset(conf).unwrap();
+        PostgresInitDb::run(conf).unwrap().complete().unwrap();
+        let mut _server = PostgresServer::boot(conf).unwrap();
         thread::spawn(move || _server.wait());
 
         let mut pool = PostgresConnectionPool::new(
-            &conf,
+            conf,
             PG_SUPER_USER,
             "postgres",
             1,

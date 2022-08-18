@@ -17,7 +17,7 @@ pub(crate) struct PostgresServer {
 
 impl PostgresServer {
     /// Boots a postgres server instance
-    pub fn boot(conf: PostgresConf) -> Result<Self> {
+    pub fn boot(conf: &'static PostgresConf) -> Result<Self> {
         info!("Booting postgres...");
         let mut cmd = Command::new(conf.install_dir.join("bin/postgres"));
         cmd.arg("-D")
@@ -62,26 +62,24 @@ mod tests {
 
     use super::*;
 
-    fn test_pg_config() -> PostgresConf {
-        PostgresConf {
+    fn test_pg_config() -> &'static PostgresConf {
+        let conf = PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
             postgres_conf_path: None,
             data_dir: PathBuf::from("/tmp/ansilo-tests/pg-server"),
             socket_dir_path: PathBuf::from("/tmp/ansilo-tests/pg-server"),
             fdw_socket_path: PathBuf::from("not-used"),
-        }
+        };
+        Box::leak(Box::new(conf))
     }
 
     #[test]
     fn test_postgres_server_boot() {
         ansilo_logging::init_for_tests();
         let conf = test_pg_config();
-        PostgresInitDb::reset(&conf).unwrap();
-        PostgresInitDb::run(conf.clone())
-            .unwrap()
-            .complete()
-            .unwrap();
-        let mut server = PostgresServer::boot(conf.clone()).unwrap();
+        PostgresInitDb::reset(conf).unwrap();
+        PostgresInitDb::run(conf).unwrap().complete().unwrap();
+        let mut server = PostgresServer::boot(conf).unwrap();
         let pid = server.proc.pid();
 
         let server_thread = thread::spawn(move || server.wait());

@@ -31,7 +31,7 @@ struct State {
 }
 
 impl PostgresServerManager {
-    pub fn new(conf: PostgresConf) -> Self {
+    pub fn new(conf: &'static PostgresConf) -> Self {
         let state = Arc::new(State {
             pid: AtomicU32::new(0),
             terminate: AtomicBool::new(false),
@@ -47,11 +47,11 @@ impl PostgresServerManager {
         }
     }
 
-    fn supervise(conf: PostgresConf, state: Arc<State>) -> Result<()> {
+    fn supervise(conf: &'static PostgresConf, state: Arc<State>) -> Result<()> {
         loop {
             info!("Booting postgres instance...");
 
-            let mut server = PostgresServer::boot(conf.clone())?;
+            let mut server = PostgresServer::boot(conf)?;
             state.pid.store(server.proc.pid(), Ordering::SeqCst);
 
             let result = server.wait().context("Failed to wait for postgres process");
@@ -134,14 +134,15 @@ mod tests {
 
     use super::*;
 
-    fn test_pg_config(test_name: &'static str) -> PostgresConf {
-        PostgresConf {
+    fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
+        let conf = PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/manager/{}", test_name)),
             socket_dir_path: PathBuf::from(format!("/tmp/ansilo-tests/manager/{}", test_name)),
             fdw_socket_path: PathBuf::from("not-used"),
-        }
+        };
+        Box::leak(Box::new(conf))
     }
 
     #[test]
@@ -161,11 +162,8 @@ mod tests {
     #[test]
     fn test_postgres_manager_running_then_drop() {
         let conf = test_pg_config("drop");
-        PostgresInitDb::reset(&conf).unwrap();
-        PostgresInitDb::run(conf.clone())
-            .unwrap()
-            .complete()
-            .unwrap();
+        PostgresInitDb::reset(conf).unwrap();
+        PostgresInitDb::run(conf).unwrap().complete().unwrap();
 
         let manager = PostgresServerManager::new(conf);
         thread::sleep(Duration::from_secs(1));
@@ -181,11 +179,8 @@ mod tests {
     #[test]
     fn test_postgres_manager_running_then_terminate() {
         let conf = test_pg_config("terminate");
-        PostgresInitDb::reset(&conf).unwrap();
-        PostgresInitDb::run(conf.clone())
-            .unwrap()
-            .complete()
-            .unwrap();
+        PostgresInitDb::reset(conf).unwrap();
+        PostgresInitDb::run(conf).unwrap().complete().unwrap();
 
         let manager = PostgresServerManager::new(conf);
         thread::sleep(Duration::from_secs(1));
@@ -203,11 +198,8 @@ mod tests {
         ansilo_logging::init_for_tests();
 
         let conf = test_pg_config("restart");
-        PostgresInitDb::reset(&conf).unwrap();
-        PostgresInitDb::run(conf.clone())
-            .unwrap()
-            .complete()
-            .unwrap();
+        PostgresInitDb::reset(conf).unwrap();
+        PostgresInitDb::run(conf).unwrap().complete().unwrap();
 
         let manager = PostgresServerManager::new(conf);
         thread::sleep(Duration::from_millis(500));

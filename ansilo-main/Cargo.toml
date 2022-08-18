@@ -11,6 +11,7 @@ ansilo-connectors-all = { path = "../ansilo-connectors/all" }
 ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-pg = { path = "../ansilo-pg" }
+ansilo-proxy = { path = "../ansilo-proxy" }
 chrono = "0.4"
 clap = { version = "3.2", features = ["derive"] }
 glob = "0.3"

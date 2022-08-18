@@ -46,7 +46,7 @@ pub(crate) const PG_APP_USER: &str = "ansiloapp";
 #[derive(Debug)]
 pub struct PostgresInstance {
     /// The postgres configuration
-    conf: PostgresConf,
+    conf: &'static PostgresConf,
     /// The server manager
     server: PostgresServerManager,
     /// Connection pools
@@ -65,24 +65,24 @@ pub struct PostgresConnectionPools {
 impl PostgresInstance {
     /// Boots an already-initialised postgres instance based on the
     /// supplied configuration
-    pub fn start(conf: &PostgresConf) -> Result<Self> {
-        let server = PostgresServerManager::new(conf.clone());
+    pub fn start(conf: &'static PostgresConf) -> Result<Self> {
+        let server = PostgresServerManager::new(conf);
 
         Self::connect(conf, server)
     }
 
     /// Boots and initialises postgres instance based on the
     /// supplied configuration
-    pub fn configure(conf: &PostgresConf) -> Result<Self> {
+    pub fn configure(conf: &'static PostgresConf) -> Result<Self> {
         let connect_timeout = Duration::from_secs(5);
 
         info!("Running initdb...");
-        PostgresInitDb::reset(&conf)?;
-        PostgresInitDb::run(conf.clone())?.complete()?;
-        let server = PostgresServerManager::new(conf.clone());
+        PostgresInitDb::reset(conf)?;
+        PostgresInitDb::run(conf)?.complete()?;
+        let server = PostgresServerManager::new(conf);
 
         let superuser_con =
-            PostgresConnectionPool::new(&conf, PG_SUPER_USER, PG_DATABASE, 1, 1, connect_timeout)?
+            PostgresConnectionPool::new(conf, PG_SUPER_USER, PG_DATABASE, 1, 1, connect_timeout)?
                 .acquire()?;
 
         info!("Configuring postgres...");
@@ -91,12 +91,12 @@ impl PostgresInstance {
         Self::connect(conf, server)
     }
 
-    fn connect(conf: &PostgresConf, server: PostgresServerManager) -> Result<Self> {
+    fn connect(conf: &'static PostgresConf, server: PostgresServerManager) -> Result<Self> {
         let connect_timeout = Duration::from_secs(10);
 
         // TODO: configurable pool sizes
         Ok(Self {
-            conf: conf.clone(),
+            conf,
             server,
             pools: PostgresConnectionPools {
                 admin: PostgresConnectionPool::new(
@@ -155,14 +155,15 @@ mod tests {
 
     use super::*;
 
-    fn test_pg_config(test_name: &'static str) -> PostgresConf {
-        PostgresConf {
+    fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
+        let conf = PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}", test_name)),
             socket_dir_path: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}", test_name)),
             fdw_socket_path: PathBuf::from("not-used"),
-        }
+        };
+        Box::leak(Box::new(conf))
     }
 
     #[test]
@@ -188,11 +189,11 @@ mod tests {
         ansilo_logging::init_for_tests();
 
         let conf = test_pg_config("configure_then_start");
-        let instance = PostgresInstance::configure(&conf).unwrap();
+        let instance = PostgresInstance::configure(conf).unwrap();
         assert!(instance.server.running());
         drop(instance);
 
-        let instance = PostgresInstance::start(&conf).unwrap();
+        let instance = PostgresInstance::start(conf).unwrap();
         assert!(instance.server.running());
     }
 }

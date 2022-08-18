@@ -6,7 +6,18 @@ use std::{
 fn main() {
     // Build and install the ansilo-pgx so it can be loaded
     // via CREATE EXTENSION in the current postgres installation
-    println!("cargo:rerun-if-changed=../ansilo-pgx/src");
+    println!("Granting access to postgres ext/lib dirs...");
+    let res = Command::new("bash")
+        .args(["-c", "sudo setfacl -m u:$USER:rwx /usr/share/postgresql/14/extension/ /usr/lib/postgresql/14/lib/"])
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+
+    assert!(res.success());
 
     println!("Installing ansilo-pgx extension...");
     // We build the extension to a separated target dir
