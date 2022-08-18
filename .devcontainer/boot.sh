@@ -23,9 +23,6 @@ sudo chown $USER:$USER /workspace
 echo "export DEV_USER=\"$DEV_USER\"" | tee -a ~/.bashrc ~/.zshrc 
 echo "export EFS_HOME=\"/efs/workspace/$DEV_USER\"" | tee -a ~/.bashrc ~/.zshrc 
 
-echo "Configuring facls"
-sudo setfacl -m u:$USER:rwx /usr/share/postgresql/14/extension/ /usr/lib/postgresql/14/lib/
-
 echo "Running sshd on port 2222 ..."
 sudo /usr/sbin/sshd -De -o ListenAddress=127.0.0.1 -p 2222 &
 SSHD_PID=$$

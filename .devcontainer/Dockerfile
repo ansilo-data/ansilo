@@ -78,5 +78,11 @@ RUN sudo apt install -y gdb
 # Install facl and add some perms
 RUN sudo apt install -y acl
 
+# Install mkcert
+RUN sudo apt install -y libnss3-tools && \
+    curl --fail "https://dl.filippo.io/mkcert/latest?for=linux/amd64" -o ~/mkcert && \
+    chmod +x ~/mkcert && \
+    sudo mv ~/mkcert /usr/local/bin/mkcert
+
 # Add boot.sh file
 COPY ./boot.sh /boot.sh
