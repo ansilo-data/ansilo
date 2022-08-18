@@ -6,6 +6,9 @@ use std::{
 fn main() {
     // Build and install the ansilo-pgx so it can be loaded
     // via CREATE EXTENSION in the current postgres installation
+    println!("cargo:rerun-if-changed=../ansilo-pgx/src");
+    println!("cargo:rerun-if-env-changed=SSH_CONNECTION");
+    
     println!("Granting access to postgres ext/lib dirs...");
     let res = Command::new("bash")
         .args(["-c", "sudo setfacl -m u:$USER:rwx /usr/share/postgresql/14/extension/ /usr/lib/postgresql/14/lib/"])
