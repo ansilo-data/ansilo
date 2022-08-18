@@ -1,6 +1,7 @@
 use ansilo_core::err::Result;
 use ansilo_pg::PostgresConnectionPools;
 use ansilo_proxy::{handler::ConnectionHandler, stream::IOStream};
+use async_trait::async_trait;
 
 /// Handler for HTTP/1 connections
 pub struct Http1ConnectionHandler {
@@ -14,8 +15,9 @@ impl Http1ConnectionHandler {
     }
 }
 
+#[async_trait]
 impl ConnectionHandler for Http1ConnectionHandler {
-    fn handle(&self, con: Box<dyn IOStream>) -> Result<()> {
+    async fn handle(&self, _con: Box<dyn IOStream>) -> Result<()> {
         todo!()
     }
 }

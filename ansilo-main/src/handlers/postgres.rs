@@ -1,8 +1,8 @@
-use std::{io::Write, os::unix::net::UnixStream, thread};
-
 use ansilo_core::err::Result;
 use ansilo_pg::PostgresConnectionPools;
 use ansilo_proxy::{handler::ConnectionHandler, stream::IOStream};
+use async_trait::async_trait;
+use tokio::net::UnixStream;
 
 use crate::conf::pg_conf;
 
@@ -17,22 +17,13 @@ impl PostgresConnectionHandler {
     }
 }
 
+#[async_trait]
 impl ConnectionHandler for PostgresConnectionHandler {
-    fn handle(&self, mut client: Box<dyn IOStream>) -> Result<()> {
+    async fn handle(&self, mut client: Box<dyn IOStream>) -> Result<()> {
         let sock_path = pg_conf().pg_socket_path();
-        let mut con = UnixStream::connect(sock_path)?;
-        con.set_nonblocking(true)?;
+        let mut con = UnixStream::connect(sock_path).await?;
 
-        let mut buf = [0u8; 1024];
-        loop {
-            let read = client.read(&mut buf)?;
-
-            if read == 0 {
-                break;
-            }
-
-            con.write_all(&buf[..read])?;
-        }
+        tokio::io::copy_bidirectional(&mut client, &mut con).await?;
 
         Ok(())
     }
