@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, thread, time::Duration};
 
 use ansilo_connectors_base::{
     common::{data::ResultSetReader, entity::ConnectorEntityConfig},
@@ -9,7 +9,7 @@ use ansilo_connectors_jdbc_base::JdbcQuery;
 use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector};
 use ansilo_core::{config::NodeConfig, data::DataValue};
 
-use crate::cases::common;
+mod common;
 
 #[test]
 fn test_oracle_jdbc_open_connection_and_execute_query() {
@@ -19,6 +19,7 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
     );
 
     let containers = common::start_oracle();
+    thread::sleep(Duration::from_secs(10));
 
     let config = OracleJdbcConnectionConfig::new(
         format!(
@@ -45,10 +46,12 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
     .unwrap()
     .acquire()
     .unwrap();
+
     let mut query = con
         .prepare(JdbcQuery::new("SELECT * FROM DUAL", vec![]))
         .unwrap();
     let res = query.execute().unwrap();
+
     let mut res = ResultSetReader::new(res).unwrap();
 
     assert_eq!(

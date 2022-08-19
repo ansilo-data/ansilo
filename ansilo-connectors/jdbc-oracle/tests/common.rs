@@ -60,7 +60,7 @@ impl Drop for ContainerInstances {
 /// so it is not terminated at the end of each test, rather it has a
 /// script which will exit automatically after idleing for 30 min
 pub fn start_oracle() -> ContainerInstances {
-    let infra_path = current_dir!().parent().unwrap().to_path_buf();
+    let infra_path = current_dir!().to_path_buf();
     let services = start_containers(infra_path.clone(), false, Duration::from_secs(600));
 
     wait_for_log(
