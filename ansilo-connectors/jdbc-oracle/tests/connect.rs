@@ -2,7 +2,7 @@ use std::{collections::HashMap, env, thread, time::Duration};
 
 use ansilo_connectors_base::{
     common::{data::ResultSetReader, entity::ConnectorEntityConfig},
-    interface::{Connection, ConnectionPool, Connector, QueryHandle},
+    interface::{Connection, ConnectionPool, Connector, QueryHandle}, test::ecs::get_current_target_dir,
 };
 
 use ansilo_connectors_jdbc_base::JdbcQuery;
@@ -15,7 +15,7 @@ mod common;
 fn test_oracle_jdbc_open_connection_and_execute_query() {
     env::set_var(
         "ANSILO_CLASSPATH",
-        common::get_current_target_dir().to_str().unwrap(),
+        get_current_target_dir().to_str().unwrap(),
     );
 
     let containers = common::start_oracle();
