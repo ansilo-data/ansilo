@@ -54,11 +54,7 @@ pub fn pg_conf() -> &'static PostgresConf {
         install_dir: pg_conf
             .install_dir
             .unwrap_or("/usr/lib/postgresql/14/".into()),
-        postgres_conf_path: Some(
-            pg_conf
-                .config_path
-                .unwrap_or("/etc/postgresql/14/main/postgresql.conf".into()),
-        ),
+        postgres_conf_path: pg_conf.config_path,
         data_dir: pg_conf
             .data_dir
             .unwrap_or("/var/run/postgresql/ansilo/data".into()),

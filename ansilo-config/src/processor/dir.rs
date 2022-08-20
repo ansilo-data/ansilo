@@ -18,7 +18,9 @@ impl ConfigExprProcessor for DirConfigProcessor {
     fn process(&self, ctx: &Ctx, expr: X) -> Result<ConfigExprResult> {
         Ok(ConfigExprResult::Expr(
             match (match_interpolation(&expr, &["dir"]), &ctx.path) {
-                (Some(_), Some(path)) => X::Constant(path.to_string_lossy().to_string()),
+                (Some(_), Some(path)) if path.parent().is_some() => {
+                    X::Constant(path.parent().unwrap().to_string_lossy().to_string())
+                }
                 _ => expr,
             },
         ))
@@ -54,7 +56,7 @@ mod tests {
     #[test]
     fn test_dir_processor_replaces_dir_expr() {
         let mut ctx = Ctx::mock();
-        ctx.path = Some("/a/b/c".into());
+        ctx.path = Some("/a/b/c.yml".into());
         let processor = DirConfigProcessor::default();
 
         let input = X::Interpolation(vec![X::Constant("dir".to_owned())]);
@@ -62,7 +64,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap(),
-            ConfigExprResult::Expr(X::Constant("/a/b/c".to_string()))
+            ConfigExprResult::Expr(X::Constant("/a/b".to_string()))
         );
     }
 

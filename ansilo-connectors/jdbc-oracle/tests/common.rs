@@ -1,4 +1,4 @@
-use std::{env, thread, time::Duration};
+use std::{env, time::Duration};
 
 use ansilo_connectors_base::test::ecs::{start_containers, wait_for_log, ContainerInstances};
 

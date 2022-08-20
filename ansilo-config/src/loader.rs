@@ -177,8 +177,8 @@ mod tests {
     #[test]
     fn test_config_loader_dir_interpolation() {
         let input = r#"a: "${dir}/bar/baz""#;
-        let result = process_yaml(input, Some("/root/foo".into()));
+        let result = process_yaml(input, Some("/foo/config.yml".into()));
 
-        assert_eq!(result.unwrap(), r#"a: /root/foo/bar/baz"#);
+        assert_eq!(result.unwrap(), r#"a: /foo/bar/baz"#);
     }
 }

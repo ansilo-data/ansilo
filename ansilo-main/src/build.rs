@@ -110,6 +110,6 @@ impl BuildInfo {
             .clone()
             .unwrap_or_default()
             .build_info_path
-            .unwrap_or("/etc/ansilo/build-info.json".into())
+            .unwrap_or("/var/run/ansilo/build-info.json".into())
     }
 }

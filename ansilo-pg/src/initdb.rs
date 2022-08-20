@@ -57,8 +57,12 @@ impl PostgresInitDb {
             // Copy the postgres.conf file if it exists
             if let Some(conf_path) = self.conf.postgres_conf_path.as_ref() {
                 let dest_path = self.conf.data_dir.join("postgresql.conf");
-                fs::copy(conf_path.as_path(), dest_path.as_path())
-                    .context("Failed to copy the postgres.conf config")?;
+                fs::copy(conf_path.as_path(), dest_path.as_path()).with_context(|| {
+                    format!(
+                        "Failed to copy the postgres.conf config: {}",
+                        conf_path.display()
+                    )
+                })?;
                 fs::set_permissions(dest_path.as_path(), Permissions::from_mode(0o600))
                     .context("Failed to set perms on postgres.conf file")?;
             }

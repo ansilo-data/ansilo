@@ -28,10 +28,10 @@ sources:
 
 postgres:
     install_dir: /usr/lib/postgresql/14/
-    config_path: /efs/workspace/elliot/ansilo/ansilo-main/tests/confs/memory/postgres.conf
+    config_path: ${dir}/postgres.conf
     data_dir: /tmp/ansilo/pg-main/memory/data/
     listen_socket_dir_path: /tmp/ansilo/pg-main/memory/
     fdw_socket_path: /tmp/ansilo/pg-main/memory/fdw.sock
-    init_sql_path: /efs/workspace/elliot/ansilo/ansilo-main/tests/confs/memory/sql/*.sql
+    init_sql_path: ${dir}/sql/*.sql
     build_info_path: /tmp/ansilo/pg-main/memory/build-info.json
     
