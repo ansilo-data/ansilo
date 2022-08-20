@@ -56,7 +56,7 @@ pub unsafe extern "C" fn import_foreign_schema(
 )
 SERVER {server_name}
 OPTIONS (
-    config {config}
+    __config {config}
 )"#
             )
         })

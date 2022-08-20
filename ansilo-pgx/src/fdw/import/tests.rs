@@ -116,7 +116,7 @@ mod tests {
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
@@ -148,7 +148,7 @@ OPTIONS (
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
@@ -170,7 +170,7 @@ OPTIONS (
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
@@ -192,7 +192,7 @@ OPTIONS (
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
@@ -223,7 +223,7 @@ OPTIONS (
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
@@ -253,7 +253,7 @@ OPTIONS (
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
@@ -275,7 +275,7 @@ OPTIONS (
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
@@ -297,7 +297,7 @@ OPTIONS (
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
@@ -319,7 +319,7 @@ OPTIONS (
 )
 SERVER test_srv
 OPTIONS (
-    config E'null\n'
+    __config E'null\n'
 )"
             ]
         )
