@@ -1,7 +1,7 @@
 use std::env;
 
 use ansilo_core::err::Result;
-use ansilo_logging::warn;
+use ansilo_logging::{warn, trace};
 
 use crate::ctx::Ctx;
 
@@ -40,7 +40,9 @@ impl ConfigExprProcessor for EnvConfigProcessor {
                         Ok(var) => Some(var),
                     };
 
-                    X::Constant(var.unwrap_or(default))
+                    let replacement = var.unwrap_or(default);
+                    trace!("Replaced configuration expression '{}' with '{}'", name, replacement);
+                    X::Constant(replacement)
                 }
                 _ => expr,
             },

@@ -1,4 +1,5 @@
 use ansilo_core::err::Result;
+use ansilo_logging::trace;
 
 use crate::ctx::Ctx;
 
@@ -19,7 +20,9 @@ impl ConfigExprProcessor for DirConfigProcessor {
         Ok(ConfigExprResult::Expr(
             match (match_interpolation(&expr, &["dir"]), &ctx.path) {
                 (Some(_), Some(path)) if path.parent().is_some() => {
-                    X::Constant(path.parent().unwrap().to_string_lossy().to_string())
+                    let replacement = path.parent().unwrap().to_string_lossy().to_string();
+                    trace!("Replaced dir expression with '{}'", replacement);
+                    X::Constant(replacement)
                 }
                 _ => expr,
             },
