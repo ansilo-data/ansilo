@@ -3,7 +3,6 @@ pub use env_logger::{init, init_from_env};
 pub use log::*;
 
 /// Configures the logger for this ansilo node
-/// Currently this is a null-op by may implement different logging settings in future
 pub fn init_logging() -> Result<()> {
     env_logger::init_from_env(
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
@@ -13,7 +12,10 @@ pub fn init_logging() -> Result<()> {
 
 /// Logging init function for tests
 pub fn init_for_tests() {
-    let res = env_logger::builder().is_test(true).try_init();
+    let res = env_logger::builder()
+        .filter_module("ansilo", LevelFilter::Trace)
+        .is_test(true)
+        .try_init();
     if let Err(err) = res {
         eprintln!("Failed to init logging: {}", err);
     }

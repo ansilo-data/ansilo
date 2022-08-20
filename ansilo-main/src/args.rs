@@ -7,7 +7,7 @@ use clap::Parser;
 /// TODO[docs]: Add about strings below
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
-pub(crate) enum Command {
+pub enum Command {
     Run(Args),
     Dev(Args),
     Build(Args),
@@ -15,10 +15,22 @@ pub(crate) enum Command {
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
-pub(crate) struct Args {
+pub struct Args {
     /// The path of the main configuration file
     #[clap(short, long, value_parser)]
     pub config: Option<PathBuf>,
+}
+
+impl Args {
+    pub fn new(config: Option<PathBuf>) -> Self {
+        Self { config }
+    }
+
+    pub fn config(config: impl Into<PathBuf>) -> Self {
+        Self {
+            config: Some(config.into()),
+        }
+    }
 }
 
 impl Command {

@@ -1,0 +1,11 @@
+[package]
+name = "ansilo-e2e"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansilo-connectors-base = { path = "../ansilo-connectors/base", features = ["test"] }
+ansilo-logging = { path = "../ansilo-logging" }
+ansilo-main = { path = "../ansilo-main" }

@@ -1,0 +1,34 @@
+name: Oracle
+
+networking:
+  port: 65432
+
+entities:
+  - id: dual
+    attributes:
+      - id: dummy
+        type: !Utf8String
+    source:
+      data_source: oracle
+      options:
+        type: Table
+        table_name: DUAL
+        attribute_column_map:
+          dummy: DUMMY
+
+sources:
+  - id: oracle
+    type: jdbc.oracle
+    options:
+      jdbc_url: jdbc:oracle:thin:@${env:ORACLE_IP}:1522/db
+      properties:
+        oracle.jdbc.user: ansilo_admin
+        oracle.jdbc.password: ansilo_testing
+        
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/sql/*.sql
+    data_dir: ${dir}/tmp/data
+    listen_socket_dir_path: ${dir}/tmp
+    fdw_socket_path: ${dir}/tmp/fdw.sock
+    build_info_path: ${dir}/tmp/build-info.json

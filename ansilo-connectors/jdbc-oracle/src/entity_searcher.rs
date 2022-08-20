@@ -19,6 +19,7 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
         _connection: &mut Self::TConnection,
         _nc: &NodeConfig,
     ) -> Result<Vec<EntityConfig>> {
-        todo!()
+        Ok(vec![])
+        // todo!()
     }
 }

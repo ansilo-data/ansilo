@@ -24,6 +24,7 @@ macro_rules! current_dir {
     };
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct ContainerInstances {
     instances: HashMap<String, Instance>,
     infra_path: PathBuf,
@@ -36,6 +37,7 @@ impl ContainerInstances {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Instance {
     pub id: String,
     pub ip: IpAddr,
@@ -98,6 +100,7 @@ fn start_containers_ecs(
             "-c",
             "ecs-cli compose ps | grep -E '(PROVISIONING|PENDING|RUNNING)' | awk '{print $1 \" \" $3}'",
         ])
+        .env("COMPOSE_PROJECT_NAME", project_name)
         .current_dir(infra_path.clone())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

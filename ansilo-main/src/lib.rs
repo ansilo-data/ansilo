@@ -1,11 +1,11 @@
-use std::thread;
+use std::{collections::HashMap, thread};
 
 use crate::{
     args::Command,
     build::BuildInfo,
     handlers::{Http1ConnectionHandler, Http2ConnectionHandler, PostgresConnectionHandler},
 };
-use ansilo_connectors_all::Connectors;
+use ansilo_connectors_all::{ConnectionPools, Connectors};
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{info, warn};
 use ansilo_pg::{fdw::server::FdwServer, PostgresInstance};
@@ -32,26 +32,25 @@ pub fn main() {
     ansilo_logging::init_logging().unwrap();
     info!("Hi, thanks for using Ansilo!");
 
-    // Parse arguments
-    let command = Command::parse();
+    run(Command::parse()).unwrap();
+}
+
+/// Runs the supplied command
+pub fn run(command: Command) -> Result<()> {
     let args = command.args();
 
     // Load configuration
     let config_path = args.config.clone().unwrap_or("/etc/ansilo/main.yml".into());
     init_conf(&config_path);
 
-    run(command).unwrap()
-}
-
-/// Runs postgres and the fdw server
-fn run(command: Command) -> Result<()> {
     let pools = init_connectors();
 
     info!("Starting fdw listener...");
     let fdw_server = FdwServer::start(conf(), pg_conf().fdw_socket_path.clone(), pools)
         .context("Failed to start fdw server")?;
 
-    let mut postgres = if let (Command::Run(_), Some(build_info)) = (&command, BuildInfo::fetch()?) {
+    let mut postgres = if let (Command::Run(_), Some(build_info)) = (&command, BuildInfo::fetch()?)
+    {
         info!("Build occurred at {}", build_info.built_at().to_rfc3339());
         info!("Starting postgres...");
         PostgresInstance::start(&pg_conf())?
@@ -118,7 +117,7 @@ fn run(command: Command) -> Result<()> {
     Ok(())
 }
 
-fn init_connectors() -> std::collections::HashMap<String, ansilo_connectors_all::ConnectionPools> {
+fn init_connectors() -> HashMap<String, ConnectionPools> {
     info!("Initializing connectors...");
     let pools = conf()
         .sources

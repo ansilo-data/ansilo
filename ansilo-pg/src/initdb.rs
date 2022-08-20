@@ -39,6 +39,7 @@ impl PostgresInitDb {
 
     /// Clears out the data directory so it can be reset
     pub fn reset(conf: &PostgresConf) -> Result<()> {
+        info!("Clearing data dir {}...", conf.data_dir.display());
         if conf.data_dir.exists() {
             fs::remove_dir_all(conf.data_dir.as_path()).context("Failed to clear directory")?;
         }
