@@ -175,14 +175,14 @@ mod tests {
                             None,
                             DataType::Int32,
                             false,
-                            true,
+                            false,
                         ),
                         EntityAttributeConfig::new(
                             "col_b".into(),
                             None,
                             DataType::Utf8String(StringOptions::default()),
                             false,
-                            true,
+                            false,
                         )
                     ],
                     vec![],
