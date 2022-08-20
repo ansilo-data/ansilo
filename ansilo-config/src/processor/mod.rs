@@ -1,6 +1,6 @@
 use ansilo_core::err::Result;
 
-use crate::loader::ConfigLoader;
+use crate::ctx::Ctx;
 
 /// A config processor applies transformations to the yaml config
 /// This is used for interpolating config items from various sources
@@ -9,7 +9,7 @@ pub(crate) trait ConfigExprProcessor {
     fn display_name(&self) -> &str;
     /// Applies any transformations to the config
     /// The transformations may be recursively applied using the supplied &ConfigLoader
-    fn process(&self, loader: &ConfigLoader, expr: ConfigStringExpr) -> Result<ConfigExprResult>;
+    fn process(&self, ctx: &Ctx, expr: ConfigStringExpr) -> Result<ConfigExprResult>;
 }
 
 /// AST used to represent configuration expressions
@@ -31,5 +31,6 @@ pub(crate) enum ConfigExprResult {
     Yaml(serde_yaml::Value),
 }
 
+pub(crate) mod dir;
 pub(crate) mod env;
 pub(crate) mod util;
