@@ -99,7 +99,7 @@ pub(crate) fn parse_expression(str: &str) -> Result<X> {
                 if let X::Interpolation(_) = exp {
                     let outer = stack.pop().unwrap();
                     exp = append_node(outer, exp);
-                    state = if let Some(':') = next {
+                    state = if let (Some(':'), false) = (next, stack.is_empty()) {
                         State::Consume
                     } else {
                         State::Break
@@ -384,6 +384,21 @@ d!:
                 X::Constant("abc".to_owned()),
                 X::Interpolation(vec![X::Constant("def".to_owned())]),
                 X::Constant("ghi".to_owned())
+            ])
+        );
+    }
+
+    #[test]
+    fn test_parse_expression_interpolation_trailing_colon() {
+        assert_eq!(
+            parse_expression("ABC@${a:DEF}:GHI").unwrap(),
+            X::Concat(vec![
+                X::Constant("ABC@".to_owned()),
+                X::Interpolation(vec![
+                    X::Constant("a".to_owned()),
+                    X::Constant("DEF".to_owned())
+                ]),
+                X::Constant(":GHI".to_owned())
             ])
         );
     }
