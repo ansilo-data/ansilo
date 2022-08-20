@@ -27,6 +27,26 @@ pub struct EntityConfig {
 }
 
 impl EntityConfig {
+    pub fn new(
+        id: String,
+        name: Option<String>,
+        description: Option<String>,
+        tags: Vec<TagValueConfig>,
+        attributes: Vec<EntityAttributeConfig>,
+        constraints: Vec<EntityConstraintConfig>,
+        source: EntitySourceConfig,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            description,
+            tags,
+            attributes,
+            constraints,
+            source,
+        }
+    }
+
     pub fn minimal(
         id: impl Into<String>,
         attrs: Vec<EntityAttributeConfig>,
@@ -74,6 +94,22 @@ pub struct EntityAttributeConfig {
 }
 
 impl EntityAttributeConfig {
+    pub fn new(
+        id: String,
+        description: Option<String>,
+        r#type: DataType,
+        primary_key: bool,
+        nullable: bool,
+    ) -> Self {
+        Self {
+            id,
+            description,
+            r#type,
+            primary_key,
+            nullable,
+        }
+    }
+
     pub fn minimal(id: impl Into<String>, r#type: DataType) -> Self {
         Self {
             id: id.into(),

@@ -26,6 +26,10 @@ impl PgTable {
         self.rd_id as _
     }
 
+    pub unsafe fn name(&self) -> &str {
+        name_data_to_str(&(*self.rd_rel).relname)
+    }
+
     pub fn attrs(&self) -> impl Iterator<Item = &FormData_pg_attribute> {
         let tupdesc = self.rd_att;
 
@@ -88,10 +92,7 @@ mod tests {
         assert_eq!(table.relid(), oid);
         assert_eq!(unsafe { *ref_count }, 1);
         assert_eq!(
-            table
-                .attrs()
-                .map(|a| a.name())
-                .collect::<Vec<_>>(),
+            table.attrs().map(|a| a.name()).collect::<Vec<_>>(),
             vec!["col"]
         );
 

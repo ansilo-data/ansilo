@@ -26,6 +26,8 @@ pub type QueryId = u32;
 pub enum ClientMessage {
     /// Send authentication token
     AuthDataSource(AuthDataSource),
+    /// Registers the supplied entity for use within future queries
+    RegisterEntity(EntityConfig),
     /// Discovers entities from the remote data source
     DiscoverEntities,
     /// Estimates the number of entities from the source
@@ -114,6 +116,8 @@ pub enum ServerMessage {
     TransactionRolledBack,
     /// Transaction committed
     TransactionCommitted,
+    /// Unknown entity error
+    UnknownEntity(EntityId),
     /// Error occurred with message
     Error(String),
 }
