@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, RwLock,
     },
     thread::{self, JoinHandle},
 };
@@ -23,37 +23,6 @@ use super::{
     connection::FdwConnection,
     proto::{ClientMessage, ServerMessage},
 };
-
-// /// TODO: organise
-// pub struct AppState {
-//     /// The ansilo app config
-//     conf: &'static NodeConfig,
-//     /// The instance connection pools
-//     pools: HashMap<String, ConnectionPools>,
-// }
-
-// impl AppState {
-//     fn connection(&mut self, data_source_id: &str) -> Result<Connections> {
-//         if !self.pools.contains_key(data_source_id) {
-//             let source_conf = self
-//                 .conf
-//                 .sources
-//                 .iter()
-//                 .find(|i| i.id == data_source_id)
-//                 .unwrap();
-
-//             let connector = source_conf.r#type.parse::<Connectors>()?;
-//             let config = connector.parse_options(source_conf.options.clone())?;
-//             let pool = connector.create_connection_pool(self.conf, data_source_id, config)?;
-
-//             self.pools.insert(data_source_id.to_string(), pool);
-//         }
-
-//         let pool = self.pools.get_mut(data_source_id).unwrap();
-
-//         pool.acquire()
-//     }
-// }
 
 /// Handles connections back from postgres
 pub struct FdwServer {
@@ -73,7 +42,7 @@ impl FdwServer {
     pub fn start(
         nc: &'static NodeConfig,
         path: PathBuf,
-        pools: HashMap<String, ConnectionPools>,
+        pools: HashMap<String, (ConnectionPools, ConnectorEntityConfigs)>,
     ) -> Result<Self> {
         let (thread, terminated) = Self::start_listening_thread(nc, path.as_path(), pools)?;
 
@@ -131,7 +100,7 @@ impl FdwServer {
     fn start_listening_thread(
         nc: &'static NodeConfig,
         path: &Path,
-        pools: HashMap<String, ConnectionPools>,
+        pools: HashMap<String, (ConnectionPools, ConnectorEntityConfigs)>,
     ) -> Result<(JoinHandle<()>, Arc<AtomicBool>)> {
         let terminated = Arc::new(AtomicBool::new(false));
 
@@ -162,8 +131,11 @@ pub struct FdwListener {
     nc: &'static NodeConfig,
     /// The unix socket the server listens on
     listener: UnixListener,
-    /// The connection pools keyed by their data source id
-    pools: Arc<HashMap<String, ConnectionPools>>,
+    /// The connection pools and entity config keyed by their data source id.
+    ///
+    /// We wrap each list of entities in a RW lock as these may be
+    /// added to when new entities are registered from a connection.
+    pools: Arc<HashMap<String, (ConnectionPools, Arc<RwLockEntityConfigs>)>>,
     /// Whether the server is terminated
     terminated: Arc<AtomicBool>,
 }
@@ -173,13 +145,18 @@ impl FdwListener {
     pub fn bind(
         nc: &'static NodeConfig,
         listener: UnixListener,
-        pools: HashMap<String, ConnectionPools>,
+        pools: HashMap<String, (ConnectionPools, ConnectorEntityConfigs)>,
         terminated: Arc<AtomicBool>,
     ) -> Self {
         Self {
             nc,
             listener,
-            pools: Arc::new(pools),
+            pools: Arc::new(
+                pools
+                    .into_iter()
+                    .map(|(k, (p, e))| (k, (p, Arc::new(e.into()))))
+                    .collect(),
+            ),
             terminated,
         }
     }
@@ -205,7 +182,7 @@ impl FdwListener {
         let _ = thread::spawn(move || {
             let mut chan = IpcServerChannel::new(socket);
 
-            let pool = match Self::auth(&mut chan, pool) {
+            let (pool, entities) = match Self::auth(&mut chan, pool) {
                 Ok(pool) => pool,
                 Err(err) => {
                     warn!("Failed to authenticate client: {}", err);
@@ -213,12 +190,15 @@ impl FdwListener {
                 }
             };
 
-            match pool {
-                ConnectionPools::OracleJdbc(pool, entities) => {
+            match (pool, &*entities) {
+                (ConnectionPools::OracleJdbc(pool), RwLockEntityConfigs::OracleJdbc(entities)) => {
                     Self::process::<OracleJdbcConnector>(nc, chan, pool, entities)
                 }
-                ConnectionPools::Memory(pool, entities) => {
+                (ConnectionPools::Memory(pool), RwLockEntityConfigs::Memory(entities)) => {
                     Self::process::<MemoryConnector>(nc, chan, pool, entities)
+                }
+                _ => {
+                    panic!("Unknown types or mismatch between pool and entities",)
                 }
             };
         });
@@ -228,8 +208,8 @@ impl FdwListener {
 
     fn auth(
         chan: &mut IpcServerChannel,
-        pools: Arc<HashMap<String, ConnectionPools>>,
-    ) -> Result<ConnectionPools> {
+        pools: Arc<HashMap<String, (ConnectionPools, Arc<RwLockEntityConfigs>)>>,
+    ) -> Result<(ConnectionPools, Arc<RwLockEntityConfigs>)> {
         chan.recv_with_return(|msg| {
             let auth = match msg {
                 ClientMessage::AuthDataSource(auth) => auth,
@@ -261,7 +241,7 @@ impl FdwListener {
         nc: &'static NodeConfig,
         chan: IpcServerChannel,
         pool: TConnector::TConnectionPool,
-        entities: ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
+        entities: &RwLock<ConnectorEntityConfig<TConnector::TEntitySourceConfig>>,
     ) {
         let mut fdw_con = FdwConnection::<TConnector>::new(nc, chan, entities, pool);
 
@@ -275,6 +255,22 @@ impl Drop for FdwServer {
     fn drop(&mut self) {
         if let Err(err) = self.terminate_mut() {
             warn!("Error while terminating fdw server: {:?}", err)
+        }
+    }
+}
+
+pub enum RwLockEntityConfigs {
+    OracleJdbc(
+        RwLock<ConnectorEntityConfig<<OracleJdbcConnector as Connector>::TEntitySourceConfig>>,
+    ),
+    Memory(RwLock<ConnectorEntityConfig<<MemoryConnector as Connector>::TEntitySourceConfig>>),
+}
+
+impl From<ConnectorEntityConfigs> for RwLockEntityConfigs {
+    fn from(conf: ConnectorEntityConfigs) -> Self {
+        match conf {
+            ConnectorEntityConfigs::OracleJdbc(e) => Self::OracleJdbc(RwLock::new(e)),
+            ConnectorEntityConfigs::Memory(e) => Self::Memory(RwLock::new(e)),
         }
     }
 }
@@ -340,14 +336,17 @@ mod tests {
 
     fn create_server(test_name: &'static str) -> FdwServer {
         let (entities, pool) = create_memory_connection_pool();
-        let pool = ConnectionPools::Memory(pool, entities);
+        let pool = ConnectionPools::Memory(pool);
+        let entities = ConnectorEntityConfigs::Memory(entities);
         let path = PathBuf::from(format!("/tmp/ansilo/fdw_server/{test_name}"));
         fs::create_dir_all(path.parent().unwrap().clone()).unwrap();
 
         let server = FdwServer::start(
             &NODE_CONFIG,
             path,
-            [("memory".to_string(), pool)].into_iter().collect(),
+            [("memory".to_string(), (pool, entities))]
+                .into_iter()
+                .collect(),
         )
         .unwrap();
         thread::sleep(Duration::from_millis(10));

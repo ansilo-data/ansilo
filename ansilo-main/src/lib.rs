@@ -5,7 +5,7 @@ use crate::{
     build::BuildInfo,
     handlers::{Http1ConnectionHandler, Http2ConnectionHandler, PostgresConnectionHandler},
 };
-use ansilo_connectors_all::{ConnectionPools, Connectors};
+use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs, Connectors};
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{info, warn};
 use ansilo_pg::{fdw::server::FdwServer, PostgresInstance};
@@ -117,7 +117,7 @@ pub fn run(command: Command) -> Result<()> {
     Ok(())
 }
 
-fn init_connectors() -> HashMap<String, ConnectionPools> {
+fn init_connectors() -> HashMap<String, (ConnectionPools, ConnectorEntityConfigs)> {
     info!("Initializing connectors...");
     let pools = conf()
         .sources

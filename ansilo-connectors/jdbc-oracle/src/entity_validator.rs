@@ -16,9 +16,12 @@ impl EntityValidator for OracleJdbcEntityValidator {
 
     fn validate(
         _connection: &mut Self::TConnection,
-        _entity_version: &EntityConfig,
+        entity: &EntityConfig,
         _nc: &NodeConfig,
     ) -> Result<EntitySource<OracleJdbcEntitySourceConfig>> {
-        todo!()
+        Ok(EntitySource::new(
+            entity.clone(),
+            OracleJdbcEntitySourceConfig::parse(entity.source.options.clone())?,
+        ))
     }
 }

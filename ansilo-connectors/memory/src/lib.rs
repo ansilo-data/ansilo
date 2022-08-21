@@ -7,7 +7,7 @@ use ansilo_connectors_base::{
 use ansilo_core::{
     config::{self, NodeConfig},
     data::DataValue,
-    err::Result,
+    err::{Context, Result},
 };
 pub use conf::*;
 mod connection;
@@ -24,6 +24,7 @@ mod query_planner;
 pub use query_planner::*;
 mod query_compiler;
 pub use query_compiler::*;
+use serde::{Deserialize, Serialize};
 
 /// The connector for an in-memory dataset
 /// Most useful for testing
@@ -81,8 +82,8 @@ impl Connector for MemoryConnector {
         Ok(db)
     }
 
-    fn parse_entity_source_options(_options: config::Value) -> Result<Self::TEntitySourceConfig> {
-        Ok(MemoryConnectorEntitySourceConfig::default())
+    fn parse_entity_source_options(options: config::Value) -> Result<Self::TEntitySourceConfig> {
+        MemoryConnectorEntitySourceConfig::parse(options)
     }
 
     fn create_connection_pool(
@@ -94,7 +95,7 @@ impl Connector for MemoryConnector {
     }
 }
 
-#[derive(Clone, Default, PartialEq, Debug)]
+#[derive(Clone, Default, PartialEq, Debug, Deserialize, Serialize)]
 pub struct MemoryConnectorEntitySourceConfig {
     pub mock_entity_size: Option<OperationCost>,
 }
@@ -102,6 +103,10 @@ pub struct MemoryConnectorEntitySourceConfig {
 impl MemoryConnectorEntitySourceConfig {
     pub fn new(mock_entity_size: Option<OperationCost>) -> Self {
         Self { mock_entity_size }
+    }
+
+    fn parse(options: config::Value) -> Result<MemoryConnectorEntitySourceConfig> {
+        serde_yaml::from_value(options).context("Failed to parse")
     }
 }
 

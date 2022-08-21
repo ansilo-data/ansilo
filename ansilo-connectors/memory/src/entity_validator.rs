@@ -15,9 +15,12 @@ impl EntityValidator for MemoryEntityValidator {
 
     fn validate(
         _connection: &mut MemoryConnection,
-        _entity_version: &EntityConfig,
+        entity: &EntityConfig,
         _nc: &NodeConfig,
     ) -> Result<EntitySource<MemoryConnectorEntitySourceConfig>> {
-        todo!()
+        Ok(EntitySource::new(
+            entity.clone(),
+            MemoryConnectorEntitySourceConfig::parse(entity.source.options.clone())?,
+        ))
     }
 }

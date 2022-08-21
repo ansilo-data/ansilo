@@ -3,12 +3,13 @@ use std::{
     fmt::Display,
     io::{Read, Write},
     mem,
+    sync::{RwLock, RwLockReadGuard},
 };
 
 use ansilo_connectors_base::{
     common::{
         data::{QueryHandleWrite, ResultSetRead},
-        entity::{ConnectorEntityConfig, EntitySource},
+        entity::{ConnectorEntityConfig, EntitySource, UnknownEntityError},
     },
     interface::*,
 };
@@ -26,13 +27,13 @@ use super::{
 };
 
 /// A single connection from the FDW
-pub(crate) struct FdwConnection<TConnector: Connector> {
+pub(crate) struct FdwConnection<'a, TConnector: Connector> {
     /// Global config
     nc: &'static NodeConfig,
     /// The unix socket the server listens on
     chan: Option<IpcServerChannel>,
     /// Entity config
-    entities: ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
+    entities: &'a RwLock<ConnectorEntityConfig<TConnector::TEntitySourceConfig>>,
     /// Connection pool
     pool: TConnector::TConnectionPool,
     /// Connection state
@@ -58,11 +59,11 @@ enum FdwQueryState<TConnector: Connector> {
     ),
 }
 
-impl<TConnector: Connector> FdwConnection<TConnector> {
+impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     pub(crate) fn new(
         nc: &'static NodeConfig,
         chan: IpcServerChannel,
-        entities: ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
+        entities: &'a RwLock<ConnectorEntityConfig<TConnector::TEntitySourceConfig>>,
         pool: TConnector::TConnectionPool,
     ) -> Self {
         Self {
@@ -86,6 +87,11 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
                 let response = match response {
                     Ok(response) => response,
+                    Err(err) if err.downcast_ref::<UnknownEntityError>().is_some() => {
+                        Some(ServerMessage::UnknownEntity(
+                            err.downcast_ref::<UnknownEntityError>().unwrap().0.clone(),
+                        ))
+                    }
                     Err(err) => Some(ServerMessage::Error(format!("{}", err))),
                 };
 
@@ -104,6 +110,10 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         Ok(Some(match message {
             ClientMessage::DiscoverEntities => {
                 ServerMessage::DiscoveredEntitiesResult(self.discover_entities()?)
+            }
+            ClientMessage::RegisterEntity(config) => {
+                self.register_entity(config)?;
+                ServerMessage::RegisteredEntity
             }
             ClientMessage::EstimateSize(entity) => {
                 ServerMessage::EstimatedSizeResult(self.estimate_size(&entity)?)
@@ -197,11 +207,32 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         )?)
     }
 
+    fn register_entity(&mut self, config: EntityConfig) -> Result<()> {
+        self.connect()?;
+
+        let entity =
+            TConnector::TEntityValidator::validate(self.connection.get()?, &config, self.nc)
+                .context("Failed to validate entity config")?;
+
+        // We only lock in write-mode when we know we will succeed.
+        // We must avoid any chance of panics which could poison the lock
+        // and hence break all access to this data source.
+        // Thankfully RWLock only poisions if panics occur in write mode.
+        let mut entities = match self.entities.write() {
+            Ok(e) => e,
+            Err(err) => bail!("Failed to lock entities for write: {:?}", err),
+        };
+
+        entities.add(entity);
+        Ok(())
+    }
+
     fn estimate_size(&mut self, entity: &EntityId) -> Result<OperationCost> {
         self.connect()?;
+        let entities = Self::entities(self.entities)?;
         Ok(TConnector::TQueryPlanner::estimate_size(
             self.connection.get()?,
-            Self::get_entity_config(&self.entities, entity)?,
+            Self::get_entity_config(&*entities, entity)?,
         )?)
     }
 
@@ -210,10 +241,11 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         source: &sqlil::EntitySource,
     ) -> Result<Vec<(sqlil::Expr, DataType)>> {
         self.connect()?;
+        let entities = Self::entities(self.entities)?;
         let res = TConnector::TQueryPlanner::get_row_id_exprs(
             self.connection.get()?,
-            &self.entities,
-            Self::get_entity_config(&self.entities, &source.entity)?,
+            &*entities,
+            Self::get_entity_config(&*entities, &source.entity)?,
             source,
         )?;
 
@@ -226,10 +258,11 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         r#type: sqlil::QueryType,
     ) -> Result<(QueryId, OperationCost)> {
         self.connect()?;
+        let entities = Self::entities(self.entities)?;
         let (cost, query) = TConnector::TQueryPlanner::create_base_query(
             self.connection.get()?,
-            &self.entities,
-            Self::get_entity_config(&self.entities, &source.entity)?,
+            &*entities,
+            Self::get_entity_config(&*entities, &source.entity)?,
             source,
             r#type,
         )?;
@@ -264,10 +297,16 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
             .current()?
             .as_select_mut()
             .context("Current query is not SELECT")?;
+        let entities = Self::entities(self.entities)?;
+
+        // Ensure joined entities are present in config
+        if let SelectQueryOperation::AddJoin(join) = &op {
+            Self::get_entity_config(&*entities, &join.target.entity)?;
+        }
 
         let res = TConnector::TQueryPlanner::apply_select_operation(
             self.connection.get()?,
-            &self.entities,
+            &*entities,
             select,
             op,
         )?;
@@ -287,7 +326,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
         let res = TConnector::TQueryPlanner::apply_insert_operation(
             self.connection.get()?,
-            &self.entities,
+            &*Self::entities(self.entities)?,
             insert,
             op,
         )?;
@@ -307,7 +346,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
         let res = TConnector::TQueryPlanner::apply_update_operation(
             self.connection.get()?,
-            &self.entities,
+            &*Self::entities(self.entities)?,
             update,
             op,
         )?;
@@ -327,7 +366,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
 
         let res = TConnector::TQueryPlanner::apply_delete_operation(
             self.connection.get()?,
-            &self.entities,
+            &*Self::entities(self.entities)?,
             delete,
             op,
         )?;
@@ -339,8 +378,11 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         let query = Self::query(&mut self.queries, query_id)?.current()?;
         let connection = self.connection.get()?;
 
-        let query =
-            TConnector::TQueryCompiler::compile_query(connection, &self.entities, query.clone())?;
+        let query = TConnector::TQueryCompiler::compile_query(
+            connection,
+            &*Self::entities(self.entities)?,
+            query.clone(),
+        )?;
         let handle = connection.prepare(query)?;
 
         let structure = handle.get_structure()?;
@@ -414,7 +456,7 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
     fn explain_query(&mut self, query_id: QueryId, verbose: bool) -> Result<String> {
         let res = TConnector::TQueryPlanner::explain_query(
             self.connection.get()?,
-            &self.entities,
+            &*Self::entities(self.entities)?,
             Self::query(&mut self.queries, query_id)?.current()?,
             verbose,
         )?;
@@ -472,12 +514,24 @@ impl<TConnector: Connector> FdwConnection<TConnector> {
         })
     }
 
-    fn get_entity_config<'a, 'b>(
-        entities: &'a ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
-        entity: &'b EntityId,
-    ) -> Result<&'a EntitySource<TConnector::TEntitySourceConfig>> {
+    fn entities<'b>(
+        entities: &'a RwLock<ConnectorEntityConfig<TConnector::TEntitySourceConfig>>,
+    ) -> Result<RwLockReadGuard<'b, ConnectorEntityConfig<TConnector::TEntitySourceConfig>>>
+    where
+        'a: 'b,
+    {
+        match entities.read() {
+            Ok(e) => Ok(e),
+            Err(_) => bail!("Failed to load entities"),
+        }
+    }
+
+    fn get_entity_config<'b, 'c>(
+        entities: &'b ConnectorEntityConfig<TConnector::TEntitySourceConfig>,
+        entity: &'c EntityId,
+    ) -> Result<&'b EntitySource<TConnector::TEntitySourceConfig>> {
         entities
-            .find(entity)
+            .get(entity)
             .context("Failed to find entity with id")
     }
 }
@@ -599,8 +653,9 @@ mod tests {
         let (client_chan, server_chan) = create_tmp_ipc_channel(name);
 
         let thread = thread::spawn(move || {
+            let entities = RwLock::new(entities);
             let mut fdw =
-                FdwConnection::<MemoryConnector>::new(&NODE_CONFIG, server_chan, entities, pool);
+                FdwConnection::<MemoryConnector>::new(&NODE_CONFIG, server_chan, &entities, pool);
 
             fdw.process()?;
 
@@ -656,6 +711,27 @@ mod tests {
     }
 
     #[test]
+    fn test_fdw_connection_register_entity() {
+        let (thread, mut client) = create_mock_connection("connection_register_entity");
+
+        let res = client
+            .send(ClientMessage::RegisterEntity(EntityConfig::minimal(
+                "random",
+                vec![EntityAttributeConfig::minimal(
+                    "attr",
+                    DataType::rust_string(),
+                )],
+                EntitySourceConfig::minimal(""),
+            )))
+            .unwrap();
+
+        assert_eq!(res, ServerMessage::RegisteredEntity);
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
     fn test_fdw_connection_estimate_size_unknown_entity() {
         let (thread, mut client) =
             create_mock_connection("connection_estimate_size_unknown_entity");
@@ -664,9 +740,45 @@ mod tests {
             .send(ClientMessage::EstimateSize(sqlil::entity("unknown")))
             .unwrap();
 
+        assert_eq!(res, ServerMessage::UnknownEntity(EntityId::new("unknown")));
+
+        client.close().unwrap();
+        thread.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_select_join_unknown_entity() {
+        let (thread, mut client) = create_mock_connection("connection_select_join_unknown_entity");
+
+        let res = client
+            .send(ClientMessage::CreateQuery(
+                sqlil::source("people", "people"),
+                sqlil::QueryType::Select,
+            ))
+            .unwrap();
+
         assert_eq!(
             res,
-            ServerMessage::Error("Failed to find entity with id".to_string())
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
+
+        let res = client
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    SelectQueryOperation::AddJoin(sqlil::Join::new(
+                        sqlil::JoinType::Inner,
+                        sqlil::source("joined_entity", "a"),
+                        vec![],
+                    ))
+                    .into(),
+                ),
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::UnknownEntity(EntityId::new("joined_entity"))
         );
 
         client.close().unwrap();

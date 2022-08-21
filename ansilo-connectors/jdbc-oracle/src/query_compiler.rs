@@ -349,7 +349,7 @@ impl OracleJdbcQueryCompiler {
         include_alias: bool,
     ) -> Result<String> {
         let entity = conf
-            .find(&source.entity)
+            .get(&source.entity)
             .with_context(|| format!("Failed to find entity {:?}", source.entity.clone()))?;
 
         let id = Self::compile_source_identifier(&entity.source)?;
@@ -392,7 +392,7 @@ impl OracleJdbcQueryCompiler {
     ) -> Result<String> {
         let source = query.get_entity_source(&eva.entity_alias)?;
         let entity = conf
-            .find(&source.entity)
+            .get(&source.entity)
             .with_context(|| format!("Failed to find entity {:?}", source.entity.clone()))?;
 
         // TODO: custom query

@@ -16,7 +16,10 @@ use pgx::{
     *,
 };
 
-use crate::{fdw::ctx::FdwContext, sqlil::get_entity_id_from_foreign_table};
+use crate::{
+    fdw::ctx::{FdwContext, FdwGlobalContext},
+    sqlil::get_entity_id_from_foreign_table,
+};
 
 use super::{current_auth_token, ServerOptions};
 
@@ -78,36 +81,43 @@ impl Drop for FdwIpcConnection {
 }
 
 /// Returns a connection to the data source for the supplied foreign table
-pub(crate) unsafe fn connect_table(foreign_table_relid: Oid) -> FdwContext {
+pub(crate) unsafe fn connect_table(foreign_table_oid: Oid) -> FdwContext {
     // Look up the foreign table from its relid
-    let table = GetForeignTable(foreign_table_relid);
+    let table = GetForeignTable(foreign_table_oid);
 
     if table.is_null() {
-        panic!("Could not find table with oid: {}", foreign_table_relid);
+        panic!("Could not find table with oid: {}", foreign_table_oid);
     }
 
     // Find the corrosponding entity / version id from the table name
-    let entity = get_entity_id_from_foreign_table(foreign_table_relid).unwrap();
+    let entity = get_entity_id_from_foreign_table(foreign_table_oid).unwrap();
 
-    connect_server((*table).serverid, entity)
+    let con = get_server_connection((*table).serverid).unwrap();
+
+    FdwContext::new(con, entity, foreign_table_oid)
 }
 
 /// Returns a connection to the data source for the supplied foreign server
-pub unsafe fn connect_server(server_oid: Oid, entity: ansilo_core::sqlil::EntityId) -> FdwContext {
+pub unsafe fn connect_server(server_oid: Oid) -> FdwGlobalContext {
+    FdwGlobalContext::new(get_server_connection(server_oid).unwrap())
+}
+
+/// Gets a connection to the data source for the supplied foreign server
+unsafe fn get_server_connection(server_oid: Oid) -> Result<Arc<FdwIpcConnection>> {
     // Retrieves the foreign server for the table
     let server = GetForeignServer(server_oid);
     if server.is_null() {
         panic!("Could not find server with oid: {}", server_oid);
     }
+
     // Parse the options defined on the server, namely the data source id
     let opts = ServerOptions::parse(PgList::<DefElem>::from_pg((*server).options))
         .expect("Failed to parse server options");
-    let con = get_connection(opts).unwrap();
-    let ctx = FdwContext::new(con, entity);
-    ctx
+
+    get_connection(opts)
 }
 
-/// Gets a connection to the data source for the supplied foreign table
+/// Gets a connection to the data source for the supplied server options
 /// If an existing connection is valid for the supplied data source it will
 /// be reused.
 unsafe fn get_connection(opts: ServerOptions) -> Result<Arc<FdwIpcConnection>> {

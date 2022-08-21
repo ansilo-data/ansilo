@@ -15,7 +15,7 @@ pub unsafe extern "C" fn import_foreign_schema(
     server_oid: Oid,
 ) -> *mut List {
     let server = GetForeignServer(server_oid);
-    let mut ctx = connect_server(server_oid, EntityId::new(""));
+    let mut ctx = connect_server(server_oid);
 
     // Retrieve the entity configurations from the remote data source
     let entities = ctx.discover_entities().unwrap();

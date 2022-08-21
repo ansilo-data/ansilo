@@ -237,7 +237,7 @@ mod tests {
     use super::*;
 
     use crate::fdw::test::server::start_fdw_server;
-    use ansilo_connectors_all::ConnectionPools;
+    use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs};
     use ansilo_connectors_base::{
         common::entity::{ConnectorEntityConfig, EntitySource},
         interface::Connector,
@@ -250,7 +250,7 @@ mod tests {
         data::{DataType, DataValue},
     };
 
-    fn create_memory_connection_pool() -> ConnectionPools {
+    fn create_memory_connection_pool() -> (ConnectionPools, ConnectorEntityConfigs) {
         let conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -268,7 +268,10 @@ mod tests {
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
             .unwrap();
 
-        ConnectionPools::Memory(pool, entities)
+        (
+            ConnectionPools::Memory(pool),
+            ConnectorEntityConfigs::Memory(entities),
+        )
     }
 
     fn setup_db<'a>(

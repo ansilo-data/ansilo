@@ -18,7 +18,7 @@ mod tests {
         sqlil::test,
         util::string::{parse_to_owned_utf8_string, to_pg_cstr},
     };
-    use ansilo_connectors_all::ConnectionPools;
+    use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs};
     use ansilo_connectors_base::{
         common::entity::{ConnectorEntityConfig, EntitySource},
         interface::Connector,
@@ -33,7 +33,9 @@ mod tests {
     };
     use ansilo_pg::fdw::proto::OperationCost;
 
-    fn create_memory_connection_pool(confs: Vec<EntityConfig>) -> ConnectionPools {
+    fn create_memory_connection_pool(
+        confs: Vec<EntityConfig>,
+    ) -> (ConnectionPools, ConnectorEntityConfigs) {
         let mut conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -49,7 +51,10 @@ mod tests {
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
             .unwrap();
 
-        ConnectionPools::Memory(pool, entities)
+        (
+            ConnectionPools::Memory(pool),
+            ConnectorEntityConfigs::Memory(entities),
+        )
     }
 
     fn run_import_foreign_schema(entities: Vec<EntityConfig>) -> Vec<String> {

@@ -1,8 +1,11 @@
-use std::collections::{hash_map::Values, HashMap};
+use std::{
+    collections::{hash_map::Values, HashMap},
+    fmt,
+};
 
 use ansilo_core::{
     config::{EntityConfig, NodeConfig},
-    err::Result,
+    err::{bail, Result},
     sqlil::EntityId,
 };
 
@@ -19,7 +22,7 @@ where
     entities: HashMap<String, EntitySource<TEntitySourceConfig>>,
 }
 
-/// Metadata about an entity version
+/// Metadata about an entity and it's connector-specific configuration
 #[derive(Debug, Clone, PartialEq)]
 pub struct EntitySource<TEntitySourceConfig>
 where
@@ -35,11 +38,8 @@ impl<TEntitySourceConfig> EntitySource<TEntitySourceConfig>
 where
     TEntitySourceConfig: Sized,
 {
-    pub fn new(conf: EntityConfig, source_conf: TEntitySourceConfig) -> Self {
-        Self {
-            conf,
-            source: source_conf,
-        }
+    pub fn new(conf: EntityConfig, source: TEntitySourceConfig) -> Self {
+        Self { conf, source }
     }
 }
 
@@ -83,8 +83,20 @@ where
         self.entities.values()
     }
 
-    pub fn find(&self, id: &EntityId) -> Option<&EntitySource<T>> {
-        self.entities.get(&id.entity_id)
+    pub fn get(&self, id: &EntityId) -> Result<&EntitySource<T>> {
+        match self.entities.get(&id.entity_id) {
+            Some(entity) => Ok(entity),
+            None => bail!(UnknownEntityError(id.clone())),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnknownEntityError(pub EntityId);
+
+impl fmt::Display for UnknownEntityError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Could not find entity with id: {:?}", self.0)
     }
 }
 
@@ -115,6 +127,16 @@ mod tests {
             conf.entities.get(&("entity_id".to_string())),
             Some(&entity_source)
         );
-        assert_eq!(conf.find(&EntityId::new("entity_id")), Some(&entity_source));
+        assert_eq!(
+            conf.get(&EntityId::new("entity_id")).unwrap(),
+            &entity_source
+        );
+        assert_eq!(
+            conf.get(&EntityId::new("invalid"))
+                .unwrap_err()
+                .downcast::<UnknownEntityError>()
+                .unwrap(),
+            UnknownEntityError(EntityId::new("invalid"))
+        );
     }
 }

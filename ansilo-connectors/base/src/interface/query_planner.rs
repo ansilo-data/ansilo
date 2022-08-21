@@ -300,7 +300,7 @@ impl DeleteQueryOperation {
 }
 
 /// A cost estimate for a query operation
-#[derive(Debug, Default, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Default, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
 pub struct OperationCost {
     /// The estimated number of rows
     pub rows: Option<u64>,

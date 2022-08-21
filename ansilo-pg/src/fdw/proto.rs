@@ -100,6 +100,8 @@ pub enum ServerMessage {
     AuthAccepted,
     /// Entities discovered from the data source
     DiscoveredEntitiesResult(Vec<EntityConfig>),
+    /// The supplied entity was registered
+    RegisteredEntity,
     /// Estimated size result
     EstimatedSizeResult(OperationCost),
     /// The returned row id expressions

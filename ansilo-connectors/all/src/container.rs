@@ -46,14 +46,14 @@ pub enum EntitySourceConfigs {
 
 #[derive(Clone)]
 pub enum ConnectionPools {
-    OracleJdbc(
-        <OracleJdbcConnector as Connector>::TConnectionPool,
-        ConnectorEntityConfig<OracleJdbcEntitySourceConfig>,
-    ),
-    Memory(
-        MemoryConnectionPool,
-        ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
-    ),
+    OracleJdbc(<OracleJdbcConnector as Connector>::TConnectionPool),
+    Memory(MemoryConnectionPool),
+}
+
+#[derive(Clone)]
+pub enum ConnectorEntityConfigs {
+    OracleJdbc(ConnectorEntityConfig<OracleJdbcEntitySourceConfig>),
+    Memory(ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>),
 }
 
 pub enum Connections {
@@ -81,7 +81,7 @@ impl Connectors {
         Some(match r#type {
             OracleJdbcConnector::TYPE => Connectors::OracleJdbc,
             MemoryConnector::TYPE => Connectors::Memory,
-            _ => return None
+            _ => return None,
         })
     }
 
@@ -122,17 +122,23 @@ impl Connectors {
         nc: &NodeConfig,
         data_source_id: &str,
         options: ConnectionConfigs,
-    ) -> Result<ConnectionPools> {
+    ) -> Result<(ConnectionPools, ConnectorEntityConfigs)> {
         Ok(match (self, options) {
             (Connectors::OracleJdbc, ConnectionConfigs::OracleJdbc(options)) => {
                 let (pool, entities) =
                     Self::create_pool::<OracleJdbcConnector>(options, nc, data_source_id)?;
-                ConnectionPools::OracleJdbc(pool, entities)
+                (
+                    ConnectionPools::OracleJdbc(pool),
+                    ConnectorEntityConfigs::OracleJdbc(entities),
+                )
             }
             (Connectors::Memory, ConnectionConfigs::Memory(options)) => {
                 let (pool, entities) =
                     Self::create_pool::<MemoryConnector>(options, nc, data_source_id)?;
-                ConnectionPools::Memory(pool, entities)
+                (
+                    ConnectionPools::Memory(pool),
+                    ConnectorEntityConfigs::Memory(entities),
+                )
             }
             (this, options) => bail!(
                 "Type mismatch between connector {:?} and config {:?}",
@@ -177,8 +183,8 @@ impl ConnectionPool for ConnectionPools {
 
     fn acquire(&mut self) -> Result<Self::TConnection> {
         Ok(match self {
-            ConnectionPools::OracleJdbc(p, _) => Connections::OracleJdbc(p.acquire()?),
-            ConnectionPools::Memory(p, _) => Connections::Memory(p.acquire()?),
+            ConnectionPools::OracleJdbc(p) => Connections::OracleJdbc(p.acquire()?),
+            ConnectionPools::Memory(p) => Connections::Memory(p.acquire()?),
         })
     }
 }

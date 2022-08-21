@@ -21,7 +21,7 @@ mod tests {
         },
         sqlil::test,
     };
-    use ansilo_connectors_all::ConnectionPools;
+    use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs};
     use ansilo_connectors_base::{
         common::entity::{ConnectorEntityConfig, EntitySource},
         interface::Connector,
@@ -35,12 +35,12 @@ mod tests {
         data::{DataType, DataValue},
         sqlil,
     };
-    use ansilo_pg::fdw::{server::FdwServer, proto::OperationCost};
+    use ansilo_pg::fdw::{proto::OperationCost, server::FdwServer};
     use assert_json_diff::*;
     use serde::{de::DeserializeOwned, Serialize};
     use serde_json::json;
 
-    fn create_memory_connection_pool() -> ConnectionPools {
+    fn create_memory_connection_pool() -> (ConnectionPools, ConnectorEntityConfigs) {
         let mut conf = MemoryDatabase::new();
         let mut entities = ConnectorEntityConfig::new();
 
@@ -149,7 +149,10 @@ mod tests {
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
             .unwrap();
 
-        ConnectionPools::Memory(pool, entities)
+        (
+            ConnectionPools::Memory(pool),
+            ConnectorEntityConfigs::Memory(entities),
+        )
     }
 
     fn setup_db(socket_path: impl Into<String>) {
@@ -213,15 +216,12 @@ mod tests {
     fn test_fdw_scan_select_all_where_remote_cond() {
         setup_test("scan_select_all_remote_cond");
 
-        let results = execute_query(
-            r#"SELECT * FROM "people" WHERE first_name = 'Mary'"#,
-            |i| {
-                (
-                    i["first_name"].value::<String>().unwrap(),
-                    i["last_name"].value::<String>().unwrap(),
-                )
-            },
-        );
+        let results = execute_query(r#"SELECT * FROM "people" WHERE first_name = 'Mary'"#, |i| {
+            (
+                i["first_name"].value::<String>().unwrap(),
+                i["last_name"].value::<String>().unwrap(),
+            )
+        });
 
         assert_eq!(
             results,
@@ -378,15 +378,12 @@ mod tests {
     fn test_fdw_scan_select_order_by_single_col_desc() {
         setup_test("scan_select_order_by_single_col_desc");
 
-        let results = execute_query(
-            r#"SELECT * FROM "people" ORDER BY first_name DESC"#,
-            |i| {
-                (
-                    i["first_name"].value::<String>().unwrap(),
-                    i["last_name"].value::<String>().unwrap(),
-                )
-            },
-        );
+        let results = execute_query(r#"SELECT * FROM "people" ORDER BY first_name DESC"#, |i| {
+            (
+                i["first_name"].value::<String>().unwrap(),
+                i["last_name"].value::<String>().unwrap(),
+            )
+        });
 
         assert_eq!(
             results,

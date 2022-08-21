@@ -15,7 +15,7 @@ pub trait EntityValidator {
     /// Validate the supplied entity config
     fn validate(
         connection: &mut Self::TConnection,
-        entity_version: &EntityConfig,
+        entity: &EntityConfig,
         nc: &NodeConfig,
     ) -> Result<EntitySource<Self::TEntitySourceConfig>>;
 }

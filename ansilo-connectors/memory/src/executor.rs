@@ -1243,10 +1243,7 @@ impl MemoryQueryExecutor {
         &self,
         e: &sqlil::EntityId,
     ) -> Result<&EntitySource<MemoryConnectorEntitySourceConfig>> {
-        let entity = self
-            .entities
-            .find(e)
-            .ok_or(Error::msg("Could not find entity"))?;
+        let entity = self.entities.get(e)?;
 
         Ok(entity)
     }

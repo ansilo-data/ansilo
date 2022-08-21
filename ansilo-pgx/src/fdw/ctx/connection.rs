@@ -9,7 +9,10 @@ use ansilo_core::{
 use ansilo_pg::fdw::proto::{ClientMessage, OperationCost, ServerMessage};
 use pgx::pg_sys::Oid;
 
-use crate::{fdw::common::FdwIpcConnection, sqlil::ConversionContext};
+use crate::{
+    fdw::common::FdwIpcConnection,
+    sqlil::{entity_config_from_foreign_table, ConversionContext},
+};
 
 use super::{
     FdwDeleteQuery, FdwInsertQuery, FdwQueryContext, FdwQueryType, FdwSelectQuery, FdwUpdateQuery,
@@ -23,16 +26,23 @@ pub struct FdwContext {
     pub data_source_id: String,
     /// The initial entity of fdw context
     pub entity: sqlil::EntityId,
+    /// The foreign table oid of the entity
+    pub foreign_table_oid: Oid,
 }
 
 impl FdwContext {
-    pub fn new(connection: Arc<FdwIpcConnection>, entity: sqlil::EntityId) -> Self {
+    pub fn new(
+        connection: Arc<FdwIpcConnection>,
+        entity: sqlil::EntityId,
+        foreign_table_oid: Oid,
+    ) -> Self {
         let data_source_id = connection.data_source_id.clone();
 
         Self {
             connection,
             data_source_id,
             entity,
+            foreign_table_oid,
         }
     }
 
@@ -40,15 +50,17 @@ impl FdwContext {
         self.connection.send(req)
     }
 
-    pub fn discover_entities(&mut self) -> Result<Vec<EntityConfig>> {
-        let res = self.send(ClientMessage::DiscoverEntities).unwrap();
+    fn register_entity(&mut self) -> Result<()> {
+        let entity_config = unsafe { entity_config_from_foreign_table(self.foreign_table_oid)? };
 
-        let entities = match res {
-            ServerMessage::DiscoveredEntitiesResult(e) => e,
-            _ => return Err(unexpected_response(res).context("Discover Entities")),
-        };
+        let res = self
+            .send(ClientMessage::RegisterEntity(entity_config))
+            .unwrap();
 
-        Ok(entities)
+        match res {
+            ServerMessage::RegisteredEntity => Ok(()),
+            _ => Err(unexpected_response(res).context("Register entity")),
+        }
     }
 
     pub fn estimate_size(&mut self) -> Result<OperationCost> {
@@ -58,6 +70,10 @@ impl FdwContext {
 
         let base_cost = match res {
             ServerMessage::EstimatedSizeResult(e) => e,
+            ServerMessage::UnknownEntity(e) if e == self.entity => {
+                self.register_entity()?;
+                return self.estimate_size();
+            }
             _ => return Err(unexpected_response(res).context("Estimate Size")),
         };
 
@@ -74,6 +90,10 @@ impl FdwContext {
 
         let row_ids = match res {
             ServerMessage::RowIds(e) => e,
+            ServerMessage::UnknownEntity(e) if e == self.entity => {
+                self.register_entity()?;
+                return self.get_row_id_exprs(alias);
+            }
             _ => return Err(unexpected_response(res).context("Getting row id's")),
         };
 
@@ -117,6 +137,40 @@ impl FdwContext {
         );
 
         Ok(query)
+    }
+}
+
+/// Context for queries without referencing a specific entity
+pub struct FdwGlobalContext {
+    /// The connection state to ansilo
+    pub connection: Arc<FdwIpcConnection>,
+    /// The ID of the data source for this FDW connection
+    pub data_source_id: String,
+}
+
+impl FdwGlobalContext {
+    pub fn new(connection: Arc<FdwIpcConnection>) -> Self {
+        let data_source_id = connection.data_source_id.clone();
+
+        Self {
+            connection,
+            data_source_id,
+        }
+    }
+
+    fn send(&mut self, req: ClientMessage) -> Result<ServerMessage> {
+        self.connection.send(req)
+    }
+
+    pub fn discover_entities(&mut self) -> Result<Vec<EntityConfig>> {
+        let res = self.send(ClientMessage::DiscoverEntities).unwrap();
+
+        let entities = match res {
+            ServerMessage::DiscoveredEntitiesResult(e) => e,
+            _ => return Err(unexpected_response(res).context("Discover Entities")),
+        };
+
+        Ok(entities)
     }
 }
 
