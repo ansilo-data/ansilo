@@ -94,6 +94,23 @@ where
 
         Ok(Some(row))
     }
+
+    /// Iterates through each row of the result set
+    pub fn iter_rows(&mut self) -> ResultSetRows<T> {
+        ResultSetRows(self)
+    }
+}
+
+pub struct ResultSetRows<'a, T: ResultSet>(&'a mut ResultSetReader<T>);
+
+impl<'a, T: ResultSet> Iterator for ResultSetRows<'a, T> {
+    type Item = Result<HashMap<String, DataValue>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0
+            .read_row()
+            .map_or_else(|e| Some(Err(e)), |d| d.map(|d| Ok(d)))
+    }
 }
 
 #[cfg(test)]
@@ -279,5 +296,76 @@ pub(super) mod rs_tests {
             )
         );
         res.read_row().unwrap_err();
+    }
+
+    #[test]
+    fn test_result_set_reader_iter_rows() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                       // not null
+                123_i32.to_ne_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                456_i32.to_ne_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                789_i32.to_ne_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                1234_i32.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.iter_rows().collect::<Result<Vec<_>>>().unwrap(),
+            vec![
+                vec![
+                    ("a".into(), DataValue::Int32(123)),
+                    ("b".into(), DataValue::Int32(456))
+                ]
+                .into_iter()
+                .collect(),
+                vec![
+                    ("a".into(), DataValue::Int32(789)),
+                    ("b".into(), DataValue::Int32(1234))
+                ]
+                .into_iter()
+                .collect()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_result_set_reader_iter_rows_error_partial_data() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                      // not null
+                123_i32.to_ne_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                456_i32.to_ne_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                789_i32.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        let mut rows = res.iter_rows();
+        assert_eq!(
+            rows.next().unwrap().unwrap(),
+            vec![
+                ("a".into(), DataValue::Int32(123)),
+                ("b".into(), DataValue::Int32(456))
+            ]
+            .into_iter()
+            .collect()
+        );
+
+        rows.next().unwrap().unwrap_err();
     }
 }
