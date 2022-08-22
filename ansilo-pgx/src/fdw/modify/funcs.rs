@@ -19,9 +19,8 @@ use crate::{
         common::{self, begin_remote_transaction, prepare_query_params, send_query_params},
         ctx::{
             from_fdw_private_modify, from_fdw_private_rel, into_fdw_private_modify,
-            mem::{pg_query_scoped, pg_transaction_scoped},
-            FdwContext, FdwModifyContext, FdwQueryContext, FdwQueryType, FdwScanContext,
-            FdwSelectQuery, PlannerContext,
+            mem::pg_transaction_scoped, FdwContext, FdwModifyContext, FdwQueryContext,
+            FdwQueryType, FdwScanContext, FdwSelectQuery, PlannerContext,
         },
     },
     sqlil::{convert, from_datum, from_pg_type, into_pg_type},
@@ -120,8 +119,8 @@ pub unsafe extern "C" fn plan_foreign_modify(
 
     into_fdw_private_modify(
         ctx,
-        pg_query_scoped(root, query),
-        pg_query_scoped(root, FdwModifyContext::new()),
+        pg_transaction_scoped(query),
+        pg_transaction_scoped(FdwModifyContext::new()),
     )
 }
 
@@ -562,8 +561,8 @@ pub unsafe extern "C" fn plan_direct_modify(
     // Update the fdw_private state with the modification query state
     (*foreign_scan).fdw_private = into_fdw_private_modify(
         ctx,
-        pg_query_scoped(root, query),
-        pg_query_scoped(root, FdwModifyContext::new()),
+        pg_transaction_scoped(query),
+        pg_transaction_scoped(FdwModifyContext::new()),
     );
 
     return true;

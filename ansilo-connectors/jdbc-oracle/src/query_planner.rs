@@ -1,5 +1,5 @@
 use ansilo_core::{
-    data::{DataType, DataValue, StringOptions},
+    data::{rust_decimal::prelude::ToPrimitive, DataType, DataValue, StringOptions},
     err::{bail, Context, Result},
     sqlil as sql,
 };
@@ -47,7 +47,7 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
             .context("Unexpected empty result set")?;
 
         let num_rows = match value {
-            DataValue::Int64(i) => i,
+            DataValue::Decimal(dec) => dec.to_u64().unwrap_or(0),
             _ => bail!("Unexpected data value returned: {:?}", value),
         };
 

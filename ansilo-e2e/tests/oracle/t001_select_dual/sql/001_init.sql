@@ -4,4 +4,8 @@ OPTIONS (
     data_source 'oracle'
 );
 
--- IMPORT FOREIGN SCHEMA "all" FROM SERVER oracle INTO public;
+IMPORT FOREIGN SCHEMA "*" 
+LIMIT TO ("SYS.DUAL")
+FROM SERVER oracle INTO public;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ansiloapp;

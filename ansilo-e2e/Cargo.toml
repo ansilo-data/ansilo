@@ -9,3 +9,4 @@ edition = "2021"
 ansilo-connectors-base = { path = "../ansilo-connectors/base", features = ["test"] }
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-main = { path = "../ansilo-main" }
+postgres = "0.19.4"

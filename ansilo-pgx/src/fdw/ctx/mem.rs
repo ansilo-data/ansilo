@@ -7,15 +7,6 @@ pub(crate) unsafe fn pg_transaction_scoped<T>(v: T) -> PgBox<T, AllocatedByPostg
 }
 
 /// Stores the supplied value in memory managed by postgres.
-/// This value is dropped at the end of the current query.
-pub(crate) unsafe fn pg_query_scoped<T>(
-    root: *mut PlannerInfo,
-    v: T,
-) -> PgBox<T, AllocatedByPostgres> {
-    pg_scoped(PgMemoryContexts::For((*root).planner_cxt), v)
-}
-
-/// Stores the supplied value in memory managed by postgres.
 /// This value is dropped at the end of the current scan query.
 pub(crate) unsafe fn pg_scan_scoped<T>(
     scan: *mut ScanState,

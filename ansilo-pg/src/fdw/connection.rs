@@ -176,7 +176,9 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
                 ServerQueryMessage::Duplicated(new_id)
             }
             ClientQueryMessage::Discard => {
-                self.queries.remove(&query_id).context("Invalid query id")?;
+                self.queries
+                    .remove(&query_id)
+                    .context("Invalid query id while discarding")?;
                 ServerQueryMessage::Discarded
             }
         })

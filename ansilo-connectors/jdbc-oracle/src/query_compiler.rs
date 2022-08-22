@@ -357,7 +357,7 @@ impl OracleJdbcQueryCompiler {
         Ok(if include_alias {
             let alias = Self::compile_identifier(source.alias.clone())?;
 
-            format!("{id} AS {alias}")
+            format!("{id} {alias}")
         } else {
             id
         })

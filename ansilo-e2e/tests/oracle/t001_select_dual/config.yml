@@ -18,7 +18,7 @@ sources:
 postgres:
     install_dir: /usr/lib/postgresql/14/
     init_sql_path: ${dir}/sql/*.sql
-    data_dir: ${dir}/tmp/data
-    listen_socket_dir_path: ${dir}/tmp
-    fdw_socket_path: ${dir}/tmp/fdw.sock
-    build_info_path: ${dir}/tmp/build-info.json
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json

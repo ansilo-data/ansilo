@@ -27,14 +27,13 @@ use crate::{
     fdw::{
         common::{self, prepare_query_params, send_query_params},
         ctx::{
-            mem::{pg_query_scoped, pg_scan_scoped, pg_transaction_scoped},
+            mem::{pg_scan_scoped, pg_transaction_scoped},
             *,
         },
     },
     sqlil::{
-        convert, convert_list, from_datum, into_datum, into_pg_type,
-        get_entity_id_from_foreign_table, parse_entity_id_from_rel,
-        ConversionContext,
+        convert, convert_list, from_datum, get_entity_id_from_foreign_table, into_datum,
+        into_pg_type, parse_entity_id_from_rel, ConversionContext,
     },
     util::{list::vec_to_pg_list, string::to_pg_cstr, table::PgTable},
 };
@@ -68,7 +67,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     // for remote transactions or locking.
     let mut ctx = pg_transaction_scoped(common::connect_table(foreigntableid));
 
-    let planner = pg_query_scoped(root, PlannerContext::base_rel(root, baserel));
+    let planner = pg_transaction_scoped(PlannerContext::base_rel(root, baserel));
 
     let mut base_cost = ctx.estimate_size().unwrap();
 
@@ -76,8 +75,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     base_cost.rows = base_cost.rows.or(Some(DEFAULT_ROW_VOLUME));
 
     // We have to evaluate the possibility and costs of pushing down the restriction clauses
-    let mut query = pg_query_scoped(
-        root,
+    let mut query = pg_transaction_scoped(
         ctx.create_query((*baserel).relid, QueryType::Select)
             .unwrap(),
     );
@@ -131,8 +129,8 @@ pub unsafe extern "C" fn get_foreign_paths(
         (*baserel).lateral_relids,
         ptr::null_mut(),
         into_fdw_private_path(
-            pg_query_scoped(root, planner.clone()),
-            pg_query_scoped(root, base_query.duplicate().unwrap()),
+            pg_transaction_scoped(planner.clone()),
+            pg_transaction_scoped(base_query.duplicate().unwrap()),
         ),
     );
     add_path(baserel, path as *mut pg_sys::Path);
@@ -241,8 +239,8 @@ pub unsafe extern "C" fn get_foreign_paths(
             (*ppi).ppi_req_outer,
             ptr::null_mut(),
             into_fdw_private_path(
-                pg_query_scoped(root, planner.clone()),
-                pg_query_scoped(root, query),
+                pg_transaction_scoped(planner.clone()),
+                pg_transaction_scoped(query),
             ),
         );
         add_path(baserel, path as *mut pg_sys::Path);
@@ -437,16 +435,16 @@ pub unsafe extern "C" fn get_foreign_join_paths(
         (*joinrel).lateral_relids,
         epq_path,
         into_fdw_private_path(
-            pg_query_scoped(root, planner.clone()),
-            pg_query_scoped(root, join_query.duplicate().unwrap()),
+            pg_transaction_scoped(planner.clone()),
+            pg_transaction_scoped(join_query.duplicate().unwrap()),
         ),
     );
     add_path(joinrel, join_path as *mut _);
 
     (*joinrel).fdw_private = into_fdw_private_rel(
         outer_ctx,
-        pg_query_scoped(root, join_query),
-        pg_query_scoped(root, planner),
+        pg_transaction_scoped(join_query),
+        pg_transaction_scoped(planner),
     ) as *mut _;
 }
 
@@ -682,16 +680,16 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         ptr::null_mut(),
         ptr::null_mut(),
         into_fdw_private_path(
-            pg_query_scoped(root, planner.clone()),
-            pg_query_scoped(root, group_query.duplicate().unwrap()),
+            pg_transaction_scoped(planner.clone()),
+            pg_transaction_scoped(group_query.duplicate().unwrap()),
         ),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
     (*outputrel).fdw_private = into_fdw_private_rel(
         ctx,
-        pg_query_scoped(root, group_query),
-        pg_query_scoped(root, planner.clone()),
+        pg_transaction_scoped(group_query),
+        pg_transaction_scoped(planner.clone()),
     ) as *mut _;
 }
 
@@ -846,16 +844,16 @@ pub unsafe extern "C" fn get_foreign_ordered_paths(
         ptr::null_mut(),
         ptr::null_mut(),
         into_fdw_private_path(
-            pg_query_scoped(root, planner.clone()),
-            pg_query_scoped(root, order_query.duplicate().unwrap()),
+            pg_transaction_scoped(planner.clone()),
+            pg_transaction_scoped(order_query.duplicate().unwrap()),
         ),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
     (*outputrel).fdw_private = into_fdw_private_rel(
         ctx,
-        pg_query_scoped(root, order_query),
-        pg_query_scoped(root, planner.clone()),
+        pg_transaction_scoped(order_query),
+        pg_transaction_scoped(planner.clone()),
     ) as *mut _;
 }
 
@@ -984,16 +982,16 @@ pub unsafe extern "C" fn get_foreign_final_paths(
         ptr::null_mut(),
         ptr::null_mut(),
         into_fdw_private_path(
-            pg_query_scoped(root, planner.clone()),
-            pg_query_scoped(root, limit_query.duplicate().unwrap()),
+            pg_transaction_scoped(planner.clone()),
+            pg_transaction_scoped(limit_query.duplicate().unwrap()),
         ),
     );
     pg_sys::add_path(outputrel, path as *mut _);
 
     (*outputrel).fdw_private = into_fdw_private_rel(
         ctx,
-        pg_query_scoped(root, limit_query),
-        pg_query_scoped(root, planner.clone()),
+        pg_transaction_scoped(limit_query),
+        pg_transaction_scoped(planner.clone()),
     ) as *mut _;
 }
 
