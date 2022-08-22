@@ -1,6 +1,12 @@
-use std::io::{self, BufReader, Read};
+use std::{
+    collections::HashMap,
+    io::{self, BufReader, Read},
+};
 
-use ansilo_core::{data::DataValue, err::Result};
+use ansilo_core::{
+    data::DataValue,
+    err::{bail, Result},
+};
 
 use crate::interface::{ResultSet, RowStructure};
 
@@ -65,6 +71,28 @@ where
     /// Returns Ok(None) if there is no more data to read in the result set
     pub fn read_data_value(&mut self) -> Result<Option<DataValue>> {
         self.inner.read_data_value()
+    }
+
+    /// Reads an whole row from the underlying result set
+    /// Returns Ok(None) if there are no more rows left in the result set.
+    pub fn read_row(&mut self) -> Result<Option<HashMap<String, DataValue>>> {
+        let mut row = HashMap::new();
+
+        for (idx, (col, _)) in self.structure.cols.iter().enumerate() {
+            let val = self.inner.read_data_value()?;
+
+            if val.is_none() {
+                if idx == 0 {
+                    return Ok(None);
+                } else {
+                    bail!("Unexpected end of data stream occurred mid-row")
+                }
+            }
+
+            row.insert(col.clone(), val.unwrap());
+        }
+
+        Ok(Some(row))
     }
 }
 
@@ -132,5 +160,124 @@ pub(super) mod rs_tests {
         );
 
         assert_eq!(res.read_data_value().unwrap(), Some(DataValue::Int32(123)));
+    }
+
+    #[test]
+    fn test_result_set_reader_read_row_single_col() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![("a".to_string(), DataType::Int32)]),
+            [
+                vec![1u8],                      // not null
+                123_i32.to_ne_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                456_i32.to_ne_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                789_i32.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_row().unwrap(),
+            Some(
+                vec![("a".into(), DataValue::Int32(123))]
+                    .into_iter()
+                    .collect()
+            )
+        );
+        assert_eq!(
+            res.read_row().unwrap(),
+            Some(
+                vec![("a".into(), DataValue::Int32(456))]
+                    .into_iter()
+                    .collect()
+            )
+        );
+        assert_eq!(
+            res.read_row().unwrap(),
+            Some(
+                vec![("a".into(), DataValue::Int32(789))]
+                    .into_iter()
+                    .collect()
+            )
+        );
+        assert_eq!(res.read_row().unwrap(), None);
+    }
+
+    #[test]
+    fn test_result_set_reader_read_row_multiple_cols() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                       // not null
+                123_i32.to_ne_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                456_i32.to_ne_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                789_i32.to_ne_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                1234_i32.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_row().unwrap(),
+            Some(
+                vec![
+                    ("a".into(), DataValue::Int32(123)),
+                    ("b".into(), DataValue::Int32(456))
+                ]
+                .into_iter()
+                .collect()
+            )
+        );
+        assert_eq!(
+            res.read_row().unwrap(),
+            Some(
+                vec![
+                    ("a".into(), DataValue::Int32(789)),
+                    ("b".into(), DataValue::Int32(1234))
+                ]
+                .into_iter()
+                .collect()
+            )
+        );
+        assert_eq!(res.read_row().unwrap(), None);
+    }
+
+    #[test]
+    fn test_result_set_reader_read_row_end_mid_row_error() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                      // not null
+                123_i32.to_ne_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                456_i32.to_ne_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                789_i32.to_ne_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_row().unwrap(),
+            Some(
+                vec![
+                    ("a".into(), DataValue::Int32(123)),
+                    ("b".into(), DataValue::Int32(456))
+                ]
+                .into_iter()
+                .collect()
+            )
+        );
+        res.read_row().unwrap_err();
     }
 }
