@@ -367,7 +367,7 @@ impl OracleJdbcQueryCompiler {
         // TODO: custom query
         Ok(match &source {
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
-                database_name: Some(db),
+                owner_name: Some(db),
                 table_name: table,
                 ..
             }) => format!(
@@ -376,7 +376,7 @@ impl OracleJdbcQueryCompiler {
                 Self::compile_identifier(table.clone())?
             ),
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
-                database_name: None,
+                owner_name: None,
                 table_name: table,
                 ..
             }) => Self::compile_identifier(table.clone())?,
@@ -404,13 +404,7 @@ impl OracleJdbcQueryCompiler {
         let column = table
             .attribute_column_map
             .get(&eva.attribute_id)
-            .with_context(|| {
-                format!(
-                    "Unknown attribute {} on entity {:?}",
-                    eva.attribute_id,
-                    source.entity.clone()
-                )
-            })?;
+            .unwrap_or(&eva.attribute_id);
 
         let table_alias = if query.as_select().is_some() {
             eva.entity_alias.clone()

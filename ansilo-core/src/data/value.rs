@@ -2,12 +2,13 @@ use std::hash::Hash;
 
 use anyhow::{bail, Result};
 use chrono::{DateTime, LocalResult, TimeZone};
+use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 use super::DataType;
 
 /// Data container for respective types
-#[derive(PartialEq, PartialOrd, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, PartialOrd, Clone, Serialize, Deserialize, EnumAsInner)]
 pub enum DataValue {
     Null,
     Utf8String(String),
@@ -33,10 +34,6 @@ pub enum DataValue {
 }
 
 impl DataValue {
-    pub fn is_null(&self) -> bool {
-        *self == DataValue::Null
-    }
-
     pub fn r#type(&self) -> DataType {
         self.into()
     }
@@ -111,7 +108,7 @@ impl Hash for DataValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         core::mem::discriminant(self).hash(state);
         match self {
-            DataValue::Null => {},
+            DataValue::Null => {}
             DataValue::Utf8String(data) => data.hash(state),
             DataValue::Binary(data) => data.hash(state),
             DataValue::Boolean(data) => data.hash(state),
@@ -136,5 +133,4 @@ impl Hash for DataValue {
     }
 }
 
-impl Eq for DataValue {
-}
+impl Eq for DataValue {}

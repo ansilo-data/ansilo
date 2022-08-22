@@ -8,6 +8,7 @@ anyhow = { version = "1.0", features = ["backtrace"] }
 bincode = { version = "2.0.0-rc.1", features = ["serde"] }
 chrono = { version = "0.4", features = ["std", "clock", "time", "libc", "serde"] }
 chrono-tz = { version = "0.6", features = ["serde"] }
+enum-as-inner = "0.5"
 rust_decimal = { version = "1.25", features = ["serde", "std", "maths"] }
 serde = { version = "1.0", features=["derive"] }
 serde_json = "1.0"

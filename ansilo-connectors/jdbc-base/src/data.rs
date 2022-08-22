@@ -68,6 +68,7 @@ pub enum JdbcType {
     SqlXml = 29,
     TimeWithTimezone = 30,
     TimestampWithTimezone = 31,
+    Json = 33,
 }
 
 impl TryFrom<i32> for JdbcType {
@@ -126,7 +127,7 @@ pub(crate) fn default_type_to_jdbc(r#type: &DataType) -> Result<JdbcType> {
         DataType::Time => JdbcType::Time,
         DataType::DateTime => JdbcType::Timestamp,
         DataType::Null => JdbcType::Null,
-        DataType::JSON => JdbcType::NVarchar,
+        DataType::JSON => JdbcType::Json,
         DataType::Utf8String(_) => JdbcType::NVarchar,
         DataType::Binary => JdbcType::Blob,
         DataType::DateTimeWithTZ => JdbcType::TimestampWithTimezone,
@@ -165,6 +166,7 @@ pub(crate) fn default_type_to_rust(r#type: JdbcType) -> Result<DataType> {
         JdbcType::NChar | JdbcType::NVarchar | JdbcType::LongNVarchar => {
             DataType::Utf8String(StringOptions::default())
         }
+        JdbcType::Json => DataType::JSON,
         JdbcType::NClob => DataType::Binary,
         JdbcType::SqlXml => bail!("SQLXML type is not supported"),
         JdbcType::TimeWithTimezone => DataType::DateTimeWithTZ,
@@ -193,6 +195,7 @@ mod tests {
             DataType::Time,
             DataType::DateTime,
             DataType::DateTimeWithTZ,
+            DataType::JSON,
         ];
 
         for dt in data_type.into_iter() {

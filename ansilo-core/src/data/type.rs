@@ -1,10 +1,11 @@
 use bincode::{Decode, Encode};
+use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 use super::DataValue;
 
 /// Data type of values
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode, EnumAsInner)]
 pub enum DataType {
     Utf8String(StringOptions),
     Binary,
@@ -68,9 +69,7 @@ impl<'a> From<&'a DataValue> for DataType {
     fn from(v: &'a DataValue) -> Self {
         match v {
             DataValue::Null => DataType::Null,
-            DataValue::Utf8String(_) => {
-                DataType::Utf8String(StringOptions::default())
-            }
+            DataValue::Utf8String(_) => DataType::Utf8String(StringOptions::default()),
             DataValue::Binary(_) => DataType::Binary,
             DataValue::Boolean(_) => DataType::Boolean,
             DataValue::Int8(_) => DataType::Int8,

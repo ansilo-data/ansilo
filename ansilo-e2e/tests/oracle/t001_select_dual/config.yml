@@ -3,18 +3,8 @@ name: Oracle
 networking:
   port: 65432
 
-entities:
-  - id: dual
-    attributes:
-      - id: dummy
-        type: !Utf8String
-    source:
-      data_source: oracle
-      options:
-        type: Table
-        table_name: DUAL
-        attribute_column_map:
-          dummy: DUMMY
+# TODO: implement entity discovery for oracle
+# write test scripts for DUAL table select
 
 sources:
   - id: oracle

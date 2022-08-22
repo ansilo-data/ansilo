@@ -53,6 +53,7 @@ public interface JdbcDataType {
     public static final int TYPE_SQLXML = 29;
     public static final int TYPE_TIME_WITH_TIMEZONE = 30;
     public static final int TYPE_TIMESTAMP_WITH_TIMEZONE = 31;
+    public static final int TYPE_JSON = 33;
 
     /**
      * Gets the read mode of the data type
@@ -132,6 +133,11 @@ public interface JdbcDataType {
             case Types.TIMESTAMP_WITH_TIMEZONE:
                 return new DateTimeWithTzDataType();
 
+            case Types.JAVA_OBJECT:
+            case Types.STRUCT:
+            case Types.SQLXML:
+                return new JsonDataType();
+
             case Types.NULL:
                 return new NullDataType();
 
@@ -199,6 +205,9 @@ public interface JdbcDataType {
 
             case TYPE_TIMESTAMP_WITH_TIMEZONE:
                 return new DateTimeWithTzDataType();
+
+            case TYPE_JSON:
+                return new JsonDataType();
 
             case TYPE_NULL:
                 return new NullDataType();

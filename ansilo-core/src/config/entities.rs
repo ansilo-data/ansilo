@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::{Result, Context};
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
@@ -166,5 +167,13 @@ impl EntitySourceConfig {
             data_source: data_source.into(),
             options: serde_yaml::Value::Null,
         }
+    }
+
+    pub fn from<T: Serialize>(options: T) -> Result<Self> {
+        Ok(Self {
+            data_source: "".into(),
+            options: serde_yaml::to_value(options)
+                .context("Failed to serialize entity source options")?,
+        })
     }
 }

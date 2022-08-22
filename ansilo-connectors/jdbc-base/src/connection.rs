@@ -49,7 +49,7 @@ impl<TTypeMapping: JdbcTypeMapping> JdbcConnectionPool<TTypeMapping> {
                 .min_idle(Some(0))
                 .max_size(1000) // TODO: fix constant max for unpooled connections
                 .max_lifetime(Some(Duration::from_micros(1))) // TODO: fix constant values
-                .connection_timeout(Duration::from_secs(1))
+                .connection_timeout(Duration::from_secs(60))
                 .build(manager)
                 .context("Failed to build connection pool")?
         };

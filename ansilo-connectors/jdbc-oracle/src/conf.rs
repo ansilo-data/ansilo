@@ -70,7 +70,7 @@ impl OracleJdbcEntitySourceConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OracleJdbcTableOptions {
     /// The database name
-    pub database_name: Option<String>,
+    pub owner_name: Option<String>,
     /// The table name
     pub table_name: String,
     /// Mapping of attributes to their respective column names
@@ -79,12 +79,12 @@ pub struct OracleJdbcTableOptions {
 
 impl OracleJdbcTableOptions {
     pub fn new(
-        database_name: Option<String>,
+        owner_name: Option<String>,
         table_name: String,
         attribute_column_map: HashMap<String, String>,
     ) -> Self {
         Self {
-            database_name,
+            owner_name,
             table_name,
             attribute_column_map,
         }
@@ -192,7 +192,7 @@ properties:
         let conf = config::parse_config(
             r#"
 type: "Table"
-database_name: "db"
+owner_name: "db"
 table_name: "table"
 attribute_column_map:
   a: b
@@ -206,7 +206,7 @@ attribute_column_map:
         assert_eq!(
             parsed,
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
-                database_name: Some("db".to_string()),
+                owner_name: Some("db".to_string()),
                 table_name: "table".to_string(),
                 attribute_column_map: [
                     ("a".to_string(), "b".to_string()),
