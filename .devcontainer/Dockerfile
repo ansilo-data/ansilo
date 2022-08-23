@@ -44,6 +44,10 @@ RUN cd ~/ && \
     cd .. && sudo rm -rf ./mold/
 COPY .cargo /.cargo
 
+# Install llvm linker
+RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
+    sudo apt-get -y install lld
+
 # Install ecs-cli
 # TODO: Hopefully https://github.com/aws/amazon-ecs-cli/pull/1150 gets merged and can use mainline
 RUN sudo curl -Lo /usr/local/bin/ecs-cli https://ansilo-dev-tmp.s3.ap-southeast-2.amazonaws.com/ecs-cli && \
