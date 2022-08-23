@@ -3,9 +3,6 @@ name: Oracle
 networking:
   port: 65432
 
-# TODO: implement entity discovery for oracle
-# write test scripts for DUAL table select
-
 sources:
   - id: oracle
     type: jdbc.oracle

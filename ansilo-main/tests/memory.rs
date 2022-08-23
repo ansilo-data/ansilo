@@ -12,7 +12,7 @@ use std::{
 mod common;
 
 fn setup() {
-    // Remove ansilo / postgres data files before each test
+    // Remove ansilo & postgres data files before each test
     let _ = fs::remove_dir_all("/tmp/ansilo/pg-main/memory/");
 }
 

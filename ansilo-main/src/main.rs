@@ -1,3 +1,5 @@
+use ansilo_main::Ansilo;
+
 fn main() {
-    ansilo_main::main();
+    Ansilo::main();
 }
