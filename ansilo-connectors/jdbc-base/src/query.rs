@@ -405,7 +405,7 @@ mod tests {
             .write(
                 [
                     vec![1u8],                      // not null
-                    123_i32.to_ne_bytes().to_vec(), // value
+                    123_i32.to_be_bytes().to_vec(), // value
                 ]
                 .concat()
                 .as_slice(),
@@ -493,7 +493,7 @@ mod tests {
                 .write(
                     [
                         vec![1u8],                // not null
-                        i.to_ne_bytes().to_vec(), // value
+                        i.to_be_bytes().to_vec(), // value
                     ]
                     .concat()
                     .as_slice(),
@@ -550,7 +550,7 @@ mod tests {
             .write(
                 [
                     vec![1u8],                      // not null
-                    1234i32.to_ne_bytes().to_vec(), // value
+                    1234i32.to_be_bytes().to_vec(), // value
                     vec![1u8],                      // not null
                     vec![3u8],                      // length
                     "foo".as_bytes().to_vec(),      // data

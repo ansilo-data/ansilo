@@ -7,6 +7,7 @@ fn main() {
     // Build and install the ansilo-pgx so it can be loaded
     // via CREATE EXTENSION in the current postgres installation
     println!("cargo:rerun-if-changed=../ansilo-core/src");
+    println!("cargo:rerun-if-changed=../ansilo-connectors/base/src");
     println!("cargo:rerun-if-changed=../ansilo-pg/src");
     println!("cargo:rerun-if-changed=../ansilo-pgx/src");
     println!("cargo:rerun-if-env-changed=SSH_CONNECTION");

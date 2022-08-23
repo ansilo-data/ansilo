@@ -215,7 +215,7 @@ mod tests {
             buff[..read],
             [
                 vec![1u8], // (not null)
-                1i32.to_ne_bytes().to_vec()
+                1i32.to_be_bytes().to_vec()
             ]
             .concat()
         );

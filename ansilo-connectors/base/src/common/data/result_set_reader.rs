@@ -171,7 +171,7 @@ pub(super) mod rs_tests {
             RowStructure::new(vec![("a".to_string(), DataType::Int32)]),
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -185,11 +185,11 @@ pub(super) mod rs_tests {
             RowStructure::new(vec![("a".to_string(), DataType::Int32)]),
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                456_i32.to_ne_bytes().to_vec(), // data
+                456_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                789_i32.to_ne_bytes().to_vec(), // data
+                789_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -230,13 +230,13 @@ pub(super) mod rs_tests {
             ]),
             [
                 vec![1u8],                       // not null
-                123_i32.to_ne_bytes().to_vec(),  // data
+                123_i32.to_be_bytes().to_vec(),  // data
                 vec![1u8],                       // not null
-                456_i32.to_ne_bytes().to_vec(),  // data
+                456_i32.to_be_bytes().to_vec(),  // data
                 vec![1u8],                       // not null
-                789_i32.to_ne_bytes().to_vec(),  // data
+                789_i32.to_be_bytes().to_vec(),  // data
                 vec![1u8],                       // not null
-                1234_i32.to_ne_bytes().to_vec(), // data
+                1234_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -275,11 +275,11 @@ pub(super) mod rs_tests {
             ]),
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                456_i32.to_ne_bytes().to_vec(), // data
+                456_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                789_i32.to_ne_bytes().to_vec(), // data
+                789_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -307,13 +307,13 @@ pub(super) mod rs_tests {
             ]),
             [
                 vec![1u8],                       // not null
-                123_i32.to_ne_bytes().to_vec(),  // data
+                123_i32.to_be_bytes().to_vec(),  // data
                 vec![1u8],                       // not null
-                456_i32.to_ne_bytes().to_vec(),  // data
+                456_i32.to_be_bytes().to_vec(),  // data
                 vec![1u8],                       // not null
-                789_i32.to_ne_bytes().to_vec(),  // data
+                789_i32.to_be_bytes().to_vec(),  // data
                 vec![1u8],                       // not null
-                1234_i32.to_ne_bytes().to_vec(), // data
+                1234_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -346,11 +346,11 @@ pub(super) mod rs_tests {
             ]),
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                456_i32.to_ne_bytes().to_vec(), // data
+                456_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                789_i32.to_ne_bytes().to_vec(), // data
+                789_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );

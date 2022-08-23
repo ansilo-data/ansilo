@@ -177,7 +177,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // val
+                123_i32.to_be_bytes().to_vec(), // val
             ]
             .concat()
         );

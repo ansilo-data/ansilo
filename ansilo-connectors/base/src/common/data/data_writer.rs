@@ -85,35 +85,35 @@ where
                 }
                 (None | Some(DataType::Int16), DataValue::Int16(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.to_ne_bytes())?;
+                    self.write(&val.to_be_bytes())?;
                 }
                 (None | Some(DataType::UInt16), DataValue::UInt16(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.to_ne_bytes())?;
+                    self.write(&val.to_be_bytes())?;
                 }
                 (None | Some(DataType::Int32), DataValue::Int32(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.to_ne_bytes())?;
+                    self.write(&val.to_be_bytes())?;
                 }
                 (None | Some(DataType::UInt32), DataValue::UInt32(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.to_ne_bytes())?;
+                    self.write(&val.to_be_bytes())?;
                 }
                 (None | Some(DataType::Int64), DataValue::Int64(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.to_ne_bytes())?;
+                    self.write(&val.to_be_bytes())?;
                 }
                 (None | Some(DataType::UInt64), DataValue::UInt64(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.to_ne_bytes())?;
+                    self.write(&val.to_be_bytes())?;
                 }
                 (None | Some(DataType::Float32), DataValue::Float32(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.to_ne_bytes())?;
+                    self.write(&val.to_be_bytes())?;
                 }
                 (None | Some(DataType::Float64), DataValue::Float64(val)) => {
                     self.write(&[1])?;
-                    self.write(&val.to_ne_bytes())?;
+                    self.write(&val.to_be_bytes())?;
                 }
                 (None | Some(DataType::Decimal(_)), DataValue::Decimal(val)) => {
                     self.write(&[1])?;
@@ -169,12 +169,12 @@ where
 
     fn write_time(&mut self, val: ansilo_core::data::chrono::NaiveTime) -> Result<()> {
         self.write(&[val.hour() as u8, val.minute() as u8, val.second() as u8])?;
-        self.write(&val.nanosecond().to_ne_bytes())?;
+        self.write(&val.nanosecond().to_be_bytes())?;
         Ok(())
     }
 
     fn write_date(&mut self, val: ansilo_core::data::chrono::NaiveDate) -> Result<()> {
-        self.write(&val.year().to_ne_bytes())?;
+        self.write(&val.year().to_be_bytes())?;
         self.write(&[val.month() as u8, val.day() as u8])?;
         Ok(())
     }
@@ -276,7 +276,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
             ]
             .concat()
         )
@@ -370,7 +370,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
                 vec![3u8],                      // chunk length
                 "abc".as_bytes().to_vec(),      // data
@@ -409,13 +409,13 @@ mod tests {
             buff,
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
                 vec![3u8],                      // chunk length
                 "abc".as_bytes().to_vec(),      // data
                 vec![0u8],                      // eof
                 vec![1u8],                      // not null
-                456_i32.to_ne_bytes().to_vec(), // data
+                456_i32.to_be_bytes().to_vec(), // data
                 vec![0u8],                      // null
             ]
             .concat()
@@ -467,7 +467,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                       // not null
-                1234_i64.to_ne_bytes().to_vec(), // data
+                1234_i64.to_be_bytes().to_vec(), // data
             ]
             .concat()
         )
@@ -485,7 +485,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                       // not null
-                1234_u64.to_ne_bytes().to_vec(), // data
+                1234_u64.to_be_bytes().to_vec(), // data
             ]
             .concat()
         )
@@ -568,7 +568,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                       // not null
-                1234_u16.to_ne_bytes().to_vec(), // data
+                1234_u16.to_be_bytes().to_vec(), // data
             ]
             .concat()
         )
@@ -586,7 +586,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                       // not null
-                1234_i16.to_ne_bytes().to_vec(), // data
+                1234_i16.to_be_bytes().to_vec(), // data
             ]
             .concat()
         )
@@ -606,7 +606,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                           // not null
-                1234.567_f32.to_ne_bytes().to_vec(), // data
+                1234.567_f32.to_be_bytes().to_vec(), // data
             ]
             .concat()
         )
@@ -626,7 +626,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                           // not null
-                1234.567_f64.to_ne_bytes().to_vec(), // data
+                1234.567_f64.to_be_bytes().to_vec(), // data
             ]
             .concat()
         )
@@ -691,7 +691,7 @@ mod tests {
             buff,
             [
                 vec![1u8],                       // not null
-                2000_u32.to_ne_bytes().to_vec(), // year
+                2000_u32.to_be_bytes().to_vec(), // year
                 vec![10u8],                      // month
                 vec![24u8],                      // day
             ]
@@ -716,7 +716,7 @@ mod tests {
                 vec![6u8],                        // hour
                 vec![45u8],                       // min
                 vec![21u8],                       // sec
-                12345_u32.to_ne_bytes().to_vec(), // nano
+                12345_u32.to_be_bytes().to_vec(), // nano
             ]
             .concat()
         )
@@ -739,13 +739,13 @@ mod tests {
             buff,
             [
                 vec![1u8],                        // not null
-                2000_u32.to_ne_bytes().to_vec(),  // year
+                2000_u32.to_be_bytes().to_vec(),  // year
                 vec![10u8],                       // month
                 vec![24u8],                       // day
                 vec![6u8],                        // hour
                 vec![45u8],                       // min
                 vec![21u8],                       // sec
-                12345_u32.to_ne_bytes().to_vec(), // nano
+                12345_u32.to_be_bytes().to_vec(), // nano
             ]
             .concat()
         )
@@ -772,13 +772,13 @@ mod tests {
             [
                 vec![1u8],                                 // not null
                 vec![13u8],                                // dt len
-                2000_u32.to_ne_bytes().to_vec(),           // year
+                2000_u32.to_be_bytes().to_vec(),           // year
                 vec![10u8],                                // month
                 vec![24u8],                                // day
                 vec![6u8],                                 // hour
                 vec![45u8],                                // min
                 vec![21u8],                                // sec
-                12345_u32.to_ne_bytes().to_vec(),          // nano
+                12345_u32.to_be_bytes().to_vec(),          // nano
                 vec![19u8],                                // tz len
                 "Australia/Melbourne".as_bytes().to_vec(), // tz name
                 vec![0u8],                                 // tz end

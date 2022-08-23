@@ -79,14 +79,7 @@ public class JdbcPreparedQuery {
      * Parses the supplied buff as query parameters and binds them to the query
      */
     public int write(ByteBuffer buff) throws Exception {
-        // We are transfering data within the name process across JNI
-        // just use native-endianess
-        //
-        // This is fine if we assume the reader of the buffer is on the same host.
-        // In the current version this assumption hosts as postgres is run in the same container
-        // In future versions perhaps we have to revise this assumption if we start supporting
-        // running postgres on another host.
-        buff.order(ByteOrder.nativeOrder());
+        buff.order(ByteOrder.BIG_ENDIAN);
 
         var originalPosition = buff.position();
 
@@ -118,7 +111,7 @@ public class JdbcPreparedQuery {
                     // If buffer contains full parameter, we read from it directly
                     var tmpBuff =
                             ByteBuffer.wrap(localBuffer.toByteArray(), 0, fixedType.getFixedSize());
-                    tmpBuff.order(ByteOrder.nativeOrder());
+                    tmpBuff.order(ByteOrder.BIG_ENDIAN);
                     fixedType.bindParam(this.preparedStatement, param.getIndex(), tmpBuff);
                     this.resetLocalBuffer();
                 } else if (buff.remaining() > 0) {
@@ -172,7 +165,7 @@ public class JdbcPreparedQuery {
 
                 // Chunk length == 0 => EOF, we then bind the parameter
                 var streamBuff = ByteBuffer.wrap(localBuffer.toByteArray());
-                streamBuff.order(ByteOrder.nativeOrder());
+                streamBuff.order(ByteOrder.BIG_ENDIAN);
                 streamType.bindParam(this.preparedStatement, param.getIndex(), streamBuff);
                 this.resetLocalBuffer();
                 this.streamChunkLength = null;
@@ -234,7 +227,7 @@ public class JdbcPreparedQuery {
     private void bindConstantParameters() throws SQLException {
         for (var param : this.constantParameters) {
             var buff = param.getConstantValueBuffer();
-            buff.order(ByteOrder.nativeOrder());
+            buff.order(ByteOrder.BIG_ENDIAN);
             buff.rewind();
             param.getDataType().bindParam(this.preparedStatement, param.getIndex(), buff);
         }

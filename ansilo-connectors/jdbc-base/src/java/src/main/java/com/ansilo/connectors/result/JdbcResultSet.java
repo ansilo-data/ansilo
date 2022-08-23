@@ -104,11 +104,7 @@ public class JdbcResultSet {
             return 0;
         }
 
-        // We are transfering data within the name process across JNI
-        // just use native-endianess
-        // We will take care of endianess during serialisation when
-        // transferring to remote systems.
-        buff.order(ByteOrder.nativeOrder());
+        buff.order(ByteOrder.BIG_ENDIAN);
 
         int originalRemaining = buff.remaining();
 

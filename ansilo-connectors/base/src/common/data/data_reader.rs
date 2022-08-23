@@ -70,17 +70,17 @@ where
                 DataType::Boolean => DataValue::Boolean(self.read_exact::<1>()?[0] != 0),
                 DataType::Int8 => DataValue::Int8(self.read_exact::<1>()?[0] as i8),
                 DataType::UInt8 => DataValue::UInt8(self.read_exact::<1>()?[0]),
-                DataType::Int16 => DataValue::Int16(i16::from_ne_bytes(self.read_exact::<2>()?)),
-                DataType::UInt16 => DataValue::UInt16(u16::from_ne_bytes(self.read_exact::<2>()?)),
-                DataType::Int32 => DataValue::Int32(i32::from_ne_bytes(self.read_exact::<4>()?)),
-                DataType::UInt32 => DataValue::UInt32(u32::from_ne_bytes(self.read_exact::<4>()?)),
-                DataType::Int64 => DataValue::Int64(i64::from_ne_bytes(self.read_exact::<8>()?)),
-                DataType::UInt64 => DataValue::UInt64(u64::from_ne_bytes(self.read_exact::<8>()?)),
+                DataType::Int16 => DataValue::Int16(i16::from_be_bytes(self.read_exact::<2>()?)),
+                DataType::UInt16 => DataValue::UInt16(u16::from_be_bytes(self.read_exact::<2>()?)),
+                DataType::Int32 => DataValue::Int32(i32::from_be_bytes(self.read_exact::<4>()?)),
+                DataType::UInt32 => DataValue::UInt32(u32::from_be_bytes(self.read_exact::<4>()?)),
+                DataType::Int64 => DataValue::Int64(i64::from_be_bytes(self.read_exact::<8>()?)),
+                DataType::UInt64 => DataValue::UInt64(u64::from_be_bytes(self.read_exact::<8>()?)),
                 DataType::Float32 => {
-                    DataValue::Float32(f32::from_ne_bytes(self.read_exact::<4>()?))
+                    DataValue::Float32(f32::from_be_bytes(self.read_exact::<4>()?))
                 }
                 DataType::Float64 => {
-                    DataValue::Float64(f64::from_ne_bytes(self.read_exact::<8>()?))
+                    DataValue::Float64(f64::from_be_bytes(self.read_exact::<8>()?))
                 }
                 DataType::Decimal(_) => DataValue::Decimal(
                     Decimal::from_str_exact(&self.read_string()?)
@@ -129,13 +129,13 @@ where
             d[0] as _,
             d[1] as _,
             d[2] as _,
-            u32::from_ne_bytes([d[3], d[4], d[5], d[6]]),
+            u32::from_be_bytes([d[3], d[4], d[5], d[6]]),
         ))
     }
 
     fn read_date(d: [u8; 6]) -> Result<NaiveDate> {
         Ok(NaiveDate::from_ymd(
-            i32::from_ne_bytes([d[0], d[1], d[2], d[3]]),
+            i32::from_be_bytes([d[0], d[1], d[2], d[3]]),
             d[4] as _,
             d[5] as _,
         ))
@@ -236,7 +236,7 @@ mod tests {
             vec![DataType::Int32],
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -290,11 +290,11 @@ mod tests {
             vec![DataType::Int32],
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                456_i32.to_ne_bytes().to_vec(), // data
+                456_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
-                789_i32.to_ne_bytes().to_vec(), // data
+                789_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -311,7 +311,7 @@ mod tests {
             vec![DataType::Int32],
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
                 vec![0u8],                      // not null
                 vec![0u8],                      // not null
             ]
@@ -333,13 +333,13 @@ mod tests {
             ],
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
                 vec![3u8],                      // read length
                 "abc".as_bytes().to_vec(),      // data
                 vec![0u8],                      // read length (eof)
                 vec![1u8],                      // not null
-                456_i32.to_ne_bytes().to_vec(), // data
+                456_i32.to_be_bytes().to_vec(), // data
                 vec![1u8],                      // not null
                 vec![3u8],                      // read length
                 "123".as_bytes().to_vec(),      // data
@@ -367,7 +367,7 @@ mod tests {
             vec![DataType::Int64],
             [
                 vec![1u8],                       // not null
-                1234_i64.to_ne_bytes().to_vec(), // data
+                1234_i64.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -382,7 +382,7 @@ mod tests {
             vec![DataType::UInt64],
             [
                 vec![1u8],                       // not null
-                1234_u64.to_ne_bytes().to_vec(), // data
+                1234_u64.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -400,7 +400,7 @@ mod tests {
             vec![DataType::Int32, DataType::Int32],
             [
                 vec![1u8],                      // not null
-                123_i32.to_ne_bytes().to_vec(), // data
+                123_i32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -445,7 +445,7 @@ mod tests {
             vec![DataType::UInt16],
             [
                 vec![1u8],                       // not null
-                1234_u16.to_ne_bytes().to_vec(), // data
+                1234_u16.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -463,7 +463,7 @@ mod tests {
             vec![DataType::Int16],
             [
                 vec![1u8],                       // not null
-                1234_i16.to_ne_bytes().to_vec(), // data
+                1234_i16.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -478,7 +478,7 @@ mod tests {
             vec![DataType::Float32],
             [
                 vec![1u8],                          // not null
-                123.456_f32.to_ne_bytes().to_vec(), // data
+                123.456_f32.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -496,7 +496,7 @@ mod tests {
             vec![DataType::Float64],
             [
                 vec![1u8],                          // not null
-                123.456_f64.to_ne_bytes().to_vec(), // data
+                123.456_f64.to_be_bytes().to_vec(), // data
             ]
             .concat(),
         );
@@ -553,7 +553,7 @@ mod tests {
             vec![DataType::Date],
             [
                 vec![1u8],                       // not null
-                2020_i32.to_ne_bytes().to_vec(), // year
+                2020_i32.to_be_bytes().to_vec(), // year
                 vec![10u8],                      // month
                 vec![21u8],                      // day
             ]
@@ -575,7 +575,7 @@ mod tests {
                 vec![12u8],                       // hour
                 vec![45u8],                       // minute
                 vec![23u8],                       // second
-                12345_u32.to_ne_bytes().to_vec(), // nanosec
+                12345_u32.to_be_bytes().to_vec(), // nanosec
             ]
             .concat(),
         );
@@ -592,13 +592,13 @@ mod tests {
             vec![DataType::DateTime],
             [
                 vec![1u8],                        // not null
-                2020_i32.to_ne_bytes().to_vec(),  // year
+                2020_i32.to_be_bytes().to_vec(),  // year
                 vec![10u8],                       // month
                 vec![21u8],                       // day
                 vec![12u8],                       // hour
                 vec![45u8],                       // minute
                 vec![23u8],                       // second
-                12345_u32.to_ne_bytes().to_vec(), // nanosec
+                12345_u32.to_be_bytes().to_vec(), // nanosec
             ]
             .concat(),
         );
@@ -619,13 +619,13 @@ mod tests {
             [
                 vec![1u8],                                 // not null
                 vec![13u8],                                // dt (len)
-                2020_i32.to_ne_bytes().to_vec(),           // year
+                2020_i32.to_be_bytes().to_vec(),           // year
                 vec![10u8],                                // month
                 vec![21u8],                                // day
                 vec![12u8],                                // hour
                 vec![45u8],                                // minute
                 vec![23u8],                                // second
-                12345_u32.to_ne_bytes().to_vec(),          // nanosec
+                12345_u32.to_be_bytes().to_vec(),          // nanosec
                 vec![19u8],                                // tz (len)
                 "Australia/Melbourne".as_bytes().to_vec(), // tz (name)
                 vec![0u8],                                 // tz (eof)
@@ -652,13 +652,13 @@ mod tests {
             [
                 vec![1u8],                                 // not null
                 vec![13u8 + 19u8],                         // dt + tz (len)
-                2020_i32.to_ne_bytes().to_vec(),           // year
+                2020_i32.to_be_bytes().to_vec(),           // year
                 vec![10u8],                                // month
                 vec![21u8],                                // day
                 vec![12u8],                                // hour
                 vec![45u8],                                // minute
                 vec![23u8],                                // second
-                12345_u32.to_ne_bytes().to_vec(),          // nanosec
+                12345_u32.to_be_bytes().to_vec(),          // nanosec
                 "Australia/Melbourne".as_bytes().to_vec(), // tz (name)
                 vec![0u8],                                 // tz (eof)
             ]

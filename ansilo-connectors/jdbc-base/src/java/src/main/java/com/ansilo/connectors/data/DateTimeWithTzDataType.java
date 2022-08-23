@@ -30,8 +30,8 @@ public class DateTimeWithTzDataType implements JdbcStreamDataType {
             return null;
         }
 
-        var buff = ByteBuffer.allocate(17);
-        buff.order(ByteOrder.nativeOrder());
+        var buff = ByteBuffer.allocate(16);
+        buff.order(ByteOrder.BIG_ENDIAN);
 
         var dt = val.toInstant().atZone(ZoneId.of("UTC"));
         buff.putInt(dt.getYear());

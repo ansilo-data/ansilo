@@ -37,7 +37,7 @@ public class DateTimeWithTzDataTypeTest extends DataTypeTest {
         when(this.resultSet.wasNull()).thenReturn(false);
 
         var stream = this.dataType.getStream(resultSet, 0);
-        var buff = ByteBuffer.allocate(17);
+        var buff = ByteBuffer.allocate(16);
 
         buff.putInt(2020);
         buff.put((byte) 1);

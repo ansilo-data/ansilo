@@ -492,7 +492,7 @@ public class JdbcPreparedQueryTest {
 
     private ByteBuffer newByteBuffer(int capacity) {
         var buff = ByteBuffer.allocate(capacity);
-        buff.order(ByteOrder.nativeOrder());
+        buff.order(ByteOrder.BIG_ENDIAN);
         return buff;
     }
 
