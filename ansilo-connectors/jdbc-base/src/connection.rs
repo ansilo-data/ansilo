@@ -211,7 +211,7 @@ impl<TTypeMapping: JdbcTypeMapping> Connection for JdbcConnection<TTypeMapping> 
                     state.jdbc_con.as_obj(),
                     "prepare",
                     "(Ljava/lang/String;Ljava/util/List;)Lcom/ansilo/connectors/query/JdbcPreparedQuery;",
-                    &[JValue::Object(*env.new_string(query.query)?), JValue::Object(param_types)],
+                    &[JValue::Object(*env.new_string(query.query.clone())?), JValue::Object(param_types)],
                 )
                 .context("Failed to invoke JdbcConnection::prepare")?
                 .l()
@@ -227,7 +227,7 @@ impl<TTypeMapping: JdbcTypeMapping> Connection for JdbcConnection<TTypeMapping> 
         Ok(JdbcPreparedQuery::new(
             Arc::clone(&state.jvm),
             jdbc_prepared_query,
-            query.params,
+            query,
         ))
     }
 

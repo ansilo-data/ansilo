@@ -5,7 +5,7 @@ use ansilo_core::{
     err::{bail, Context, Result},
 };
 use jni::{
-    objects::{GlobalRef, JMethodID, JObject, JValue},
+    objects::{GlobalRef, JList, JMethodID, JObject, JString, JValue},
     signature::{JavaType, Primitive},
     sys::jmethodID,
 };
@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use ansilo_connectors_base::{
     common::data::DataWriter,
-    interface::{QueryHandle, QueryInputStructure},
+    interface::{LoggedQuery, QueryHandle, QueryInputStructure},
 };
 
 use super::{JdbcResultSet, JdbcTypeMapping, Jvm};
@@ -50,22 +50,18 @@ impl JdbcQuery {
 pub struct JdbcPreparedQuery<TTypeMapping: JdbcTypeMapping> {
     pub jvm: Arc<Jvm>,
     pub jdbc_prepared_statement: GlobalRef,
-    pub params: Vec<JdbcQueryParam>,
+    pub query: JdbcQuery,
     write_method_id: Option<jmethodID>,
     as_read_only_buffer_method_id: Option<jmethodID>,
     _p: PhantomData<TTypeMapping>,
 }
 
 impl<TTypeMapping: JdbcTypeMapping> JdbcPreparedQuery<TTypeMapping> {
-    pub fn new(
-        jvm: Arc<Jvm>,
-        jdbc_prepared_statement: GlobalRef,
-        params: Vec<JdbcQueryParam>,
-    ) -> Self {
+    pub fn new(jvm: Arc<Jvm>, jdbc_prepared_statement: GlobalRef, query: JdbcQuery) -> Self {
         Self {
             jvm,
             jdbc_prepared_statement,
-            params,
+            query,
             write_method_id: None,
             as_read_only_buffer_method_id: None,
             _p: PhantomData,
@@ -108,7 +104,8 @@ impl<TTypeMapping: JdbcTypeMapping> QueryHandle for JdbcPreparedQuery<TTypeMappi
 
     fn get_structure(&self) -> Result<QueryInputStructure> {
         Ok(QueryInputStructure::new(
-            self.params
+            self.query
+                .params
                 .iter()
                 .filter_map(|i| match i {
                     JdbcQueryParam::Dynamic(id, data_type) => Some((*id, data_type.clone())),
@@ -198,6 +195,52 @@ impl<TTypeMapping: JdbcTypeMapping> QueryHandle for JdbcPreparedQuery<TTypeMappi
 
             Ok(JdbcResultSet::new(Arc::clone(&self.jvm), jdbc_result_set))
         })
+    }
+
+    fn logged(&self) -> Result<LoggedQuery> {
+        let params = self.jvm.with_local_frame(32, |env| {
+            let logged_params = env
+                .call_method(
+                    self.jdbc_prepared_statement.as_obj(),
+                    "getLoggedParams",
+                    "()Ljava/util/List;",
+                    &[],
+                )
+                .context("Failed to invoke JdbcPreparedQuery::getLoggedParams")?
+                .l()
+                .context("Failed to convert List into object")?;
+
+            self.jvm.check_exceptions(env)?;
+
+            let logged_params =
+                JList::from_env(env, logged_params).context("Failed to read list")?;
+            let mut params = vec![];
+
+            for param in logged_params.iter().context("Failed to iterate list")? {
+                let param = env.auto_local(
+                    env.call_method(param, "toString", "()Ljava/lang/String;", &[])
+                        .context("Failed to call LoggedParam::toString")?
+                        .l()
+                        .context("Failed to convert to object")?,
+                );
+                self.jvm.check_exceptions(env)?;
+
+                let param = env
+                    .get_string(JString::from(param.as_obj()))
+                    .context("Failed to convert java string")
+                    .and_then(|i| {
+                        i.to_str()
+                            .map(|i| i.to_string())
+                            .context("Failed to convert java string")
+                    })?;
+
+                params.push(param);
+            }
+
+            Ok(params)
+        })?;
+
+        Ok(LoggedQuery::new(&self.query.query, params, None))
     }
 }
 
@@ -291,6 +334,7 @@ mod tests {
         query: &str,
         params: Vec<JdbcQueryParam>,
     ) -> JdbcPreparedQuery<SqliteTypeMapping> {
+        let query = JdbcQuery::new(query, params);
         let env = &jvm.env().unwrap();
 
         let prepared_statement = env
@@ -298,13 +342,13 @@ mod tests {
                 jdbc_con,
                 "prepareStatement",
                 "(Ljava/lang/String;)Ljava/sql/PreparedStatement;",
-                &[JValue::Object(*env.new_string(query).unwrap())],
+                &[JValue::Object(*env.new_string(&query.query).unwrap())],
             )
             .unwrap();
 
         let param_types = env.new_object("java/util/ArrayList", "()V", &[]).unwrap();
 
-        for (idx, param) in params.iter().enumerate() {
+        for (idx, param) in query.params.iter().enumerate() {
             let data_type = param
                 .to_java_jdbc_parameter::<SqliteTypeMapping>(idx + 1, jvm)
                 .unwrap();
@@ -328,7 +372,7 @@ mod tests {
 
         let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query).unwrap();
 
-        JdbcPreparedQuery::new(Arc::clone(&jvm), jdbc_prepared_query, params)
+        JdbcPreparedQuery::new(Arc::clone(&jvm), jdbc_prepared_query, query)
     }
 
     #[test]
@@ -463,6 +507,8 @@ mod tests {
 
             assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(i)));
             assert_eq!(rs.read_data_value().unwrap(), None);
+
+            prepared_query.restart().unwrap();
         }
     }
 
@@ -483,6 +529,59 @@ mod tests {
 
         assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(123)));
         assert_eq!(rs.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_prepared_query_get_logged() {
+        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jdbc_con = create_sqlite_memory_connection(&jvm);
+
+        let mut prepared_query = create_prepared_query(
+            &jvm,
+            jdbc_con,
+            "SELECT ? as num, ? as str",
+            vec![
+                JdbcQueryParam::Dynamic(1, DataType::Int32),
+                JdbcQueryParam::Dynamic(2, DataType::rust_string()),
+            ],
+        );
+
+        prepared_query
+            .write(
+                [
+                    vec![1u8],                      // not null
+                    1234i32.to_ne_bytes().to_vec(), // value
+                    vec![1u8],                      // not null
+                    vec![3u8],                      // length
+                    "foo".as_bytes().to_vec(),      // data
+                    vec![0u8],                      // eof
+                ]
+                .concat()
+                .as_slice(),
+            )
+            .unwrap();
+
+        let logged = prepared_query.logged().unwrap();
+
+        assert_eq!(
+            logged,
+            LoggedQuery::new(
+                "SELECT ? as num, ? as str",
+                vec![
+                    "LoggedParam [index=1, type=INTEGER, value=1234]".into(),
+                    "LoggedParam [index=2, type=NVARCHAR, value=foo]".into()
+                ],
+                None
+            )
+        );
+
+        // Restart should clear query log
+        prepared_query.restart().unwrap();
+        let logged = prepared_query.logged().unwrap();
+        assert_eq!(
+            logged,
+            LoggedQuery::new("SELECT ? as num, ? as str", vec![], None)
+        );
     }
 
     #[test]

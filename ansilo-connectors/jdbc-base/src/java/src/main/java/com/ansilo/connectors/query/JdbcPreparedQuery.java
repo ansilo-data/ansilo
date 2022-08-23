@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import com.ansilo.connectors.data.JdbcFixedSizeDataType;
@@ -17,9 +16,10 @@ import com.ansilo.connectors.result.JdbcResultSet;
  */
 public class JdbcPreparedQuery {
     /**
-     * The actual JDBC statement
+     * The inner JDBC statement We wrap it in a LoggingPreparedStatement to facilate capturing of
+     * query params.
      */
-    private PreparedStatement preparedStatement;
+    private LoggingPreparedStatement preparedStatement;
 
     /**
      * The list of all query paramaters
@@ -60,14 +60,14 @@ public class JdbcPreparedQuery {
      * Creates a new prepared query
      */
     public JdbcPreparedQuery(PreparedStatement preparedStatement, List<JdbcParameter> parameters) {
-        this.preparedStatement = preparedStatement;
+        this.preparedStatement = new LoggingPreparedStatement(preparedStatement);
         this.parameters = parameters;
         this.dynamicParameters = parameters.stream().filter(i -> !i.isConstant()).toList();
         this.constantParameters = parameters.stream().filter(i -> i.isConstant()).toList();
     }
 
     public PreparedStatement getPreparedStatement() {
-        return preparedStatement;
+        return preparedStatement.getInner();
     }
 
     public List<JdbcParameter> getParameters() {
@@ -192,6 +192,7 @@ public class JdbcPreparedQuery {
     public void restart() throws SQLException {
         // Reset parameter index for next execution
         this.paramIndex = 0;
+        this.preparedStatement.clearLoggedParams();
     }
 
     /**
@@ -215,11 +216,14 @@ public class JdbcPreparedQuery {
         var resultSet =
                 new JdbcResultSet(hasResultSet ? this.preparedStatement.getResultSet() : null);
 
-
-        // Reset parameter index for next execution
-        this.paramIndex = 0;
-
         return resultSet;
+    }
+
+    /**
+     * Gets the logged query parameters for this execution.
+     */
+    public List<LoggedParam> getLoggedParams() {
+        return this.preparedStatement.getLoggedParams();
     }
 
     private void bindConstantParameters() throws SQLException {

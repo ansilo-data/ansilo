@@ -1,7 +1,7 @@
 use std::{collections::HashMap, io, sync::Arc};
 
 use ansilo_core::{
-    data::DataType,
+    data::{DataType, DataValue},
     err::{Context, Result},
     sqlil,
 };
@@ -9,10 +9,13 @@ use serde::Serialize;
 
 use ansilo_connectors_base::{
     common::{data::DataReader, entity::ConnectorEntityConfig},
-    interface::{QueryHandle, QueryInputStructure},
+    interface::{LoggedQuery, QueryHandle, QueryInputStructure},
 };
 
-use super::{executor::MemoryQueryExecutor, MemoryDatabase, MemoryResultSet, MemoryConnectorEntitySourceConfig};
+use super::{
+    executor::MemoryQueryExecutor, MemoryConnectorEntitySourceConfig, MemoryDatabase,
+    MemoryResultSet,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct MemoryQuery {
@@ -72,6 +75,32 @@ impl QueryHandle for MemoryQueryHandle {
     }
 
     fn execute(&mut self) -> Result<MemoryResultSet> {
+        let params = self.parse_params()?;
+
+        let executor = MemoryQueryExecutor::new(
+            Arc::clone(&self.data),
+            self.entities.clone(),
+            self.query.query.clone(),
+            params,
+        );
+
+        executor.run()
+    }
+
+    fn logged(&self) -> Result<LoggedQuery> {
+        Ok(LoggedQuery::new(
+            format!("{:?}", self.query),
+            self.parse_params()?
+                .into_iter()
+                .map(|p| format!("{:?}", p))
+                .collect(),
+            None,
+        ))
+    }
+}
+
+impl MemoryQueryHandle {
+    fn parse_params(&self) -> Result<HashMap<u32, DataValue>> {
         let mut params = HashMap::new();
         let mut param_reader = DataReader::new(
             io::Cursor::new(self.param_buff.clone()),
@@ -87,13 +116,6 @@ impl QueryHandle for MemoryQueryHandle {
             );
         }
 
-        let executor = MemoryQueryExecutor::new(
-            Arc::clone(&self.data),
-            self.entities.clone(),
-            self.query.query.clone(),
-            params,
-        );
-
-        executor.run()
+        Ok(params)
     }
 }

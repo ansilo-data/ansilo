@@ -7,7 +7,7 @@ use ansilo_core::{
 
 use ansilo_connectors_base::{
     common::entity::ConnectorEntityConfig,
-    interface::{QueryInputStructure, RowStructure},
+    interface::{LoggedQuery, QueryInputStructure, RowStructure},
 };
 
 use ansilo_connectors_memory::{
@@ -277,6 +277,13 @@ impl QueryHandle for QueryHandles {
             QueryHandles::OracleJdbc(h) => ResultSets::OracleJdbc(h.execute()?),
             QueryHandles::Memory(h) => ResultSets::Memory(h.execute()?),
         })
+    }
+
+    fn logged(&self) -> Result<LoggedQuery> {
+        match self {
+            QueryHandles::OracleJdbc(h) => h.logged(),
+            QueryHandles::Memory(h) => h.logged(),
+        }
     }
 }
 

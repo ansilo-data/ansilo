@@ -135,6 +135,10 @@ mod tests {
         fn execute(&mut self) -> Result<MockResultSet> {
             unimplemented!()
         }
+
+        fn logged(&self) -> Result<crate::interface::LoggedQuery> {
+            unimplemented!()
+        }
     }
 
     impl MockQueryHandle {

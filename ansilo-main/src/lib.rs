@@ -23,6 +23,8 @@ pub mod conf;
 pub mod dev;
 pub mod handlers;
 
+pub use ansilo_pg::fdw::log::RemoteQueryLog;
+
 use build::*;
 use conf::*;
 
@@ -34,6 +36,8 @@ pub struct Ansilo {
     command: Command,
     /// Running subsystems
     subsystems: Option<Subsystems>,
+    /// Remote query log
+    log: RemoteQueryLog,
 }
 
 struct Subsystems {
@@ -52,12 +56,13 @@ impl Ansilo {
         ansilo_logging::init_logging().unwrap();
         info!("Hi, thanks for using Ansilo!");
 
-        Self::start(Command::parse()).unwrap().wait().unwrap();
+        Self::start(Command::parse(), None).unwrap().wait().unwrap();
     }
 
     /// Runs the supplied command
-    pub fn start(command: Command) -> Result<Self> {
+    pub fn start(command: Command, log: Option<RemoteQueryLog>) -> Result<Self> {
         let args = command.args();
+        let log = log.unwrap_or_default();
 
         // Load configuration
         let config_path = args.config.clone().unwrap_or("/etc/ansilo/main.yml".into());
@@ -66,8 +71,13 @@ impl Ansilo {
         let pools = Self::init_connectors();
 
         info!("Starting fdw listener...");
-        let fdw = FdwServer::start(conf(), pg_conf().fdw_socket_path.clone(), pools)
-            .context("Failed to start fdw server")?;
+        let fdw = FdwServer::start(
+            conf(),
+            pg_conf().fdw_socket_path.clone(),
+            pools,
+            log.clone(),
+        )
+        .context("Failed to start fdw server")?;
 
         let mut postgres =
             if let (Command::Run(_), Some(build_info)) = (&command, BuildInfo::fetch()?) {
@@ -83,6 +93,7 @@ impl Ansilo {
             return Ok(Self {
                 command,
                 subsystems: None,
+                log,
             });
         }
 
@@ -104,7 +115,13 @@ impl Ansilo {
                 fdw,
                 proxy,
             }),
+            log,
         })
+    }
+
+    /// Gets the remote query log
+    pub fn log(&self) -> &RemoteQueryLog {
+        &self.log
     }
 
     /// Waits for instance to terminate

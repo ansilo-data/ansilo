@@ -1,5 +1,6 @@
 package com.ansilo.connectors.query;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -20,6 +21,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.Int32DataType;
+import com.ansilo.connectors.data.JdbcDataType;
 import com.ansilo.connectors.data.VarcharDataType;
 import com.ansilo.connectors.result.JdbcResultSet;
 
@@ -330,7 +332,7 @@ public class JdbcPreparedQueryTest {
             assertEquals(5, wrote);
 
             this.preparedQuery.execute();
-            this.preparedQuery.restart();;
+            this.preparedQuery.restart();
         }
 
         verify(this.innerStatement, times(3)).setInt(1, 123);
@@ -397,12 +399,82 @@ public class JdbcPreparedQueryTest {
         buff2.put((byte) 1); // not null
         buff2.putInt(888); // val
         buff2.rewind();
+        this.preparedQuery.restart();
         wrote = this.preparedQuery.write(buff2);
         assertEquals(5, wrote);
         this.preparedQuery.execute();
         verify(this.innerStatement, times(1)).setInt(1, 123);
         verify(this.innerStatement, times(1)).setInt(2, 888);
         verify(this.innerStatement, times(1)).setInt(3, 789);
+    }
+
+    @Test
+    void testLoggedParamsWithSingleParam() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.initPreparedQuery();
+
+        var buff = this.newByteBuffer(5);
+        buff.put((byte) 1); // not null
+        buff.putInt(123); // val
+        buff.rewind();
+
+        this.preparedQuery.write(buff);
+
+        var params = this.preparedQuery.getLoggedParams();
+
+        assertArrayEquals(List.of(new LoggedParam(1, JdbcDataType.TYPE_INTEGER, 123)).toArray(),
+                params.toArray());
+    }
+
+    @Test
+    void testLoggedParamsWithMultipleParams() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+        this.initPreparedQuery();
+
+        var buff = this.newByteBuffer(11);
+        // param 1
+        buff.put((byte) 1); // not null
+        buff.putInt(123); // val
+        // param 2
+        buff.put((byte) 1); // not null
+        buff.put(this.lengthToByte(3)); // length
+        buff.put(StandardCharsets.UTF_8.encode("abc"));
+        buff.put(this.lengthToByte(0)); // eof
+        buff.rewind();
+
+        this.preparedQuery.write(buff);
+
+        var params = this.preparedQuery.getLoggedParams();
+
+        assertArrayEquals(
+                List.of(new LoggedParam(1, JdbcDataType.TYPE_INTEGER, 123),
+                        new LoggedParam(1, JdbcDataType.TYPE_NVARCHAR, "abc")).toArray(),
+                params.toArray());
+    }
+
+    @Test
+    void getLoggedQueryParamsMultipleWithRestart() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.initPreparedQuery();
+
+        for (var i : new int[] {1, 2, 3}) {
+            var buff = this.newByteBuffer(5);
+            buff.put((byte) 1); // not null
+            buff.putInt(i); // val
+            buff.rewind();
+
+            var wrote = this.preparedQuery.write(buff);
+
+            assertEquals(5, wrote);
+
+            assertArrayEquals(List.of(new LoggedParam(1, JdbcDataType.TYPE_INTEGER, i)).toArray(),
+                    this.preparedQuery.getLoggedParams().toArray());
+
+            this.preparedQuery.restart();
+
+            assertArrayEquals(new LoggedParam[0], this.preparedQuery.getLoggedParams().toArray());
+        }
     }
 
     @Test

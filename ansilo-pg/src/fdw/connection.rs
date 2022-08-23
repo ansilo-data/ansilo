@@ -23,11 +23,14 @@ use ansilo_logging::warn;
 
 use super::{
     channel::IpcServerChannel,
+    log::RemoteQueryLog,
     proto::{ClientMessage, ClientQueryMessage, QueryId, ServerMessage, ServerQueryMessage},
 };
 
 /// A single connection from the FDW
 pub(crate) struct FdwConnection<'a, TConnector: Connector> {
+    /// ID of the data source
+    data_source_id: String,
     /// Global config
     nc: &'static NodeConfig,
     /// The unix socket the server listens on
@@ -42,6 +45,8 @@ pub(crate) struct FdwConnection<'a, TConnector: Connector> {
     queries: HashMap<QueryId, FdwQueryState<TConnector>>,
     /// Current query id counter
     query_id: QueryId,
+    /// Remote query log
+    log: RemoteQueryLog,
 }
 
 enum FdwConnectionState<TConnector: Connector> {
@@ -61,12 +66,15 @@ enum FdwQueryState<TConnector: Connector> {
 
 impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     pub(crate) fn new(
+        data_source_id: String,
         nc: &'static NodeConfig,
         chan: IpcServerChannel,
         entities: &'a RwLock<ConnectorEntityConfig<TConnector::TEntitySourceConfig>>,
         pool: TConnector::TConnectionPool,
+        log: RemoteQueryLog,
     ) -> Self {
         Self {
+            data_source_id,
             nc,
             chan: Some(chan),
             entities,
@@ -74,6 +82,7 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             connection: FdwConnectionState::New,
             queries: HashMap::new(),
             query_id: 0,
+            log,
         }
     }
 
@@ -420,8 +429,12 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         let result_set = handle.0.execute()?;
         let row_structure = result_set.get_structure()?;
 
+        let query = handle.0.logged()?;
+        self.log.record(&self.data_source_id, query)?;
+
         *Self::query(&mut self.queries, query_id)? =
             FdwQueryState::Executed(handle, ResultSetRead(result_set));
+
         Ok(row_structure)
     }
 
@@ -585,7 +598,6 @@ impl<TConnector: Connector> FdwConnectionState<TConnector> {
 mod tests {
     use std::{
         io,
-        sync::Arc,
         thread::{self, JoinHandle},
     };
 
@@ -649,19 +661,31 @@ mod tests {
     fn create_mock_connection_opts(
         name: &'static str,
         db_conf: MemoryDatabaseConf,
-    ) -> (JoinHandle<Result<Arc<MemoryDatabase>>>, IpcClientChannel) {
+        log: RemoteQueryLog,
+    ) -> (
+        JoinHandle<Result<FdwConnection<MemoryConnector>>>,
+        IpcClientChannel,
+    ) {
         let (entities, pool) = create_memory_connection_pool(db_conf);
 
         let (client_chan, server_chan) = create_tmp_ipc_channel(name);
 
         let thread = thread::spawn(move || {
             let entities = RwLock::new(entities);
-            let mut fdw =
-                FdwConnection::<MemoryConnector>::new(&NODE_CONFIG, server_chan, &entities, pool);
+            let entities = Box::leak(Box::new(entities));
+
+            let mut fdw = FdwConnection::<MemoryConnector>::new(
+                "memory".into(),
+                &NODE_CONFIG,
+                server_chan,
+                entities,
+                pool,
+                log,
+            );
 
             fdw.process()?;
 
-            Ok(fdw.pool.conf())
+            Ok(fdw)
         });
 
         (thread, client_chan)
@@ -669,8 +693,11 @@ mod tests {
 
     fn create_mock_connection(
         name: &'static str,
-    ) -> (JoinHandle<Result<Arc<MemoryDatabase>>>, IpcClientChannel) {
-        create_mock_connection_opts(name, MemoryDatabaseConf::default())
+    ) -> (
+        JoinHandle<Result<FdwConnection<MemoryConnector>>>,
+        IpcClientChannel,
+    ) {
+        create_mock_connection_opts(name, MemoryDatabaseConf::default(), RemoteQueryLog::new())
     }
 
     #[test]
@@ -1118,7 +1145,7 @@ mod tests {
         );
 
         client.close().unwrap();
-        let entities = thread.join().unwrap().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
 
         // Assert row was actually inserted
         let rows = entities.get_data("people").unwrap();
@@ -1183,7 +1210,7 @@ mod tests {
         );
 
         client.close().unwrap();
-        let entities = thread.join().unwrap().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
 
         // Assert rows were all updated
         let rows = entities.get_data("people").unwrap();
@@ -1253,7 +1280,7 @@ mod tests {
         );
 
         client.close().unwrap();
-        let entities = thread.join().unwrap().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
 
         // Assert row was deleted
         let rows = entities.get_data("people").unwrap();
@@ -1533,6 +1560,7 @@ mod tests {
                 transactions_enabled: false,
                 row_locks_pretend: true,
             },
+            RemoteQueryLog::new(),
         );
 
         let res = client.send(ClientMessage::BeginTransaction).unwrap();
@@ -1588,7 +1616,7 @@ mod tests {
         assert_eq!(res, ServerMessage::TransactionRolledBack);
 
         client.close().unwrap();
-        let entities = thread.join().unwrap().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
 
         // Assert delete was rolled back
         let rows = entities.get_data("people").unwrap();
@@ -1604,7 +1632,7 @@ mod tests {
 
     #[test]
     fn test_fdw_connection_begin_transaction_commit() {
-        let (thread, mut client) = create_mock_connection("connection_transaction_rollback");
+        let (thread, mut client) = create_mock_connection("connection_transaction_commit");
 
         let res = client.send(ClientMessage::BeginTransaction).unwrap();
 
@@ -1646,10 +1674,81 @@ mod tests {
         assert_eq!(res, ServerMessage::TransactionCommitted);
 
         client.close().unwrap();
-        let entities = thread.join().unwrap().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
 
         // Assert delete was committed
         let rows = entities.get_data("people").unwrap();
         assert_eq!(rows, Vec::<Vec<DataValue>>::new());
+    }
+
+    #[test]
+    fn test_fdw_connection_remote_query_log() {
+        let log = RemoteQueryLog::store_in_memory();
+        let (thread, mut client) = create_mock_connection_opts(
+            "connection_remote_query_log",
+            MemoryDatabaseConf::default(),
+            log.clone(),
+        );
+
+        let res = client
+            .send(ClientMessage::CreateQuery(
+                sqlil::source("people", "people"),
+                sqlil::QueryType::Select,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
+
+        let res = client
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    SelectQueryOperation::AddColumn((
+                        "first_name".into(),
+                        sqlil::Expr::attr("people", "first_name"),
+                    ))
+                    .into(),
+                ),
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
+        );
+
+        assert_eq!(log.get_from_memory().unwrap(), vec![]);
+
+        client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .unwrap();
+
+        assert_eq!(
+            log.get_from_memory().unwrap(),
+            vec![("memory".to_string(), LoggedQuery::new("MemoryQuery { query: Select(Select { cols: [(\"first_name\", Attribute(AttributeId { entity_alias: \"people\", attribute_id: \"first_name\" }))], from: EntitySource { entity: EntityId { entity_id: \"people\" }, alias: \"people\" }, joins: [], where: [], group_bys: [], order_bys: [], row_limit: None, row_skip: 0, row_lock: None }), params: [] }", vec![], None))]
+        );
+
+        client.close().unwrap();
+        let con = thread.join().unwrap().unwrap();
+
+        assert_eq!(
+            log.get_from_memory().unwrap(),
+            con.log.get_from_memory().unwrap()
+        );
     }
 }

@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.util.HashMap;
 
 /**
  * The interface of the JDBC data type.
@@ -214,6 +215,84 @@ public interface JdbcDataType {
 
             default:
                 throw new SQLException(String.format("Unknown data type id: %d", dataTypeId));
+        }
+    }
+
+
+    /**
+     * Creates a new data type instance from the type id as defined by the TYPE_* constants above
+     */
+    public static String typeName(int dataTypeId) {
+        switch (dataTypeId) {
+            case TYPE_BIT:
+                return "BIT";
+            case TYPE_TINYINT:
+                return "TINYINT";
+            case TYPE_SMALLINT:
+                return "SMALLINT";
+            case TYPE_INTEGER:
+                return "INTEGER";
+            case TYPE_BIGINT:
+                return "BIGINT";
+            case TYPE_FLOAT:
+                return "FLOAT";
+            case TYPE_REAL:
+                return "REAL";
+            case TYPE_DOUBLE:
+                return "DOUBLE";
+            case TYPE_NUMERIC:
+                return "NUMERIC";
+            case TYPE_DECIMAL:
+                return "DECIMAL";
+            case TYPE_CHAR:
+                return "CHAR";
+            case TYPE_VARCHAR:
+                return "VARCHAR";
+            case TYPE_LONGVARCHAR:
+                return "LONGVARCHAR";
+            case TYPE_DATE:
+                return "DATE";
+            case TYPE_TIME:
+                return "TIME";
+            case TYPE_TIMESTAMP:
+                return "TIMESTAMP";
+            case TYPE_BINARY:
+                return "BINARY";
+            case TYPE_NULL:
+                return "NULL";
+            case TYPE_JAVA_OBJECT:
+                return "JAVA_OBJECT";
+            case TYPE_DISTINCT:
+                return "DISTINCT";
+            case TYPE_STRUCT:
+                return "STRUCT";
+            case TYPE_ARRAY:
+                return "ARRAY";
+            case TYPE_BLOB:
+                return "BLOB";
+            case TYPE_CLOB:
+                return "CLOB";
+            case TYPE_BOOLEAN:
+                return "BOOLEAN";
+            case TYPE_NCHAR:
+                return "NCHAR";
+            case TYPE_NVARCHAR:
+                return "NVARCHAR";
+            case TYPE_LONGNVARCHAR:
+                return "LONGNVARCHAR";
+            case TYPE_NCLOB:
+                return "NCLOB";
+            case TYPE_SQLXML:
+                return "SQLXML";
+            case TYPE_TIME_WITH_TIMEZONE:
+                return "TIME_WITH_TIMEZONE";
+            case TYPE_TIMESTAMP_WITH_TIMEZONE:
+                return "TIMESTAMP_WITH_TIMEZONE";
+            case TYPE_JSON:
+                return "JSON";
+
+            default:
+                throw new RuntimeException(String.format("Unknown data type id: %d", dataTypeId));
         }
     }
 }

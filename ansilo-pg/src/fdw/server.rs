@@ -21,6 +21,7 @@ use ansilo_logging::{error, warn};
 use super::{
     channel::IpcServerChannel,
     connection::FdwConnection,
+    log::RemoteQueryLog,
     proto::{ClientMessage, ServerMessage},
 };
 
@@ -43,8 +44,9 @@ impl FdwServer {
         nc: &'static NodeConfig,
         path: PathBuf,
         pools: HashMap<String, (ConnectionPools, ConnectorEntityConfigs)>,
+        log: RemoteQueryLog,
     ) -> Result<Self> {
-        let (thread, terminated) = Self::start_listening_thread(nc, path.as_path(), pools)?;
+        let (thread, terminated) = Self::start_listening_thread(nc, path.as_path(), pools, log)?;
 
         Ok(Self {
             nc,
@@ -101,6 +103,7 @@ impl FdwServer {
         nc: &'static NodeConfig,
         path: &Path,
         pools: HashMap<String, (ConnectionPools, ConnectorEntityConfigs)>,
+        log: RemoteQueryLog,
     ) -> Result<(JoinHandle<()>, Arc<AtomicBool>)> {
         let terminated = Arc::new(AtomicBool::new(false));
 
@@ -113,7 +116,7 @@ impl FdwServer {
             let terminated = Arc::clone(&terminated);
 
             thread::spawn(move || {
-                let res = FdwListener::bind(nc, listener, pools, terminated).listen();
+                let res = FdwListener::bind(nc, listener, pools, terminated, log).listen();
 
                 if let Err(err) = res {
                     error!("FDW listener error: {}", err);
@@ -138,6 +141,8 @@ pub struct FdwListener {
     pools: Arc<HashMap<String, (ConnectionPools, Arc<RwLockEntityConfigs>)>>,
     /// Whether the server is terminated
     terminated: Arc<AtomicBool>,
+    /// Remote query log
+    log: RemoteQueryLog,
 }
 
 impl FdwListener {
@@ -147,6 +152,7 @@ impl FdwListener {
         listener: UnixListener,
         pools: HashMap<String, (ConnectionPools, ConnectorEntityConfigs)>,
         terminated: Arc<AtomicBool>,
+        log: RemoteQueryLog,
     ) -> Self {
         Self {
             nc,
@@ -158,6 +164,7 @@ impl FdwListener {
                     .collect(),
             ),
             terminated,
+            log,
         }
     }
 
@@ -178,11 +185,12 @@ impl FdwListener {
     fn start(&self, socket: UnixStream) -> Result<()> {
         let pool = Arc::clone(&self.pools);
         let nc = self.nc;
+        let log = self.log.clone();
 
         let _ = thread::spawn(move || {
             let mut chan = IpcServerChannel::new(socket);
 
-            let (pool, entities) = match Self::auth(&mut chan, pool) {
+            let (ds_id, pool, entities) = match Self::auth(&mut chan, pool) {
                 Ok(pool) => pool,
                 Err(err) => {
                     warn!("Failed to authenticate client: {}", err);
@@ -192,10 +200,10 @@ impl FdwListener {
 
             match (pool, &*entities) {
                 (ConnectionPools::OracleJdbc(pool), RwLockEntityConfigs::OracleJdbc(entities)) => {
-                    Self::process::<OracleJdbcConnector>(nc, chan, pool, entities)
+                    Self::process::<OracleJdbcConnector>(ds_id, nc, chan, pool, entities, log)
                 }
                 (ConnectionPools::Memory(pool), RwLockEntityConfigs::Memory(entities)) => {
-                    Self::process::<MemoryConnector>(nc, chan, pool, entities)
+                    Self::process::<MemoryConnector>(ds_id, nc, chan, pool, entities, log)
                 }
                 _ => {
                     panic!("Unknown types or mismatch between pool and entities",)
@@ -209,7 +217,7 @@ impl FdwListener {
     fn auth(
         chan: &mut IpcServerChannel,
         pools: Arc<HashMap<String, (ConnectionPools, Arc<RwLockEntityConfigs>)>>,
-    ) -> Result<(ConnectionPools, Arc<RwLockEntityConfigs>)> {
+    ) -> Result<(String, ConnectionPools, Arc<RwLockEntityConfigs>)> {
         chan.recv_with_return(|msg| {
             let auth = match msg {
                 ClientMessage::AuthDataSource(auth) => auth,
@@ -220,7 +228,8 @@ impl FdwListener {
 
             let pool = pools
                 .get(&auth.data_source_id)
-                .map(|i| i.clone())
+                .cloned()
+                .map(|(pool, entities)| (auth.data_source_id.clone(), pool, entities))
                 .with_context(|| {
                     format!(
                         "Failed to find data source with id: {}",
@@ -238,12 +247,15 @@ impl FdwListener {
     }
 
     fn process<TConnector: Connector>(
+        data_source_id: String,
         nc: &'static NodeConfig,
         chan: IpcServerChannel,
         pool: TConnector::TConnectionPool,
         entities: &RwLock<ConnectorEntityConfig<TConnector::TEntitySourceConfig>>,
+        log: RemoteQueryLog,
     ) {
-        let mut fdw_con = FdwConnection::<TConnector>::new(nc, chan, entities, pool);
+        let mut fdw_con =
+            FdwConnection::<TConnector>::new(data_source_id, nc, chan, entities, pool, log);
 
         if let Err(err) = fdw_con.process() {
             error!("Error while processing FDW connection: {}", err);
@@ -347,6 +359,7 @@ mod tests {
             [("memory".to_string(), (pool, entities))]
                 .into_iter()
                 .collect(),
+            RemoteQueryLog::new(),
         )
         .unwrap();
         thread::sleep(Duration::from_millis(10));
