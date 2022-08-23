@@ -3,6 +3,7 @@ package com.ansilo.connectors.data;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.sql.PreparedStatement;
@@ -30,6 +31,7 @@ public class DateTimeWithTzDataType implements JdbcStreamDataType {
         }
 
         var buff = ByteBuffer.allocate(17);
+        buff.order(ByteOrder.nativeOrder());
 
         var dt = val.toInstant().atZone(ZoneId.of("UTC"));
         buff.putInt(dt.getYear());

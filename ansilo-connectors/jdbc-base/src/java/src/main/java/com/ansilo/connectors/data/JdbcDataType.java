@@ -4,7 +4,6 @@ import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
-import java.util.HashMap;
 
 /**
  * The interface of the JDBC data type.
@@ -110,6 +109,7 @@ public interface JdbcDataType {
             case Types.CHAR:
             case Types.LONGVARCHAR:
             case Types.CLOB:
+            case Types.ROWID:
                 return new VarcharDataType();
 
             case Types.NVARCHAR:
@@ -120,6 +120,8 @@ public interface JdbcDataType {
 
             case Types.BINARY:
             case Types.BLOB:
+            case Types.VARBINARY:
+            case Types.LONGVARBINARY:
                 return new BinaryDataType();
 
             case Types.DATE:
@@ -137,6 +139,8 @@ public interface JdbcDataType {
             case Types.JAVA_OBJECT:
             case Types.STRUCT:
             case Types.SQLXML:
+            case Types.OTHER:
+            case Types.ARRAY:
                 return new JsonDataType();
 
             case Types.NULL:

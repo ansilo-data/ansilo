@@ -677,7 +677,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity""#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity""#,
                 vec![]
             )
         );
@@ -699,7 +699,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" WHERE (("entity"."col1") = (?))"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" WHERE (("entity"."col1") = (?))"#,
                 vec![JdbcQueryParam::Dynamic(1, DataType::Int32)]
             )
         );
@@ -725,7 +725,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" INNER JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" INNER JOIN "other" "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
         );
@@ -751,7 +751,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" LEFT JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" LEFT JOIN "other" "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
         );
@@ -777,7 +777,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" RIGHT JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" RIGHT JOIN "other" "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
         );
@@ -803,7 +803,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" FULL JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" FULL JOIN "other" "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
         );
@@ -824,7 +824,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" GROUP BY "entity"."col1", ?"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" GROUP BY "entity"."col1", ?"#,
                 vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
             )
         );
@@ -849,7 +849,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" ORDER BY "entity"."col1" ASC, ? DESC"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" ORDER BY "entity"."col1" ASC, ? DESC"#,
                 vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
             )
         );
@@ -868,7 +868,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" OFFSET 10 ROWS FETCH FIRST 20 ROWS ONLY"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" OFFSET 10 ROWS FETCH FIRST 20 ROWS ONLY"#,
                 vec![]
             )
         );
@@ -886,7 +886,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" OFFSET 10 ROWS"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" OFFSET 10 ROWS"#,
                 vec![]
             )
         );
@@ -904,7 +904,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" FETCH FIRST 20 ROWS ONLY"#,
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" FETCH FIRST 20 ROWS ONLY"#,
                 vec![]
             )
         );
@@ -925,7 +925,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT LENGTH("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10 ROWS"#,
+                r#"SELECT LENGTH("entity"."col1") AS "COL" FROM "table" "entity" OFFSET 10 ROWS"#,
                 vec![]
             )
         );
@@ -946,7 +946,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10 ROWS"#,
+                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" "entity" OFFSET 10 ROWS"#,
                 vec![]
             )
         );
@@ -967,7 +967,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" FOR UPDATE"#,
+                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" "entity" FOR UPDATE"#,
                 vec![]
             )
         );

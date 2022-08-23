@@ -30,6 +30,10 @@ impl JdbcConnectionConfig for OracleJdbcConnectionConfig {
     fn get_pool_config(&self) -> Option<JdbcConnectionPoolConfig> {
         self.pool.clone()
     }
+
+    fn get_java_connection(&self) -> String {
+        "com.ansilo.connectors.oracle.OracleJdbcConnection".into()
+    }
 }
 
 impl OracleJdbcConnectionConfig {

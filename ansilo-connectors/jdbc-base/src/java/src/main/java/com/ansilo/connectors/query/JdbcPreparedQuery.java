@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import com.ansilo.connectors.data.JdbcFixedSizeDataType;
@@ -19,42 +20,42 @@ public class JdbcPreparedQuery {
      * The inner JDBC statement We wrap it in a LoggingPreparedStatement to facilate capturing of
      * query params.
      */
-    private LoggingPreparedStatement preparedStatement;
+    protected LoggingPreparedStatement preparedStatement;
 
     /**
      * The list of all query paramaters
      */
-    private List<JdbcParameter> parameters;
+    protected List<JdbcParameter> parameters;
 
     /**
      * The list of all constant query paramaters
      */
-    private List<JdbcParameter> constantParameters;
+    protected List<JdbcParameter> constantParameters;
 
     /**
      * The list of all dynamic query parameters
      */
-    private List<JdbcParameter> dynamicParameters;
+    protected List<JdbcParameter> dynamicParameters;
 
     /**
      * The index of the current param
      */
-    private int paramIndex = 0;
+    protected int paramIndex = 0;
 
     /**
      * Local buffer used to buffer partial parameter data
      */
-    private ByteArrayOutputStream localBuffer = null;
+    protected ByteArrayOutputStream localBuffer = null;
 
     /**
      * The length of the next chunk in the stream
      */
-    private Integer streamChunkLength = null;
+    protected Integer streamChunkLength = null;
 
     /**
      * Whether constant query parameters have been bound.
      */
-    private boolean boundConstantParams = false;
+    protected boolean boundConstantParams = false;
 
     /**
      * Creates a new prepared query
@@ -214,9 +215,13 @@ public class JdbcPreparedQuery {
         var hasResultSet = this.preparedStatement.execute();
 
         var resultSet =
-                new JdbcResultSet(hasResultSet ? this.preparedStatement.getResultSet() : null);
+                this.newResultSet(hasResultSet ? this.preparedStatement.getResultSet() : null);
 
         return resultSet;
+    }
+
+    protected JdbcResultSet newResultSet(ResultSet innerResultSet) throws SQLException {
+        return new JdbcResultSet(innerResultSet);
     }
 
     /**

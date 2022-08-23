@@ -1,7 +1,7 @@
 use std::cmp;
 
 use anyhow::{bail, Result};
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use rust_decimal::{
     prelude::{One, ToPrimitive},
     Decimal,
@@ -610,6 +610,7 @@ impl DataValue {
     fn try_coerce_date(data: NaiveDate, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Date => Self::Date(data),
+            DataType::DateTime => Self::DateTime(data.and_hms(0, 0, 0)),
             DataType::Utf8String(_) => Self::Utf8String(data.format("%Y-%m-%d").to_string()),
             _ => bail!(
                 "No type coercion exists from type 'date' ({}) to {:?}",
@@ -622,6 +623,9 @@ impl DataValue {
     fn try_coerce_time(data: NaiveTime, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Time => Self::Time(data),
+            DataType::DateTime => {
+                Self::DateTime(NaiveDateTime::new(NaiveDate::from_ymd(1970, 1, 1), data))
+            }
             DataType::Utf8String(_) => Self::Utf8String(data.format("%H:%M:%S").to_string()),
             _ => bail!(
                 "No type coercion exists from type 'time' ({}) to {:?}",
@@ -634,6 +638,15 @@ impl DataValue {
     fn try_coerce_date_time(data: NaiveDateTime, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::DateTime => Self::DateTime(data),
+            DataType::Date
+                if (data.hour(), data.minute(), data.second(), data.nanosecond())
+                    == (0, 0, 0, 0) =>
+            {
+                DataValue::Date(data.date())
+            }
+            DataType::Time if (data.year(), data.month(), data.day()) == (1970, 1, 1) => {
+                DataValue::Time(data.time())
+            }
             DataType::Utf8String(_) => {
                 Self::Utf8String(data.format("%Y-%m-%dT%H:%M:%S").to_string())
             }
@@ -910,6 +923,14 @@ mod tests {
                     DataType::Utf8String(StringOptions::default()),
                     DataType::Binary,
                 ],
+            ),
+            (
+                vec![DataValue::Date(NaiveDate::from_ymd(2020, 10, 25))],
+                vec![DataType::DateTime],
+            ),
+            (
+                vec![DataValue::Time(NaiveTime::from_hms_nano(12, 43, 56, 1234))],
+                vec![DataType::DateTime],
             ),
         ];
 

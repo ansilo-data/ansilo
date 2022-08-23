@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,42 +22,42 @@ public class JdbcResultSet {
     /**
      * The inner JDBC result set
      */
-    private ResultSet resultSet;
+    protected ResultSet resultSet;
 
     /**
      * The array of data types for each column in the result set.
      */
-    private JdbcDataType[] dataTypes;
+    protected JdbcDataType[] dataTypes;
 
     /**
      * The position of the result set cursor
      */
-    private int rowIndex = 0;
+    protected int rowIndex = 0;
 
     /**
      * The position of the column within the current row
      */
-    private int columnIndex = 0;
+    protected int columnIndex = 0;
 
     /**
      * Whether we are finished reading from the result set
      */
-    private boolean lastRow = false;
+    protected boolean lastRow = false;
 
     /**
      * The byte stream for reading the data in the current position.
      */
-    private InputStream currentStream = null;
+    protected InputStream currentStream = null;
 
     /**
      * Minimum number of bytes required to read the next value
      */
-    private Integer requireAtLeastBytes;
+    protected Integer requireAtLeastBytes;
 
     /**
      * Internal read buffer for copying input streams into the byte buffer.
      */
-    private byte[] readBuff;
+    protected byte[] readBuff;
 
     /**
      * Initialises the result set wrapper
@@ -209,7 +210,7 @@ public class JdbcResultSet {
         return read;
     }
 
-    private boolean nextRow() throws SQLException {
+    protected boolean nextRow() throws SQLException {
         var res = this.resultSet.next();
 
         if (res) {
@@ -222,7 +223,7 @@ public class JdbcResultSet {
         return res;
     }
 
-    private JdbcDataType[] getDataTypes() throws SQLException {
+    protected JdbcDataType[] getDataTypes() throws SQLException {
         if (this.resultSet == null) {
             return new JdbcDataType[0];
         }
@@ -231,9 +232,18 @@ public class JdbcResultSet {
         JdbcDataType[] dataTypes = new JdbcDataType[metadata.getColumnCount()];
 
         for (int i = 0; i < dataTypes.length; i++) {
-            dataTypes[i] = JdbcDataType.createFromJdbcType(metadata.getColumnType(i + 1));
+            dataTypes[i] = this.getDataType(metadata, i + 1);
         }
 
         return dataTypes;
+    }
+
+    protected JdbcDataType getDataType(ResultSetMetaData metadata, int index) throws SQLException {
+        try {
+            return JdbcDataType.createFromJdbcType(metadata.getColumnType(index));
+        } catch (Exception e) {
+            throw new SQLException(String.format("Could not determine type for column \"%s\": %s",
+                    metadata.getColumnName(index), e.getMessage()), e);
+        }
     }
 }

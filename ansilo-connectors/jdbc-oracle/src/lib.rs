@@ -1,4 +1,7 @@
-use ansilo_connectors_base::{common::entity::ConnectorEntityConfig, interface::Connector};
+use ansilo_connectors_base::{
+    common::entity::ConnectorEntityConfig,
+    interface::{ConnectionPool, Connector},
+};
 use ansilo_connectors_jdbc_base::{
     JdbcConnection, JdbcConnectionPool, JdbcDefaultTypeMapping, JdbcPreparedQuery, JdbcQuery,
     JdbcResultSet, JdbcTransactionManager,
@@ -53,5 +56,17 @@ impl Connector for OracleJdbcConnector {
         _entities: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
     ) -> Result<Self::TConnectionPool> {
         JdbcConnectionPool::new(options)
+    }
+}
+
+impl OracleJdbcConnector {
+    /// Connects an oracle database
+    pub fn connect(config: OracleJdbcConnectionConfig) -> Result<<Self as Connector>::TConnection> {
+        OracleJdbcConnector::create_connection_pool(
+            config.clone(),
+            &NodeConfig::default(),
+            &ConnectorEntityConfig::new(),
+        )?
+        .acquire()
     }
 }

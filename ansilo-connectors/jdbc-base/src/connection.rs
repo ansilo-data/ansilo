@@ -20,6 +20,7 @@ struct Manager {
     jvm: Arc<Jvm>,
     jdbc_url: String,
     jdbc_props: HashMap<String, String>,
+    connection_class: String,
 }
 
 impl<TTypeMapping: JdbcTypeMapping> JdbcConnectionPool<TTypeMapping> {
@@ -31,6 +32,7 @@ impl<TTypeMapping: JdbcTypeMapping> JdbcConnectionPool<TTypeMapping> {
             jvm: Arc::new(jvm),
             jdbc_url: options.get_jdbc_url(),
             jdbc_props: options.get_jdbc_props(),
+            connection_class: options.get_java_connection().replace('.', "/"),
         };
 
         // TODO: add event handler with handle_checkin callback to "clean" the connection
@@ -115,7 +117,7 @@ impl ManageConnection for Manager {
 
                 let jdbc_con = env
                     .new_object(
-                        "com/ansilo/connectors/JdbcConnection",
+                        &self.connection_class,
                         "(Ljava/lang/String;Ljava/util/Properties;)V",
                         &[JValue::Object(*url), JValue::Object(props)],
                     )
@@ -353,6 +355,7 @@ mod tests {
 
     use super::*;
 
+    #[derive(Clone)]
     struct MockJdbcConnectionConfig(String, HashMap<String, String>);
 
     impl JdbcConnectionConfig for MockJdbcConnectionConfig {

@@ -19,16 +19,17 @@ pub struct Args {
     /// The path of the main configuration file
     #[clap(short, long, value_parser)]
     pub config: Option<PathBuf>,
+
+    /// Whether to force a build of the postgres database
+    #[clap(short, long, value_parser)]
+    pub force_build: bool,
 }
 
 impl Args {
-    pub fn new(config: Option<PathBuf>) -> Self {
-        Self { config }
-    }
-
-    pub fn config(config: impl Into<PathBuf>) -> Self {
+    pub fn testing(config: impl Into<PathBuf>) -> Self {
         Self {
             config: Some(config.into()),
+            force_build: true,
         }
     }
 }

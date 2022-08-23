@@ -2,7 +2,7 @@ use std::{fs, os::unix::net::UnixStream, path::PathBuf, thread, time::Duration};
 
 use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs};
 use ansilo_core::config::NodeConfig;
-use ansilo_pg::fdw::server::FdwServer;
+use ansilo_pg::fdw::{log::RemoteQueryLog, server::FdwServer};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -20,6 +20,7 @@ pub(crate) fn start_fdw_server(
         &NODE_CONFIG,
         path.clone(),
         [("memory".to_string(), pool)].into_iter().collect(),
+        RemoteQueryLog::new(),
     )
     .unwrap();
 

@@ -108,6 +108,7 @@ impl TryFrom<i32> for JdbcType {
             29 => JdbcType::SqlXml,
             30 => JdbcType::TimeWithTimezone,
             31 => JdbcType::TimestampWithTimezone,
+            33 => JdbcType::Json,
             _ => bail!("Unrecognized JDBC data type constant: {}", value),
         })
     }

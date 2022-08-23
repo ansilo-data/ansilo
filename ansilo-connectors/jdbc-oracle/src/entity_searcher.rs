@@ -41,6 +41,7 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
                 AND T.TEMPORARY = 'N'
                 AND T.NESTED = 'NO'
                 AND T.DROPPED = 'NO'
+                AND T.OWNER = 'ANSILO_ADMIN'
             "#,
                 vec![],
             ))?
@@ -91,7 +92,7 @@ pub(crate) fn parse_entity_config(
                     None,
                     from_oracle_type(&c)?,
                     false,
-                    c["NULLABLE"].as_utf8_string().context("NULLABLE")? == "YES",
+                    c["NULLABLE"].as_utf8_string().context("NULLABLE")? == "Y",
                 ))
             })
             .collect::<Result<Vec<_>>>()?,
@@ -103,15 +104,15 @@ pub(crate) fn parse_entity_config(
 
 pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataType> {
     let ora_type = col["DATA_TYPE"].as_utf8_string().context("DATA_TYPE")?;
-    let ora_type = ora_type
+    let normalised_type = ora_type
         .chars()
         .filter(|c| match c {
             'A'..='Z' => true,
-            ' ' => true,
+            ' ' | '_' => true,
             _ => false,
         })
         .collect::<String>();
-    Ok(match ora_type.as_str() {
+    Ok(match normalised_type.as_str() {
         "CHAR" | "NCHAR" | "VARCHAR" | "VARCHAR2" | "NVARCHAR" | "NVARCHAR2" => {
             let length = col["CHAR_LENGTH"]
                 .clone()
@@ -136,13 +137,16 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
             DataType::Decimal(DecimalOptions::new(precision, scale))
         }
         "BINARY_FLOAT" => DataType::Float32,
-        "BINARY_DOUBE" => DataType::Float64,
+        "BINARY_DOUBLE" => DataType::Float64,
         "RAW" | "LONG RAW" | "BFILE" | "BLOB" | "CLOB" | "NCLOB" => DataType::Binary,
         "JSON" => DataType::JSON,
         "DATE" => DataType::Date,
         "TIMESTAMP" => DataType::DateTime,
         "TIMESTAMP WITH TIME ZONE" | "TIMESTAMP WITH LOCAL TIME ZONE" => DataType::DateTimeWithTZ,
         // Default unknown data types to json
-        _ => DataType::JSON,
+        _ => {
+            warn!("Encountered unknown data type '{ora_type}', defaulting to JSON seralisation");
+            DataType::JSON
+        }
     })
 }

@@ -3,7 +3,7 @@ use ansilo_core::{
         chrono::{
             Datelike, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone, Timelike, Weekday,
         },
-        uuid, DataType, DataValue, DateTimeWithTZ, StringOptions,
+        uuid, DataType, DataValue, DateTimeWithTZ,
     },
     err::{bail, Result},
 };
@@ -204,7 +204,7 @@ fn into_uuid(data: uuid::Uuid) -> pgx::Uuid {
 #[cfg(any(test, feature = "pg_test"))]
 #[pg_schema]
 mod tests {
-    use ansilo_core::data::{rust_decimal::Decimal, DecimalOptions, chrono_tz::Tz};
+    use ansilo_core::data::{chrono_tz::Tz, rust_decimal::Decimal, DecimalOptions, StringOptions};
     use pgx::*;
 
     use super::*;

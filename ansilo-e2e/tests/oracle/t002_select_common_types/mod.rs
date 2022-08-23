@@ -10,6 +10,7 @@ use ansilo_main::{
 fn test() {
     ansilo_logging::init_for_tests();
     let containers = super::common::start_oracle();
+    super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
 
     let instance = Ansilo::start(
         Command::Run(Args::testing(crate::current_dir!().join("config.yml"))),
@@ -19,7 +20,7 @@ fn test() {
 
     let mut client = crate::common::connect(65432);
 
-    let rows = client.query("SELECT * FROM \"SYS.DUAL\"", &[]).unwrap();
+    let rows = client.query("SELECT * FROM \"ANSILO_ADMIN.T002__TEST_TAB\"", &[]).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(

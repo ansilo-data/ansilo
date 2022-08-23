@@ -14,13 +14,13 @@ mod query;
 pub use query::*;
 mod jvm;
 pub use jvm::*;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod tests;
 
 /// JDBC connection config
-pub trait JdbcConnectionConfig: Send + Sync {
+pub trait JdbcConnectionConfig: Send + Sync + Clone {
     /// Gets the JDBC connection URL
     fn get_jdbc_url(&self) -> String;
 
@@ -29,6 +29,11 @@ pub trait JdbcConnectionConfig: Send + Sync {
 
     /// Gets the connection pool config
     fn get_pool_config(&self) -> Option<JdbcConnectionPoolConfig>;
+
+    /// Gets the java class name of the connection
+    fn get_java_connection(&self) -> String {
+        "com.ansilo.connectors.JdbcConnection".into()
+    }
 }
 
 /// Options for pooling the JDBC connections

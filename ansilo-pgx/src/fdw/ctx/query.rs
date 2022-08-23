@@ -6,7 +6,7 @@ use ansilo_core::{
     sqlil,
 };
 use ansilo_pg::fdw::{
-    data::{QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
+    data::{LoggedQuery, QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
     proto::{
         ClientMessage, ClientQueryMessage, DeleteQueryOperation, InsertQueryOperation,
         OperationCost, QueryId, QueryInputStructure, QueryOperation, QueryOperationResult,
@@ -387,6 +387,10 @@ impl QueryHandle for FdwQueryHandle {
                 _ => return Err(unexpected_response(res)),
             })
             .context("Failed to execute query")
+    }
+
+    fn logged(&self) -> Result<LoggedQuery> {
+        unimplemented!()
     }
 }
 

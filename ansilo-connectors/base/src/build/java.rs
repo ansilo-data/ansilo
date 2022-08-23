@@ -17,6 +17,7 @@ pub fn build_java_maven_module(path: &str) {
             "compile",
             "package",
             "dependency:copy-dependencies",
+            "install",
         ])
         .current_dir(path)
         .stdout(Stdio::piped())

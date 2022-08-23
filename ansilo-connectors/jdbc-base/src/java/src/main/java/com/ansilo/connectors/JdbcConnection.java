@@ -2,6 +2,7 @@ package com.ansilo.connectors;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Properties;
@@ -12,14 +13,12 @@ import com.ansilo.connectors.query.JdbcPreparedQuery;
  * The JDBC Connection wrapper class.
  * 
  * This acts an entrypoint called from our rust code to initialise the JDBC connection.
- *
- * TODO: Test
  */
 public class JdbcConnection {
     /**
      * The actual JDBC connection instance
      */
-    private Connection connection;
+    protected Connection connection;
 
     /**
      * Initialises the JDBC connection
@@ -51,6 +50,11 @@ public class JdbcConnection {
             throws SQLException {
         var statement = this.connection.prepareStatement(query);
 
+        return this.newPreparedQuery(parameters, statement);
+    }
+
+    protected JdbcPreparedQuery newPreparedQuery(List<JdbcParameter> parameters,
+            PreparedStatement statement) {
         return new JdbcPreparedQuery(statement, parameters);
     }
 
@@ -81,7 +85,7 @@ public class JdbcConnection {
     public void commitTransaction() throws SQLException {
         this.connection.commit();
     }
-    
+
     /**
      * Checks if the connection is valid
      * 

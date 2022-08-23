@@ -80,7 +80,7 @@ impl Ansilo {
         .context("Failed to start fdw server")?;
 
         let mut postgres =
-            if let (Command::Run(_), Some(build_info)) = (&command, BuildInfo::fetch()?) {
+            if let (Command::Run(_), false, Some(build_info)) = (&command, args.force_build, BuildInfo::fetch()?) {
                 info!("Build occurred at {}", build_info.built_at().to_rfc3339());
                 info!("Starting postgres...");
                 PostgresInstance::start(&pg_conf())?
