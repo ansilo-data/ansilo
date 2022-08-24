@@ -303,7 +303,7 @@ impl JdbcQueryParam {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use ansilo_core::data::{DataValue, StringOptions};
     use jni::objects::{JObject, JString};
 
@@ -313,7 +313,7 @@ mod tests {
     use super::*;
 
     #[derive(Clone)]
-    struct SqliteTypeMapping;
+    pub(crate) struct SqliteTypeMapping;
 
     impl JdbcTypeMapping for SqliteTypeMapping {
         fn to_jdbc(r#type: &DataType) -> Result<JdbcType> {

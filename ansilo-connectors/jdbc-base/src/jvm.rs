@@ -13,6 +13,7 @@ lazy_static::lazy_static! {
         let jvm_args = InitArgsBuilder::new()
             .version(JNIVersion::V8)
             .option(format!("-Djava.class.path={}", jars.join(":")).as_str())
+            .option("-Dorg.sqlite.tmpdir=/store/workspace/elliot/tmp/")
             // TODO: configurable temp directory
             .option("-Xcheck:jni")
             // .option("-verbose:jni")

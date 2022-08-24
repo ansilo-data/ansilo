@@ -1,11 +1,19 @@
 use std::{collections::HashMap, fmt::Display, marker::PhantomData, sync::Arc, time::Duration};
 
-use ansilo_core::err::{bail, Context, Result};
+use ansilo_core::{
+    data::DataValue,
+    err::{bail, Context, Result},
+};
 use ansilo_logging::warn;
 use jni::objects::{GlobalRef, JValue};
 use r2d2::{ManageConnection, PooledConnection};
 
-use ansilo_connectors_base::interface::{Connection, ConnectionPool, TransactionManager};
+use ansilo_connectors_base::{
+    common::data::QueryHandleWriter,
+    interface::{Connection, ConnectionPool, QueryHandle, TransactionManager},
+};
+
+use crate::{JdbcQueryParam, JdbcResultSet};
 
 use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, JdbcTypeMapping, Jvm};
 
@@ -238,6 +246,29 @@ impl<TTypeMapping: JdbcTypeMapping> Connection for JdbcConnection<TTypeMapping> 
     }
 }
 
+impl<TTypeMapping: JdbcTypeMapping> JdbcConnection<TTypeMapping> {
+    /// Executes the supplied sql on the connection
+    pub fn execute(
+        &mut self,
+        query: impl Into<String>,
+        params: Vec<DataValue>,
+    ) -> Result<JdbcResultSet<TTypeMapping>> {
+        let jdbc_params = params
+            .iter()
+            .enumerate()
+            .map(|(idx, p)| JdbcQueryParam::Dynamic(idx as _, p.r#type()))
+            .collect::<Vec<_>>();
+
+        let prepared = self.prepare(JdbcQuery::new(query, jdbc_params))?;
+        let mut writer = QueryHandleWriter::new(prepared)?;
+
+        writer.write_all(params.into_iter())?;
+        writer.flush()?;
+
+        writer.inner()?.execute()
+    }
+}
+
 impl JdbcConnectionState {
     /// Checks whether the connection is valid
     pub fn is_valid(&self) -> Result<()> {
@@ -347,10 +378,10 @@ mod tests {
 
     use ansilo_core::data::{DataType, DataValue};
 
-    use crate::{JdbcConnectionPoolConfig, JdbcDefaultTypeMapping, JdbcQueryParam};
+    use crate::{query::tests::SqliteTypeMapping, JdbcConnectionPoolConfig, JdbcQueryParam};
     use ansilo_connectors_base::{
         common::data::ResultSetReader,
-        interface::{QueryHandle, QueryInputStructure},
+        interface::{QueryHandle, QueryInputStructure, ResultSet},
     };
 
     use super::*;
@@ -372,7 +403,7 @@ mod tests {
         }
     }
 
-    fn init_sqlite_connection() -> JdbcConnection<JdbcDefaultTypeMapping> {
+    fn init_sqlite_connection() -> JdbcConnection<SqliteTypeMapping> {
         JdbcConnectionPool::new(MockJdbcConnectionConfig(
             "jdbc:sqlite::memory:".to_owned(),
             HashMap::new(),
@@ -389,7 +420,7 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_init_invalid() {
-        let res = JdbcConnectionPool::<JdbcDefaultTypeMapping>::new(MockJdbcConnectionConfig(
+        let res = JdbcConnectionPool::<SqliteTypeMapping>::new(MockJdbcConnectionConfig(
             "invalid".to_owned(),
             HashMap::new(),
         ))
@@ -481,6 +512,44 @@ mod tests {
         let res = con.prepare(query).unwrap().execute().unwrap();
         let mut res = ResultSetReader::new(res).unwrap();
         assert_eq!(res.read_data_value().unwrap().unwrap(), DataValue::Int32(1));
+    }
+
+    #[test]
+    fn test_jdbc_connection_execute_no_params() {
+        let mut con = init_sqlite_connection();
+
+        let results = con.execute("SELECT 123 as num", vec![]).unwrap();
+
+        assert_eq!(
+            results.reader().unwrap().read_data_value().unwrap(),
+            Some(DataValue::Int32(123))
+        );
+    }
+
+    #[test]
+    fn test_jdbc_connection_execute_with_params() {
+        let mut con = init_sqlite_connection();
+
+        let mut results = con
+            .execute(
+                "SELECT ? as num, ? as str",
+                vec![DataValue::Int32(123), DataValue::Utf8String("foo".into())],
+            )
+            .unwrap()
+            .reader()
+            .unwrap();
+
+        assert_eq!(
+            results.read_data_value().unwrap(),
+            Some(DataValue::Int32(123))
+        );
+
+        assert_eq!(
+            results.read_data_value().unwrap(),
+            Some(DataValue::Utf8String("foo".into()))
+        );
+
+        assert_eq!(results.read_data_value().unwrap(), None);
     }
 
     #[test]
