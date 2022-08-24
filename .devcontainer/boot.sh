@@ -37,7 +37,7 @@ echo "Running lazyprox"
 sudo lazyprox \
     --listen 0.0.0.0:22 \
     --dest localhost:2222 \
-    --idle-timeout-secs $TIMEOUT_DURATION
+    --idle-timeout-secs $TIMEOUT_DURATION || true
 
 if [[ ! -z "$SPOT_FLEET_ID" ]];
 then
