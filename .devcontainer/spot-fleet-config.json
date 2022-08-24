@@ -1,0 +1,57 @@
+{
+    "IamFleetRole": "arn:aws:iam::635198228996:role/aws-ec2-spot-fleet-tagging-role",
+    "AllocationStrategy": "lowestPrice",
+    "TargetCapacity": 1,
+    "TerminateInstancesWithExpiration": true,
+    "Type": "request",
+    "TargetCapacityUnitType": "units",
+    "LaunchSpecifications": [
+        {
+            "ImageId": "ami-0e040c48614ad1327",
+            "KeyName": "elliotlevin@MacBook-Pro",
+            "BlockDeviceMappings": [
+                {
+                    "DeviceName": "/dev/sda1",
+                    "Ebs": {
+                        "DeleteOnTermination": true,
+                        "SnapshotId": "snap-0fc65c6828e92d9e9",
+                        "VolumeSize": 30,
+                        "VolumeType": "gp2",
+                        "Encrypted": false
+                    }
+                }
+            ],
+            "IamInstanceProfile": {
+                "Arn": "arn:aws:iam::635198228996:instance-profile/DevInstanceRole"
+            },
+            "EbsOptimized": true,
+            "Placement": {
+                "AvailabilityZone": "ap-southeast-2a"
+            },
+            "NetworkInterfaces": [
+                {
+                    "DeviceIndex": 0,
+                    "SubnetId": "subnet-044878cdd1f4b0d3d",
+                    "DeleteOnTermination": true,
+                    "Groups": [
+                        "sg-0f28ed350cce239d5"
+                    ],
+                    "AssociatePublicIpAddress": true
+                }
+            ],
+            "InstanceRequirements": {
+                "VCpuCount": {
+                    "Min": 8,
+                    "Max": 8
+                },
+                "MemoryMiB": {
+                    "Min": 16384,
+                    "Max": 32768
+                },
+                "AcceleratorCount": {
+                    "Max": 0
+                }
+            }
+        }
+    ]
+}

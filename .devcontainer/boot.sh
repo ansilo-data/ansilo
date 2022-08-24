@@ -5,12 +5,13 @@
 set -e
 
 DEV_USER=$1
-LISTEN_PORT=${2:-"22"}
+SPOT_FLEET_ID=$2
+LISTEN_PORT=${3:-"22"}
 TIMEOUT_DURATION=1800
 
 if [[ -z "$DEV_USER" ]];
 then
-    echo "Usage $0 [user] [ssh listen port=22]"
+    echo "Usage $0 [user] [spot fleet id] [ssh listen port=22]"
     exit 1
 fi
 
