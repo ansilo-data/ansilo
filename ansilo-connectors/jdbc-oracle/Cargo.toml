@@ -20,6 +20,7 @@ serde_json = "1.0"
 
 [build-dependencies]
 ansilo-connectors-base = { path = "../base", features = ["build"] }
+ansilo-connectors-jdbc-base = { path = "../jdbc-base" }
 
 [dev-dependencies]
 ansilo-connectors-base = { path = "../base", features = ["test"] }
