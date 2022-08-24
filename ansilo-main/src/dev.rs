@@ -4,22 +4,23 @@ use ansilo_logging::{info, warn};
 use nix::sys::signal;
 use notify::{watcher, RecursiveMode, Watcher};
 
-use crate::conf::{conf, conf_path};
+use crate::conf::AppConf;
 
 /// We support a fast-reload mode for development using `ansilo dev`.
 /// We will trigger a term signal when configuration files are updated.
-pub fn signal_on_config_update() {
+pub fn signal_on_config_update(conf: &AppConf) {
     let (tx, rx) = channel();
 
     let mut watcher = watcher(tx, Duration::from_secs(10)).unwrap();
 
     // Watch for changes on root config file
     watcher
-        .watch(conf_path(), RecursiveMode::NonRecursive)
+        .watch(&conf.path, RecursiveMode::NonRecursive)
         .unwrap();
 
     // Watch for changes on sql files
-    if let Some(mut init_sql_path) = conf()
+    if let Some(mut init_sql_path) = conf
+        .node
         .postgres
         .as_ref()
         .and_then(|i| i.init_sql_path.as_ref().map(|i| i.as_path()))

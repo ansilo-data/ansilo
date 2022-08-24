@@ -34,6 +34,8 @@ use conf::*;
 pub struct Ansilo {
     /// The command used to start the instance
     command: Command,
+    /// The configuration used
+    conf: &'static AppConf,
     /// Running subsystems
     subsystems: Option<Subsystems>,
     /// Remote query log
@@ -66,50 +68,57 @@ impl Ansilo {
 
         // Load configuration
         let config_path = args.config.clone().unwrap_or("/etc/ansilo/main.yml".into());
-        init_conf(&config_path);
+        // We are happy to let the app-wide config leak for the rest of the program
+        let conf: &'static _ = Box::leak(Box::new(init_conf(&config_path)));
 
-        let pools = Self::init_connectors();
+        let pools = Self::init_connectors(conf);
 
         info!("Starting fdw listener...");
         let fdw = FdwServer::start(
-            conf(),
-            pg_conf().fdw_socket_path.clone(),
+            &conf.node,
+            conf.pg.fdw_socket_path.clone(),
             pools,
             log.clone(),
         )
         .context("Failed to start fdw server")?;
 
-        let mut postgres =
-            if let (Command::Run(_), false, Some(build_info)) = (&command, args.force_build, BuildInfo::fetch()?) {
-                info!("Build occurred at {}", build_info.built_at().to_rfc3339());
-                info!("Starting postgres...");
-                PostgresInstance::start(&pg_conf())?
-            } else {
-                build()?
-            };
+        let mut postgres = if let (Command::Run(_), false, Some(build_info)) =
+            (&command, args.force_build, BuildInfo::fetch(conf)?)
+        {
+            info!("Build occurred at {}", build_info.built_at().to_rfc3339());
+            info!("Starting postgres...");
+            PostgresInstance::start(&conf.pg)?
+        } else {
+            build(conf)?
+        };
 
         if command.is_build() {
             info!("Build complete...");
             return Ok(Self {
                 command,
+                conf,
                 subsystems: None,
                 log,
             });
         }
 
         info!("Starting proxy server...");
-        let conf = init_proxy_conf(HandlerConf::new(
-            PostgresConnectionHandler::new(postgres.connections().clone()),
-            Http2ConnectionHandler::new(postgres.connections().clone()),
-            Http1ConnectionHandler::new(postgres.connections().clone()),
-        ));
+        let proxy_conf = Box::leak(Box::new(init_proxy_conf(
+            conf,
+            HandlerConf::new(
+                PostgresConnectionHandler::new(conf, postgres.connections().clone()),
+                Http2ConnectionHandler::new(postgres.connections().clone()),
+                Http1ConnectionHandler::new(postgres.connections().clone()),
+            ),
+        )));
 
-        let mut proxy = ProxyServer::new(conf);
+        let mut proxy = ProxyServer::new(proxy_conf);
         proxy.start().context("Failed to start proxy server")?;
 
         info!("Start up complete...");
         Ok(Self {
             command,
+            conf,
             subsystems: Some(Subsystems {
                 postgres,
                 fdw,
@@ -132,7 +141,7 @@ impl Ansilo {
 
         if self.command.is_dev() {
             thread::spawn(|| {
-                dev::signal_on_config_update();
+                dev::signal_on_config_update(self.conf);
             });
         }
 
@@ -187,9 +196,12 @@ impl Ansilo {
         Ok(())
     }
 
-    fn init_connectors() -> HashMap<String, (ConnectionPools, ConnectorEntityConfigs)> {
+    fn init_connectors(
+        conf: &'static AppConf,
+    ) -> HashMap<String, (ConnectionPools, ConnectorEntityConfigs)> {
         info!("Initializing connectors...");
-        let pools = conf()
+        let pools = conf
+            .node
             .sources
             .iter()
             .map(|i| {
@@ -203,7 +215,7 @@ impl Ansilo {
                     .unwrap();
 
                 let pool = connector
-                    .create_connection_pool(conf(), &i.id, options)
+                    .create_connection_pool(&conf.node, &i.id, options)
                     .context("Failed to create connection pool")
                     .unwrap();
 

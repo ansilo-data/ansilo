@@ -4,16 +4,17 @@ use ansilo_proxy::{handler::ConnectionHandler, stream::IOStream};
 use async_trait::async_trait;
 use tokio::net::UnixStream;
 
-use crate::conf::pg_conf;
+use crate::conf::AppConf;
 
 /// Handler for postgres-wire-protocol connections
 pub struct PostgresConnectionHandler {
+    conf: &'static AppConf,
     pool: PostgresConnectionPools,
 }
 
 impl PostgresConnectionHandler {
-    pub fn new(pool: PostgresConnectionPools) -> Self {
-        Self { pool }
+    pub fn new(conf: &'static AppConf, pool: PostgresConnectionPools) -> Self {
+        Self { conf, pool }
     }
 }
 
@@ -25,7 +26,7 @@ impl ConnectionHandler for PostgresConnectionHandler {
         // We should either have pooling of these sockets in some fashion
         // or become fully aware of the protocol messages and channel it
         // through the postgres connection API
-        let sock_path = pg_conf().pg_socket_path();
+        let sock_path = self.conf.pg.pg_socket_path();
         let mut con = UnixStream::connect(sock_path).await?;
 
         tokio::io::copy_bidirectional(&mut client, &mut con).await?;

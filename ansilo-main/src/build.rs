@@ -13,14 +13,12 @@ use serde::{Deserialize, Serialize};
 use crate::conf::*;
 
 /// Initialises the postgres database
-pub fn build() -> Result<PostgresInstance> {
+pub fn build(conf: &'static AppConf) -> Result<PostgresInstance> {
     info!("Running build...");
-    let conf = conf();
-    let pg_conf = pg_conf();
 
     // Initialize postgres via initdb
     let mut postgres =
-        PostgresInstance::configure(&pg_conf).context("Failed to initialise postgres")?;
+        PostgresInstance::configure(&conf.pg).context("Failed to initialise postgres")?;
 
     // Connect to it
     let mut con = postgres
@@ -30,6 +28,7 @@ pub fn build() -> Result<PostgresInstance> {
 
     // Run sql init scripts
     let init_sql_path = conf
+        .node
         .postgres
         .clone()
         .unwrap_or_default()
@@ -48,7 +47,7 @@ pub fn build() -> Result<PostgresInstance> {
         con.batch_execute(&sql).context("Failed to execute sql")?;
     }
 
-    BuildInfo::new().store()?;
+    BuildInfo::new().store(conf)?;
     info!("Build complete...");
 
     Ok(postgres)
@@ -77,8 +76,8 @@ impl BuildInfo {
     }
 
     /// Stores the build info at the path specified in the node config
-    pub fn store(&self) -> Result<()> {
-        let path = Self::path();
+    pub fn store(&self, conf: &AppConf) -> Result<()> {
+        let path = Self::path(conf);
         let json = serde_json::to_vec(self).context("Failed to serialize build info")?;
 
         fs::write(path, json).context("Failed to write build info")?;
@@ -87,8 +86,8 @@ impl BuildInfo {
     }
 
     /// Stores the build info at the path specified in the node config
-    pub fn fetch() -> Result<Option<Self>> {
-        let path = Self::path();
+    pub fn fetch(conf: &AppConf) -> Result<Option<Self>> {
+        let path = Self::path(conf);
 
         if !path.exists() {
             return Ok(None);
@@ -104,8 +103,8 @@ impl BuildInfo {
         Ok(Some(info))
     }
 
-    fn path() -> PathBuf {
-        conf()
+    fn path(conf: &AppConf) -> PathBuf {
+        conf.node
             .postgres
             .clone()
             .unwrap_or_default()
