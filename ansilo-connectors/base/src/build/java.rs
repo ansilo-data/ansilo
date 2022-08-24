@@ -20,8 +20,8 @@ pub fn build_java_maven_module(path: &str) {
             "install",
         ])
         .current_dir(path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
         .spawn()
         .unwrap()
         .wait()
