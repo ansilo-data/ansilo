@@ -18,7 +18,7 @@ RUN mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys \
 # First load user-specific init scripts...
 RUN touch ~/.initenvrc && echo 'source ~/.initenvrc' | tee -a ~/.bashrc ~/.zshrc 
 
-RUN cargo install cargo-pgx
+RUN cargo install cargo-pgx --version 0.5.0-beta.0
 RUN cargo pgx init --pg14 download
 
 RUN cargo install cargo-edit
