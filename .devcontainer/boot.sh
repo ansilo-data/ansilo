@@ -43,6 +43,7 @@ if [[ ! -z "$SPOT_FLEET_ID" ]];
 then
     echo "Terminating spot instance fleet $SPOT_FLEET_ID..."
     aws ec2 cancel-spot-fleet-requests \
-            --spot-fleet-request-ids $SPOT_FLEET_ID
+            --spot-fleet-request-ids $SPOT_FLEET_ID \
+            --terminate-instances
     echo "Terminated!"
 fi

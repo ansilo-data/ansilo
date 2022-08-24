@@ -73,6 +73,7 @@ cleanup() {
         echo "Stopping spot fleet $SPOT_FLEET_ID..."
         aws ec2 cancel-spot-fleet-requests \
             --spot-fleet-request-ids $SPOT_FLEET_ID \
+            --terminate-instances \
             >/dev/null 2>&1
         echo "Fleet stopped!"
     fi
