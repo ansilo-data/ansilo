@@ -5,12 +5,13 @@
 set -e
 
 DEV_USER=$1
-LISTEN_PORT=${2:-"22"}
+SPOT_FLEET_ID=$2
+LISTEN_PORT=${3:-"22"}
 TIMEOUT_DURATION=1800
 
 if [[ -z "$DEV_USER" ]];
 then
-    echo "Usage $0 [user] [ssh listen port=22]"
+    echo "Usage $0 [user] [spot fleet id] [ssh listen port=22]"
     exit 1
 fi
 
@@ -36,12 +37,13 @@ echo "Running lazyprox"
 sudo lazyprox \
     --listen 0.0.0.0:22 \
     --dest localhost:2222 \
-    --idle-timeout-secs $TIMEOUT_DURATION
+    --idle-timeout-secs $TIMEOUT_DURATION || true
 
 if [[ ! -z "$SPOT_FLEET_ID" ]];
 then
     echo "Terminating spot instance fleet $SPOT_FLEET_ID..."
     aws ec2 cancel-spot-fleet-requests \
-            --spot-fleet-request-ids $SPOT_FLEET_ID
+            --spot-fleet-request-ids $SPOT_FLEET_ID \
+            --terminate-instances
     echo "Terminated!"
 fi
