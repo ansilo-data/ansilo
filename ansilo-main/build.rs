@@ -35,7 +35,7 @@ fn main() {
             "CARGO_TARGET_DIR",
             format!(
                 "{}/tmp/ansilo-pgx-build/target/",
-                env::var("EFS_HOME").unwrap_or("".into())
+                env::var("WORKSPACE_HOME").unwrap_or("".into())
             ),
         )
         .current_dir("../ansilo-pgx")
