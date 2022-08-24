@@ -11,7 +11,7 @@ pub fn build_java_maven_module(path: &str) {
 
     println!("Running mvn build...");
 
-    Command::new("mvn")
+    let res = Command::new("mvn")
         .args(&[
             "clean",
             "compile",
@@ -26,6 +26,8 @@ pub fn build_java_maven_module(path: &str) {
         .unwrap()
         .wait()
         .unwrap();
+
+    assert!(res.success());
 
     let target_dir = get_target_dir();
 
