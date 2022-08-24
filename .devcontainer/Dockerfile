@@ -4,7 +4,7 @@ FROM mcr.microsoft.com/vscode/devcontainers/rust:1-${VARIANT}
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     apt-get -y install --no-install-recommends \
     curl vim htop ssh openssl libssl-dev sudo \
-    # postges reqs
+    # postgres reqs
     build-essential pkg-config \
     libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc clang
 
@@ -34,7 +34,7 @@ RUN echo 'export MAVEN_OPTS="-Dmaven.repo.local=${WORKSPACE_HOME}/ansilo/.m2"' |
 RUN echo 'export LD_LIBRARY_PATH="\$LD_LIBRARY_PATH:\$(dirname \$(find \$JAVA_HOME -name libjvm.so))"' | tee -a ~/.bashrc ~/.zshrc 
 
 # Maintain shell history between instances
-RUN echo 'export HISTFILE="${WORKSPACE_HOME}/.sh_history' | tee -a ~/.bashrc ~/.zshrc 
+RUN echo 'export HISTFILE="${WORKSPACE_HOME}/.sh_history"' | tee -a ~/.bashrc ~/.zshrc 
 
 # Install mold linker
 RUN cd ~/ && \
