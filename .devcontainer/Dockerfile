@@ -31,7 +31,7 @@ RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     sudo apt-get -y install openjdk-17-jdk maven
 RUN echo 'export JAVA_HOME="$(dirname $(dirname $(readlink -f $(which java))))"' | tee -a ~/.bashrc ~/.zshrc 
 RUN echo 'export MAVEN_OPTS="-Dmaven.repo.local=${WORKSPACE_HOME}/ansilo/.m2"' | tee -a ~/.bashrc ~/.zshrc 
-RUN echo 'export LD_LIBRARY_PATH="\$LD_LIBRARY_PATH:\$(dirname \$(find \$JAVA_HOME -name libjvm.so))"' | tee -a ~/.bashrc ~/.zshrc 
+RUN echo 'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(dirname $(find $JAVA_HOME -name libjvm.so))"' | tee -a ~/.bashrc ~/.zshrc 
 
 # Maintain shell history between instances
 RUN echo 'export HISTFILE="${WORKSPACE_HOME}/.sh_history"' | tee -a ~/.bashrc ~/.zshrc 
