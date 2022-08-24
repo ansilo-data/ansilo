@@ -14,14 +14,18 @@ then
     exit 1
 fi
 
-echo "Setup EFS homedir for user $DEV_USER..."
-sudo mkdir -p /efs/workspace/$DEV_USER/ansilo
-sudo ln -s /efs/workspace/$DEV_USER /workspace
-sudo chown $USER:$USER /efs/workspace/$DEV_USER
-sudo chown $USER:$USER /efs/workspace/$DEV_USER/ansilo
-sudo chown $USER:$USER /workspace
-echo "export DEV_USER=\"$DEV_USER\"" | tee -a ~/.bashrc ~/.zshrc 
-echo "export EFS_HOME=\"/efs/workspace/$DEV_USER\"" | tee -a ~/.bashrc ~/.zshrc 
+echo "Setup init env scripts for user $DEV_USER..."
+echo "export DEV_USER=\"$DEV_USER\"" | tee -a ~/.initenvrc
+echo "export WORKSPACE_HOME=\"/store/workspace/$DEV_USER\"" | tee -a ~/.initenvrc
+
+echo "Setup homedir for user $DEV_USER..."
+sudo mkdir -p /store/workspace/$DEV_USER/ansilo
+sudo chown $USER:$USER /store/workspace/$DEV_USER
+sudo chown $USER:$USER /store/workspace/$DEV_USER/ansilo
+
+echo "Installing SSH keys..."
+echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDOIgym/c2xk7m+WbgHrm0joP87hQohUjNpxkkSsF5bCdIxAH4F8FsBkRYTnKZUB0eaTnf798lFSQ2IDgzDUOM/9FO/7efzhD30+d+ZBYNYDj9+vXHCe/7XfrwYrWZyLUlV0CAmBhqgCwbL5jPoWRDRDj6yYcM8QWVyOeNOq/Cqqisfi41xztj+q8c93p00rqCT/RytRxnxFzt961Tq2jQOl4Zh0d5i9czr1QNMQl4d1mIwgWitcTXUKAeWLmhaZdIhD1ePxXX5yrH9IKcd04InM1FJxm4nlPLKedFZ0n31Y8U4UTyWPl5yB9dCPbekFsP+Z9PTVElVIcxDKianvJtH elliotlevin@MacBook-Pro' \
+    >> ~/.ssh/authorized_keys
 
 echo "Running sshd on port 2222 ..."
 sudo /usr/sbin/sshd -De -o ListenAddress=127.0.0.1 -p 2222 &
@@ -34,3 +38,10 @@ sudo lazyprox \
     --dest localhost:2222 \
     --idle-timeout-secs $TIMEOUT_DURATION
 
+if [[ ! -z "$SPOT_FLEET_ID" ]];
+then
+    echo "Terminating spot instance fleet $SPOT_FLEET_ID..."
+    aws ec2 cancel-spot-fleet-requests \
+            --spot-fleet-request-ids $SPOT_FLEET_ID
+    echo "Terminated!"
+fi
