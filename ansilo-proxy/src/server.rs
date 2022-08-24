@@ -8,7 +8,7 @@ use std::{
 };
 
 use ansilo_core::err::{bail, Context, Result};
-use ansilo_logging::{debug, error, warn};
+use ansilo_logging::{debug, error, info, warn};
 use socket2::{Domain, Socket};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -162,6 +162,8 @@ impl ProxyListener {
 
     /// Accepts new connections
     async fn accept(&mut self) -> Result<()> {
+        info!("Listening on {}", self.listener.local_addr()?);
+        
         loop {
             let (con, _) = self
                 .listener

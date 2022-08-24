@@ -8,7 +8,6 @@ use ansilo_core::{config::NodeConfig, err::Context};
 use ansilo_logging::info;
 use ansilo_pg::conf::PostgresConf;
 use ansilo_proxy::conf::{HandlerConf, ProxyConf, TlsConf};
-use once_cell::sync::OnceCell;
 
 /// Container for the application config
 pub struct AppConf {

@@ -41,7 +41,6 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
                 AND T.TEMPORARY = 'N'
                 AND T.NESTED = 'NO'
                 AND T.DROPPED = 'NO'
-                AND T.OWNER = 'ANSILO_ADMIN'
             "#,
                 vec![],
             ))?
@@ -139,7 +138,7 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
         }
         "BINARY_FLOAT" => DataType::Float32,
         "BINARY_DOUBLE" => DataType::Float64,
-        "RAW" | "LONG RAW" | "BFILE" | "BLOB" => DataType::Binary,
+        "RAW" | "LONG RAW" | "LONG" | "BFILE" | "BLOB" => DataType::Binary,
         "JSON" => DataType::JSON,
         "DATE" => DataType::Date,
         "TIMESTAMP" => DataType::DateTime,

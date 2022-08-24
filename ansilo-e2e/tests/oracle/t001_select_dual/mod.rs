@@ -9,7 +9,7 @@ use ansilo_main::{
 #[test]
 fn test() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
+    let _containers = super::common::start_oracle();
 
     let instance = Ansilo::start(
         Command::Run(Args::testing(crate::current_dir!().join("config.yml"))),
@@ -17,7 +17,7 @@ fn test() {
     )
     .unwrap();
 
-    let mut client = crate::common::connect(65432);
+    let mut client = crate::common::connect(60001);
 
     let rows = client.query("SELECT * FROM \"SYS.DUAL\"", &[]).unwrap();
 

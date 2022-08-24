@@ -11,9 +11,10 @@ ansilo-connectors-jdbc-base = { path = "../ansilo-connectors/jdbc-base" }
 ansilo-connectors-jdbc-oracle = { path = "../ansilo-connectors/jdbc-oracle" }
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-main = { path = "../ansilo-main" }
+chrono = "0.4"
 glob = "0.3"
 itertools = "0.10"
-postgres = { version = "0.19", features = ["with-serde_json-1"] }
+postgres = { version = "0.19", features = ["with-serde_json-1", "with-chrono-0_4"] }
 rust_decimal = { version = "1.26", features = ["tokio-pg"] }
 serde = "1.0"
 serde_json = "1.0"

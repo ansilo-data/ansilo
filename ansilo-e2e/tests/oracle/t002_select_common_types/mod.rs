@@ -5,6 +5,7 @@ use ansilo_main::{
     args::{Args, Command},
     Ansilo, RemoteQueryLog,
 };
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 use itertools::Itertools;
 use rust_decimal::Decimal;
 use serde_json::json;
@@ -21,7 +22,7 @@ fn test() {
     )
     .unwrap();
 
-    let mut client = crate::common::connect(65432);
+    let mut client = crate::common::connect(60002);
 
     let rows = client
         .query("SELECT * FROM \"ANSILO_ADMIN.T002__TEST_TAB\"", &[])
@@ -77,17 +78,34 @@ fn test() {
         rows[0].get::<_, serde_json::Value>(13),
         json!({"foo": "bar"})
     );
-    assert_eq!(rows[0].get::<_, String>(14), "TODO".to_string());
-    assert_eq!(rows[0].get::<_, String>(15), "TODO".to_string());
-    assert_eq!(rows[0].get::<_, String>(16), "TODO".to_string());
-    assert_eq!(rows[0].get::<_, String>(17), "TODO".to_string());
+    assert_eq!(
+        rows[0].get::<_, NaiveDate>(14),
+        NaiveDate::from_ymd(2020, 12, 23)
+    );
+    assert_eq!(
+        rows[0].get::<_, NaiveDateTime>(15),
+        NaiveDateTime::new(
+            NaiveDate::from_ymd(2018, 2, 1),
+            NaiveTime::from_hms(1, 2, 3)
+        )
+    );
+    assert_eq!(
+        rows[0].get::<_, DateTime<FixedOffset>>(16),
+        DateTime::<FixedOffset>::parse_from_rfc3339("1999-01-15T11:00:00-05:00").unwrap()
+    );
+    assert_eq!(
+        rows[0].get::<_, DateTime<FixedOffset>>(17),
+        DateTime::<FixedOffset>::parse_from_rfc3339("1997-01-31T09:26:56.888+02:00").unwrap()
+    );
     assert_eq!(rows[0].get::<_, Option<String>>(18), None);
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![(
             "oracle".to_string(),
-            LoggedQuery::query(r#"SELECT "t1"."DUMMY" AS "c0" FROM "SYS"."DUAL" "t1""#)
+            LoggedQuery::query(
+                r#"SELECT "t1"."COL_CHAR" AS "c0", "t1"."COL_NCHAR" AS "c1", "t1"."COL_VARCHAR2" AS "c2", "t1"."COL_NVARCHAR2" AS "c3", "t1"."COL_NUMBER" AS "c4", "t1"."COL_FLOAT" AS "c5", "t1"."COL_BINARY_FLOAT" AS "c6", "t1"."COL_BINARY_DOUBLE" AS "c7", "t1"."COL_RAW" AS "c8", "t1"."COL_LONG_RAW" AS "c9", "t1"."COL_BLOB" AS "c10", "t1"."COL_CLOB" AS "c11", "t1"."COL_NCLOB" AS "c12", "t1"."COL_JSON" AS "c13", "t1"."COL_DATE" AS "c14", "t1"."COL_TIMESTAMP" AS "c15", "t1"."COL_TIMESTAMP_TZ" AS "c16", "t1"."COL_TIMESTAMP_LTZ" AS "c17", "t1"."COL_NULL" AS "c18" FROM "ANSILO_ADMIN"."T002__TEST_TAB" "t1""#
+            )
         )]
-    )
+    );
 }

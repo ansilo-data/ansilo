@@ -1,7 +1,7 @@
 name: Oracle
 
 networking:
-  port: 65432
+  port: 60002
 
 sources:
   - id: oracle
