@@ -1,23 +1,14 @@
 use std::env;
 
 use ansilo_connectors_base::interface::LoggedQuery;
-use ansilo_main::{
-    args::{Args, Command},
-    Ansilo, RemoteQueryLog,
-};
 
 #[test]
 fn test() {
     ansilo_logging::init_for_tests();
     let _containers = super::common::start_oracle();
 
-    let instance = Ansilo::start(
-        Command::Run(Args::testing(crate::current_dir!().join("config.yml"))),
-        Some(RemoteQueryLog::store_in_memory()),
-    )
-    .unwrap();
-
-    let mut client = crate::common::connect(60001);
+    let (instance, mut client) =
+        crate::common::run_instance(crate::current_dir!().join("config.yml"));
 
     let rows = client.query("SELECT * FROM \"SYS.DUAL\"", &[]).unwrap();
 

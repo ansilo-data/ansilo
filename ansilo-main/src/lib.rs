@@ -128,6 +128,11 @@ impl Ansilo {
         })
     }
 
+    /// Gets the app config
+    pub fn conf(&self) -> &AppConf {
+        &self.conf
+    }
+
     /// Gets the remote query log
     pub fn log(&self) -> &RemoteQueryLog {
         &self.log

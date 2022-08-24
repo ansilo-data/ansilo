@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ansilo-core = { path = "../ansilo-core" }
 ansilo-connectors-base = { path = "../ansilo-connectors/base", features = ["test"] }
 ansilo-connectors-jdbc-base = { path = "../ansilo-connectors/jdbc-base" }
 ansilo-connectors-jdbc-oracle = { path = "../ansilo-connectors/jdbc-oracle" }
@@ -18,3 +19,4 @@ postgres = { version = "0.19", features = ["with-serde_json-1", "with-chrono-0_4
 rust_decimal = { version = "1.26", features = ["tokio-pg"] }
 serde = "1.0"
 serde_json = "1.0"
+serde_yaml = "0.9"

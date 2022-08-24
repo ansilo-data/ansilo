@@ -1,10 +1,6 @@
 use std::env;
 
 use ansilo_connectors_base::interface::LoggedQuery;
-use ansilo_main::{
-    args::{Args, Command},
-    Ansilo, RemoteQueryLog,
-};
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 use itertools::Itertools;
 use rust_decimal::Decimal;
@@ -16,13 +12,8 @@ fn test() {
     let containers = super::common::start_oracle();
     super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
 
-    let instance = Ansilo::start(
-        Command::Run(Args::testing(crate::current_dir!().join("config.yml"))),
-        Some(RemoteQueryLog::store_in_memory()),
-    )
-    .unwrap();
-
-    let mut client = crate::common::connect(60002);
+    let (instance, mut client) =
+        crate::common::run_instance(crate::current_dir!().join("config.yml"));
 
     let rows = client
         .query("SELECT * FROM \"ANSILO_ADMIN.T002__TEST_TAB\"", &[])

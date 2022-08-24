@@ -1,4 +1,7 @@
-use std::io::{self, BufWriter, Write};
+use std::{
+    io::{self, BufWriter, Write},
+    iter::Iterator,
+};
 
 use ansilo_core::{
     data::DataValue,
@@ -104,6 +107,15 @@ where
     pub fn write_data_value(&mut self, data: DataValue) -> Result<()> {
         self.inner.write_data_value(data)
     }
+
+    /// Writes the supplied data value to the underlying query handle
+    pub fn write_all(&mut self, data: impl Iterator<Item = DataValue>) -> Result<()> {
+        for val in data {
+            self.inner.write_data_value(val)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -178,6 +190,29 @@ mod tests {
             [
                 vec![1u8],                      // not null
                 123_i32.to_be_bytes().to_vec(), // val
+            ]
+            .concat()
+        );
+    }
+
+    #[test]
+    fn test_query_handle_writer_write_all() {
+        let structure = QueryInputStructure::new(vec![(1, DataType::Int32), (2, DataType::Int32)]);
+        let mut query = MockQueryHandle::new(structure.clone(), 1024);
+
+        query
+            .write_all([DataValue::Int32(123), DataValue::Int32(456)].into_iter())
+            .unwrap();
+
+        let buff = query.inner().unwrap().1.into_inner();
+
+        assert_eq!(
+            buff,
+            [
+                vec![1u8],                      // not null
+                123_i32.to_be_bytes().to_vec(), // val
+                vec![1u8],                      // not null
+                456_i32.to_be_bytes().to_vec(), // val
             ]
             .concat()
         );

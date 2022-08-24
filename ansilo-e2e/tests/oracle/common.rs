@@ -4,7 +4,7 @@ use ansilo_connectors_base::{
     interface::{Connection, QueryHandle},
     test::ecs::{get_current_target_dir, start_containers, wait_for_log, ContainerInstances},
 };
-use ansilo_connectors_jdbc_base::JdbcQuery;
+use ansilo_connectors_jdbc_base::{JdbcQuery, JdbcConnection, JdbcDefaultTypeMapping};
 use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector};
 use ansilo_logging::info;
 use glob::glob;
@@ -44,7 +44,10 @@ pub fn start_oracle() -> ContainerInstances {
     services
 }
 
-pub fn init_oracle_sql(containers: &ContainerInstances, path: PathBuf) {
+pub fn init_oracle_sql(
+    containers: &ContainerInstances,
+    path: PathBuf,
+) -> JdbcConnection<JdbcDefaultTypeMapping> {
     let config = OracleJdbcConnectionConfig::new(
         format!(
             "jdbc:oracle:thin:@{}:1522/db",
@@ -74,4 +77,6 @@ pub fn init_oracle_sql(containers: &ContainerInstances, path: PathBuf) {
                 .unwrap();
         }
     }
+
+    connection
 }

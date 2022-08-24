@@ -108,17 +108,7 @@ impl FdwContext {
         let mut cvt = ConversionContext::new();
         let alias = cvt.register_alias(varno);
 
-        let (query_id, cost) = self
-            .send(ClientMessage::CreateQuery(
-                sqlil::EntitySource::new(self.entity.clone(), alias),
-                r#type,
-            ))
-            .and_then(|res| match res {
-                ServerMessage::QueryCreated(query_id, cost) => Ok((query_id, cost)),
-                _ => return Err(unexpected_response(res)),
-            })
-            .context("Creating query")
-            .unwrap();
+        let (query_id, cost) = self.send_create_query(alias, r#type);
 
         let query = match r#type {
             sqlil::QueryType::Select => FdwQueryType::Select(FdwSelectQuery::default()),
@@ -137,6 +127,26 @@ impl FdwContext {
         );
 
         Ok(query)
+    }
+
+    fn send_create_query(&mut self, alias: &str, r#type: sqlil::QueryType) -> (u32, OperationCost) {
+        let (query_id, cost) = self
+            .send(ClientMessage::CreateQuery(
+                sqlil::EntitySource::new(self.entity.clone(), alias),
+                r#type,
+            ))
+            .and_then(|res| match res {
+                ServerMessage::QueryCreated(query_id, cost) => Ok((query_id, cost)),
+                ServerMessage::UnknownEntity(e) if e == self.entity => {
+                    self.register_entity()?;
+                    return Ok(self.send_create_query(alias, r#type));
+                }
+                _ => return Err(unexpected_response(res)),
+            })
+            .context("Creating query")
+            .unwrap();
+
+        (query_id, cost)
     }
 }
 
