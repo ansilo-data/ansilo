@@ -48,7 +48,7 @@ sudo docker run \
     --detach \
     --privileged \
     -p 2222:22 \
-    --mount type=tmpfs,destination=/tmp \
+    --tmpfs /tmp:exec \
     --volume /storage:/store \
     --entrypoint /bin/bash \
     $DEVCONTAINER_IMAGE /boot.sh $DEV_USER $SPOT_FLEET_ID
