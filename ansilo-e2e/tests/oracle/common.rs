@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, fs, path::PathBuf, time::Duration};
+use std::{collections::HashMap, env, fs, path::PathBuf, sync::Mutex, time::Duration};
 
 use ansilo_connectors_base::{
     interface::{Connection, QueryHandle},
@@ -9,11 +9,15 @@ use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnec
 use ansilo_logging::info;
 use glob::glob;
 
+static ORACLE_MUTEX: Mutex<()> = Mutex::new(());
+
 /// Starts an Oracle DB instance and waits for it to become ready to accept connections
 /// NOTE: The instance takes a long time to boot up due to the image size
 /// so it is not terminated at the end of each test, rather it has a
 /// script which will exit automatically after idleing for 30 min
 pub fn start_oracle() -> ContainerInstances {
+    let _lock = ORACLE_MUTEX.lock().unwrap();
+
     env::set_var(
         "ANSILO_CLASSPATH",
         get_current_target_dir().to_str().unwrap(),

@@ -113,12 +113,13 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
         })
         .collect::<String>();
     Ok(match normalised_type.as_str() {
-        "CHAR" | "NCHAR" | "VARCHAR" | "VARCHAR2" | "NVARCHAR" | "NVARCHAR2" => {
+        "CHAR" | "NCHAR" | "VARCHAR" | "VARCHAR2" | "NVARCHAR" | "NVARCHAR2" | "CLOB" | "NCLOB" => {
             let length = col["CHAR_LENGTH"]
                 .clone()
                 .try_coerce_into(&DataType::UInt32)
                 .ok()
-                .and_then(|i| i.as_u_int32().cloned());
+                .and_then(|i| i.as_u_int32().cloned())
+                .and_then(|i| if i >= 1 { Some(i) } else { None });
 
             DataType::Utf8String(StringOptions::new(length))
         }
@@ -138,7 +139,7 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
         }
         "BINARY_FLOAT" => DataType::Float32,
         "BINARY_DOUBLE" => DataType::Float64,
-        "RAW" | "LONG RAW" | "BFILE" | "BLOB" | "CLOB" | "NCLOB" => DataType::Binary,
+        "RAW" | "LONG RAW" | "BFILE" | "BLOB" => DataType::Binary,
         "JSON" => DataType::JSON,
         "DATE" => DataType::Date,
         "TIMESTAMP" => DataType::DateTime,
