@@ -12,7 +12,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 
 public class JdbcResultSetTest {
     private ResultSet innerResultSet;
@@ -36,8 +36,8 @@ public class JdbcResultSetTest {
         var rowStructure = resultSet.getRowStructure();
 
         assertEquals(2, rowStructure.getCols().size());
-        assertEquals(JdbcDataType.TYPE_VARCHAR, rowStructure.getCols().get(0).getDataType().getTypeId());
-        assertEquals(JdbcDataType.TYPE_INTEGER, rowStructure.getCols().get(1).getDataType().getTypeId());
+        assertEquals(DataType.TYPE_VARCHAR, rowStructure.getCols().get(0).getDataType().getTypeId());
+        assertEquals(DataType.TYPE_INT32, rowStructure.getCols().get(1).getDataType().getTypeId());
     }
 
     @Test

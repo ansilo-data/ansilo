@@ -8,8 +8,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
-import com.ansilo.connectors.data.JdbcFixedSizeDataType;
-import com.ansilo.connectors.data.JdbcStreamDataType;
+import com.ansilo.connectors.data.FixedSizeDataType;
+import com.ansilo.connectors.data.StreamDataType;
 import com.ansilo.connectors.result.JdbcResultSet;
 
 /**
@@ -100,8 +100,8 @@ public class JdbcPreparedQuery {
                 continue;
             }
 
-            if (paramType instanceof JdbcFixedSizeDataType) {
-                var fixedType = (JdbcFixedSizeDataType) paramType;
+            if (paramType instanceof FixedSizeDataType) {
+                var fixedType = (FixedSizeDataType) paramType;
                 var localBuffer = this.getLocalBuffer();
 
                 if (localBuffer.size() == 0 && buff.remaining() >= fixedType.getFixedSize()) {
@@ -127,8 +127,8 @@ public class JdbcPreparedQuery {
                     break;
                 }
 
-            } else if (paramType instanceof JdbcStreamDataType) {
-                var streamType = (JdbcStreamDataType) paramType;
+            } else if (paramType instanceof StreamDataType) {
+                var streamType = (StreamDataType) paramType;
                 var localBuffer = this.getLocalBuffer();
 
                 // Read chunk length

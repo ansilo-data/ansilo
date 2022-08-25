@@ -11,7 +11,7 @@ import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.query.JdbcParameter;
 
 public class JdbcConnectionTest {
@@ -28,8 +28,8 @@ public class JdbcConnectionTest {
     void testPrepareStatement() throws Exception {
         var query = "EXAMPLE QUERY";
         var params = new ArrayList<JdbcParameter>();
-        params.add(JdbcParameter.createDynamic(1, JdbcDataType.TYPE_INTEGER));
-        params.add(JdbcParameter.createDynamic(1, JdbcDataType.TYPE_VARCHAR));
+        params.add(JdbcParameter.createDynamic(1, DataType.TYPE_INT32));
+        params.add(JdbcParameter.createDynamic(1, DataType.TYPE_VARCHAR));
 
         var mockStatement = mock(PreparedStatement.class);
         when(this.innerConnection.prepareStatement(query)).thenReturn(mockStatement);

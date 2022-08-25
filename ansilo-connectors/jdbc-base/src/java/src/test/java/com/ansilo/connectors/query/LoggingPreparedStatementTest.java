@@ -21,7 +21,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.Int32DataType;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.data.VarcharDataType;
 import com.ansilo.connectors.result.JdbcResultSet;
 
@@ -48,7 +48,7 @@ public class LoggingPreparedStatementTest {
     @Test
     void testGetLoggedParamsWithSetParam() throws Exception {
         this.statement.setInt(1, 1234);
-        assertArrayEquals(new LoggedParam[] {new LoggedParam(1, JdbcDataType.TYPE_INTEGER, 1234)},
+        assertArrayEquals(new LoggedParam[] {new LoggedParam(1, DataType.TYPE_INT32, 1234)},
                 this.statement.getLoggedParams().toArray());
     }
 
@@ -57,8 +57,8 @@ public class LoggingPreparedStatementTest {
         this.statement.setInt(1, 1234);
         this.statement.setString(2, "ABC");
         assertArrayEquals(
-                new LoggedParam[] {new LoggedParam(1, JdbcDataType.TYPE_INTEGER, 1234),
-                        new LoggedParam(2, JdbcDataType.TYPE_NVARCHAR, "ABC")},
+                new LoggedParam[] {new LoggedParam(1, DataType.TYPE_INT32, 1234),
+                        new LoggedParam(2, DataType.TYPE_UTF8_STRING, "ABC")},
                 this.statement.getLoggedParams().toArray());
     }
 

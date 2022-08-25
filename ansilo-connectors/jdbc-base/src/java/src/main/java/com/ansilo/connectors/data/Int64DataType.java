@@ -9,10 +9,10 @@ import java.sql.Types;
 /**
  * The int64 data type
  */
-public class Int64DataType implements JdbcFixedSizeDataType {
+public class Int64DataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_BIGINT;
+        return TYPE_INT64;
     }
 
     @Override
@@ -21,9 +21,9 @@ public class Int64DataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getLong(colIndex);
+        var val = resultSet.getLong(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

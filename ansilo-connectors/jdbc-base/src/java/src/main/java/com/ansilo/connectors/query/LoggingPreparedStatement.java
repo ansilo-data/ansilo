@@ -24,7 +24,7 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 
 /**
  * Wrapper for a PreparedStatment that captures bound query parameters.
@@ -314,289 +314,289 @@ public class LoggingPreparedStatement implements PreparedStatement {
 
     @Override
     public void setArray(int arg0, Array arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_ARRAY, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_ARRAY, arg1));
         this.inner.setArray(arg0, arg1);
     }
 
     @Override
     public void setAsciiStream(int arg0, InputStream arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_VARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_VARCHAR, arg1));
         this.inner.setAsciiStream(arg0, arg1);
     }
 
     @Override
     public void setAsciiStream(int arg0, InputStream arg1, int arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_VARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_VARCHAR, arg1));
         this.inner.setAsciiStream(arg0, arg1, arg2);
     }
 
     @Override
     public void setAsciiStream(int arg0, InputStream arg1, long arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_VARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_VARCHAR, arg1));
         this.inner.setAsciiStream(arg0, arg1, arg2);
     }
 
     @Override
     public void setBigDecimal(int arg0, BigDecimal arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NUMERIC, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_NUMERIC, arg1));
         this.inner.setBigDecimal(arg0, arg1);
     }
 
     @Override
     public void setBinaryStream(int arg0, InputStream arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BINARY, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BINARY, arg1));
         this.inner.setBinaryStream(arg0, arg1);
     }
 
     @Override
     public void setBinaryStream(int arg0, InputStream arg1, int arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BINARY, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BINARY, arg1));
         this.inner.setBinaryStream(arg0, arg1, arg2);
     }
 
     @Override
     public void setBinaryStream(int arg0, InputStream arg1, long arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BINARY, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BINARY, arg1));
         this.inner.setBinaryStream(arg0, arg1, arg2);
     }
 
     @Override
     public void setBlob(int arg0, Blob arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BLOB, arg1));
         this.inner.setBlob(arg0, arg1);
     }
 
     @Override
     public void setBlob(int arg0, InputStream arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BLOB, arg1));
         this.inner.setBlob(arg0, arg1);
     }
 
     @Override
     public void setBlob(int arg0, InputStream arg1, long arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BLOB, arg1));
         this.inner.setBlob(arg0, arg1, arg2);
     }
 
     @Override
     public void setBoolean(int arg0, boolean arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BOOLEAN, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BOOLEAN, arg1));
         this.inner.setBoolean(arg0, arg1);
     }
 
     @Override
     public void setByte(int arg0, byte arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BINARY, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BINARY, arg1));
         this.inner.setByte(arg0, arg1);
     }
 
     @Override
     public void setBytes(int arg0, byte[] arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BINARY, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BINARY, arg1));
         this.inner.setBytes(arg0, arg1);
     }
 
     @Override
     public void setCharacterStream(int arg0, Reader arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_VARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_VARCHAR, arg1));
         this.inner.setCharacterStream(arg0, arg1);
     }
 
     @Override
     public void setCharacterStream(int arg0, Reader arg1, int arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_VARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_VARCHAR, arg1));
         this.inner.setCharacterStream(arg0, arg1, arg2);
     }
 
     @Override
     public void setCharacterStream(int arg0, Reader arg1, long arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_VARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_VARCHAR, arg1));
         this.inner.setCharacterStream(arg0, arg1, arg2);
     }
 
     @Override
     public void setClob(int arg0, Clob arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_CLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_CLOB, arg1));
         this.inner.setClob(arg0, arg1);
     }
 
     @Override
     public void setClob(int arg0, Reader arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_CLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_CLOB, arg1));
         this.inner.setClob(arg0, arg1);
     }
 
     @Override
     public void setClob(int arg0, Reader arg1, long arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_CLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_CLOB, arg1));
         this.inner.setClob(arg0, arg1, arg2);
     }
 
     @Override
     public void setDate(int arg0, Date arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_DATE, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_DATE, arg1));
         this.inner.setDate(arg0, arg1);
     }
 
     @Override
     public void setDate(int arg0, Date arg1, Calendar arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_DATE, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_DATE, arg1));
         this.inner.setDate(arg0, arg1, arg2);
     }
 
     @Override
     public void setDouble(int arg0, double arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_DOUBLE, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_FLOAT64, arg1));
         this.inner.setDouble(arg0, arg1);
     }
 
     @Override
     public void setFloat(int arg0, float arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_FLOAT, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_FLOAT32, arg1));
         this.inner.setFloat(arg0, arg1);
     }
 
     @Override
     public void setInt(int arg0, int arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_INTEGER, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_INT32, arg1));
         this.inner.setInt(arg0, arg1);
     }
 
     @Override
     public void setLong(int arg0, long arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BIGINT, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_INT64, arg1));
         this.inner.setLong(arg0, arg1);
     }
 
     @Override
     public void setNCharacterStream(int arg0, Reader arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NVARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_UTF8_STRING, arg1));
         this.inner.setNCharacterStream(arg0, arg1);
     }
 
     @Override
     public void setNCharacterStream(int arg0, Reader arg1, long arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NVARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_UTF8_STRING, arg1));
         this.inner.setNCharacterStream(arg0, arg1, arg2);
     }
 
     @Override
     public void setNClob(int arg0, NClob arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NCLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_NCLOB, arg1));
         this.inner.setNClob(arg0, arg1);
     }
 
     @Override
     public void setNClob(int arg0, Reader arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NCLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_NCLOB, arg1));
         this.inner.setNClob(arg0, arg1);
     }
 
     @Override
     public void setNClob(int arg0, Reader arg1, long arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NCLOB, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_NCLOB, arg1));
         this.inner.setNClob(arg0, arg1, arg2);
     }
 
     @Override
     public void setNString(int arg0, String arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NVARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_UTF8_STRING, arg1));
         this.inner.setNString(arg0, arg1);
     }
 
     @Override
     public void setNull(int arg0, int arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NULL, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_NULL, arg1));
         this.inner.setNull(arg0, arg1);
     }
 
     @Override
     public void setNull(int arg0, int arg1, String arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NULL, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_NULL, arg1));
         this.inner.setNull(arg0, arg1, arg2);
     }
 
     @Override
     public void setObject(int arg0, Object arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_JAVA_OBJECT, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_JAVA_OBJECT, arg1));
         this.inner.setObject(arg0, arg1);
     }
 
     @Override
     public void setObject(int arg0, Object arg1, int arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_JAVA_OBJECT, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_JAVA_OBJECT, arg1));
         this.inner.setObject(arg0, arg1, arg2);
     }
 
     @Override
     public void setObject(int arg0, Object arg1, int arg2, int arg3) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_JAVA_OBJECT, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_JAVA_OBJECT, arg1));
         this.inner.setObject(arg0, arg1, arg2, arg3);
     }
 
     @Override
     public void setRef(int arg0, Ref arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_VARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_VARCHAR, arg1));
         this.inner.setRef(arg0, arg1);
     }
 
     @Override
     public void setRowId(int arg0, RowId arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_VARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_VARCHAR, arg1));
         this.inner.setRowId(arg0, arg1);
     }
 
     @Override
     public void setSQLXML(int arg0, SQLXML arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_SQLXML, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_SQLXML, arg1));
         this.inner.setSQLXML(arg0, arg1);
     }
 
     @Override
     public void setShort(int arg0, short arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_SMALLINT, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_INT16, arg1));
         this.inner.setShort(arg0, arg1);
     }
 
     @Override
     public void setString(int arg0, String arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NVARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_UTF8_STRING, arg1));
         this.inner.setString(arg0, arg1);
     }
 
     @Override
     public void setTime(int arg0, Time arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_TIME, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_TIME, arg1));
         this.inner.setTime(arg0, arg1);
     }
 
     @Override
     public void setTime(int arg0, Time arg1, Calendar arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_TIME, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_TIME, arg1));
         this.inner.setTime(arg0, arg1, arg2);
     }
 
     @Override
     public void setTimestamp(int arg0, Timestamp arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_TIMESTAMP, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_DATE_TIME, arg1));
         this.inner.setTimestamp(arg0, arg1);
     }
 
     @Override
     public void setTimestamp(int arg0, Timestamp arg1, Calendar arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_TIMESTAMP, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_DATE_TIME, arg1));
         this.inner.setTimestamp(arg0, arg1, arg2);
     }
 
     @Override
     public void setURL(int arg0, URL arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_NVARCHAR, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_UTF8_STRING, arg1));
         this.inner.setURL(arg0, arg1);
     }
 
     @Override
     public void setUnicodeStream(int arg0, InputStream arg1, int arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, JdbcDataType.TYPE_BINARY, arg1));
+        this.params.add(new LoggedParam(arg0, DataType.TYPE_BINARY, arg1));
         this.inner.setUnicodeStream(arg0, arg1, arg2);
     }
 }

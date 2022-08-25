@@ -13,15 +13,15 @@ import java.sql.Types;
 /**
  * The decimal data type
  */
-public class DecimalDataType implements JdbcStreamDataType {
+public class DecimalDataType implements StreamDataType {
     @Override
     public int getTypeId() {
         return TYPE_DECIMAL;
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int colIndex) throws Exception {
-        var val = resultSet.getBigDecimal(colIndex);
+    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
+        var val = resultSet.getBigDecimal(index);
 
         if (val == null) {
             return null;

@@ -15,7 +15,7 @@ import com.google.gson.JsonElement;
 /**
  * The json data type
  */
-public class JsonDataType implements JdbcStreamDataType {
+public class JsonDataType implements StreamDataType {
     private static Gson gson = new GsonBuilder().serializeNulls().create();
 
     @Override
@@ -24,8 +24,8 @@ public class JsonDataType implements JdbcStreamDataType {
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int colIndex) throws Exception {
-        Object obj = resultSet.getObject(colIndex);
+    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
+        Object obj = resultSet.getObject(index);
 
         if (obj == null) {
             return null;

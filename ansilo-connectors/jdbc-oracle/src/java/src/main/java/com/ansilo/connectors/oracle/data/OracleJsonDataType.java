@@ -8,14 +8,14 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
-import com.ansilo.connectors.data.JdbcStreamDataType;
+import com.ansilo.connectors.data.StreamDataType;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 /**
  * The json data type
  */
-public class OracleJsonDataType implements JdbcStreamDataType {
+public class OracleJsonDataType implements StreamDataType {
     private static Gson gson = new GsonBuilder().serializeNulls().create();
 
     @Override
@@ -24,8 +24,8 @@ public class OracleJsonDataType implements JdbcStreamDataType {
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int colIndex) throws Exception {
-        String json = resultSet.getString(colIndex);
+    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
+        String json = resultSet.getString(index);
 
         if (json == null) {
             return null;

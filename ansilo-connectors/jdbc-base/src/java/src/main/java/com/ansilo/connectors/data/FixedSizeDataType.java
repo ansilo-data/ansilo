@@ -2,14 +2,15 @@ package com.ansilo.connectors.data;
 
 import java.nio.ByteBuffer;
 import java.sql.ResultSet;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * A fixed size data type.
  */
-public interface JdbcFixedSizeDataType extends JdbcDataType {
+public interface FixedSizeDataType extends DataType {
     @Override
     default int getReadMode() {
-        return JdbcDataType.MODE_FIXED;
+        return DataType.MODE_FIXED;
     }
 
     /**
@@ -20,5 +21,6 @@ public interface JdbcFixedSizeDataType extends JdbcDataType {
     /**
      * Copies the value into the supplied byte buffer from the supplied result set.
      */
-    void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex) throws Exception;
+    void writeToByteBuffer(JdbcDataMapping mapping, ByteBuffer buff, ResultSet resultSet,
+            int index) throws Exception;
 }

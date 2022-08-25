@@ -12,7 +12,7 @@ import java.time.ZoneId;
 /**
  * The date data type
  */
-public class DateDataType implements JdbcFixedSizeDataType {
+public class DateDataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
         return TYPE_DATE;
@@ -24,9 +24,9 @@ public class DateDataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getDate(colIndex);
+        var val = resultSet.getDate(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

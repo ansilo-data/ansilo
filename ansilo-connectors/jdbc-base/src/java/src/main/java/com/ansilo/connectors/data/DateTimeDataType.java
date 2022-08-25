@@ -11,10 +11,10 @@ import java.time.LocalDateTime;
 /**
  * The date/time data type
  */
-public class DateTimeDataType implements JdbcFixedSizeDataType {
+public class DateTimeDataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_TIMESTAMP;
+        return TYPE_DATE_TIME;
     }
 
     @Override
@@ -23,9 +23,9 @@ public class DateTimeDataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getTimestamp(colIndex);
+        var val = resultSet.getTimestamp(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

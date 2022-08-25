@@ -9,10 +9,10 @@ import java.sql.Types;
 /**
  * The int16 data type
  */
-public class Int16DataType implements JdbcFixedSizeDataType {
+public class Int16DataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_SMALLINT;
+        return TYPE_INT16;
     }
 
     @Override
@@ -21,9 +21,9 @@ public class Int16DataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getShort(colIndex);
+        var val = resultSet.getShort(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

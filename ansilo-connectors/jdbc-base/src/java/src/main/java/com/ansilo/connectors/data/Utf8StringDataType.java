@@ -12,15 +12,15 @@ import java.sql.Types;
 /**
  * The nvarchar data type
  */
-public class NVarcharDataType implements JdbcStreamDataType {
+public class Utf8StringDataType implements StreamDataType {
     @Override
     public int getTypeId() {
-        return TYPE_NVARCHAR;
+        return TYPE_UTF8_STRING;
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int colIndex) throws Exception {
-        String string = resultSet.getNString(colIndex);
+    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
+        String string = resultSet.getNString(index);
 
         if (string == null) {
             return null;

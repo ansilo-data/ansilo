@@ -9,7 +9,7 @@ import java.sql.Types;
 /**
  * The null data type
  */
-public class NullDataType implements JdbcFixedSizeDataType {
+public class NullDataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
         return TYPE_NULL;
@@ -21,7 +21,7 @@ public class NullDataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
         buff.put((byte) 0);
     }

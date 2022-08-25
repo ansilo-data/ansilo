@@ -9,10 +9,10 @@ import java.sql.Types;
 /**
  * The int8 data type
  */
-public class Int8DataType implements JdbcFixedSizeDataType {
+public class Int8DataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_TINYINT;
+        return TYPE_INT8;
     }
 
     @Override
@@ -21,9 +21,9 @@ public class Int8DataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getByte(colIndex);
+        var val = resultSet.getByte(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

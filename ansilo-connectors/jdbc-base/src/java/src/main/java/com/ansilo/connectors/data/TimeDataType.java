@@ -11,7 +11,7 @@ import java.time.LocalTime;
 /**
  * The time data type
  */
-public class TimeDataType implements JdbcFixedSizeDataType {
+public class TimeDataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
         return TYPE_TIME;
@@ -23,9 +23,9 @@ public class TimeDataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getTime(colIndex);
+        var val = resultSet.getTime(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

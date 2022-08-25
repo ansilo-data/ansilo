@@ -13,12 +13,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class NVarcharDataTypeTest extends DataTypeTest {
-    private NVarcharDataType dataType;
+    private Utf8StringDataType dataType;
 
     @BeforeEach
     void setUp() {
         super.setUp();
-        this.dataType = new NVarcharDataType();
+        this.dataType = new Utf8StringDataType();
     }
 
     @Test

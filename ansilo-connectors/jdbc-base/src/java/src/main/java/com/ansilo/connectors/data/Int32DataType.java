@@ -9,10 +9,10 @@ import java.sql.Types;
 /**
  * The int32 data type
  */
-public class Int32DataType implements JdbcFixedSizeDataType {
+public class Int32DataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_INTEGER;
+        return TYPE_INT32;
     }
 
     @Override
@@ -21,9 +21,9 @@ public class Int32DataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        int val = resultSet.getInt(colIndex);
+        int val = resultSet.getInt(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

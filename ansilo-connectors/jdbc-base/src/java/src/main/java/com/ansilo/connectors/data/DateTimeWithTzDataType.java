@@ -16,15 +16,15 @@ import java.time.ZonedDateTime;
 /**
  * The date/time with timezone data type
  */
-public class DateTimeWithTzDataType implements JdbcStreamDataType {
+public class DateTimeWithTzDataType implements StreamDataType {
     @Override
     public int getTypeId() {
-        return TYPE_TIMESTAMP_WITH_TIMEZONE;
+        return TYPE_DATE_TIME_WITH_TZ;
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int colIndex) throws Exception {
-        var val = resultSet.getTimestamp(colIndex);
+    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
+        var val = resultSet.getTimestamp(index);
 
         if (resultSet.wasNull()) {
             return null;

@@ -9,7 +9,7 @@ import java.sql.Types;
 /**
  * The bool data type
  */
-public class BoolDataType implements JdbcFixedSizeDataType {
+public class BoolDataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
         return TYPE_BOOLEAN;
@@ -21,9 +21,9 @@ public class BoolDataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getBoolean(colIndex);
+        var val = resultSet.getBoolean(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

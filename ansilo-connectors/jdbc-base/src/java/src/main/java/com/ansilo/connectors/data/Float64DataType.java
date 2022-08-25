@@ -9,10 +9,10 @@ import java.sql.Types;
 /**
  * The float64 data type
  */
-public class Float64DataType implements JdbcFixedSizeDataType {
+public class Float64DataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_DOUBLE;
+        return TYPE_FLOAT64;
     }
 
     @Override
@@ -21,9 +21,9 @@ public class Float64DataType implements JdbcFixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int colIndex)
+    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getDouble(colIndex);
+        var val = resultSet.getDouble(index);
         if (resultSet.wasNull()) {
             buff.put((byte) 0);
             return;

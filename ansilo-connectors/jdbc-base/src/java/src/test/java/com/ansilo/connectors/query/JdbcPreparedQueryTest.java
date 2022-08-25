@@ -21,7 +21,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.Int32DataType;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.data.VarcharDataType;
 import com.ansilo.connectors.result.JdbcResultSet;
 
@@ -422,7 +422,7 @@ public class JdbcPreparedQueryTest {
 
         var params = this.preparedQuery.getLoggedParams();
 
-        assertArrayEquals(List.of(new LoggedParam(1, JdbcDataType.TYPE_INTEGER, 123)).toArray(),
+        assertArrayEquals(List.of(new LoggedParam(1, DataType.TYPE_INT32, 123)).toArray(),
                 params.toArray());
     }
 
@@ -448,8 +448,8 @@ public class JdbcPreparedQueryTest {
         var params = this.preparedQuery.getLoggedParams();
 
         assertArrayEquals(
-                List.of(new LoggedParam(1, JdbcDataType.TYPE_INTEGER, 123),
-                        new LoggedParam(1, JdbcDataType.TYPE_NVARCHAR, "abc")).toArray(),
+                List.of(new LoggedParam(1, DataType.TYPE_INT32, 123),
+                        new LoggedParam(1, DataType.TYPE_UTF8_STRING, "abc")).toArray(),
                 params.toArray());
     }
 
@@ -468,7 +468,7 @@ public class JdbcPreparedQueryTest {
 
             assertEquals(5, wrote);
 
-            assertArrayEquals(List.of(new LoggedParam(1, JdbcDataType.TYPE_INTEGER, i)).toArray(),
+            assertArrayEquals(List.of(new LoggedParam(1, DataType.TYPE_INT32, i)).toArray(),
                     this.preparedQuery.getLoggedParams().toArray());
 
             this.preparedQuery.restart();

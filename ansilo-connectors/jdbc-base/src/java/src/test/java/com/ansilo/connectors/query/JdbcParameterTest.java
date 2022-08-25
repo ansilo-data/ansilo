@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.sql.Types;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.Int32DataType;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 
 public class JdbcParameterTest {
     @Test
@@ -24,7 +24,7 @@ public class JdbcParameterTest {
 
     @Test
     void testCreateDynamicFromDataTypeId() throws Exception {
-        var param = JdbcParameter.createDynamic(1, JdbcDataType.TYPE_INTEGER);
+        var param = JdbcParameter.createDynamic(1, DataType.TYPE_INT32);
 
         assertEquals(1, param.getIndex());
         assertInstanceOf(Int32DataType.class, param.getDataType());
@@ -71,7 +71,7 @@ public class JdbcParameterTest {
     @Test
     void testCreateConstantCopiedFromDataTypeId() throws Exception {
         var buff = ByteBuffer.wrap(new byte[] {1, 2, 3});
-        var param = JdbcParameter.createConstantCopied(1, JdbcDataType.TYPE_INTEGER, buff);
+        var param = JdbcParameter.createConstantCopied(1, DataType.TYPE_INT32, buff);
 
         assertEquals(1, param.getIndex());
         assertInstanceOf(Int32DataType.class, param.getDataType());

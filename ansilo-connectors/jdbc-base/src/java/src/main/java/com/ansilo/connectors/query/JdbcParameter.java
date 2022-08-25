@@ -2,7 +2,7 @@ package com.ansilo.connectors.query;
 
 import java.nio.ByteBuffer;
 import java.sql.SQLException;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 
 /**
  * A JDBC query paremeter.
@@ -16,14 +16,14 @@ public class JdbcParameter {
     /**
      * The data type of the query parameter
      */
-    private JdbcDataType dataType;
+    private DataType dataType;
 
     /**
      * If the parameter has a constant value, then the byte buffer containing the value
      */
     private ByteBuffer constantValueBuffer;
 
-    private JdbcParameter(int index, JdbcDataType dataType, ByteBuffer constantValueBuffer) {
+    private JdbcParameter(int index, DataType dataType, ByteBuffer constantValueBuffer) {
         this.index = index;
         this.dataType = dataType;
         this.constantValueBuffer = constantValueBuffer;
@@ -32,7 +32,7 @@ public class JdbcParameter {
     /**
      * Creates a JDBC query parameter
      */
-    public static JdbcParameter createDynamic(int index, JdbcDataType dataType) {
+    public static JdbcParameter createDynamic(int index, DataType dataType) {
         return new JdbcParameter(index, dataType, null);
     }
 
@@ -42,13 +42,13 @@ public class JdbcParameter {
      * @throws SQLException
      */
     public static JdbcParameter createDynamic(int index, int dataTypeId) throws SQLException {
-        return createDynamic(index, JdbcDataType.createFromTypeId(dataTypeId));
+        return createDynamic(index, DataType.createFromTypeId(dataTypeId));
     }
 
     /**
      * Creates a JDBC query parameter with a constant value.
      */
-    public static JdbcParameter createConstant(int index, JdbcDataType dataType,
+    public static JdbcParameter createConstant(int index, DataType dataType,
             ByteBuffer buffer) {
         return new JdbcParameter(index, dataType, buffer);
     }
@@ -58,14 +58,14 @@ public class JdbcParameter {
      */
     public static JdbcParameter createConstant(int index, int dataTypeId, ByteBuffer buffer)
             throws SQLException {
-        return createConstant(index, JdbcDataType.createFromTypeId(dataTypeId), buffer);
+        return createConstant(index, DataType.createFromTypeId(dataTypeId), buffer);
     }
 
     /**
      * Creates a JDBC query parameter with a constant value and creates a copy of the supplied byte
      * buffer.
      */
-    public static JdbcParameter createConstantCopied(int index, JdbcDataType dataType,
+    public static JdbcParameter createConstantCopied(int index, DataType dataType,
             ByteBuffer buffer) {
         var copy = ByteBuffer.allocate(buffer.capacity());
         copy.put(buffer);
@@ -79,14 +79,14 @@ public class JdbcParameter {
      */
     public static JdbcParameter createConstantCopied(int index, int dataTypeId, ByteBuffer buffer)
             throws SQLException {
-        return createConstantCopied(index, JdbcDataType.createFromTypeId(dataTypeId), buffer);
+        return createConstantCopied(index, DataType.createFromTypeId(dataTypeId), buffer);
     }
 
     public int getIndex() {
         return index;
     }
 
-    public JdbcDataType getDataType() {
+    public DataType getDataType() {
         return dataType;
     }
 

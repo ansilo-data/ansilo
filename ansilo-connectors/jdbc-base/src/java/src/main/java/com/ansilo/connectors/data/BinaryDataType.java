@@ -5,40 +5,34 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The binary data type
  */
-public class BinaryDataType implements JdbcStreamDataType {
+public class BinaryDataType implements StreamDataType {
     @Override
     public int getTypeId() {
         return TYPE_BINARY;
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int colIndex) throws Exception {
-        var data = resultSet.getBinaryStream(colIndex);
-
-        if (resultSet.wasNull()) {
-            return null;
-        }
-
-        return data;
+    public InputStream getStream(JdbcDataMapping mapping, ResultSet resultSet, int index)
+            throws Exception {
+        return mapping.getBinary(resultSet, index);
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index,
+            ByteBuffer buff) throws Exception {
         boolean isNull = buff.get() == 0;
 
         if (isNull) {
-            statement.setNull(index, Types.BINARY);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
             var bytes = new byte[buff.remaining()];
             buff.get(bytes);
-            statement.setBinaryStream(index, new ByteArrayInputStream(bytes));
+            mapping.bindBinary(statement, index, new ByteArrayInputStream(bytes));
         }
     }
 }

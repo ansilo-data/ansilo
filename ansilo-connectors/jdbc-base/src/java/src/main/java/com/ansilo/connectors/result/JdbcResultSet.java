@@ -8,9 +8,9 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import com.ansilo.connectors.data.JdbcDataType;
-import com.ansilo.connectors.data.JdbcFixedSizeDataType;
-import com.ansilo.connectors.data.JdbcStreamDataType;
+import com.ansilo.connectors.data.DataType;
+import com.ansilo.connectors.data.FixedSizeDataType;
+import com.ansilo.connectors.data.StreamDataType;
 
 /***
  * The JDBC result set wrapper class.
@@ -27,7 +27,7 @@ public class JdbcResultSet {
     /**
      * The array of data types for each column in the result set.
      */
-    protected JdbcDataType[] dataTypes;
+    protected DataType[] dataTypes;
 
     /**
      * The position of the result set cursor
@@ -135,8 +135,8 @@ public class JdbcResultSet {
 
             var dataType = this.dataTypes[this.columnIndex];
 
-            if (dataType instanceof JdbcFixedSizeDataType) {
-                var fixedDataType = (JdbcFixedSizeDataType) dataType;
+            if (dataType instanceof FixedSizeDataType) {
+                var fixedDataType = (FixedSizeDataType) dataType;
                 if (fixedDataType.getFixedSize() <= buff.remaining()) {
                     fixedDataType.writeToByteBuffer(buff, this.resultSet, this.columnIndex + 1);
                     this.columnIndex++;
@@ -144,8 +144,8 @@ public class JdbcResultSet {
                     this.requireAtLeastBytes = fixedDataType.getFixedSize();
                     break;
                 }
-            } else if (dataType instanceof JdbcStreamDataType) {
-                var streamDataType = (JdbcStreamDataType) dataType;
+            } else if (dataType instanceof StreamDataType) {
+                var streamDataType = (StreamDataType) dataType;
 
                 if (this.currentStream == null) {
                     this.currentStream =
@@ -219,13 +219,13 @@ public class JdbcResultSet {
         return res;
     }
 
-    protected JdbcDataType[] getDataTypes() throws SQLException {
+    protected DataType[] getDataTypes() throws SQLException {
         if (this.resultSet == null) {
-            return new JdbcDataType[0];
+            return new DataType[0];
         }
 
         var metadata = this.resultSet.getMetaData();
-        JdbcDataType[] dataTypes = new JdbcDataType[metadata.getColumnCount()];
+        DataType[] dataTypes = new DataType[metadata.getColumnCount()];
 
         for (int i = 0; i < dataTypes.length; i++) {
             dataTypes[i] = this.getDataType(metadata, i + 1);
@@ -234,9 +234,9 @@ public class JdbcResultSet {
         return dataTypes;
     }
 
-    protected JdbcDataType getDataType(ResultSetMetaData metadata, int index) throws SQLException {
+    protected DataType getDataType(ResultSetMetaData metadata, int index) throws SQLException {
         try {
-            return JdbcDataType.createFromJdbcType(metadata.getColumnType(index));
+            return DataType.createFromJdbcType(metadata.getColumnType(index));
         } catch (Exception e) {
             throw new SQLException(String.format("Could not determine type for column \"%s\": %s",
                     metadata.getColumnName(index), e.getMessage()), e);

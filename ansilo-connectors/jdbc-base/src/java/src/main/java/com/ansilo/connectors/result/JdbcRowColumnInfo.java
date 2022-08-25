@@ -1,6 +1,6 @@
 package com.ansilo.connectors.result;
 
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 
 /**
  * Represents the metadata of a column in a JDBC result set.
@@ -14,9 +14,9 @@ public class JdbcRowColumnInfo {
     /**
      * The data type of the column
      */
-    private JdbcDataType dataType;
+    private DataType dataType;
 
-    public JdbcRowColumnInfo(String name, JdbcDataType dataType) {
+    public JdbcRowColumnInfo(String name, DataType dataType) {
         this.name = name;
         this.dataType = dataType;
     }
@@ -25,7 +25,7 @@ public class JdbcRowColumnInfo {
         return name;
     }
 
-    public JdbcDataType getDataType() {
+    public DataType getDataType() {
         return dataType;
     }
 

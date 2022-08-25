@@ -6,7 +6,7 @@ import java.sql.SQLException;
 import com.ansilo.connectors.data.DateTimeWithTzDataType;
 import com.ansilo.connectors.data.Float32DataType;
 import com.ansilo.connectors.data.Float64DataType;
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.oracle.data.OracleJsonDataType;
 import com.ansilo.connectors.result.JdbcResultSet;
 
@@ -20,7 +20,7 @@ public class OracleJdbcResultSet extends JdbcResultSet {
     }
 
     @Override
-    protected JdbcDataType getDataType(ResultSetMetaData metadata, int index) throws SQLException {
+    protected DataType getDataType(ResultSetMetaData metadata, int index) throws SQLException {
         var type = metadata.getColumnType(index);
 
         if (type == oracle.sql.TypeDescriptor.TYPECODE_BFLOAT) {

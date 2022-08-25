@@ -1,6 +1,6 @@
 package com.ansilo.connectors.query;
 
-import com.ansilo.connectors.data.JdbcDataType;
+import com.ansilo.connectors.data.DataType;
 
 /**
  * Logged query parameter
@@ -61,7 +61,7 @@ public class LoggedParam {
 
     @Override
     public String toString() {
-        return "LoggedParam [index=" + index + ", type=" + JdbcDataType.typeName(jdbcType)
+        return "LoggedParam [index=" + index + ", type=" + DataType.typeName(jdbcType)
                 + ", value=" + value + "]";
     }
 }
