@@ -111,7 +111,7 @@ impl PostgresInstance {
                     conf,
                     PG_APP_USER,
                     PG_DATABASE,
-                    5,
+                    1,
                     50,
                     connect_timeout,
                 )?,

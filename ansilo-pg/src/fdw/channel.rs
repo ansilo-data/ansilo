@@ -1,7 +1,7 @@
 use std::{io::Write, os::unix::net::UnixStream};
 
 use ansilo_core::err::{Context, Result};
-use ansilo_logging::error;
+use ansilo_logging::{error, trace};
 
 use super::{
     bincode::bincode_conf,
@@ -37,6 +37,7 @@ impl IpcClientChannel {
 
     /// Sends the supplied message and waits for the response
     pub fn send(&mut self, req: ClientMessage) -> Result<ServerMessage> {
+        trace!("Sending to fdw: {:?}", req);
         bincode::encode_into_std_write::<ClientMessage, _, _>(
             req,
             &mut self.sock,
@@ -49,6 +50,7 @@ impl IpcClientChannel {
         let res =
             bincode::decode_from_std_read::<ServerMessage, _, _>(&mut self.sock, self.conf.clone())
                 .context("Failed to read message")?;
+        trace!("Response from fdw: {:?}", res);
 
         Ok(res)
     }
@@ -75,7 +77,7 @@ impl IpcClientChannel {
 impl Drop for IpcClientChannel {
     fn drop(&mut self) {
         if let Err(err) = self.close() {
-            error!("Failed to close ipc channel: {}", err);
+            error!("Failed to close ipc channel: {:?}", err);
         }
     }
 }
@@ -108,6 +110,7 @@ impl IpcServerChannel {
         let req =
             bincode::decode_from_std_read::<ClientMessage, _, _>(&mut self.sock, self.conf.clone())
                 .context("Failed to receive message")?;
+        trace!("Received from postgres: {:?}", req);
 
         let (res, ret) = cb(req)?;
 
@@ -116,6 +119,8 @@ impl IpcServerChannel {
         }
 
         let res = res.unwrap();
+        trace!("Response to postgres: {:?}", res);
+
         bincode::encode_into_std_write::<ServerMessage, _, _>(
             res,
             &mut self.sock,
@@ -219,9 +224,10 @@ mod tests {
 
         for _ in 1..10 {
             let res = client
-                .send(ClientMessage::Query(0, ClientQueryMessage::WriteParams(
-                    param_buff.to_vec(),
-                )))
+                .send(ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::WriteParams(param_buff.to_vec()),
+                ))
                 .unwrap();
             assert_eq!(
                 res,
@@ -254,7 +260,9 @@ mod tests {
 
         drop(server);
 
-        client.send(ClientMessage::Query(0, ClientQueryMessage::Prepare)).unwrap_err();
+        client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap_err();
     }
 
     #[test]

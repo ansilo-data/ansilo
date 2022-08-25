@@ -182,13 +182,13 @@ impl Ansilo {
 
         info!("Terminating...");
         if let Err(err) = subsystems.proxy.terminate() {
-            warn!("Failed to terminate proxy server: {}", err);
+            warn!("Failed to terminate proxy server: {:?}", err);
         }
         if let Err(err) = subsystems.postgres.terminate() {
-            warn!("Failed to terminate postgres: {}", err);
+            warn!("Failed to terminate postgres: {:?}", err);
         }
         if let Err(err) = subsystems.fdw.terminate() {
-            warn!("Failed to terminate fdw server: {}", err);
+            warn!("Failed to terminate fdw server: {:?}", err);
         }
 
         info!("Shutdown sequence complete");

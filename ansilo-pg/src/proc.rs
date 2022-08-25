@@ -53,14 +53,14 @@ impl ChildProc {
 
         thread::spawn(move || {
             for i in io::BufReader::new(stdout).lines() {
-                let i = i.unwrap_or_else(|e| format!("{} failed to read: {}", prefix, e));
+                let i = i.unwrap_or_else(|e| format!("{} failed to read: {:?}", prefix, e));
                 info!("{} {}", prefix, i)
             }
         });
 
         thread::spawn(move || {
             for i in io::BufReader::new(stderr).lines() {
-                let i = i.unwrap_or_else(|e| format!("{} failed to read: {}", prefix, e));
+                let i = i.unwrap_or_else(|e| format!("{} failed to read: {:?}", prefix, e));
                 warn!("{} {}", prefix, i)
             }
         });
@@ -80,7 +80,7 @@ impl Drop for ChildProc {
     fn drop(&mut self) {
         // If already exited
         if let Ok(Some(status)) = self.proc.try_wait() {
-            info!("{} Exited with code: {}", self.log_prefix, status);
+            info!("{} Exited with code: {:?}", self.log_prefix, status);
             return;
         }
 
@@ -90,7 +90,7 @@ impl Drop for ChildProc {
 
         if let Err(err) = res {
             error!(
-                "{} Failed to send SIGINT to postgres: {}",
+                "{} Failed to send SIGINT to postgres: {:?}",
                 self.log_prefix, err
             );
             return;
@@ -108,7 +108,7 @@ impl Drop for ChildProc {
                     thread::sleep(Duration::from_millis(10));
                 }
                 Err(err) => {
-                    error!("{} Failed to wait: {}", self.log_prefix, err);
+                    error!("{} Failed to wait: {:?}", self.log_prefix, err);
                     return;
                 }
             }
@@ -120,7 +120,7 @@ impl Drop for ChildProc {
                 );
 
                 if let Err(err) = self.proc.kill() {
-                    error!("{} Failed to kill process: {}", self.log_prefix, err);
+                    error!("{} Failed to kill process: {:?}", self.log_prefix, err);
                     return;
                 }
 
@@ -129,7 +129,7 @@ impl Drop for ChildProc {
                         break status;
                     }
                     Err(err) => {
-                        error!("{} Failed to wait: {}", self.log_prefix, err);
+                        error!("{} Failed to wait: {:?}", self.log_prefix, err);
                         return;
                     }
                 }

@@ -33,7 +33,7 @@ impl ConfigExprProcessor for EnvConfigProcessor {
 
                     let var = match env::var(name.clone()) {
                         Err(err) => {
-                            warn!("Failed to get env var \"{}\": {}", name, err);
+                            warn!("Failed to get env var \"{}\": {:?}", name, err);
                             None
                         }
                         Ok(var) if var.is_empty() => None,

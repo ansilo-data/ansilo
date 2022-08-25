@@ -9,5 +9,6 @@ Cargo.lock
 .m2/
 .vscode-server/
 *.log
+*.out
 old/
 tmp/

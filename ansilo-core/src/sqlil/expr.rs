@@ -332,3 +332,65 @@ impl Expr {
         flag
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use rust_decimal::Decimal;
+
+    use crate::data::DateTimeWithTZ;
+
+    use super::*;
+
+    #[test]
+    fn serialize_constant_values() {
+        let cases = [
+            DataValue::Utf8String("Test".into()),
+            DataValue::Binary(vec![1, 2, 3]),
+            DataValue::Boolean(true),
+            DataValue::Int8(123),
+            DataValue::UInt8(234),
+            DataValue::Int16(-1234),
+            DataValue::UInt16(12345),
+            DataValue::Int32(-654645654),
+            DataValue::UInt32(43534352),
+            DataValue::Int64(-4645747345645),
+            DataValue::UInt64(45345643634346),
+            DataValue::Float32(1234.5678),
+            DataValue::Float64(9876.54321),
+            DataValue::Decimal(Decimal::new(123456789, 4)),
+            DataValue::JSON("{\"foo\": \"bar\"}".into()),
+            DataValue::Date(chrono::NaiveDate::from_ymd(2020, 8, 12)),
+            DataValue::Time(chrono::NaiveTime::from_hms_nano(1, 2, 3, 12345)),
+            DataValue::DateTime(chrono::NaiveDateTime::new(
+                chrono::NaiveDate::from_ymd(2020, 8, 12),
+                chrono::NaiveTime::from_hms_nano(1, 2, 3, 12345),
+            )),
+            DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+                chrono::NaiveDateTime::new(
+                    chrono::NaiveDate::from_ymd(2020, 8, 12),
+                    chrono::NaiveTime::from_hms_nano(1, 2, 3, 12345),
+                ),
+                chrono_tz::UTC,
+            )),
+            DataValue::Uuid(uuid::Uuid::new_v4()),
+        ];
+
+        for val in cases {
+            let cnst = Expr::Constant(Constant::new(val));
+            let config = bincode::config::standard();
+
+            println!("serializing {:?}", cnst);
+            assert_eq!(
+                cnst,
+                bincode::decode_from_slice::<Expr, _>(
+                    bincode::encode_to_vec(cnst.clone(), config.clone())
+                        .unwrap()
+                        .as_slice(),
+                    config.clone()
+                )
+                .unwrap()
+                .0,
+            )
+        }
+    }
+}

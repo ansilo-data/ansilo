@@ -118,7 +118,7 @@ impl Drop for PostgresServerManager {
     fn drop(&mut self) {
         if self.thread.is_some() {
             if let Err(err) = self.terminate_mut() {
-                error!("Failed to terminate postgres instance: {}", err);
+                error!("Failed to terminate postgres instance: {:?}", err);
             }
         }
     }

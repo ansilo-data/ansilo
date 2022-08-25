@@ -8,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.data.FixedSizeDataType;
 import com.ansilo.connectors.data.StreamDataType;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
@@ -237,11 +238,43 @@ public class JdbcPreparedQuery {
 
     private void bindConstantParameters() throws Exception {
         for (var param : this.constantParameters) {
+            var dataType = param.getDataType();
+
             var buff = param.getConstantValueBuffer();
             buff.order(ByteOrder.BIG_ENDIAN);
             buff.rewind();
-            param.getDataType().bindParam(this.mapping, this.preparedStatement, param.getIndex(),
-                    buff);
+
+            if (dataType instanceof FixedSizeDataType) {
+                dataType.bindParam(this.mapping, this.preparedStatement, param.getIndex(), buff);
+            } else if (dataType instanceof StreamDataType) {
+                // Read stream into local buffer
+                var streamData = new ByteArrayOutputStream();
+
+                // Read not-null byte
+                byte notNull = buff.get();
+                streamData.write(new byte[] {notNull});
+
+                while (notNull > 0) {
+                    byte length = buff.get();
+
+                    // Check for EOF
+                    if (length == 0) {
+                        break;
+                    }
+
+                    // Write chunk to buffer
+                    var tmpArr = new byte[length];
+                    buff.get(tmpArr, 0, length);
+                    streamData.write(tmpArr);
+                }
+
+                var streamBuff = ByteBuffer.wrap(streamData.toByteArray());
+                streamBuff.order(ByteOrder.BIG_ENDIAN);
+                dataType.bindParam(this.mapping, this.preparedStatement, param.getIndex(),
+                        streamBuff);
+            } else {
+                throw new SQLException("Unknown data type class: " + dataType.toString());
+            }
         }
 
         this.boundConstantParams = true;

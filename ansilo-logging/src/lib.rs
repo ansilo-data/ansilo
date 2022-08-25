@@ -17,7 +17,7 @@ pub fn init_for_tests() {
         .is_test(true)
         .try_init();
     if let Err(err) = res {
-        eprintln!("Failed to init logging: {}", err);
+        eprintln!("Failed to init logging: {:?}", err);
     }
 }
 

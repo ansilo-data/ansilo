@@ -193,7 +193,7 @@ impl FdwListener {
             let (ds_id, pool, entities) = match Self::auth(&mut chan, pool) {
                 Ok(pool) => pool,
                 Err(err) => {
-                    warn!("Failed to authenticate client: {}", err);
+                    warn!("Failed to authenticate client: {:?}", err);
                     return;
                 }
             };
@@ -258,7 +258,7 @@ impl FdwListener {
             FdwConnection::<TConnector>::new(data_source_id, nc, chan, entities, pool, log);
 
         if let Err(err) = fdw_con.process() {
-            error!("Error while processing FDW connection: {}", err);
+            error!("Error while processing FDW connection: {:?}", err);
         }
     }
 }

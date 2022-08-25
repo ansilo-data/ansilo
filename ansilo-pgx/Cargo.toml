@@ -21,6 +21,7 @@ pg_test = [
 
 [dependencies]
 ansilo-core = { path = "../ansilo-core" }
+ansilo-logging = { path = "../ansilo-logging" }
 ansilo-pg = { path = "../ansilo-pg" }
 cstr = "0.2.10"
 serde = "1.0"

@@ -141,7 +141,7 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             ClientMessage::RollbackTransaction => self.rollback_transaction()?,
             ClientMessage::CommitTransaction => self.commit_transaction()?,
             ClientMessage::Close => return Ok(None),
-            ClientMessage::Error(err) => bail!("Error received from client: {}", err),
+            ClientMessage::Error(err) => bail!("Error received from client: {:?}", err),
             _ => {
                 warn!("Received unexpected message from client: {:?}", message);
                 ServerMessage::Error("Invalid message received".to_string())

@@ -18,7 +18,11 @@ extension_sql!(
     name = "ansilo_fdw"
 );
 
-
+#[allow(non_snake_case)]
+#[pg_guard]
+pub extern "C" fn _PG_init() {
+    ansilo_logging::init();
+}
 
 /// This can be used to sense check the extension is running
 /// ```sql

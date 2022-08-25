@@ -365,6 +365,49 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
+    void writeConstantParamString() throws Exception {
+        var buff = this.newByteBuffer(8);
+        buff.put((byte) 1); // not null
+        buff.put((byte)5); // chunk length
+        buff.put(StandardCharsets.UTF_8.encode("hello")); // data
+        buff.put((byte)0); // EOF
+        buff.rewind();
+
+        this.innerParams.add(JdbcParameter.createConstant(1, new Utf8StringDataType(), buff));
+        this.initPreparedQuery();
+
+        // should only bind after execute
+        verify(this.innerStatement, times(0)).setNString(1, "hello");
+
+        this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).setNString(1, "hello");
+
+        // should only bind constants once
+        this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).setNString(1, "hello");
+    }
+
+    @Test
+    void writeConstantParamStringNull() throws Exception {
+        var buff = this.newByteBuffer(8);
+        buff.put((byte) 0); // not null
+        buff.rewind();
+
+        this.innerParams.add(JdbcParameter.createConstant(1, new Utf8StringDataType(), buff));
+        this.initPreparedQuery();
+
+        // should only bind after execute
+        verify(this.innerStatement, times(0)).setNull(1, Types.NVARCHAR);
+
+        this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).setNull(1, Types.NVARCHAR);
+
+        // should only bind constants once
+        this.preparedQuery.execute();
+        verify(this.innerStatement, times(1)).setNull(1, Types.NVARCHAR);
+    }
+
+    @Test
     void writeConstantAndDynamicParams() throws Exception {
         var buff1 = this.newByteBuffer(5);
         buff1.put((byte) 1); // not null

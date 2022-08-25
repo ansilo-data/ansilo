@@ -1,0 +1,21 @@
+name: Oracle
+
+networking:
+  port: 60004
+
+sources:
+  - id: oracle
+    type: jdbc.oracle
+    options:
+      jdbc_url: jdbc:oracle:thin:@${env:ORACLE_IP}:1522/db
+      properties:
+        oracle.jdbc.user: ansilo_admin
+        oracle.jdbc.password: ansilo_testing
+        
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-sql/*.sql
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json
