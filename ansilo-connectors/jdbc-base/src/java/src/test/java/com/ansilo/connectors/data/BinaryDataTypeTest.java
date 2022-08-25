@@ -25,26 +25,26 @@ public class BinaryDataTypeTest extends DataTypeTest {
 
     @Test
     void testHandlesNullValue() throws Exception {
-        when(this.resultSet.getBinaryStream(0)).thenReturn(null);
-        when(this.resultSet.wasNull()).thenReturn(true);
+        when(this.mapping.getBinary(this.resultSet, 0)).thenReturn(null);
 
-        assertNull(this.dataType.getStream(this.resultSet, 0));
+        assertNull(this.dataType.getStream(this.mapping, this.resultSet, 0));
     }
 
     @Test
     void testEmptyBinaryStream() throws Exception {
-        when(this.resultSet.getBinaryStream(0)).thenReturn(ByteArrayInputStream.nullInputStream());
+        when(this.mapping.getBinary(this.resultSet, 0))
+                .thenReturn(ByteArrayInputStream.nullInputStream());
 
-        InputStream stream = this.dataType.getStream(this.resultSet, 0);
+        InputStream stream = this.dataType.getStream(this.mapping, this.resultSet, 0);
         assertArrayEquals(new byte[0], stream.readAllBytes());
     }
 
     @Test
     void testBinaryStreamWithData() throws Exception {
-        when(this.resultSet.getBinaryStream(0))
+        when(this.mapping.getBinary(this.resultSet, 0))
                 .thenReturn(new ByteArrayInputStream(new byte[] {1, 2, 3}));
 
-        InputStream stream = this.dataType.getStream(this.resultSet, 0);
+        InputStream stream = this.dataType.getStream(this.mapping, this.resultSet, 0);
 
         assertArrayEquals(new byte[] {1, 2, 3}, stream.readAllBytes());
     }
@@ -55,10 +55,11 @@ public class BinaryDataTypeTest extends DataTypeTest {
         buff.put((byte) 1);
         buff.put(new byte[] {4, 5, 6});
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
         var actual = ArgumentCaptor.forClass(ByteArrayInputStream.class);
-        verify(this.preparedStatement, times(1)).setBinaryStream(eq(1), actual.capture());
+        verify(this.mapping, times(1)).bindBinary(eq(this.preparedStatement), eq(1),
+                actual.capture());
 
         assertArrayEquals(new byte[] {4, 5, 6}, actual.getAllValues().get(0).readAllBytes());
     }
@@ -68,8 +69,9 @@ public class BinaryDataTypeTest extends DataTypeTest {
         var buff = ByteBuffer.allocate(1);
         buff.put((byte) 0);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setNull(1, Types.BINARY);
+        verify(this.mapping, times(1)).bindNull(this.preparedStatement, 1,
+                this.dataType.getTypeId());
     }
 }

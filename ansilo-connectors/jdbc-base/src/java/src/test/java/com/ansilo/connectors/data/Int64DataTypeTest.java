@@ -19,44 +19,43 @@ public class Int64DataTypeTest extends DataTypeTest {
 
     @Test
     void testHandlesNullValue() throws Exception {
-        when(this.resultSet.getLong(0)).thenReturn((long)123);
-        when(this.resultSet.wasNull()).thenReturn(true);
+        when(this.mapping.getInt64(this.resultSet, 0)).thenReturn(null);
 
-        this.dataType.writeToByteBuffer(this.byteBuffer, this.resultSet, 0);
+        this.dataType.writeToByteBuffer(this.mapping, this.byteBuffer, this.resultSet, 0);
 
         verify(this.byteBuffer, times(1)).put((byte) 0);
-        verify(this.byteBuffer, times(0)).putLong((long)123);
+        verify(this.byteBuffer, times(0)).putLong((long) 123);
     }
 
     @Test
     void testWriteByte() throws Exception {
-        when(this.resultSet.getLong(0)).thenReturn((long)123);
-        when(this.resultSet.wasNull()).thenReturn(false);
+        when(this.mapping.getInt64(this.resultSet, 0)).thenReturn((long) 123);
 
-        this.dataType.writeToByteBuffer(this.byteBuffer, this.resultSet, 0);
+        this.dataType.writeToByteBuffer(this.mapping, this.byteBuffer, this.resultSet, 0);
 
         verify(this.byteBuffer, times(1)).put((byte) 1);
-        verify(this.byteBuffer, times(1)).putLong((long)123);
+        verify(this.byteBuffer, times(1)).putLong((long) 123);
     }
 
     @Test
     void testBindParam() throws Exception {
         var buff = ByteBuffer.allocate(15);
-        buff.put((byte)1);
-        buff.putLong((long)111);
+        buff.put((byte) 1);
+        buff.putLong((long) 111);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setLong(1, (long)111);
+        verify(this.mapping, times(1)).bindInt64(this.preparedStatement, 1, (long) 111);
     }
 
     @Test
     void testBindParamNull() throws Exception {
         var buff = ByteBuffer.allocate(1);
-        buff.put((byte)0);
+        buff.put((byte) 0);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setNull(1, Types.BIGINT);
+        verify(this.mapping, times(1)).bindNull(this.preparedStatement, 1,
+                this.dataType.getTypeId());
     }
 }

@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import java.nio.ByteBuffer;
-import java.sql.Types;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.Int32DataType;
 import com.ansilo.connectors.data.DataType;
@@ -47,7 +46,7 @@ public class JdbcParameterTest {
     @Test
     void testCreateConstantFromDataTypeId() throws Exception {
         var buff = ByteBuffer.allocate(10);
-        var param = JdbcParameter.createConstant(1, Types.INTEGER, buff);
+        var param = JdbcParameter.createConstant(1, DataType.TYPE_INT32, buff);
 
         assertEquals(1, param.getIndex());
         assertInstanceOf(Int32DataType.class, param.getDataType());

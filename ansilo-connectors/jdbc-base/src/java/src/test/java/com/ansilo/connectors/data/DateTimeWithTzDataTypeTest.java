@@ -7,8 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.sql.Timestamp;
-import java.sql.Types;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,19 +23,17 @@ public class DateTimeWithTzDataTypeTest extends DataTypeTest {
 
     @Test
     void testHandlesNullValue() throws Exception {
-        when(this.resultSet.getTimestamp(0)).thenReturn(null);
-        when(this.resultSet.wasNull()).thenReturn(true);
+        when(this.mapping.getDateTimeWithTz(this.resultSet, 0)).thenReturn(null);
 
-        assertNull(this.dataType.getStream(this.resultSet, 0));
+        assertNull(this.dataType.getStream(this.mapping, this.resultSet, 0));
     }
 
     @Test
     void testWriteDateTimeWithTz() throws Exception {
-        when(this.resultSet.getTimestamp(0))
-                .thenReturn(Timestamp.from(ZonedDateTime.parse("2020-01-02T02:03:04.123456789Z").toInstant()));
-        when(this.resultSet.wasNull()).thenReturn(false);
+        when(this.mapping.getDateTimeWithTz(this.resultSet, 0))
+                .thenReturn(ZonedDateTime.parse("2020-01-02T02:03:04.123456789Z"));
 
-        var stream = this.dataType.getStream(resultSet, 0);
+        var stream = this.dataType.getStream(this.mapping, this.resultSet, 0);
         var buff = ByteBuffer.allocate(16);
 
         buff.putInt(2020);
@@ -64,10 +61,10 @@ public class DateTimeWithTzDataTypeTest extends DataTypeTest {
         buff.putInt(987654321);
         buff.put(StandardCharsets.UTF_8.encode("UTC"));
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setTimestamp(1,
-                Timestamp.from(ZonedDateTime.parse("2000-06-09T23:59:58.987654321Z").toInstant()));
+        verify(this.mapping, times(1)).bindDateTimeWithTz(this.preparedStatement, 1, ZonedDateTime
+                .parse("2000-06-09T23:59:58.987654321Z").withZoneSameInstant(ZoneId.of("UTC")));
     }
 
     @Test
@@ -75,8 +72,9 @@ public class DateTimeWithTzDataTypeTest extends DataTypeTest {
         var buff = ByteBuffer.allocate(1);
         buff.put((byte) 0);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setNull(1, Types.TIMESTAMP_WITH_TIMEZONE);
+        verify(this.mapping, times(1)).bindNull(this.preparedStatement, 1,
+                this.dataType.getTypeId());
     }
 }

@@ -1,18 +1,18 @@
 package com.ansilo.connectors.query;
 
-import com.ansilo.connectors.data.DataType;
+import java.sql.JDBCType;
 
 /**
  * Logged query parameter
  */
 public class LoggedParam {
     private int index;
-    private int jdbcType;
+    private String jdbcMethod;
     private Object value;
 
-    public LoggedParam(int index, int jdbcType, Object value) {
+    public LoggedParam(int index, String jdbcMethod, Object value) {
         this.index = index;
-        this.jdbcType = jdbcType;
+        this.jdbcMethod = jdbcMethod;
         this.value = value;
     }
 
@@ -20,8 +20,8 @@ public class LoggedParam {
         return index;
     }
 
-    public int getJdbcType() {
-        return jdbcType;
+    public String getJdbcMethod() {
+        return jdbcMethod;
     }
 
     public Object getValue() {
@@ -33,7 +33,7 @@ public class LoggedParam {
         final int prime = 31;
         int result = 1;
         result = prime * result + index;
-        result = prime * result + jdbcType;
+        result = prime * result + ((jdbcMethod == null) ? 0 : jdbcMethod.hashCode());
         result = prime * result + ((value == null) ? 0 : value.hashCode());
         return result;
     }
@@ -49,7 +49,10 @@ public class LoggedParam {
         LoggedParam other = (LoggedParam) obj;
         if (index != other.index)
             return false;
-        if (jdbcType != other.jdbcType)
+        if (jdbcMethod == null) {
+            if (other.jdbcMethod != null)
+                return false;
+        } else if (!jdbcMethod.equals(other.jdbcMethod))
             return false;
         if (value == null) {
             if (other.value != null)
@@ -61,7 +64,7 @@ public class LoggedParam {
 
     @Override
     public String toString() {
-        return "LoggedParam [index=" + index + ", type=" + DataType.typeName(jdbcType)
-                + ", value=" + value + "]";
+        return "LoggedParam [index=" + index + ", method=" + this.jdbcMethod + ", value=" + value
+                + "]";
     }
 }

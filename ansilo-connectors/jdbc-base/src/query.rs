@@ -307,7 +307,7 @@ pub(crate) mod tests {
     use ansilo_core::data::{DataValue, StringOptions};
     use jni::objects::{JObject, JString};
 
-    use crate::{tests::create_sqlite_memory_connection, JdbcType};
+    use crate::{tests::create_sqlite_memory_connection, JavaDataType};
     use ansilo_connectors_base::common::data::ResultSetReader;
 
     use super::*;
@@ -316,14 +316,14 @@ pub(crate) mod tests {
     pub(crate) struct SqliteTypeMapping;
 
     impl JdbcTypeMapping for SqliteTypeMapping {
-        fn to_jdbc(r#type: &DataType) -> Result<JdbcType> {
+        fn to_jdbc(r#type: &DataType) -> Result<JavaDataType> {
             Ok(match r#type {
-                DataType::Utf8String(_) => JdbcType::Varchar,
+                DataType::Utf8String(_) => JavaDataType::Varchar,
                 _ => return crate::default_type_to_jdbc(r#type),
             })
         }
 
-        fn to_rust(r#type: JdbcType) -> Result<DataType> {
+        fn to_rust(r#type: JavaDataType) -> Result<DataType> {
             crate::default_type_to_rust(r#type)
         }
     }

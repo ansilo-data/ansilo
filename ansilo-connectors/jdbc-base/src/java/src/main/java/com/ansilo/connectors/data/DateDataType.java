@@ -4,10 +4,8 @@ import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
 import java.time.LocalDate;
-import java.time.ZoneId;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The date data type
@@ -24,33 +22,33 @@ public class DateDataType implements FixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
+    public void writeToByteBuffer(JdbcDataMapping mapping, ByteBuffer buff, ResultSet resultSet, int index)
             throws Exception {
-        var val = resultSet.getDate(index);
-        if (resultSet.wasNull()) {
+        var val = mapping.getDate(resultSet, index);
+
+        if (val == null) {
             buff.put((byte) 0);
             return;
         }
 
-        var date = val.toLocalDate();
         buff.put((byte) 1);
-        buff.putInt(date.getYear());
-        buff.put((byte) date.getMonthValue());
-        buff.put((byte) date.getDayOfMonth());
+        buff.putInt(val.getYear());
+        buff.put((byte) val.getMonthValue());
+        buff.put((byte) val.getDayOfMonth());
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index, ByteBuffer buff)
+            throws Exception {
         boolean isNull = buff.get() == 0;
 
         if (isNull) {
-            statement.setNull(index, Types.DATE);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
             var year = buff.getInt();
             var month = buff.get();
             var day = buff.get();
-            statement.setDate(index, Date.valueOf(LocalDate.of(year, month, day)));
+            mapping.bindDate(statement, index, LocalDate.of(year, month, day));
         }
     }
 }

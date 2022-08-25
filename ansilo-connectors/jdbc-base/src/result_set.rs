@@ -9,7 +9,7 @@ use jni::{
 
 use ansilo_connectors_base::interface::{ResultSet, RowStructure};
 
-use super::{JdbcType, JdbcTypeMapping, Jvm};
+use super::{JavaDataType, JdbcTypeMapping, Jvm};
 
 /// Implementation of the JDBC result set
 pub struct JdbcResultSet<TTypeMapping: JdbcTypeMapping> {
@@ -83,7 +83,7 @@ impl<TTypeMapping: JdbcTypeMapping> ResultSet for JdbcResultSet<TTypeMapping> {
                     .context("Failed to convert to int")?;
                 self.jvm.check_exceptions(env)?;
 
-                let jdbc_type = JdbcType::try_from(jdbc_type_id)?;
+                let jdbc_type = JavaDataType::try_from(jdbc_type_id)?;
                 structure.cols.push((
                     name,
                     TTypeMapping::to_rust(jdbc_type).context("Failed to map JDBC result type")?,

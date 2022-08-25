@@ -11,6 +11,7 @@ import java.util.List;
 import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.data.FixedSizeDataType;
 import com.ansilo.connectors.data.StreamDataType;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /***
  * The JDBC result set wrapper class.
@@ -19,6 +20,11 @@ import com.ansilo.connectors.data.StreamDataType;
  * the JDBC result-set into a binary stream format that is written two a buffer managed by rust.
  */
 public class JdbcResultSet {
+    /**
+     * The data mapping for this query.
+     */
+    protected JdbcDataMapping mapping;
+
     /**
      * The inner JDBC result set
      */
@@ -65,7 +71,8 @@ public class JdbcResultSet {
      * @param resultSet
      * @throws SQLException
      */
-    public JdbcResultSet(ResultSet resultSet) throws SQLException {
+    public JdbcResultSet(JdbcDataMapping mapping, ResultSet resultSet) throws Exception {
+        this.mapping = mapping;
         this.resultSet = resultSet;
         this.dataTypes = this.getDataTypes();
         this.readBuff = new byte[255];
@@ -138,7 +145,8 @@ public class JdbcResultSet {
             if (dataType instanceof FixedSizeDataType) {
                 var fixedDataType = (FixedSizeDataType) dataType;
                 if (fixedDataType.getFixedSize() <= buff.remaining()) {
-                    fixedDataType.writeToByteBuffer(buff, this.resultSet, this.columnIndex + 1);
+                    fixedDataType.writeToByteBuffer(this.mapping, buff, this.resultSet,
+                            this.columnIndex + 1);
                     this.columnIndex++;
                 } else {
                     this.requireAtLeastBytes = fixedDataType.getFixedSize();
@@ -148,8 +156,8 @@ public class JdbcResultSet {
                 var streamDataType = (StreamDataType) dataType;
 
                 if (this.currentStream == null) {
-                    this.currentStream =
-                            streamDataType.getStream(this.resultSet, this.columnIndex + 1);
+                    this.currentStream = streamDataType.getStream(this.mapping, this.resultSet,
+                            this.columnIndex + 1);
 
                     // The first byte indicates if the value is null or present
                     buff.put(this.currentStream == null ? (byte) 0 : 1);
@@ -219,7 +227,7 @@ public class JdbcResultSet {
         return res;
     }
 
-    protected DataType[] getDataTypes() throws SQLException {
+    protected DataType[] getDataTypes() throws Exception {
         if (this.resultSet == null) {
             return new DataType[0];
         }
@@ -228,18 +236,9 @@ public class JdbcResultSet {
         DataType[] dataTypes = new DataType[metadata.getColumnCount()];
 
         for (int i = 0; i < dataTypes.length; i++) {
-            dataTypes[i] = this.getDataType(metadata, i + 1);
+            dataTypes[i] = this.mapping.getColumnDataType(this.resultSet, i + 1);
         }
 
         return dataTypes;
-    }
-
-    protected DataType getDataType(ResultSetMetaData metadata, int index) throws SQLException {
-        try {
-            return DataType.createFromJdbcType(metadata.getColumnType(index));
-        } catch (Exception e) {
-            throw new SQLException(String.format("Could not determine type for column \"%s\": %s",
-                    metadata.getColumnName(index), e.getMessage()), e);
-        }
     }
 }

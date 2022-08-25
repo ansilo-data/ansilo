@@ -164,8 +164,10 @@ public class JdbcDataMapping {
     /**
      * Reads the value from the result set.
      */
-    public boolean getBool(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getBoolean(index);
+    public Boolean getBool(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getBoolean(index);
+
+        return resultSet.wasNull() ? null : data;
     }
 
     /**
@@ -179,35 +181,38 @@ public class JdbcDataMapping {
      * Reads the value from the result set.
      */
     public LocalDate getDate(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getDate(index).toLocalDate();
+        var data = resultSet.getDate(index);
+        return data == null ? null : data.toLocalDate();
     }
 
     /**
      * Binds the value to the prepared statement.
      */
     public void bindDate(PreparedStatement statement, int index, LocalDate data) throws Exception {
-        statement.setDate(index, java.sql.Date.valueOf(data));
+        statement.setDate(index, data == null ? null : java.sql.Date.valueOf(data));
     }
 
     /**
      * Reads the value from the result set.
      */
     public LocalTime getTime(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getTime(index).toLocalTime();
+        var data = resultSet.getTime(index);
+        return data == null ? null : data.toLocalTime();
     }
 
     /**
      * Binds the value to the prepared statement.
      */
     public void bindTime(PreparedStatement statement, int index, LocalTime data) throws Exception {
-        statement.setTime(index, java.sql.Time.valueOf(data));
+        statement.setTime(index, data == null ? null : java.sql.Time.valueOf(data));
     }
 
     /**
      * Reads the value from the result set.
      */
     public LocalDateTime getDateTime(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getTimestamp(index).toLocalDateTime();
+        var data = resultSet.getTimestamp(index);
+        return data == null ? null : data.toLocalDateTime();
     }
 
     /**
@@ -215,14 +220,15 @@ public class JdbcDataMapping {
      */
     public void bindDateTime(PreparedStatement statement, int index, LocalDateTime data)
             throws Exception {
-        statement.setTimestamp(index, java.sql.Timestamp.valueOf(data));
+        statement.setTimestamp(index, data == null ? null : java.sql.Timestamp.valueOf(data));
     }
 
     /**
      * Reads the value from the result set.
      */
     public ZonedDateTime getDateTimeWithTz(ResultSet resultSet, int index) throws Exception {
-        return ZonedDateTime.ofInstant(resultSet.getTimestamp(index).toInstant(), ZoneId.of("UTC"));
+        var data = resultSet.getTimestamp(index);
+        return data == null ? null : ZonedDateTime.ofInstant(data.toInstant(), ZoneId.of("UTC"));
     }
 
     /**
@@ -230,14 +236,15 @@ public class JdbcDataMapping {
      */
     public void bindDateTimeWithTz(PreparedStatement statement, int index, ZonedDateTime data)
             throws Exception {
-        statement.setTimestamp(index, java.sql.Timestamp.from(data.toInstant()));
+        statement.setTimestamp(index,
+                data == null ? null : java.sql.Timestamp.from(data.toInstant()));
     }
 
     /**
      * Reads the value from the result set.
      */
     public String getUtf8String(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getString(index);
+        return resultSet.getNString(index);
     }
 
     /**
@@ -245,28 +252,30 @@ public class JdbcDataMapping {
      */
     public void bindUtf8String(PreparedStatement statement, int index, String data)
             throws Exception {
-        statement.setString(index, data);
+        statement.setNString(index, data);
     }
 
     /**
      * Reads the value from the result set.
      */
     public String getJson(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getString(index);
+        return resultSet.getNString(index);
     }
 
     /**
      * Binds the value to the prepared statement.
      */
     public void bindJson(PreparedStatement statement, int index, String data) throws Exception {
-        statement.setString(index, data);
+        statement.setNString(index, data);
     }
 
     /**
      * Reads the value from the result set.
      */
-    public float getFloat32(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getFloat(index);
+    public Float getFloat32(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getFloat(index);
+
+        return resultSet.wasNull() ? null : data;
     }
 
     /**
@@ -279,8 +288,10 @@ public class JdbcDataMapping {
     /**
      * Reads the value from the result set.
      */
-    public double getFloat64(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getDouble(index);
+    public Double getFloat64(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getDouble(index);
+
+        return resultSet.wasNull() ? null : data;
     }
 
     /**
@@ -293,8 +304,10 @@ public class JdbcDataMapping {
     /**
      * Reads the value from the result set.
      */
-    public byte getInt8(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getByte(index);
+    public Byte getInt8(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getByte(index);
+
+        return resultSet.wasNull() ? null : data;
     }
 
     /**
@@ -307,8 +320,10 @@ public class JdbcDataMapping {
     /**
      * Reads the value from the result set.
      */
-    public short getInt16(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getShort(index);
+    public Short getInt16(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getShort(index);
+
+        return resultSet.wasNull() ? null : data;
     }
 
     /**
@@ -321,8 +336,10 @@ public class JdbcDataMapping {
     /**
      * Reads the value from the result set.
      */
-    public int getInt32(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getInt(index);
+    public Integer getInt32(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getInt(index);
+
+        return resultSet.wasNull() ? null : data;
     }
 
     /**
@@ -335,8 +352,10 @@ public class JdbcDataMapping {
     /**
      * Reads the value from the result set.
      */
-    public long getInt64(ResultSet resultSet, int index) throws Exception {
-        return resultSet.getLong(index);
+    public Long getInt64(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getLong(index);
+
+        return resultSet.wasNull() ? null : data;
     }
 
     /**

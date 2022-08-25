@@ -22,10 +22,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.Int32DataType;
 import com.ansilo.connectors.data.DataType;
-import com.ansilo.connectors.data.VarcharDataType;
+import com.ansilo.connectors.data.Utf8StringDataType;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 import com.ansilo.connectors.result.JdbcResultSet;
 
 public class JdbcPreparedQueryTest {
+    private JdbcDataMapping mapping;
     private PreparedStatement innerStatement;
     private ResultSet mockResultSet;
     private ResultSetMetaData mockResultSetMetadata;
@@ -34,6 +36,7 @@ public class JdbcPreparedQueryTest {
 
     @BeforeEach
     void setUp() throws SQLException {
+        this.mapping = new JdbcDataMapping();
         this.innerStatement = mock(PreparedStatement.class);
         this.mockResultSet = mock(ResultSet.class);
         this.mockResultSetMetadata = mock(ResultSetMetaData.class);
@@ -45,7 +48,8 @@ public class JdbcPreparedQueryTest {
     }
 
     private void initPreparedQuery() {
-        this.preparedQuery = new JdbcPreparedQuery(this.innerStatement, this.innerParams);
+        this.preparedQuery =
+                new JdbcPreparedQuery(this.mapping, this.innerStatement, this.innerParams);
     }
 
     @Test
@@ -87,8 +91,8 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
-    void writeVarchar() throws Exception {
-        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+    void writeUtf8String() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Utf8StringDataType()));
         this.initPreparedQuery();
 
         var buff = this.newByteBuffer(6);
@@ -129,10 +133,10 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
-    void writeMultipleVarchar() throws Exception {
-        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
-        this.innerParams.add(JdbcParameter.createDynamic(2, new VarcharDataType()));
-        this.innerParams.add(JdbcParameter.createDynamic(3, new VarcharDataType()));
+    void writeMultipleUtf8String() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Utf8StringDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(2, new Utf8StringDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(3, new Utf8StringDataType()));
         this.initPreparedQuery();
 
         var buff = this.newByteBuffer(18);
@@ -159,9 +163,9 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
-    void writeIntThenVarchar() throws Exception {
+    void writeIntThenUtf8String() throws Exception {
         this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
-        this.innerParams.add(JdbcParameter.createDynamic(2, new VarcharDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(2, new Utf8StringDataType()));
         this.initPreparedQuery();
 
         var buff = this.newByteBuffer(11);
@@ -199,8 +203,8 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
-    void writePartialVarchar() throws Exception {
-        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+    void writePartialUtf8String() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Utf8StringDataType()));
         this.initPreparedQuery();
 
         var buff = this.newByteBuffer(12);
@@ -223,10 +227,10 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
-    void writeIntWithVarcharAndMixedNulls() throws Exception {
-        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+    void writeIntWithUtf8StringAndMixedNulls() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Utf8StringDataType()));
         this.innerParams.add(JdbcParameter.createDynamic(2, new Int32DataType()));
-        this.innerParams.add(JdbcParameter.createDynamic(3, new VarcharDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(3, new Utf8StringDataType()));
         this.innerParams.add(JdbcParameter.createDynamic(4, new Int32DataType()));
         this.initPreparedQuery();
 
@@ -248,7 +252,7 @@ public class JdbcPreparedQueryTest {
 
         verify(this.innerStatement, times(1)).setString(1, "abc");
         verify(this.innerStatement, times(1)).setNull(2, Types.INTEGER);
-        verify(this.innerStatement, times(1)).setNull(3, Types.VARCHAR);
+        verify(this.innerStatement, times(1)).setNull(3, Types.NVARCHAR);
         verify(this.innerStatement, times(1)).setInt(4, 123);
     }
 
@@ -422,14 +426,13 @@ public class JdbcPreparedQueryTest {
 
         var params = this.preparedQuery.getLoggedParams();
 
-        assertArrayEquals(List.of(new LoggedParam(1, DataType.TYPE_INT32, 123)).toArray(),
-                params.toArray());
+        assertArrayEquals(List.of(new LoggedParam(1, "setInt", 123)).toArray(), params.toArray());
     }
 
     @Test
     void testLoggedParamsWithMultipleParams() throws Exception {
         this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
-        this.innerParams.add(JdbcParameter.createDynamic(1, new VarcharDataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Utf8StringDataType()));
         this.initPreparedQuery();
 
         var buff = this.newByteBuffer(11);
@@ -448,8 +451,8 @@ public class JdbcPreparedQueryTest {
         var params = this.preparedQuery.getLoggedParams();
 
         assertArrayEquals(
-                List.of(new LoggedParam(1, DataType.TYPE_INT32, 123),
-                        new LoggedParam(1, DataType.TYPE_UTF8_STRING, "abc")).toArray(),
+                List.of(new LoggedParam(1, "setInt", 123), new LoggedParam(1, "setString", "abc"))
+                        .toArray(),
                 params.toArray());
     }
 
@@ -468,7 +471,7 @@ public class JdbcPreparedQueryTest {
 
             assertEquals(5, wrote);
 
-            assertArrayEquals(List.of(new LoggedParam(1, DataType.TYPE_INT32, i)).toArray(),
+            assertArrayEquals(List.of(new LoggedParam(1, "setInt", i)).toArray(),
                     this.preparedQuery.getLoggedParams().toArray());
 
             this.preparedQuery.restart();
@@ -482,7 +485,8 @@ public class JdbcPreparedQueryTest {
         this.innerStatement = mock(PreparedStatement.class);
         when(this.innerStatement.execute()).thenReturn(false);
 
-        this.preparedQuery = new JdbcPreparedQuery(this.innerStatement, this.innerParams);
+        this.preparedQuery =
+                new JdbcPreparedQuery(this.mapping, this.innerStatement, this.innerParams);
 
         var resultSet = this.preparedQuery.execute();
         verify(this.innerStatement, times(1)).execute();

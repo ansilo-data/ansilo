@@ -6,47 +6,40 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The json data type
  */
 public class JsonDataType implements StreamDataType {
-    private static Gson gson = new GsonBuilder().serializeNulls().create();
-
     @Override
     public int getTypeId() {
         return TYPE_JSON;
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
-        Object obj = resultSet.getObject(index);
+    public InputStream getStream(JdbcDataMapping mapping, ResultSet resultSet, int index)
+            throws Exception {
+        var data = mapping.getJson(resultSet, index);
 
-        if (obj == null) {
+        if (data == null) {
             return null;
         }
 
-        var json = gson.toJson(obj);
-        var buff = StandardCharsets.UTF_8.encode(json);
+        var buff = StandardCharsets.UTF_8.encode(data);
         return new ByteArrayInputStream(buff.array(), 0, buff.limit());
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index,
+            ByteBuffer buff) throws Exception {
         boolean isNull = buff.get() == 0;
 
         if (isNull) {
-            statement.setNull(index, Types.JAVA_OBJECT);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
-            var json = StandardCharsets.UTF_8.decode(buff).toString();
-            var parsed = gson.fromJson(json, JsonElement.class);
-            statement.setObject(index, parsed);
+            var data = StandardCharsets.UTF_8.decode(buff).toString();
+            mapping.bindJson(statement, index, data);
         }
     }
 }

@@ -10,12 +10,18 @@ import java.sql.SQLException;
 import java.util.List;
 import com.ansilo.connectors.data.FixedSizeDataType;
 import com.ansilo.connectors.data.StreamDataType;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 import com.ansilo.connectors.result.JdbcResultSet;
 
 /**
  * Wrapper class for the JDBC prepared statement class
  */
 public class JdbcPreparedQuery {
+    /**
+     * The data mapping for this query.
+     */
+    protected JdbcDataMapping mapping;
+
     /**
      * The inner JDBC statement We wrap it in a LoggingPreparedStatement to facilate capturing of
      * query params.
@@ -60,7 +66,9 @@ public class JdbcPreparedQuery {
     /**
      * Creates a new prepared query
      */
-    public JdbcPreparedQuery(PreparedStatement preparedStatement, List<JdbcParameter> parameters) {
+    public JdbcPreparedQuery(JdbcDataMapping mapping, PreparedStatement preparedStatement,
+            List<JdbcParameter> parameters) {
+        this.mapping = mapping;
         this.preparedStatement = new LoggingPreparedStatement(preparedStatement);
         this.parameters = parameters;
         this.dynamicParameters = parameters.stream().filter(i -> !i.isConstant()).toList();
@@ -95,7 +103,7 @@ public class JdbcPreparedQuery {
             var isNull = localBuffer.size() > 0 ? false : (buff.get(buff.position()) == 0);
 
             if (isNull) {
-                paramType.bindParam(this.preparedStatement, param.getIndex(), buff);
+                paramType.bindParam(this.mapping, this.preparedStatement, param.getIndex(), buff);
                 this.paramIndex++;
                 continue;
             }
@@ -106,13 +114,15 @@ public class JdbcPreparedQuery {
 
                 if (localBuffer.size() == 0 && buff.remaining() >= fixedType.getFixedSize()) {
                     // If no buffered data, read from the buffer directly
-                    fixedType.bindParam(this.preparedStatement, param.getIndex(), buff);
+                    fixedType.bindParam(this.mapping, this.preparedStatement, param.getIndex(),
+                            buff);
                 } else if (localBuffer.size() >= fixedType.getFixedSize()) {
                     // If buffer contains full parameter, we read from it directly
                     var tmpBuff =
                             ByteBuffer.wrap(localBuffer.toByteArray(), 0, fixedType.getFixedSize());
                     tmpBuff.order(ByteOrder.BIG_ENDIAN);
-                    fixedType.bindParam(this.preparedStatement, param.getIndex(), tmpBuff);
+                    fixedType.bindParam(this.mapping, this.preparedStatement, param.getIndex(),
+                            tmpBuff);
                     this.resetLocalBuffer();
                 } else if (buff.remaining() > 0) {
                     // Consume the not null flag byte
@@ -166,7 +176,8 @@ public class JdbcPreparedQuery {
                 // Chunk length == 0 => EOF, we then bind the parameter
                 var streamBuff = ByteBuffer.wrap(localBuffer.toByteArray());
                 streamBuff.order(ByteOrder.BIG_ENDIAN);
-                streamType.bindParam(this.preparedStatement, param.getIndex(), streamBuff);
+                streamType.bindParam(this.mapping, this.preparedStatement, param.getIndex(),
+                        streamBuff);
                 this.resetLocalBuffer();
                 this.streamChunkLength = null;
             }
@@ -195,7 +206,7 @@ public class JdbcPreparedQuery {
      * @return
      * @throws SQLException
      */
-    public JdbcResultSet execute() throws SQLException {
+    public JdbcResultSet execute() throws Exception {
         if (this.paramIndex != this.dynamicParameters.size()) {
             throw new SQLException(
                     "Cannot execute query until all parameter data has been written");
@@ -213,8 +224,8 @@ public class JdbcPreparedQuery {
         return resultSet;
     }
 
-    protected JdbcResultSet newResultSet(ResultSet innerResultSet) throws SQLException {
-        return new JdbcResultSet(innerResultSet);
+    protected JdbcResultSet newResultSet(ResultSet innerResultSet) throws Exception {
+        return new JdbcResultSet(this.mapping, innerResultSet);
     }
 
     /**
@@ -224,12 +235,13 @@ public class JdbcPreparedQuery {
         return this.preparedStatement.getLoggedParams();
     }
 
-    private void bindConstantParameters() throws SQLException {
+    private void bindConstantParameters() throws Exception {
         for (var param : this.constantParameters) {
             var buff = param.getConstantValueBuffer();
             buff.order(ByteOrder.BIG_ENDIAN);
             buff.rewind();
-            param.getDataType().bindParam(this.preparedStatement, param.getIndex(), buff);
+            param.getDataType().bindParam(this.mapping, this.preparedStatement, param.getIndex(),
+                    buff);
         }
 
         this.boundConstantParams = true;

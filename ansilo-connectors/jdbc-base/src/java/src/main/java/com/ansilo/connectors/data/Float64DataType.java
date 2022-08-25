@@ -3,8 +3,7 @@ package com.ansilo.connectors.data;
 import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The float64 data type
@@ -17,14 +16,15 @@ public class Float64DataType implements FixedSizeDataType {
 
     @Override
     public int getFixedSize() {
-        return 9;
+        return 5;
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
-            throws Exception {
-        var val = resultSet.getDouble(index);
-        if (resultSet.wasNull()) {
+    public void writeToByteBuffer(JdbcDataMapping mapping, ByteBuffer buff, ResultSet resultSet,
+            int index) throws Exception {
+        var val = mapping.getFloat64(resultSet, index);
+
+        if (val == null) {
             buff.put((byte) 0);
             return;
         }
@@ -34,14 +34,14 @@ public class Float64DataType implements FixedSizeDataType {
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index,
+            ByteBuffer buff) throws Exception {
         boolean isNull = buff.get() == 0;
-        
+
         if (isNull) {
-            statement.setNull(index, Types.DOUBLE);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
-            statement.setDouble(index, buff.getDouble());
+            mapping.bindFloat64(statement, index, buff.getDouble());
         }
     }
 }

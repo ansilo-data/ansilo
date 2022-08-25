@@ -2,9 +2,7 @@ package com.ansilo.connectors.data;
 
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import java.nio.ByteBuffer;
-import java.sql.Types;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +17,7 @@ public class NullDataTypeTest extends DataTypeTest {
 
     @Test
     void testWrite() throws Exception {
-        this.dataType.writeToByteBuffer(this.byteBuffer, this.resultSet, 0);
+        this.dataType.writeToByteBuffer(this.mapping, this.byteBuffer, this.resultSet, 0);
 
         verify(this.byteBuffer, times(1)).put((byte) 0);
     }
@@ -27,10 +25,11 @@ public class NullDataTypeTest extends DataTypeTest {
     @Test
     void testBindParam() throws Exception {
         var buff = ByteBuffer.allocate(1);
-        buff.put((byte)0);
+        buff.put((byte) 0);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setNull(1, Types.NULL);
+        verify(this.mapping, times(1)).bindNull(this.preparedStatement, 1,
+                this.dataType.getTypeId());
     }
 }

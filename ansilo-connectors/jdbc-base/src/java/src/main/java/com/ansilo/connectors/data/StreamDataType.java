@@ -16,6 +16,6 @@ public interface StreamDataType extends DataType {
     /**
      * Gets the input stream from the result set.
      */
-    InputStream getStream(JdbcDataMapping mapping, ResultSet resultSet, int colIndex)
+    InputStream getStream(JdbcDataMapping mapping, ResultSet resultSet, int index)
             throws Exception;
 }

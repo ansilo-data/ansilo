@@ -8,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The nvarchar data type
@@ -19,8 +20,9 @@ public class Utf8StringDataType implements StreamDataType {
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
-        String string = resultSet.getNString(index);
+    public InputStream getStream(JdbcDataMapping mapping, ResultSet resultSet, int index)
+            throws Exception {
+        String string = mapping.getUtf8String(resultSet, index);
 
         if (string == null) {
             return null;
@@ -31,14 +33,15 @@ public class Utf8StringDataType implements StreamDataType {
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index,
+            ByteBuffer buff) throws Exception {
         boolean isNull = buff.get() == 0;
 
         if (isNull) {
-            statement.setNull(index, Types.NVARCHAR);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
-            statement.setNString(index, StandardCharsets.UTF_8.decode(buff).toString());
+            mapping.bindUtf8String(statement, index,
+                    StandardCharsets.UTF_8.decode(buff).toString());
         }
     }
 }

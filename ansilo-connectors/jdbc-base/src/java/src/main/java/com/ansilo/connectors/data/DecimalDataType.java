@@ -9,6 +9,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The decimal data type
@@ -20,8 +21,9 @@ public class DecimalDataType implements StreamDataType {
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
-        var val = resultSet.getBigDecimal(index);
+    public InputStream getStream(JdbcDataMapping mapping, ResultSet resultSet, int index)
+            throws Exception {
+        var val = mapping.getDecimal(resultSet, index);
 
         if (val == null) {
             return null;
@@ -32,14 +34,14 @@ public class DecimalDataType implements StreamDataType {
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index,
+            ByteBuffer buff) throws Exception {
         boolean isNull = buff.get() == 0;
 
         if (isNull) {
-            statement.setNull(index, Types.DECIMAL);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
-            statement.setBigDecimal(index,
+            mapping.bindDecimal(statement, index,
                     new BigDecimal(StandardCharsets.UTF_8.decode(buff).toString()));
         }
     }

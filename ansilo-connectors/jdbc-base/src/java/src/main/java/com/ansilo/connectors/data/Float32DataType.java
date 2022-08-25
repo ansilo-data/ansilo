@@ -3,8 +3,7 @@ package com.ansilo.connectors.data;
 import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The float32 data type
@@ -21,10 +20,11 @@ public class Float32DataType implements FixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
-            throws Exception {
-        var val = resultSet.getFloat(index);
-        if (resultSet.wasNull()) {
+    public void writeToByteBuffer(JdbcDataMapping mapping, ByteBuffer buff, ResultSet resultSet,
+            int index) throws Exception {
+        var val = mapping.getFloat32(resultSet, index);
+
+        if (val == null) {
             buff.put((byte) 0);
             return;
         }
@@ -34,14 +34,14 @@ public class Float32DataType implements FixedSizeDataType {
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index,
+            ByteBuffer buff) throws Exception {
         boolean isNull = buff.get() == 0;
-        
+
         if (isNull) {
-            statement.setNull(index, Types.FLOAT);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
-            statement.setFloat(index, buff.getFloat());
+            mapping.bindFloat32(statement, index, buff.getFloat());
         }
     }
 }

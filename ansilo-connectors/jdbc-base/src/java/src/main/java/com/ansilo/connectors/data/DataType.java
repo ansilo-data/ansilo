@@ -22,22 +22,22 @@ public interface DataType {
      * 
      * @see ansilo-connectors/src/jdbc/data.rs
      */
-    public static final int TYPE_INT8 = 2;
-    public static final int TYPE_INT16 = 3;
-    public static final int TYPE_INT32 = 4;
-    public static final int TYPE_INT64 = 5;
-    public static final int TYPE_FLOAT32 = 6;
-    public static final int TYPE_FLOAT64 = 8;
-    public static final int TYPE_DECIMAL = 10;
-    public static final int TYPE_DATE = 13;
-    public static final int TYPE_TIME = 14;
-    public static final int TYPE_DATE_TIME = 15;
-    public static final int TYPE_DATE_TIME_WITH_TZ = 31;
-    public static final int TYPE_BINARY = 16;
-    public static final int TYPE_NULL = 17;
-    public static final int TYPE_BOOLEAN = 24;
-    public static final int TYPE_UTF8_STRING = 26;
-    public static final int TYPE_JSON = 33;
+    public static final int TYPE_INT8 = 1;
+    public static final int TYPE_INT16 = 2;
+    public static final int TYPE_INT32 = 3;
+    public static final int TYPE_INT64 = 4;
+    public static final int TYPE_FLOAT32 = 5;
+    public static final int TYPE_FLOAT64 = 6;
+    public static final int TYPE_DECIMAL = 7;
+    public static final int TYPE_DATE = 8;
+    public static final int TYPE_TIME = 9;
+    public static final int TYPE_DATE_TIME = 10;
+    public static final int TYPE_DATE_TIME_WITH_TZ = 11;
+    public static final int TYPE_BINARY = 12;
+    public static final int TYPE_NULL = 13;
+    public static final int TYPE_BOOLEAN = 14;
+    public static final int TYPE_UTF8_STRING = 15;
+    public static final int TYPE_JSON = 16;
 
     /**
      * Gets the read mode of the data type

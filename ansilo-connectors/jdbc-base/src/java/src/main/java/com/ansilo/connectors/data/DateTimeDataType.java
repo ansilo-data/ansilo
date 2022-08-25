@@ -7,6 +7,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.time.LocalDateTime;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The date/time data type
@@ -23,32 +24,32 @@ public class DateTimeDataType implements FixedSizeDataType {
     }
 
     @Override
-    public void writeToByteBuffer(ByteBuffer buff, ResultSet resultSet, int index)
-            throws Exception {
-        var val = resultSet.getTimestamp(index);
-        if (resultSet.wasNull()) {
+    public void writeToByteBuffer(JdbcDataMapping mapping, ByteBuffer buff, ResultSet resultSet,
+            int index) throws Exception {
+        var val = mapping.getDateTime(resultSet, index);
+
+        if (val == null) {
             buff.put((byte) 0);
             return;
         }
 
-        var dt = val.toLocalDateTime();
         buff.put((byte) 1);
-        buff.putInt(dt.getYear());
-        buff.put((byte) dt.getMonthValue());
-        buff.put((byte) dt.getDayOfMonth());
-        buff.put((byte) dt.getHour());
-        buff.put((byte) dt.getMinute());
-        buff.put((byte) dt.getSecond());
-        buff.putInt(dt.getNano());
+        buff.putInt(val.getYear());
+        buff.put((byte) val.getMonthValue());
+        buff.put((byte) val.getDayOfMonth());
+        buff.put((byte) val.getHour());
+        buff.put((byte) val.getMinute());
+        buff.put((byte) val.getSecond());
+        buff.putInt(val.getNano());
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index,
+            ByteBuffer buff) throws Exception {
         boolean isNull = buff.get() == 0;
 
         if (isNull) {
-            statement.setNull(index, Types.TIMESTAMP);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
             var year = buff.getInt();
             var month = buff.get();
@@ -57,8 +58,8 @@ public class DateTimeDataType implements FixedSizeDataType {
             var minute = buff.get();
             var second = buff.get();
             var nano = buff.getInt();
-            statement.setTimestamp(index, Timestamp
-                    .valueOf(LocalDateTime.of(year, month, day, hour, minute, second, nano)));
+            mapping.bindDateTime(statement, index,
+                    LocalDateTime.of(year, month, day, hour, minute, second, nano));
         }
     }
 }

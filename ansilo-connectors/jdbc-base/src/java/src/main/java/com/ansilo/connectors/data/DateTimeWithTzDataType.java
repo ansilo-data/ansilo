@@ -5,13 +5,11 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.sql.Timestamp;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
  * The date/time with timezone data type
@@ -23,36 +21,36 @@ public class DateTimeWithTzDataType implements StreamDataType {
     }
 
     @Override
-    public InputStream getStream(ResultSet resultSet, int index) throws Exception {
-        var val = resultSet.getTimestamp(index);
+    public InputStream getStream(JdbcDataMapping mapping, ResultSet resultSet, int index)
+            throws Exception {
+        var val = mapping.getDateTimeWithTz(resultSet, index);
 
-        if (resultSet.wasNull()) {
+        if (val == null) {
             return null;
         }
 
         var buff = ByteBuffer.allocate(16);
         buff.order(ByteOrder.BIG_ENDIAN);
 
-        var dt = val.toInstant().atZone(ZoneId.of("UTC"));
-        buff.putInt(dt.getYear());
-        buff.put((byte) dt.getMonthValue());
-        buff.put((byte) dt.getDayOfMonth());
-        buff.put((byte) dt.getHour());
-        buff.put((byte) dt.getMinute());
-        buff.put((byte) dt.getSecond());
-        buff.putInt(dt.getNano());
+        buff.putInt(val.getYear());
+        buff.put((byte) val.getMonthValue());
+        buff.put((byte) val.getDayOfMonth());
+        buff.put((byte) val.getHour());
+        buff.put((byte) val.getMinute());
+        buff.put((byte) val.getSecond());
+        buff.putInt(val.getNano());
         buff.put(StandardCharsets.UTF_8.encode("UTC"));
 
         return new ByteArrayInputStream(buff.array(), 0, buff.limit());
     }
 
     @Override
-    public void bindParam(PreparedStatement statement, int index, ByteBuffer buff)
-            throws SQLException {
+    public void bindParam(JdbcDataMapping mapping, PreparedStatement statement, int index,
+            ByteBuffer buff) throws Exception {
         boolean isNull = buff.get() == 0;
 
         if (isNull) {
-            statement.setNull(index, Types.TIMESTAMP_WITH_TIMEZONE);
+            mapping.bindNull(statement, index, this.getTypeId());
         } else {
             var year = buff.getInt();
             var month = buff.get();
@@ -62,8 +60,8 @@ public class DateTimeWithTzDataType implements StreamDataType {
             var second = buff.get();
             var nano = buff.getInt();
             var tz = StandardCharsets.UTF_8.decode(buff).toString();
-            statement.setTimestamp(index, Timestamp.from(ZonedDateTime
-                    .of(year, month, day, hour, minute, second, nano, ZoneId.of(tz)).toInstant()));
+            mapping.bindDateTimeWithTz(statement, index,
+                    ZonedDateTime.of(year, month, day, hour, minute, second, nano, ZoneId.of(tz)));
         }
     }
 }

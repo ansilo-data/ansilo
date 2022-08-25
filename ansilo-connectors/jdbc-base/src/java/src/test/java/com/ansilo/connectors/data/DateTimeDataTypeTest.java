@@ -23,22 +23,19 @@ public class DateTimeDataTypeTest extends DataTypeTest {
 
     @Test
     void testHandlesNullValue() throws Exception {
-        when(this.resultSet.getTimestamp(0)).thenReturn(null);
-        when(this.resultSet.wasNull()).thenReturn(true);
+        when(this.mapping.getDateTime(this.resultSet, 0)).thenReturn(null);
 
-        this.dataType.writeToByteBuffer(this.byteBuffer, this.resultSet, 0);
+        this.dataType.writeToByteBuffer(this.mapping, this.byteBuffer, this.resultSet, 0);
 
         verify(this.byteBuffer, times(1)).put((byte) 0);
     }
 
     @Test
     void testWriteDateTime() throws Exception {
-        var time = mock(Timestamp.class);
-        when(time.toLocalDateTime()).thenReturn(LocalDateTime.of(2020, 8, 25, 12, 34, 56, 12345));
-        when(this.resultSet.getTimestamp(0)).thenReturn(time);
-        when(this.resultSet.wasNull()).thenReturn(false);
+        when(this.mapping.getDateTime(this.resultSet, 0))
+                .thenReturn(LocalDateTime.of(2020, 8, 25, 12, 34, 56, 12345));
 
-        this.dataType.writeToByteBuffer(this.byteBuffer, this.resultSet, 0);
+        this.dataType.writeToByteBuffer(this.mapping, this.byteBuffer, this.resultSet, 0);
 
         verify(this.byteBuffer, times(1)).put((byte) 1);
         verify(this.byteBuffer, times(1)).putInt(2020);
@@ -62,10 +59,10 @@ public class DateTimeDataTypeTest extends DataTypeTest {
         buff.put((byte) 58);
         buff.putInt(987654321);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setTimestamp(1,
-                Timestamp.valueOf(LocalDateTime.parse("2000-06-09T23:59:58.987654321")));
+        verify(this.mapping, times(1)).bindDateTime(this.preparedStatement, 1,
+                LocalDateTime.parse("2000-06-09T23:59:58.987654321"));
     }
 
     @Test
@@ -73,8 +70,9 @@ public class DateTimeDataTypeTest extends DataTypeTest {
         var buff = ByteBuffer.allocate(1);
         buff.put((byte) 0);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setNull(1, Types.TIMESTAMP);
+        verify(this.mapping, times(1)).bindNull(this.preparedStatement, 1,
+                this.dataType.getTypeId());
     }
 }

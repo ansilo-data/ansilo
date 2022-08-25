@@ -6,6 +6,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Properties;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 import com.ansilo.connectors.query.JdbcParameter;
 import com.ansilo.connectors.query.JdbcPreparedQuery;
 
@@ -21,22 +22,29 @@ public class JdbcConnection {
     protected Connection connection;
 
     /**
+     * The data mapping for this JDBC connector
+     */
+    protected JdbcDataMapping mapping;
+
+    /**
      * Initialises the JDBC connection
      * 
      * @param jdbcUrl
      * @param props
      * @throws SQLException
      */
-    public JdbcConnection(String jdbcUrl, Properties jdbcProps) throws SQLException {
+    public JdbcConnection(String jdbcUrl, Properties jdbcProps, JdbcDataMapping mapping)
+            throws SQLException {
         // TODO: logging
-        this(DriverManager.getConnection(jdbcUrl, jdbcProps));
+        this(DriverManager.getConnection(jdbcUrl, jdbcProps), mapping);
     }
 
     /**
      * Initialises a new JDBC connection
      */
-    public JdbcConnection(Connection connection) {
+    public JdbcConnection(Connection connection, JdbcDataMapping mapping) {
         this.connection = connection;
+        this.mapping = mapping;
     }
 
     /**
@@ -55,7 +63,7 @@ public class JdbcConnection {
 
     protected JdbcPreparedQuery newPreparedQuery(List<JdbcParameter> parameters,
             PreparedStatement statement) {
-        return new JdbcPreparedQuery(statement, parameters);
+        return new JdbcPreparedQuery(this.mapping, statement, parameters);
     }
 
     /**

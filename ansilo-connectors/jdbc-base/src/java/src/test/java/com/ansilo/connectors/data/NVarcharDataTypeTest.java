@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.sql.Types;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -23,24 +22,24 @@ public class NVarcharDataTypeTest extends DataTypeTest {
 
     @Test
     void testHandlesNullValue() throws Exception {
-        when(this.resultSet.getNString(0)).thenReturn(null);
+        when(this.mapping.getUtf8String(this.resultSet, 0)).thenReturn(null);
 
-        assertNull(this.dataType.getStream(this.resultSet, 0));
+        assertNull(this.dataType.getStream(this.mapping, this.resultSet, 0));
     }
 
     @Test
     void testEmptyString() throws Exception {
-        when(this.resultSet.getNString(0)).thenReturn("");
+        when(this.mapping.getUtf8String(this.resultSet, 0)).thenReturn("");
 
-        InputStream stream = this.dataType.getStream(this.resultSet, 0);
+        InputStream stream = this.dataType.getStream(this.mapping, this.resultSet, 0);
         assertArrayEquals(new byte[0], stream.readAllBytes());
     }
 
     @Test
     void testString() throws Exception {
-        when(this.resultSet.getNString(0)).thenReturn("abc");
+        when(this.mapping.getUtf8String(this.resultSet, 0)).thenReturn("abc");
 
-        InputStream stream = this.dataType.getStream(this.resultSet, 0);
+        InputStream stream = this.dataType.getStream(this.mapping, this.resultSet, 0);
 
         var expected = this.toByteArray(StandardCharsets.UTF_8.encode("abc"));
         assertArrayEquals(expected, stream.readAllBytes());
@@ -48,10 +47,10 @@ public class NVarcharDataTypeTest extends DataTypeTest {
 
     @Test
     void testUnicodeString() throws Exception {
-        when(this.resultSet.getNString(0)).thenReturn("🥑🥑🥑");
+        when(this.mapping.getUtf8String(this.resultSet, 0)).thenReturn("🥑🥑🥑");
 
-        InputStream stream = this.dataType.getStream(this.resultSet, 0);
-        
+        InputStream stream = this.dataType.getStream(this.mapping, this.resultSet, 0);
+
         var expected = this.toByteArray(StandardCharsets.UTF_8.encode("🥑🥑🥑"));
         assertArrayEquals(expected, stream.readAllBytes());
     }
@@ -62,9 +61,9 @@ public class NVarcharDataTypeTest extends DataTypeTest {
         buff.put((byte) 1);
         buff.put(StandardCharsets.UTF_8.encode("TEST"));
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setNString(1, "TEST");
+        verify(this.mapping, times(1)).bindUtf8String(this.preparedStatement, 1, "TEST");
     }
 
     @Test
@@ -72,9 +71,10 @@ public class NVarcharDataTypeTest extends DataTypeTest {
         var buff = ByteBuffer.allocate(1);
         buff.put((byte) 0);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setNull(1, Types.NVARCHAR);
+        verify(this.mapping, times(1)).bindNull(this.preparedStatement, 1,
+                this.dataType.getTypeId());
     }
 
     private byte[] toByteArray(ByteBuffer data) {

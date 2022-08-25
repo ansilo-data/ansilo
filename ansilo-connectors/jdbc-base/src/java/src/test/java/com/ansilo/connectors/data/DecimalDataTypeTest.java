@@ -9,7 +9,6 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.sql.Types;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,16 +23,16 @@ public class DecimalDataTypeTest extends DataTypeTest {
 
     @Test
     void testHandlesNullValue() throws Exception {
-        when(this.resultSet.getBigDecimal(0)).thenReturn(null);
+        when(this.mapping.getDecimal(this.resultSet, 0)).thenReturn(null);
 
-        assertNull(this.dataType.getStream(this.resultSet, 0));
+        assertNull(this.dataType.getStream(this.mapping, this.resultSet, 0));
     }
 
     @Test
     void testZero() throws Exception {
-        when(this.resultSet.getBigDecimal(0)).thenReturn(BigDecimal.ZERO);
+        when(this.mapping.getDecimal(this.resultSet, 0)).thenReturn(BigDecimal.ZERO);
 
-        InputStream stream = this.dataType.getStream(this.resultSet, 0);
+        InputStream stream = this.dataType.getStream(this.mapping, this.resultSet, 0);
 
         var expected = this.toByteArray(StandardCharsets.UTF_8.encode("0"));
         assertArrayEquals(expected, stream.readAllBytes());
@@ -41,9 +40,10 @@ public class DecimalDataTypeTest extends DataTypeTest {
 
     @Test
     void testLargeNumber() throws Exception {
-        when(this.resultSet.getBigDecimal(0)).thenReturn(new BigDecimal("123456789.12345678"));
+        when(this.mapping.getDecimal(this.resultSet, 0))
+                .thenReturn(new BigDecimal("123456789.12345678"));
 
-        InputStream stream = this.dataType.getStream(this.resultSet, 0);
+        InputStream stream = this.dataType.getStream(this.mapping, this.resultSet, 0);
 
         var expected = this.toByteArray(StandardCharsets.UTF_8.encode("123456789.12345678"));
         assertArrayEquals(expected, stream.readAllBytes());
@@ -55,9 +55,10 @@ public class DecimalDataTypeTest extends DataTypeTest {
         buff.put((byte) 1);
         buff.put(StandardCharsets.UTF_8.encode("1.1"));
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setBigDecimal(1, new BigDecimal("1.1"));
+        verify(this.mapping, times(1)).bindDecimal(this.preparedStatement, 1,
+                new BigDecimal("1.1"));
     }
 
     @Test
@@ -65,9 +66,10 @@ public class DecimalDataTypeTest extends DataTypeTest {
         var buff = ByteBuffer.allocate(1);
         buff.put((byte) 0);
         buff.rewind();
-        this.dataType.bindParam(this.preparedStatement, 1, buff);
+        this.dataType.bindParam(this.mapping, this.preparedStatement, 1, buff);
 
-        verify(this.preparedStatement, times(1)).setNull(1, Types.DECIMAL);
+        verify(this.mapping, times(1)).bindNull(this.preparedStatement, 1,
+                this.dataType.getTypeId());
     }
 
     private byte[] toByteArray(ByteBuffer data) {

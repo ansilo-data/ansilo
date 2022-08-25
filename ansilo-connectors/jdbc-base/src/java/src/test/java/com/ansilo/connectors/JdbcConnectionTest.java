@@ -12,16 +12,19 @@ import java.util.ArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.DataType;
+import com.ansilo.connectors.mapping.JdbcDataMapping;
 import com.ansilo.connectors.query.JdbcParameter;
 
 public class JdbcConnectionTest {
     private Connection innerConnection;
+    private JdbcDataMapping mapping;
     private JdbcConnection connection;
 
     @BeforeEach
     void setUp() {
         this.innerConnection = mock(Connection.class);
-        this.connection = new JdbcConnection(innerConnection);
+        this.mapping = mock(JdbcDataMapping.class);
+        this.connection = new JdbcConnection(innerConnection, mapping);
     }
 
     @Test
@@ -29,7 +32,7 @@ public class JdbcConnectionTest {
         var query = "EXAMPLE QUERY";
         var params = new ArrayList<JdbcParameter>();
         params.add(JdbcParameter.createDynamic(1, DataType.TYPE_INT32));
-        params.add(JdbcParameter.createDynamic(1, DataType.TYPE_VARCHAR));
+        params.add(JdbcParameter.createDynamic(1, DataType.TYPE_UTF8_STRING));
 
         var mockStatement = mock(PreparedStatement.class);
         when(this.innerConnection.prepareStatement(query)).thenReturn(mockStatement);
