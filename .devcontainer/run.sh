@@ -91,7 +91,7 @@ echo "Requested spot fleet: $SPOT_FLEET_ID"
 
 echo "Waiting for spot fleet instance on in $SPOT_FLEET_ID"
 TRIES=0
-while [[ $TRIES -le 10 ]];
+while ((TRIES < 30));
 do
     SPOT_INSTANCE_JSON=$(aws ec2 describe-spot-fleet-instances \
         --spot-fleet-request-id $SPOT_FLEET_ID \
@@ -101,6 +101,7 @@ do
     then 
         echo "No instance found, sleeping..."
         sleep 10
+        let "TRIES+=1"
         continue
     fi
 
@@ -119,7 +120,7 @@ echo "Found instance ip: $PUB_IP"
 
 echo "Waiting for sshd on spot instance at $PUB_IP"
 TRIES=0
-while [[ $TRIES -le 20 ]];
+while ((TRIES < 30));
 do
     echo "Connecting..."
     set +e
@@ -130,8 +131,10 @@ do
     then 
         break
     fi
+
     echo "Failed to connect, sleeping..."
     sleep 5
+    let "TRIES+=1"
 done
 
 echo "SSH is listening on instance..."
@@ -171,7 +174,7 @@ echo "Instance provisioned!"
 
 echo "Waiting for sshd on devcontainer at $PUB_IP"
 TRIES=0
-while [[ $TRIES -le 20 ]];
+while ((TRIES < 30));
 do
     echo "Connecting..."
     set +e
@@ -182,8 +185,10 @@ do
     then 
         break
     fi
+
     echo "Failed to connect, sleeping..."
     sleep 5
+    let "TRIES+=1"
 done
 
 echo "Updating ~/.ssh/config with ansilodev"

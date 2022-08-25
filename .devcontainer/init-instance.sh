@@ -10,9 +10,24 @@ export LC_ALL=C.UTF-8
 ECR_REPO="635198228996.dkr.ecr.ap-southeast-2.amazonaws.com"
 DEVCONTAINER_IMAGE="$ECR_REPO/devcontainer:latest"
 
-echo "Installing deps..."
-sudo apt-get update
-DEBIAN_FRONTEND=noninteractive sudo apt-get install -y zip netcat socat
+TRIES=0
+while ((TRIES < 10));
+do
+    echo "Installing deps..."
+    set +e
+    sudo apt-get update
+    DEBIAN_FRONTEND=noninteractive sudo apt-get install -y zip netcat socat
+    EXIT_CODE=$?
+    set -e
+
+    if [[ $EXIT_CODE == 0 ]];
+    then
+        break
+    fi
+    
+    sleep 5
+    let "TRIES+=1"
+done
 
 echo "Finding device for EBS $EBS_ID..."
 VOL_SERIAL=$(echo $EBS_ID | cut -d'-' -f2)
