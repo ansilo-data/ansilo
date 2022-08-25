@@ -3,7 +3,7 @@ use std::{collections::HashMap, env, time::Duration};
 use ansilo_connectors_base::test::ecs::{
     get_current_target_dir, start_containers, wait_for_log, ContainerInstances,
 };
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcDefaultTypeMapping};
+use ansilo_connectors_jdbc_base::JdbcConnection;
 use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector};
 
 #[macro_export]
@@ -44,9 +44,7 @@ pub fn start_oracle() -> ContainerInstances {
     services
 }
 
-pub fn connect_to_oracle(
-    containers: &ContainerInstances,
-) -> JdbcConnection<JdbcDefaultTypeMapping> {
+pub fn connect_to_oracle(containers: &ContainerInstances) -> JdbcConnection {
     env::set_var(
         "ANSILO_CLASSPATH",
         get_current_target_dir().to_str().unwrap(),

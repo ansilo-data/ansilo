@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 use ansilo_core::{
     data::{DataType, DataValue},
@@ -16,7 +16,9 @@ use ansilo_connectors_base::{
     interface::{LoggedQuery, QueryHandle, QueryInputStructure},
 };
 
-use super::{JdbcResultSet, JdbcTypeMapping, Jvm};
+use crate::JavaDataType;
+
+use super::{JdbcResultSet, Jvm};
 
 /// JDBC query
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -47,16 +49,15 @@ impl JdbcQuery {
 }
 
 /// JDBC prepared query
-pub struct JdbcPreparedQuery<TTypeMapping: JdbcTypeMapping> {
+pub struct JdbcPreparedQuery {
     pub jvm: Arc<Jvm>,
     pub jdbc_prepared_statement: GlobalRef,
     pub query: JdbcQuery,
     write_method_id: Option<jmethodID>,
     as_read_only_buffer_method_id: Option<jmethodID>,
-    _p: PhantomData<TTypeMapping>,
 }
 
-impl<TTypeMapping: JdbcTypeMapping> JdbcPreparedQuery<TTypeMapping> {
+impl JdbcPreparedQuery {
     pub fn new(jvm: Arc<Jvm>, jdbc_prepared_statement: GlobalRef, query: JdbcQuery) -> Self {
         Self {
             jvm,
@@ -64,7 +65,6 @@ impl<TTypeMapping: JdbcTypeMapping> JdbcPreparedQuery<TTypeMapping> {
             query,
             write_method_id: None,
             as_read_only_buffer_method_id: None,
-            _p: PhantomData,
         }
     }
 
@@ -99,8 +99,8 @@ impl<TTypeMapping: JdbcTypeMapping> JdbcPreparedQuery<TTypeMapping> {
     }
 }
 
-impl<TTypeMapping: JdbcTypeMapping> QueryHandle for JdbcPreparedQuery<TTypeMapping> {
-    type TResultSet = JdbcResultSet<TTypeMapping>;
+impl QueryHandle for JdbcPreparedQuery {
+    type TResultSet = JdbcResultSet;
 
     fn get_structure(&self) -> Result<QueryInputStructure> {
         Ok(QueryInputStructure::new(
@@ -176,7 +176,7 @@ impl<TTypeMapping: JdbcTypeMapping> QueryHandle for JdbcPreparedQuery<TTypeMappi
         })
     }
 
-    fn execute(&mut self) -> Result<JdbcResultSet<TTypeMapping>> {
+    fn execute(&mut self) -> Result<JdbcResultSet> {
         self.jvm.with_local_frame(32, |env| {
             let jdbc_result_set = env
                 .call_method(
@@ -248,7 +248,7 @@ impl JdbcQueryParam {
     /// Initialises a new instance of the JdbcParameter class which
     /// copies the current query parameter
     /// @see ansilo-connectors/src/jdbc/java/src/main/java/com/ansilo/connectors/query/JdbcParameter.java
-    pub(crate) fn to_java_jdbc_parameter<'a, TTypeMapping: JdbcTypeMapping>(
+    pub(crate) fn to_java_jdbc_parameter<'a>(
         &self,
         index: usize,
         jvm: &'a Jvm,
@@ -262,11 +262,7 @@ impl JdbcQueryParam {
                 "(II)Lcom/ansilo/connectors/query/JdbcParameter;",
                 &[
                     JValue::Int(index as i32),
-                    JValue::Int(
-                        TTypeMapping::to_jdbc(data_type)
-                            .context("Failed to map query param data type")?
-                            as i32,
-                    ),
+                    JValue::Int(JavaDataType::from(data_type) as i32),
                 ],
             ),
             JdbcQueryParam::Constant(data_value) => {
@@ -282,11 +278,7 @@ impl JdbcQueryParam {
                     "(IILjava/nio/ByteBuffer;)Lcom/ansilo/connectors/query/JdbcParameter;",
                     &[
                         JValue::Int(index as i32),
-                        JValue::Int(
-                            TTypeMapping::to_jdbc(&data_value.r#type())
-                                .context("Failed to map constant query param data type")?
-                                as i32,
-                        ),
+                        JValue::Int(JavaDataType::from(&data_value.r#type()) as i32),
                         JValue::Object(*byte_buff),
                     ],
                 )
@@ -303,37 +295,21 @@ impl JdbcQueryParam {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use ansilo_core::data::{DataValue, StringOptions};
     use jni::objects::{JObject, JString};
 
-    use crate::{tests::create_sqlite_memory_connection, JavaDataType};
+    use crate::tests::create_sqlite_memory_connection;
     use ansilo_connectors_base::common::data::ResultSetReader;
 
     use super::*;
-
-    #[derive(Clone)]
-    pub(crate) struct SqliteTypeMapping;
-
-    impl JdbcTypeMapping for SqliteTypeMapping {
-        fn to_jdbc(r#type: &DataType) -> Result<JavaDataType> {
-            Ok(match r#type {
-                DataType::Utf8String(_) => JavaDataType::Varchar,
-                _ => return crate::default_type_to_jdbc(r#type),
-            })
-        }
-
-        fn to_rust(r#type: JavaDataType) -> Result<DataType> {
-            crate::default_type_to_rust(r#type)
-        }
-    }
 
     fn create_prepared_query(
         jvm: &Arc<Jvm>,
         jdbc_con: JObject,
         query: &str,
         params: Vec<JdbcQueryParam>,
-    ) -> JdbcPreparedQuery<SqliteTypeMapping> {
+    ) -> JdbcPreparedQuery {
         let query = JdbcQuery::new(query, params);
         let env = &jvm.env().unwrap();
 
@@ -349,9 +325,7 @@ pub(crate) mod tests {
         let param_types = env.new_object("java/util/ArrayList", "()V", &[]).unwrap();
 
         for (idx, param) in query.params.iter().enumerate() {
-            let data_type = param
-                .to_java_jdbc_parameter::<SqliteTypeMapping>(idx + 1, jvm)
-                .unwrap();
+            let data_type = param.to_java_jdbc_parameter(idx + 1, jvm).unwrap();
 
             env.call_method(
                 param_types,
@@ -362,11 +336,19 @@ pub(crate) mod tests {
             .unwrap();
         }
 
+        let data_map = env
+            .new_object(
+                "com/ansilo/connectors/mapping/SqliteJdbcDataMapping",
+                "()V",
+                &[],
+            )
+            .unwrap();
+
         let jdbc_prepared_query = env
             .new_object(
                 "com/ansilo/connectors/query/JdbcPreparedQuery",
-                "(Ljava/sql/PreparedStatement;Ljava/util/List;)V",
-                &[prepared_statement, JValue::Object(param_types)],
+                "(Lcom/ansilo/connectors/mapping/JdbcDataMapping;Ljava/sql/PreparedStatement;Ljava/util/List;)V",
+                &[JValue::Object(data_map),prepared_statement, JValue::Object(param_types)],
             )
             .unwrap();
 
@@ -568,8 +550,8 @@ pub(crate) mod tests {
             LoggedQuery::new(
                 "SELECT ? as num, ? as str",
                 vec![
-                    "LoggedParam [index=1, type=INTEGER, value=1234]".into(),
-                    "LoggedParam [index=2, type=NVARCHAR, value=foo]".into()
+                    "LoggedParam [index=1, method=setInt, value=1234]".into(),
+                    "LoggedParam [index=2, method=setString, value=foo]".into()
                 ],
                 None
             )
@@ -589,9 +571,7 @@ pub(crate) mod tests {
         let jvm = Arc::new(Jvm::boot().unwrap());
         let param = JdbcQueryParam::Dynamic(1, DataType::Int32);
 
-        let java_obj = param
-            .to_java_jdbc_parameter::<SqliteTypeMapping>(1, &jvm)
-            .unwrap();
+        let java_obj = param.to_java_jdbc_parameter(1, &jvm).unwrap();
         let class = jvm.env().unwrap().get_object_class(java_obj).unwrap();
 
         assert_eq!(
@@ -626,9 +606,7 @@ pub(crate) mod tests {
         let jvm = Jvm::boot().unwrap();
         let param = JdbcQueryParam::Constant(DataValue::Int32(1123));
 
-        let java_obj = param
-            .to_java_jdbc_parameter::<SqliteTypeMapping>(1, &jvm)
-            .unwrap();
+        let java_obj = param.to_java_jdbc_parameter(1, &jvm).unwrap();
         let class = jvm.env().unwrap().get_object_class(java_obj).unwrap();
 
         assert_eq!(

@@ -34,7 +34,7 @@ fn test_oracle_jdbc_discover_entities() {
                 None,
                 DataType::Utf8String(StringOptions::new(Some(1))),
                 false,
-                false
+                true
             )],
             EntitySourceConfig::from(OracleJdbcEntitySourceConfig::Table(
                 OracleJdbcTableOptions::new(Some("SYS".into()), "DUAL".into(), HashMap::new())

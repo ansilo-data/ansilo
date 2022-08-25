@@ -31,8 +31,8 @@ impl JdbcConnectionConfig for OracleJdbcConnectionConfig {
         self.pool.clone()
     }
 
-    fn get_java_connection(&self) -> String {
-        "com.ansilo.connectors.oracle.OracleJdbcConnection".into()
+    fn get_java_jdbc_data_mapping(&self) -> String {
+        "com.ansilo.connectors.oracle.mapping.OracleJdbcDataMapping".into()
     }
 }
 

@@ -112,7 +112,7 @@ public class JdbcResultSetTest {
         when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
 
         when(this.innerResultSet.next()).thenReturn(true, false);
-        when(this.innerResultSet.getString(1)).thenReturn("abc123");
+        when(this.innerResultSet.getNString(1)).thenReturn("abc123");
 
         var resultSet = new JdbcResultSet(this.mapping, this.innerResultSet);
         var buff = ByteBuffer.allocate(1024);
@@ -165,7 +165,7 @@ public class JdbcResultSetTest {
         when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
 
         when(this.innerResultSet.next()).thenReturn(true, false);
-        when(this.innerResultSet.getString(1)).thenReturn("abc123");
+        when(this.innerResultSet.getNString(1)).thenReturn("abc123");
 
         var resultSet = new JdbcResultSet(this.mapping, this.innerResultSet);
         var partialRead = ByteBuffer.allocate(5);
@@ -285,7 +285,7 @@ public class JdbcResultSetTest {
         when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
 
         when(this.innerResultSet.next()).thenReturn(true, true, true, false);
-        when(this.innerResultSet.getString(1)).thenReturn("abc", null, "123");
+        when(this.innerResultSet.getNString(1)).thenReturn("abc", null, "123");
         when(this.innerResultSet.wasNull()).thenReturn(false, true, false);
 
         var resultSet = new JdbcResultSet(this.mapping, this.innerResultSet);
@@ -320,7 +320,7 @@ public class JdbcResultSetTest {
         when(this.innerResultSetMetadata.getColumnType(1)).thenReturn(Types.VARCHAR);
 
         when(this.innerResultSet.next()).thenReturn(true, false);
-        when(this.innerResultSet.getString(1)).thenReturn("a".repeat(600));
+        when(this.innerResultSet.getNString(1)).thenReturn("a".repeat(600));
 
         var resultSet = new JdbcResultSet(this.mapping, this.innerResultSet);
         var buff = ByteBuffer.allocate(1000);

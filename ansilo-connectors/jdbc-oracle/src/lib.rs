@@ -3,8 +3,8 @@ use ansilo_connectors_base::{
     interface::{ConnectionPool, Connector},
 };
 use ansilo_connectors_jdbc_base::{
-    JdbcConnection, JdbcConnectionPool, JdbcDefaultTypeMapping, JdbcPreparedQuery, JdbcQuery,
-    JdbcResultSet, JdbcTransactionManager,
+    JdbcConnection, JdbcConnectionPool, JdbcPreparedQuery, JdbcQuery, JdbcResultSet,
+    JdbcTransactionManager,
 };
 
 mod conf;
@@ -27,17 +27,17 @@ pub use query_compiler::*;
 pub struct OracleJdbcConnector;
 
 impl Connector for OracleJdbcConnector {
-    type TConnectionPool = JdbcConnectionPool<JdbcDefaultTypeMapping>;
-    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
+    type TConnectionPool = JdbcConnectionPool;
+    type TConnection = JdbcConnection;
     type TConnectionConfig = OracleJdbcConnectionConfig;
     type TEntitySearcher = OracleJdbcEntitySearcher;
     type TEntityValidator = OracleJdbcEntityValidator;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
     type TQueryPlanner = OracleJdbcQueryPlanner;
     type TQueryCompiler = OracleJdbcQueryCompiler;
-    type TQueryHandle = JdbcPreparedQuery<JdbcDefaultTypeMapping>;
+    type TQueryHandle = JdbcPreparedQuery;
     type TQuery = JdbcQuery;
-    type TResultSet = JdbcResultSet<JdbcDefaultTypeMapping>;
+    type TResultSet = JdbcResultSet;
     type TTransactionManager = JdbcTransactionManager;
 
     const TYPE: &'static str = "jdbc.oracle";

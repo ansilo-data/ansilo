@@ -5,13 +5,13 @@ use ansilo_core::{
 
 use super::OracleJdbcEntitySourceConfig;
 use ansilo_connectors_base::{common::entity::EntitySource, interface::EntityValidator};
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcDefaultTypeMapping};
+use ansilo_connectors_jdbc_base::JdbcConnection;
 
 /// The entity validator for Oracle JDBC
 pub struct OracleJdbcEntityValidator {}
 
 impl EntityValidator for OracleJdbcEntityValidator {
-    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
+    type TConnection = JdbcConnection;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn validate(

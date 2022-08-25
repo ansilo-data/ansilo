@@ -3,31 +3,6 @@ use ansilo_core::{
     err::{self, bail, Result},
 };
 
-/// Trait for defining type conversions from rust DataValue/DataType's
-/// to their equivalent JDBC types.
-///
-/// @see ansilo-connectors/src/jdbc/java/src/main/java/com/ansilo/connectors/data/JdbcType.java
-/// @see https://docs.oracle.com/cd/E19830-01/819-4721/beajw/index.html
-pub trait JdbcTypeMapping: Clone + Send + Sync + 'static {
-    /// Convert the rustland data type into the equivalent JDBC data type
-    /// (Inverse conversion of the previous impl)
-    fn to_jdbc(r#type: &DataType) -> Result<JavaDataType> {
-        default_type_to_jdbc(r#type)
-    }
-
-    /// Converts the supplied jdbc data type id to the equivalent
-    /// data type defined in rustland
-    fn to_rust(r#type: JavaDataType) -> Result<DataType> {
-        default_type_to_rust(r#type)
-    }
-}
-
-/// Default JDBC type mappings
-#[derive(Clone)]
-pub struct JdbcDefaultTypeMapping;
-
-impl JdbcTypeMapping for JdbcDefaultTypeMapping {}
-
 /// Constants representing JDBC data types.
 /// These constants are also defined in java:
 /// @see ansilo-connectors/src/jdbc/java/src/main/java/com/ansilo/connectors/data/JdbcType.java
@@ -46,12 +21,12 @@ pub enum JavaDataType {
     Date = 8,
     Time = 9,
     DateTime = 10,
-    DateTimeWithTz = 11,
+    DateTimeWithTZ = 11,
     Binary = 12,
     Null = 13,
     Boolean = 14,
     Utf8String = 15,
-    Json = 16,
+    JSON = 16,
 }
 
 impl TryFrom<i32> for JavaDataType {
@@ -59,48 +34,71 @@ impl TryFrom<i32> for JavaDataType {
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         Ok(match value {
-            1 => Int8,
-            2 => Int16,
-            3 => Int32,
-            4 => Int64,
-            5 => Float32,
-            6 => Float64,
-            7 => Decimal,
-            8 => Date,
-            9 => Time,
-            10 => DateTime,
-            11 => DateTimeWithTz,
-            12 => Binary,
-            13 => Null,
-            14 => Boolean,
-            15 => Utf8String,
-            16 => Json,
+            1 => Self::Int8,
+            2 => Self::Int16,
+            3 => Self::Int32,
+            4 => Self::Int64,
+            5 => Self::Float32,
+            6 => Self::Float64,
+            7 => Self::Decimal,
+            8 => Self::Date,
+            9 => Self::Time,
+            10 => Self::DateTime,
+            11 => Self::DateTimeWithTZ,
+            12 => Self::Binary,
+            13 => Self::Null,
+            14 => Self::Boolean,
+            15 => Self::Utf8String,
+            16 => Self::JSON,
             _ => bail!("Unrecognized JDBC data type constant: {}", value),
         })
     }
 }
 
-impl From<DataType> for JavaDataType {
-    fn from(r#type: DataType) -> Self {
+impl From<&DataType> for JavaDataType {
+    fn from(r#type: &DataType) -> Self {
         match r#type {
-            DataType::Boolean => JavaDataType::Boolean,
-            DataType::Int8 => JavaDataType::TinyInt,
-            DataType::Int16 => JavaDataType::SmallInt,
-            DataType::Int32 => JavaDataType::Integer,
-            DataType::Int64 => JavaDataType::BigInt,
-            DataType::Float32 => JavaDataType::Float,
-            DataType::Float64 => JavaDataType::Double,
-            DataType::Decimal(_) => JavaDataType::Decimal,
-            DataType::Date => JavaDataType::Date,
-            DataType::Time => JavaDataType::Time,
-            DataType::DateTime => JavaDataType::Timestamp,
-            DataType::Null => JavaDataType::Null,
-            DataType::JSON => JavaDataType::Json,
-            DataType::Utf8String(_) => JavaDataType::NVarchar,
-            DataType::Binary => JavaDataType::Blob,
-            DataType::DateTimeWithTZ => JavaDataType::TimestampWithTimezone,
-            DataType::Uuid => JavaDataType::Varchar,
-            _ => bail!("{:?} is not supported", r#type),
+            DataType::Boolean => Self::Boolean,
+            DataType::Int8 => Self::Int8,
+            DataType::Int16 => Self::Int16,
+            DataType::Int32 => Self::Int32,
+            DataType::Int64 => Self::Int64,
+            DataType::Float32 => Self::Float32,
+            DataType::Float64 => Self::Float64,
+            DataType::Decimal(_) => Self::Decimal,
+            DataType::Date => Self::Date,
+            DataType::Time => Self::Time,
+            DataType::DateTime => Self::DateTime,
+            DataType::Null => Self::Null,
+            DataType::JSON => Self::JSON,
+            DataType::Utf8String(_) => Self::Utf8String,
+            DataType::Binary => Self::Binary,
+            DataType::DateTimeWithTZ => Self::DateTimeWithTZ,
+            // DataType::Uuid => Self::Uuid,
+            _ => panic!("TODO: remaining types"),
+        }
+    }
+}
+
+impl Into<DataType> for JavaDataType {
+    fn into(self) -> DataType {
+        match self {
+            JavaDataType::Int8 => DataType::Int8,
+            JavaDataType::Int16 => DataType::Int16,
+            JavaDataType::Int32 => DataType::Int32,
+            JavaDataType::Int64 => DataType::Int64,
+            JavaDataType::Float32 => DataType::Float32,
+            JavaDataType::Float64 => DataType::Float64,
+            JavaDataType::Decimal => DataType::Decimal(DecimalOptions::default()),
+            JavaDataType::Date => DataType::Date,
+            JavaDataType::Time => DataType::Time,
+            JavaDataType::DateTime => DataType::DateTime,
+            JavaDataType::DateTimeWithTZ => DataType::DateTimeWithTZ,
+            JavaDataType::Binary => DataType::Binary,
+            JavaDataType::Null => DataType::Null,
+            JavaDataType::Boolean => DataType::Boolean,
+            JavaDataType::Utf8String => DataType::Utf8String(StringOptions::default()),
+            JavaDataType::JSON => DataType::JSON,
         }
     }
 }
@@ -130,10 +128,10 @@ mod tests {
         ];
 
         for dt in data_type.into_iter() {
-            assert_eq!(
-                default_type_to_rust(default_type_to_jdbc(&dt).unwrap()).unwrap(),
-                dt
-            );
+            let converted: DataType = JavaDataType::try_from(JavaDataType::from(&dt) as i32)
+                .unwrap()
+                .into();
+            assert_eq!(converted, dt);
         }
     }
 }

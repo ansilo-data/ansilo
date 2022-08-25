@@ -6,8 +6,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**

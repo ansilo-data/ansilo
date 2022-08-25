@@ -13,7 +13,7 @@ use ansilo_connectors_base::{
     },
 };
 
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcDefaultTypeMapping, JdbcQuery};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 
 use super::{
     OracleJdbcConnectorEntityConfig, OracleJdbcEntitySourceConfig, OracleJdbcQueryCompiler,
@@ -23,7 +23,7 @@ use super::{
 pub struct OracleJdbcQueryPlanner {}
 
 impl QueryPlanner for OracleJdbcQueryPlanner {
-    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
+    type TConnection = JdbcConnection;
     type TQuery = JdbcQuery;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 

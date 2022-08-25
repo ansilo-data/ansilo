@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 use ansilo_core::err::{Context, Result};
 use jni::{
@@ -9,28 +9,26 @@ use jni::{
 
 use ansilo_connectors_base::interface::{ResultSet, RowStructure};
 
-use super::{JavaDataType, JdbcTypeMapping, Jvm};
+use super::{JavaDataType, Jvm};
 
 /// Implementation of the JDBC result set
-pub struct JdbcResultSet<TTypeMapping: JdbcTypeMapping> {
+pub struct JdbcResultSet {
     pub jvm: Arc<Jvm>,
     pub jdbc_result_set: GlobalRef,
     pub read_method_id: Option<jmethodID>,
-    _p: PhantomData<TTypeMapping>,
 }
 
-impl<TTypeMapping: JdbcTypeMapping> JdbcResultSet<TTypeMapping> {
+impl JdbcResultSet {
     pub fn new(jvm: Arc<Jvm>, jdbc_result_set: GlobalRef) -> Self {
         Self {
             jvm,
             jdbc_result_set,
             read_method_id: None,
-            _p: PhantomData,
         }
     }
 }
 
-impl<TTypeMapping: JdbcTypeMapping> ResultSet for JdbcResultSet<TTypeMapping> {
+impl ResultSet for JdbcResultSet {
     fn get_structure(&self) -> Result<RowStructure> {
         self.jvm.with_local_frame(32, |env| {
             let jdbc_structure = env
@@ -83,11 +81,8 @@ impl<TTypeMapping: JdbcTypeMapping> ResultSet for JdbcResultSet<TTypeMapping> {
                     .context("Failed to convert to int")?;
                 self.jvm.check_exceptions(env)?;
 
-                let jdbc_type = JavaDataType::try_from(jdbc_type_id)?;
-                structure.cols.push((
-                    name,
-                    TTypeMapping::to_rust(jdbc_type).context("Failed to map JDBC result type")?,
-                ));
+                let java_data_type = JavaDataType::try_from(jdbc_type_id)?;
+                structure.cols.push((name, java_data_type.into()));
             }
 
             Ok(structure)
@@ -137,15 +132,11 @@ mod tests {
     use ansilo_core::data::{DataType, StringOptions};
     use jni::objects::{JObject, JValue};
 
-    use crate::{tests::create_sqlite_memory_connection, JdbcDefaultTypeMapping};
+    use crate::tests::create_sqlite_memory_connection;
 
     use super::*;
 
-    fn execute_query(
-        jvm: &Arc<Jvm>,
-        jdbc_con: JObject,
-        query: &str,
-    ) -> JdbcResultSet<JdbcDefaultTypeMapping> {
+    fn execute_query(jvm: &Arc<Jvm>, jdbc_con: JObject, query: &str) -> JdbcResultSet {
         let env = &jvm.env().unwrap();
 
         // create statement
@@ -167,11 +158,19 @@ mod tests {
             .l()
             .unwrap();
 
+        let data_map = env
+            .new_object(
+                "com/ansilo/connectors/mapping/SqliteJdbcDataMapping",
+                "()V",
+                &[],
+            )
+            .unwrap();
+
         let jdbc_result_set = env
             .new_object(
                 "com/ansilo/connectors/result/JdbcResultSet",
-                "(Ljava/sql/ResultSet;)V",
-                &[JValue::Object(jdbc_result_set)],
+                "(Lcom/ansilo/connectors/mapping/JdbcDataMapping;Ljava/sql/ResultSet;)V",
+                &[JValue::Object(data_map), JValue::Object(jdbc_result_set)],
             )
             .unwrap();
 

@@ -7,7 +7,7 @@ use ansilo_core::{
 };
 
 use ansilo_connectors_base::interface::{Connection, EntitySearcher, QueryHandle, ResultSet};
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcDefaultTypeMapping, JdbcQuery};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 use ansilo_logging::warn;
 use itertools::Itertools;
 
@@ -19,7 +19,7 @@ use super::OracleJdbcEntitySourceConfig;
 pub struct OracleJdbcEntitySearcher {}
 
 impl EntitySearcher for OracleJdbcEntitySearcher {
-    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
+    type TConnection = JdbcConnection;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
     fn discover(connection: &mut Self::TConnection, _nc: &NodeConfig) -> Result<Vec<EntityConfig>> {

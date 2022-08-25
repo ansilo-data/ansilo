@@ -5,9 +5,7 @@ use ansilo_core::{
 };
 
 use ansilo_connectors_base::interface::QueryCompiler;
-use ansilo_connectors_jdbc_base::{
-    JdbcConnection, JdbcDefaultTypeMapping, JdbcQuery, JdbcQueryParam,
-};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
 
 use super::{
     OracleJdbcConnectorEntityConfig, OracleJdbcEntitySourceConfig, OracleJdbcTableOptions,
@@ -17,7 +15,7 @@ use super::{
 pub struct OracleJdbcQueryCompiler;
 
 impl QueryCompiler for OracleJdbcQueryCompiler {
-    type TConnection = JdbcConnection<JdbcDefaultTypeMapping>;
+    type TConnection = JdbcConnection;
     type TQuery = JdbcQuery;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 

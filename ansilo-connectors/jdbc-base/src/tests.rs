@@ -29,11 +29,24 @@ pub fn create_sqlite_memory_connection(jvm: &Jvm) -> JObject {
     let url = env.auto_local(env.new_string("jdbc:sqlite::memory:").unwrap());
     let props = env.auto_local(env.new_object("java/util/Properties", "()V", &[]).unwrap());
 
+    let data_map = env.auto_local(
+        env.new_object(
+            "com/ansilo/connectors/mapping/SqliteJdbcDataMapping",
+            "()V",
+            &[],
+        )
+        .unwrap(),
+    );
+
     let jdbc_con = env.auto_local(
         env.new_object(
             "com/ansilo/connectors/JdbcConnection",
-            "(Ljava/lang/String;Ljava/util/Properties;)V",
-            &[JValue::Object(url.as_obj()), JValue::Object(props.as_obj())],
+            "(Ljava/lang/String;Ljava/util/Properties;Lcom/ansilo/connectors/mapping/JdbcDataMapping;)V",
+            &[
+                JValue::Object(url.as_obj()),
+                JValue::Object(props.as_obj()),
+                JValue::Object(data_map.as_obj()),
+            ],
         )
         .unwrap(),
     );

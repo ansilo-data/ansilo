@@ -105,7 +105,7 @@ public class JdbcPreparedQueryTest {
         var wrote = this.preparedQuery.write(buff);
 
         assertEquals(6, wrote);
-        verify(this.innerStatement, times(1)).setString(1, "abc");
+        verify(this.innerStatement, times(1)).setNString(1, "abc");
     }
 
     @Test
@@ -157,9 +157,9 @@ public class JdbcPreparedQueryTest {
         var wrote = this.preparedQuery.write(buff);
 
         assertEquals(18, wrote);
-        verify(this.innerStatement, times(1)).setString(1, "abc");
-        verify(this.innerStatement, times(1)).setString(2, "def");
-        verify(this.innerStatement, times(1)).setString(3, "ghi");
+        verify(this.innerStatement, times(1)).setNString(1, "abc");
+        verify(this.innerStatement, times(1)).setNString(2, "def");
+        verify(this.innerStatement, times(1)).setNString(3, "ghi");
     }
 
     @Test
@@ -181,7 +181,7 @@ public class JdbcPreparedQueryTest {
 
         assertEquals(11, wrote);
         verify(this.innerStatement, times(1)).setInt(1, 123);
-        verify(this.innerStatement, times(1)).setString(2, "abc");
+        verify(this.innerStatement, times(1)).setNString(2, "abc");
     }
 
     @Test
@@ -223,7 +223,7 @@ public class JdbcPreparedQueryTest {
             assertEquals(1, wrote);
         }
 
-        verify(this.innerStatement, times(1)).setString(1, "abcdefg");
+        verify(this.innerStatement, times(1)).setNString(1, "abcdefg");
     }
 
     @Test
@@ -250,7 +250,7 @@ public class JdbcPreparedQueryTest {
             assertEquals(1, wrote);
         }
 
-        verify(this.innerStatement, times(1)).setString(1, "abc");
+        verify(this.innerStatement, times(1)).setNString(1, "abc");
         verify(this.innerStatement, times(1)).setNull(2, Types.INTEGER);
         verify(this.innerStatement, times(1)).setNull(3, Types.NVARCHAR);
         verify(this.innerStatement, times(1)).setInt(4, 123);
@@ -451,7 +451,7 @@ public class JdbcPreparedQueryTest {
         var params = this.preparedQuery.getLoggedParams();
 
         assertArrayEquals(
-                List.of(new LoggedParam(1, "setInt", 123), new LoggedParam(1, "setString", "abc"))
+                List.of(new LoggedParam(1, "setInt", 123), new LoggedParam(1, "setNString", "abc"))
                         .toArray(),
                 params.toArray());
     }
