@@ -1,6 +1,7 @@
 package com.ansilo.connectors.query;
 
-import java.sql.JDBCType;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Logged query parameter
@@ -64,7 +65,19 @@ public class LoggedParam {
 
     @Override
     public String toString() {
-        return "LoggedParam [index=" + index + ", method=" + this.jdbcMethod + ", value=" + value
-                + "]";
+        return "LoggedParam [index=" + index + ", method=" + this.jdbcMethod + ", value="
+                + this.valueToString() + "]";
+    }
+
+    private String valueToString() {
+        if (value == null) {
+            return "null";
+        }
+
+        if (value instanceof InputStream) {
+            return value.getClass().getName();
+        }
+
+        return value.toString();
     }
 }

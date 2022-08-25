@@ -1,6 +1,7 @@
 use std::env;
 
 use ansilo_connectors_base::interface::LoggedQuery;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test() {

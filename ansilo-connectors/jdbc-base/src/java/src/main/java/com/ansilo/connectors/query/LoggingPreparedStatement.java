@@ -499,19 +499,19 @@ public class LoggingPreparedStatement implements PreparedStatement {
 
     @Override
     public void setNString(int arg0, String arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, "setNString", arg1));
+        this.params.add(new LoggedParam(arg0, "setNString", String.copyValueOf(arg1.toCharArray())));
         this.inner.setNString(arg0, arg1);
     }
 
     @Override
     public void setNull(int arg0, int arg1) throws SQLException {
-        this.params.add(new LoggedParam(arg0, "setNull", arg1));
+        this.params.add(new LoggedParam(arg0, "setNull", null));
         this.inner.setNull(arg0, arg1);
     }
 
     @Override
     public void setNull(int arg0, int arg1, String arg2) throws SQLException {
-        this.params.add(new LoggedParam(arg0, "setNull", arg1));
+        this.params.add(new LoggedParam(arg0, "setNull", null));
         this.inner.setNull(arg0, arg1, arg2);
     }
 

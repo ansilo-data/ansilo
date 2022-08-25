@@ -223,15 +223,16 @@ impl QueryHandle for JdbcPreparedQuery {
                         .l()
                         .context("Failed to convert to object")?,
                 );
+
                 self.jvm.check_exceptions(env)?;
 
                 let param = env
                     .get_string(JString::from(param.as_obj()))
-                    .context("Failed to convert java string")
-                    .and_then(|i| {
-                        i.to_str()
-                            .map(|i| i.to_string())
-                            .context("Failed to convert java string")
+                    .context("Failed to convert LoggedParam to java string")
+                    .map(|i| {
+                        cesu8::from_java_cesu8(i.to_bytes())
+                            .unwrap_or_else(|_| String::from_utf8_lossy(i.to_bytes()))
+                            .to_string()
                     })?;
 
                 params.push(param);

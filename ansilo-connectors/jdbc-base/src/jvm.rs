@@ -1,6 +1,6 @@
 use std::{env, fs, path::PathBuf};
 
-use ansilo_core::err::{Context, Result, bail};
+use ansilo_core::err::{bail, Context, Result};
 use ansilo_logging::{debug, warn};
 use jni::{objects::JObject, InitArgsBuilder, JNIEnv, JNIVersion, JavaVM};
 
@@ -130,6 +130,8 @@ impl Jvm {
     }
 
     /// Executes the supplied function in a local frame
+    ///
+    /// This will all check for java exceptions after the callback returns.
     pub fn with_local_frame<F, R>(&self, local_ref_capacity: i32, cb: F) -> Result<R>
     where
         F: FnOnce(&JNIEnv) -> Result<R>,
@@ -140,22 +142,27 @@ impl Jvm {
 
         let ret = cb(&env);
 
+        let exception = self.check_exceptions(&env);
+
         env.pop_local_frame(JObject::null())
             .context("Failed to pop local frame")?;
 
-        ret
+        exception.and(ret)
     }
 
     /// Checks for any pending Java exceptions and clears them if present
-    pub fn check_exceptions(&self, env: &JNIEnv) -> Result<()>
-    {
-        if env.exception_check().context("Failed to check for exception")? {
-            env.exception_describe().context("Failed to describe exception")?;
+    pub fn check_exceptions(&self, env: &JNIEnv) -> Result<()> {
+        if env
+            .exception_check()
+            .context("Failed to check for exception")?
+        {
+            env.exception_describe()
+                .context("Failed to describe exception")?;
             env.exception_clear().context("Failed to clear exception")?;
 
             bail!("Java exception occured")
         }
-        
+
         Ok(())
     }
 }

@@ -67,11 +67,13 @@ impl ResultSet for JdbcResultSet {
 
                 let name = env
                     .get_string(JString::from(name.as_obj()))
-                    .context("Failed to convert java string")
+                    .context("Failed to convert column name to java string")
                     .and_then(|i| {
-                        i.to_str()
+                        cesu8::from_java_cesu8(i.to_bytes())
                             .map(|i| i.to_string())
-                            .context("Failed to convert java string")
+                            .context(
+                                "Failed to convert column name to java string during utf8 parsing",
+                            )
                     })?;
 
                 let jdbc_type_id = env

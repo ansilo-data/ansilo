@@ -3,6 +3,7 @@ use std::env;
 use ansilo_connectors_base::interface::LoggedQuery;
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime};
 use itertools::Itertools;
+use pretty_assertions::assert_eq;
 use rust_decimal::Decimal;
 use serde_json::json;
 
@@ -95,7 +96,29 @@ fn test() {
         vec![(
             "oracle".to_string(),
             LoggedQuery::query(
-                r#"SELECT "t1"."COL_CHAR" AS "c0", "t1"."COL_NCHAR" AS "c1", "t1"."COL_VARCHAR2" AS "c2", "t1"."COL_NVARCHAR2" AS "c3", "t1"."COL_NUMBER" AS "c4", "t1"."COL_FLOAT" AS "c5", "t1"."COL_BINARY_FLOAT" AS "c6", "t1"."COL_BINARY_DOUBLE" AS "c7", "t1"."COL_RAW" AS "c8", "t1"."COL_LONG_RAW" AS "c9", "t1"."COL_BLOB" AS "c10", "t1"."COL_CLOB" AS "c11", "t1"."COL_NCLOB" AS "c12", "t1"."COL_JSON" AS "c13", "t1"."COL_DATE" AS "c14", "t1"."COL_TIMESTAMP" AS "c15", "t1"."COL_TIMESTAMP_TZ" AS "c16", "t1"."COL_TIMESTAMP_LTZ" AS "c17", "t1"."COL_NULL" AS "c18" FROM "ANSILO_ADMIN"."T002__TEST_TAB" "t1""#
+                [
+                    r#"SELECT "t1"."COL_CHAR" AS "c0", "#,
+                    r#""t1"."COL_NCHAR" AS "c1", "#,
+                    r#""t1"."COL_VARCHAR2" AS "c2", "#,
+                    r#""t1"."COL_NVARCHAR2" AS "c3", "#,
+                    r#""t1"."COL_NUMBER" AS "c4", "#,
+                    r#""t1"."COL_FLOAT" AS "c5", "#,
+                    r#""t1"."COL_BINARY_FLOAT" AS "c6", "#,
+                    r#""t1"."COL_BINARY_DOUBLE" AS "c7", "#,
+                    r#""t1"."COL_RAW" AS "c8", "#,
+                    r#""t1"."COL_LONG_RAW" AS "c9", "#,
+                    r#""t1"."COL_BLOB" AS "c10", "#,
+                    r#""t1"."COL_CLOB" AS "c11", "#,
+                    r#""t1"."COL_NCLOB" AS "c12", "#,
+                    r#""t1"."COL_JSON" AS "c13", "#,
+                    r#""t1"."COL_DATE" AS "c14", "#,
+                    r#""t1"."COL_TIMESTAMP" AS "c15", "#,
+                    r#""t1"."COL_TIMESTAMP_TZ" AS "c16", "#,
+                    r#""t1"."COL_TIMESTAMP_LTZ" AS "c17", "#,
+                    r#""t1"."COL_NULL" AS "c18" "#,
+                    r#"FROM "ANSILO_ADMIN"."T002__TEST_TAB" "t1""#
+                ]
+                .join("")
             )
         )]
     );
