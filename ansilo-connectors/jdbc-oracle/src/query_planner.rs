@@ -5,10 +5,10 @@ use ansilo_core::{
 };
 
 use ansilo_connectors_base::{
-    common::{data::ResultSetReader, entity::EntitySource},
+    common::entity::EntitySource,
     interface::{
         Connection, DeleteQueryOperation, InsertQueryOperation, OperationCost, QueryCompiler,
-        QueryHandle, QueryOperationResult, QueryPlanner, SelectQueryOperation,
+        QueryHandle, QueryOperationResult, QueryPlanner, ResultSet, SelectQueryOperation,
         UpdateQueryOperation,
     },
 };
@@ -37,11 +37,14 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         let table = OracleJdbcQueryCompiler::compile_source_identifier(&entity.source)?;
 
         let mut query = connection.prepare(JdbcQuery::new(
-            format!("SELECT COUNT(*) * 1000 FROM {} SAMPLE(0.1)", table),
+            format!(
+                "SELECT GREATEST(COUNT(*), 1) * 1000 FROM {} SAMPLE(0.1)",
+                table
+            ),
             vec![],
         ))?;
 
-        let mut result_set = ResultSetReader::new(query.execute()?)?;
+        let mut result_set = query.execute()?.reader()?;
         let value = result_set
             .read_data_value()?
             .context("Unexpected empty result set")?;

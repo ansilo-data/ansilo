@@ -8,3 +8,4 @@ pub mod t006_select_where;
 pub mod t007_update_where;
 pub mod t008_delete_where;
 pub mod t009_insert_select;
+pub mod t010_select_group_by;
