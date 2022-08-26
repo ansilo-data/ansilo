@@ -69,7 +69,7 @@ mod tests {
     fn test_remote_query_log_with_memory_disabled() {
         let log = RemoteQueryLog::new();
 
-        log.record("abc", LoggedQuery::query("query")).unwrap();
+        log.record("abc", LoggedQuery::new_query("query")).unwrap();
 
         log.get_from_memory().unwrap_err();
         log.clear_memory().unwrap_err();
@@ -79,11 +79,11 @@ mod tests {
     fn test_remote_query_log_with_memory_enabled() {
         let log = RemoteQueryLog::store_in_memory();
 
-        log.record("abc", LoggedQuery::query("query")).unwrap();
+        log.record("abc", LoggedQuery::new_query("query")).unwrap();
 
         assert_eq!(
             log.get_from_memory().unwrap(),
-            vec![("abc".to_string(), LoggedQuery::query("query"))]
+            vec![("abc".to_string(), LoggedQuery::new_query("query"))]
         );
 
         log.clear_memory().unwrap();

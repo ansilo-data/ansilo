@@ -95,7 +95,7 @@ fn test() {
         instance.log().get_from_memory().unwrap(),
         vec![(
             "oracle".to_string(),
-            LoggedQuery::query(
+            LoggedQuery::new_query(
                 [
                     r#"SELECT "t1"."COL_CHAR" AS "c0", "#,
                     r#""t1"."COL_NCHAR" AS "c1", "#,

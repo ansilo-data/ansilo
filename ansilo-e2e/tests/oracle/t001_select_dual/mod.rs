@@ -28,7 +28,7 @@ fn test() {
         instance.log().get_from_memory().unwrap(),
         vec![(
             "oracle".to_string(),
-            LoggedQuery::query(r#"SELECT "t1"."DUMMY" AS "c0" FROM "SYS"."DUAL" "t1""#)
+            LoggedQuery::new_query(r#"SELECT "t1"."DUMMY" AS "c0" FROM "SYS"."DUAL" "t1""#)
         )]
     )
 }

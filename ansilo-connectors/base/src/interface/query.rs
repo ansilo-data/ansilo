@@ -67,11 +67,23 @@ impl LoggedQuery {
         }
     }
 
-    pub fn query(query: impl Into<String>) -> Self {
+    pub fn new_query(query: impl Into<String>) -> Self {
         Self {
             query: query.into(),
             params: vec![],
             other: HashMap::new(),
         }
+    }
+
+    pub fn query(&self) -> &str {
+        &self.query
+    }
+
+    pub fn params(&self) -> &Vec<String> {
+        &self.params
+    }
+
+    pub fn other(&self) -> &HashMap<String, String> {
+        &self.other
     }
 }
