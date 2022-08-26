@@ -3,7 +3,7 @@ use ansilo_core::{
     err::Result,
 };
 
-use ansilo_connectors_base::interface::EntitySearcher;
+use ansilo_connectors_base::interface::{EntityDiscoverOptions, EntitySearcher};
 
 use super::{MemoryConnection, MemoryConnectorEntitySourceConfig};
 
@@ -13,7 +13,11 @@ impl EntitySearcher for MemoryEntitySearcher {
     type TConnection = MemoryConnection;
     type TEntitySourceConfig = MemoryConnectorEntitySourceConfig;
 
-    fn discover(connection: &mut MemoryConnection, _nc: &NodeConfig) -> Result<Vec<EntityConfig>> {
+    fn discover(
+        connection: &mut MemoryConnection,
+        _nc: &NodeConfig,
+        _opts: EntityDiscoverOptions,
+    ) -> Result<Vec<EntityConfig>> {
         Ok(connection
             .conf
             .entities()

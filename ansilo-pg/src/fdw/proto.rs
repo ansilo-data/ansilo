@@ -1,6 +1,7 @@
 pub use ansilo_connectors_base::interface::{
-    DeleteQueryOperation, InsertQueryOperation, OperationCost, QueryInputStructure, QueryOperation,
-    QueryOperationResult, RowStructure, SelectQueryOperation, UpdateQueryOperation,
+    DeleteQueryOperation, EntityDiscoverOptions, InsertQueryOperation, OperationCost,
+    QueryInputStructure, QueryOperation, QueryOperationResult, RowStructure, SelectQueryOperation,
+    UpdateQueryOperation,
 };
 
 use ansilo_core::{
@@ -29,7 +30,7 @@ pub enum ClientMessage {
     /// Registers the supplied entity for use within future queries
     RegisterEntity(EntityConfig),
     /// Discovers entities from the remote data source
-    DiscoverEntities,
+    DiscoverEntities(EntityDiscoverOptions),
     /// Estimates the number of entities from the source
     EstimateSize(EntityId),
     /// Requests the row id expressions for the entity source

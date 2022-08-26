@@ -6,8 +6,10 @@ use ansilo_core::{
     err::{Context, Result},
 };
 
-use ansilo_connectors_base::interface::{Connection, EntitySearcher, QueryHandle, ResultSet};
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
+use ansilo_connectors_base::interface::{
+    Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet,
+};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
 use ansilo_logging::warn;
 use itertools::Itertools;
 
@@ -22,11 +24,15 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
     type TConnection = JdbcConnection;
     type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
 
-    fn discover(connection: &mut Self::TConnection, _nc: &NodeConfig) -> Result<Vec<EntityConfig>> {
+    fn discover(
+        connection: &mut Self::TConnection,
+        _nc: &NodeConfig,
+        opts: EntityDiscoverOptions,
+    ) -> Result<Vec<EntityConfig>> {
         // Query oracle's information schema tables to retrieve all column definitions
         // Importantly we order the results by table and then by column position
         // when lets us efficiently group the result by table using `group_by` below.
-        // Additionally, we the results to be deterministic and return the columns 
+        // Additionally, we the results to be deterministic and return the columns
         // the user-defined order on the oracle side.
         let cols = connection
             .prepare(JdbcQuery::new(
@@ -44,12 +50,19 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
                 FROM ALL_TABLES T
                 INNER JOIN ALL_TAB_COLUMNS C ON T.OWNER = C.OWNER AND T.TABLE_NAME = C.TABLE_NAME
                 WHERE 1=1
+                AND (T.OWNER || '.' || T.TABLE_NAME) LIKE ?
                 AND T.TEMPORARY = 'N'
                 AND T.NESTED = 'NO'
                 AND T.DROPPED = 'NO'
                 ORDER BY T.OWNER, T.TABLE_NAME, C.COLUMN_ID
             "#,
-                vec![],
+                vec![JdbcQueryParam::Constant(DataValue::Utf8String(
+                    opts.remote_schema
+                        .as_ref()
+                        .map(|i| i.as_str())
+                        .unwrap_or("%")
+                        .into(),
+                ))],
             ))?
             .execute()?;
 
@@ -109,7 +122,7 @@ pub(crate) fn parse_entity_config(
 
 pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataType> {
     let ora_type = col["DATA_TYPE"].as_utf8_string().context("DATA_TYPE")?;
-    
+
     // Strip out type modifiers, eg "TIMESTAMP(6)" --> "TIMESTAMP"
     let normalised_type = ora_type
         .chars()

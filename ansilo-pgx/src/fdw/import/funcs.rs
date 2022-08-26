@@ -1,12 +1,14 @@
 use std::ptr;
 
 use ansilo_core::sqlil::EntityId;
+use ansilo_pg::fdw::proto::EntityDiscoverOptions;
 use itertools::Itertools;
 use pgx::pg_sys::{GetForeignServer, ImportForeignSchemaStmt, List, Oid};
 use pgx::*;
 
 use crate::fdw::common::connect_server;
 use crate::sqlil::to_pg_type_name;
+use crate::util::def_elem::parse_def_elems_to_hash_map;
 use crate::util::string::{parse_to_owned_utf8_string, to_pg_cstr, to_pg_str_literal};
 
 #[pg_guard]
@@ -17,8 +19,13 @@ pub unsafe extern "C" fn import_foreign_schema(
     let server = GetForeignServer(server_oid);
     let mut ctx = connect_server(server_oid);
 
+    // Parse the statement into EntityDiscoverOptions
+    let remote_schema = parse_to_owned_utf8_string((*stmt).remote_schema).unwrap();
+    let other = parse_def_elems_to_hash_map(PgList::from_pg((*stmt).options)).unwrap();
+    let opts = EntityDiscoverOptions::new(remote_schema, other);
+
     // Retrieve the entity configurations from the remote data source
-    let entities = ctx.discover_entities().unwrap();
+    let entities = ctx.discover_entities(opts).unwrap();
 
     // Construct the CREATE FOREIGN TABLE statements
     let stmts = entities

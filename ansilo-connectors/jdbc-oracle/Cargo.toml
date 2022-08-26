@@ -24,3 +24,4 @@ ansilo-connectors-jdbc-base = { path = "../jdbc-base" }
 
 [dev-dependencies]
 ansilo-connectors-base = { path = "../base", features = ["test"] }
+serial_test = "*"

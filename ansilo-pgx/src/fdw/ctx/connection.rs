@@ -6,7 +6,7 @@ use ansilo_core::{
     err::{anyhow, Context, Error, Result},
     sqlil,
 };
-use ansilo_pg::fdw::proto::{ClientMessage, OperationCost, ServerMessage};
+use ansilo_pg::fdw::proto::{ClientMessage, EntityDiscoverOptions, OperationCost, ServerMessage};
 use pgx::pg_sys::Oid;
 
 use crate::{
@@ -172,8 +172,8 @@ impl FdwGlobalContext {
         self.connection.send(req)
     }
 
-    pub fn discover_entities(&mut self) -> Result<Vec<EntityConfig>> {
-        let res = self.send(ClientMessage::DiscoverEntities).unwrap();
+    pub fn discover_entities(&mut self, opts: EntityDiscoverOptions) -> Result<Vec<EntityConfig>> {
+        let res = self.send(ClientMessage::DiscoverEntities(opts)).unwrap();
 
         let entities = match res {
             ServerMessage::DiscoveredEntitiesResult(e) => e,

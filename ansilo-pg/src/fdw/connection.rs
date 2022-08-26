@@ -117,8 +117,8 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
 
     fn handle_message(&mut self, message: ClientMessage) -> Result<Option<ServerMessage>> {
         Ok(Some(match message {
-            ClientMessage::DiscoverEntities => {
-                ServerMessage::DiscoveredEntitiesResult(self.discover_entities()?)
+            ClientMessage::DiscoverEntities(opts) => {
+                ServerMessage::DiscoveredEntitiesResult(self.discover_entities(opts)?)
             }
             ClientMessage::RegisterEntity(config) => {
                 self.register_entity(config)?;
@@ -209,12 +209,13 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         queries.get_mut(&query_id).context("Invalid query id")
     }
 
-    fn discover_entities(&mut self) -> Result<Vec<EntityConfig>> {
+    fn discover_entities(&mut self, opts: EntityDiscoverOptions) -> Result<Vec<EntityConfig>> {
         self.connect()?;
 
         Ok(TConnector::TEntitySearcher::discover(
             self.connection.get()?,
             self.nc,
+            opts,
         )?)
     }
 
@@ -721,7 +722,8 @@ mod tests {
     fn test_fdw_connection_discover_entities() {
         let (thread, mut client) = create_mock_connection("connection_discover_entities");
 
-        let res = client.send(ClientMessage::DiscoverEntities).unwrap();
+        let opts = EntityDiscoverOptions::default();
+        let res = client.send(ClientMessage::DiscoverEntities(opts)).unwrap();
 
         assert_eq!(
             res,

@@ -79,7 +79,9 @@ mod tests {
 
         unsafe {
             let server = pg_sys::GetForeignServerByName(to_pg_cstr("test_srv").unwrap(), false);
-            let import_stmts = import_foreign_schema(ptr::null_mut(), (*server).serverid);
+            let mut stmt = pg_sys::ImportForeignSchemaStmt::default();
+            stmt.remote_schema = to_pg_cstr("any").unwrap();
+            let import_stmts = import_foreign_schema(&mut stmt as *mut _, (*server).serverid);
             let import_stmts = PgList::<i8>::from_pg(import_stmts);
 
             import_stmts
