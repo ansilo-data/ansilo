@@ -9,7 +9,7 @@ use serial_test::serial;
 
 #[test]
 #[serial]
-fn test_update_where_remote() {
+fn test_delete_where_remote() {
     ansilo_logging::init_for_tests();
     let containers = super::common::start_oracle();
     let mut oracle =
@@ -21,8 +21,7 @@ fn test_update_where_remote() {
     let _rows = client
         .execute(
             r#"
-            UPDATE "ANSILO_ADMIN.T007__TEST_TAB"
-            SET "NAME" = 'Jannet'
+            DELETE FROM "ANSILO_ADMIN.T008__TEST_TAB"
             WHERE "ID" = 2
         "#,
             &[],
@@ -34,7 +33,7 @@ fn test_update_where_remote() {
 
     // Check data received on oracle end
     let results = oracle
-        .execute("SELECT * FROM T007__TEST_TAB ORDER BY ID", vec![])
+        .execute("SELECT * FROM T008__TEST_TAB ORDER BY ID", vec![])
         .unwrap()
         .reader()
         .unwrap()
@@ -50,11 +49,7 @@ fn test_update_where_remote() {
                 r["NAME"].as_utf8_string().unwrap().clone()
             ))
             .collect_vec(),
-        vec![
-            (1, "John".to_string()),
-            (2, "Jannet".to_string()),
-            (3, "Mary".to_string()),
-        ]
+        vec![(1, "John".to_string()), (3, "Mary".to_string()),]
     );
 
     assert_eq!(
@@ -63,14 +58,11 @@ fn test_update_where_remote() {
             "oracle".to_string(),
             LoggedQuery::new(
                 [
-                    r#"UPDATE "ANSILO_ADMIN"."T007__TEST_TAB" SET "NAME" = ? "#,
-                    r#"WHERE (("T007__TEST_TAB"."ID") = (?))"#,
+                    r#"DELETE FROM "ANSILO_ADMIN"."T008__TEST_TAB" "#,
+                    r#"WHERE (("T008__TEST_TAB"."ID") = (?))"#,
                 ]
                 .join(""),
-                vec![
-                    "LoggedParam [index=1, method=setNString, value=Jannet]".into(),
-                    "LoggedParam [index=2, method=setBigDecimal, value=2]".into(),
-                ],
+                vec!["LoggedParam [index=1, method=setBigDecimal, value=2]".into(),],
                 None
             )
         )]
@@ -79,7 +71,7 @@ fn test_update_where_remote() {
 
 #[test]
 #[serial]
-fn test_update_where_local() {
+fn test_delete_where_local() {
     ansilo_logging::init_for_tests();
     let containers = super::common::start_oracle();
     let mut oracle =
@@ -91,8 +83,7 @@ fn test_update_where_local() {
     let _rows = client
         .execute(
             r#"
-            UPDATE "ANSILO_ADMIN.T007__TEST_TAB"
-            SET "NAME" = 'Johnny'
+            DELETE FROM "ANSILO_ADMIN.T008__TEST_TAB"
             WHERE MD5("ID"::text) = MD5('1')
         "#,
             &[],
@@ -104,7 +95,7 @@ fn test_update_where_local() {
 
     // Check data received on oracle end
     let results = oracle
-        .execute("SELECT * FROM T007__TEST_TAB ORDER BY ID", vec![])
+        .execute("SELECT * FROM T008__TEST_TAB ORDER BY ID", vec![])
         .unwrap()
         .reader()
         .unwrap()
@@ -120,24 +111,20 @@ fn test_update_where_local() {
                 r["NAME"].as_utf8_string().unwrap().clone()
             ))
             .collect_vec(),
-        vec![
-            (1, "Johnny".to_string()),
-            (2, "Jane".to_string()),
-            (3, "Mary".to_string()),
-        ]
+        vec![(2, "Jane".to_string()), (3, "Mary".to_string()),]
     );
 
     let query_log = instance.log().get_from_memory().unwrap();
 
-    // Update with local eval should lock remote rows using FOR UPDATE first
+    // Delete with local eval should lock remote rows using FOR UPDATE first
     assert_eq!(
         query_log[0],
         (
             "oracle".to_string(),
             LoggedQuery::new(
                 [
-                    r#"SELECT "t1"."ROWID" AS "c0", "t1"."ID" AS "c1", "t1"."NAME" AS "c2" "#,
-                    r#"FROM "ANSILO_ADMIN"."T007__TEST_TAB" "t1" "#,
+                    r#"SELECT "t1"."ROWID" AS "c0", "t1"."ID" AS "c1" "#,
+                    r#"FROM "ANSILO_ADMIN"."T008__TEST_TAB" "t1" "#,
                     r#"FOR UPDATE"#,
                 ]
                 .join(""),
@@ -150,17 +137,13 @@ fn test_update_where_local() {
     assert_eq!(
         query_log[1].1.query(),
         [
-            r#"UPDATE "ANSILO_ADMIN"."T007__TEST_TAB" SET "NAME" = ? "#,
-            r#"WHERE (("T007__TEST_TAB"."ROWID") = (?))"#,
+            r#"DELETE FROM "ANSILO_ADMIN"."T008__TEST_TAB" "#,
+            r#"WHERE (("T008__TEST_TAB"."ROWID") = (?))"#,
         ]
         .join("")
         .as_str(),
     );
-    assert_eq!(
-        query_log[1].1.params()[0].as_str(),
-        "LoggedParam [index=1, method=setNString, value=Johnny]"
-    );
-    assert!(query_log[1].1.params()[1]
+    assert!(query_log[1].1.params()[0]
         .as_str()
-        .starts_with("LoggedParam [index=2, method=setNString, value="))
+        .starts_with("LoggedParam [index=1, method=setNString, value="))
 }
