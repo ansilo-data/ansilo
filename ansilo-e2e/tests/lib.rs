@@ -1,4 +1,4 @@
-pub mod common;
-pub mod util;
+mod util;
+pub use util::*;
 
 mod oracle;

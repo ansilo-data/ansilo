@@ -1,28 +1,30 @@
 package com.ansilo.connectors.data;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.UUID;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
- * The bool data type
+ * The uuid data type
  */
-public class BoolDataType implements FixedSizeDataType {
+public class UuidDataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_BOOLEAN;
+        return TYPE_UUID;
     }
 
     @Override
     public int getFixedSize() {
-        return 2;
+        return 17;
     }
 
     @Override
     public void writeToByteBuffer(JdbcDataMapping mapping, ByteBuffer buff, ResultSet resultSet,
             int index) throws Exception {
-        var val = mapping.getBool(resultSet, index);
+        var val = mapping.getUuid(resultSet, index);
 
         if (val == null) {
             buff.put((byte) 0);
@@ -30,7 +32,9 @@ public class BoolDataType implements FixedSizeDataType {
         }
 
         buff.put((byte) 1);
-        buff.put(val ? (byte) 1 : (byte) 0);
+        // Write UUID in big endian order
+        buff.putLong(val.getMostSignificantBits());
+        buff.putLong(val.getLeastSignificantBits());
     }
 
     @Override
@@ -41,8 +45,10 @@ public class BoolDataType implements FixedSizeDataType {
         if (isNull) {
             mapping.bindNull(statement, index, this.getTypeId());
         } else {
-            boolean data = buff.get() != 0;
-            mapping.bindBool(statement, index, data);
+            var msb = buff.getLong();
+            var lsb = buff.getLong();
+            var uuid = new UUID(msb, lsb);
+            mapping.bindUuid(statement, index, uuid);
         }
     }
 }

@@ -9,6 +9,8 @@ use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnec
 use ansilo_logging::info;
 use glob::glob;
 
+use crate::locking::FunctionCache;
+
 static ORACLE_MUTEX: Mutex<()> = Mutex::new(());
 
 /// Starts an Oracle DB instance and waits for it to become ready to accept connections
@@ -23,7 +25,15 @@ pub fn start_oracle() -> ContainerInstances {
         get_current_target_dir().to_str().unwrap(),
     );
 
-    let infra_path = crate::util::workspace_dir().join("ansilo-connectors/jdbc-oracle/tests");
+    let mut cache = FunctionCache::<ContainerInstances>::new("oracle", Duration::from_secs(600));
+
+    if let Some(services) = cache.valid() {
+        cache.extend();
+        env::set_var("ORACLE_IP", services.get("oracle").unwrap().ip.to_string());
+        return services;
+    }
+
+    let infra_path = crate::dir::workspace_dir().join("ansilo-connectors/jdbc-oracle/tests");
     let services = start_containers(
         "oracle",
         infra_path.clone(),
@@ -37,6 +47,8 @@ pub fn start_oracle() -> ContainerInstances {
         "alter pluggable database all open",
         Duration::from_secs(180),
     );
+
+    cache.save(&services);
 
     // Env var is referenced by our config.yml files to connect to the oracle instance
     env::set_var("ORACLE_IP", services.get("oracle").unwrap().ip.to_string());

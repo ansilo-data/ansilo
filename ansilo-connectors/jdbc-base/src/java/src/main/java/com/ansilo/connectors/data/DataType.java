@@ -20,24 +20,29 @@ public interface DataType {
     /**
      * If you update these constants make sure to update the rust constants:
      * 
-     * @see ansilo-connectors/src/jdbc/data.rs
+     * @see ansilo-connectors/jdbc-base/src/data.rs
      */
     public static final int TYPE_INT8 = 1;
-    public static final int TYPE_INT16 = 2;
-    public static final int TYPE_INT32 = 3;
-    public static final int TYPE_INT64 = 4;
-    public static final int TYPE_FLOAT32 = 5;
-    public static final int TYPE_FLOAT64 = 6;
-    public static final int TYPE_DECIMAL = 7;
-    public static final int TYPE_DATE = 8;
-    public static final int TYPE_TIME = 9;
-    public static final int TYPE_DATE_TIME = 10;
-    public static final int TYPE_DATE_TIME_WITH_TZ = 11;
-    public static final int TYPE_BINARY = 12;
-    public static final int TYPE_NULL = 13;
-    public static final int TYPE_BOOLEAN = 14;
-    public static final int TYPE_UTF8_STRING = 15;
-    public static final int TYPE_JSON = 16;
+    public static final int TYPE_UINT8 = 2;
+    public static final int TYPE_INT16 = 3;
+    public static final int TYPE_UINT16 = 4;
+    public static final int TYPE_INT32 = 5;
+    public static final int TYPE_UINT32 = 6;
+    public static final int TYPE_INT64 = 7;
+    public static final int TYPE_UINT64 = 8;
+    public static final int TYPE_FLOAT32 = 9;
+    public static final int TYPE_FLOAT64 = 10;
+    public static final int TYPE_DECIMAL = 11;
+    public static final int TYPE_DATE = 12;
+    public static final int TYPE_TIME = 13;
+    public static final int TYPE_DATE_TIME = 14;
+    public static final int TYPE_DATE_TIME_WITH_TZ = 15;
+    public static final int TYPE_BINARY = 16;
+    public static final int TYPE_NULL = 17;
+    public static final int TYPE_BOOLEAN = 18;
+    public static final int TYPE_UTF8_STRING = 19;
+    public static final int TYPE_JSON = 20;
+    public static final int TYPE_UUID = 21;
 
     /**
      * Gets the read mode of the data type

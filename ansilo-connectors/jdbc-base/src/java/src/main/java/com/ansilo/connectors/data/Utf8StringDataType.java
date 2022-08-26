@@ -9,7 +9,7 @@ import java.sql.ResultSet;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
- * The nvarchar data type
+ * The utf8-string data type
  */
 public class Utf8StringDataType implements StreamDataType {
     @Override

@@ -1,28 +1,29 @@
 package com.ansilo.connectors.data;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 
 /**
- * The bool data type
+ * The uint64 data type
  */
-public class BoolDataType implements FixedSizeDataType {
+public class UInt64DataType implements FixedSizeDataType {
     @Override
     public int getTypeId() {
-        return TYPE_BOOLEAN;
+        return TYPE_UINT64;
     }
 
     @Override
     public int getFixedSize() {
-        return 2;
+        return 9;
     }
 
     @Override
     public void writeToByteBuffer(JdbcDataMapping mapping, ByteBuffer buff, ResultSet resultSet,
             int index) throws Exception {
-        var val = mapping.getBool(resultSet, index);
+        var val = mapping.getUInt64(resultSet, index);
 
         if (val == null) {
             buff.put((byte) 0);
@@ -30,7 +31,7 @@ public class BoolDataType implements FixedSizeDataType {
         }
 
         buff.put((byte) 1);
-        buff.put(val ? (byte) 1 : (byte) 0);
+        buff.putLong(val.longValue());
     }
 
     @Override
@@ -41,8 +42,8 @@ public class BoolDataType implements FixedSizeDataType {
         if (isNull) {
             mapping.bindNull(statement, index, this.getTypeId());
         } else {
-            boolean data = buff.get() != 0;
-            mapping.bindBool(statement, index, data);
+            mapping.bindUInt64(statement, index,
+                    new BigInteger(Long.toUnsignedString(buff.getLong())));
         }
     }
 }

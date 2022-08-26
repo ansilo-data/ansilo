@@ -14,7 +14,7 @@ fn test() {
     super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
 
     let (instance, mut client) =
-        crate::common::run_instance(crate::current_dir!().join("config.yml"));
+        crate::main::run_instance(crate::current_dir!().join("config.yml"));
 
     let rows = client
         .query("SELECT * FROM \"ANSILO_ADMIN.T002__TEST_TAB\"", &[])

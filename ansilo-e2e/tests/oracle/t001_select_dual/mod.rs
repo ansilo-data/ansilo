@@ -9,7 +9,7 @@ fn test() {
     let _containers = super::common::start_oracle();
 
     let (instance, mut client) =
-        crate::common::run_instance(crate::current_dir!().join("config.yml"));
+        crate::main::run_instance(crate::current_dir!().join("config.yml"));
 
     let rows = client.query("SELECT * FROM \"SYS.DUAL\"", &[]).unwrap();
 

@@ -2,6 +2,7 @@ package com.ansilo.connectors.mapping;
 
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -11,6 +12,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.UUID;
 import com.ansilo.connectors.data.*;
 
 /**
@@ -318,6 +320,24 @@ public class JdbcDataMapping {
     }
 
     /**
+     * Reads the value from the result set. NOTE: For unsigned values we widen the type to avoid
+     * data corruption.
+     */
+    public Short getUInt8(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getShort(index);
+
+        return resultSet.wasNull() ? null : data;
+    }
+
+    /**
+     * Binds the value to the prepared statement. NOTE: For unsigned values we widen the type to
+     * avoid data corruption.
+     */
+    public void bindUInt8(PreparedStatement statement, int index, short data) throws Exception {
+        statement.setShort(index, data);
+    }
+
+    /**
      * Reads the value from the result set.
      */
     public Short getInt16(ResultSet resultSet, int index) throws Exception {
@@ -332,6 +352,25 @@ public class JdbcDataMapping {
     public void bindInt16(PreparedStatement statement, int index, short data) throws Exception {
         statement.setShort(index, data);
     }
+
+    /**
+     * Reads the value from the result set. NOTE: For unsigned values we widen the type to avoid
+     * data corruption.
+     */
+    public Integer getUInt16(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getInt(index);
+
+        return resultSet.wasNull() ? null : data;
+    }
+
+    /**
+     * Binds the value to the prepared statement. NOTE: For unsigned values we widen the type to
+     * avoid data corruption.
+     */
+    public void bindUInt16(PreparedStatement statement, int index, int data) throws Exception {
+        statement.setInt(index, data);
+    }
+
 
     /**
      * Reads the value from the result set.
@@ -350,6 +389,25 @@ public class JdbcDataMapping {
     }
 
     /**
+     * Reads the value from the result set. NOTE: For unsigned values we widen the type to avoid
+     * data corruption.
+     */
+    public Long getUInt32(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getLong(index);
+
+        return resultSet.wasNull() ? null : data;
+    }
+
+    /**
+     * Binds the value to the prepared statement. NOTE: For unsigned values we widen the type to
+     * avoid data corruption.
+     */
+    public void bindUInt32(PreparedStatement statement, int index, long data) throws Exception {
+        statement.setLong(index, data);
+    }
+
+
+    /**
      * Reads the value from the result set.
      */
     public Long getInt64(ResultSet resultSet, int index) throws Exception {
@@ -363,6 +421,24 @@ public class JdbcDataMapping {
      */
     public void bindInt64(PreparedStatement statement, int index, long data) throws Exception {
         statement.setLong(index, data);
+    }
+
+    /**
+     * Reads the value from the result set. NOTE: For unsigned values we widen the type to avoid
+     * data corruption.
+     */
+    public BigInteger getUInt64(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getBigDecimal(index);
+        return data == null ? null : data.toBigIntegerExact();
+    }
+
+    /**
+     * Binds the value to the prepared statement. NOTE: For unsigned values we widen the type to
+     * avoid data corruption.
+     */
+    public void bindUInt64(PreparedStatement statement, int index, BigInteger data)
+            throws Exception {
+        statement.setBigDecimal(index, data == null ? null : new BigDecimal(data));
     }
 
     /**
@@ -385,5 +461,20 @@ public class JdbcDataMapping {
      */
     public void bindNull(PreparedStatement statement, int index, int dataType) throws Exception {
         statement.setNull(index, this.getJdbcType(dataType));
+    }
+
+    /**
+     * Reads the value from the result set.
+     */
+    public UUID getUuid(ResultSet resultSet, int index) throws Exception {
+        var data = resultSet.getString(index);
+        return data == null ? null : UUID.fromString(data);
+    }
+
+    /**
+     * Binds the value to the prepared statement.
+     */
+    public void bindUuid(PreparedStatement statement, int index, UUID data) throws Exception {
+        statement.setString(index, data == null ? null : data.toString());
     }
 }

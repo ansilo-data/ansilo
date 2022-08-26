@@ -1,7 +1,7 @@
 name: Oracle
 
 networking:
-  port: 60004
+  port: ${env:ANSILO_PORT}
 
 sources:
   - id: oracle

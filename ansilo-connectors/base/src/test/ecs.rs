@@ -9,6 +9,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use serde::{Deserialize, Serialize};
+
 #[macro_export]
 macro_rules! current_dir {
     () => {
@@ -24,7 +26,7 @@ macro_rules! current_dir {
     };
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ContainerInstances {
     instances: HashMap<String, Instance>,
     infra_path: PathBuf,
@@ -37,7 +39,7 @@ impl ContainerInstances {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Instance {
     pub id: String,
     pub ip: IpAddr,
