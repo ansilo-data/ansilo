@@ -177,3 +177,45 @@ fn test_select_where_local_condition() {
         )]
     );
 }
+
+#[test]
+#[serial]
+fn test_select_where_remote_and_local_condition() {
+    ansilo_logging::init_for_tests();
+    let containers = super::common::start_oracle();
+    super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+
+    let (instance, mut client) =
+        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+
+    let rows = client
+        .query(
+            r#"
+            SELECT * FROM "ANSILO_ADMIN.T006__TEST_TAB"
+            WHERE "NAME" != 'John'
+            AND MD5("NAME") != MD5('Mary')
+            "#,
+            &[],
+        )
+        .unwrap();
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].get::<_, String>(0), "Jane".to_string());
+
+    assert_eq!(
+        instance.log().get_from_memory().unwrap(),
+        vec![(
+            "oracle".to_string(),
+            LoggedQuery::new(
+                [
+                    r#"SELECT "t1"."NAME" AS "c0" "#,
+                    r#"FROM "ANSILO_ADMIN"."T006__TEST_TAB" "t1" "#,
+                    r#"WHERE (("t1"."NAME") != (?))"#,
+                ]
+                .join(""),
+                vec!["LoggedParam [index=1, method=setNString, value=John]".into()],
+                None
+            )
+        )]
+    );
+}
