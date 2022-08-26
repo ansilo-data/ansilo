@@ -11,3 +11,4 @@ pub mod t009_insert_select;
 pub mod t010_select_group_by;
 pub mod t011_select_order_by;
 pub mod t012_select_limit_offset;
+pub mod t013_select_joins;
