@@ -449,7 +449,7 @@ pub struct FdwSelectQuery {
     /// The operations which are able to be pushed down to the remote
     pub remote_ops: Vec<SelectQueryOperation>,
     /// The current column alias counter
-    col_num: u32,
+    pub col_num: u32,
     /// Mapping of each row's vars to thier resno's in the output
     /// The structure is HashMap<varno, HashMap<varattnum, resno>>
     res_cols: HashMap<u32, HashMap<u32, u32>>,

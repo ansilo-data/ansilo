@@ -51,6 +51,7 @@ const DEFAULT_FDW_REMOTE_WORK_MULTIPLIER: f64 = 0.25;
 /// We want to be pessimistict about the number of rows in tables
 /// to avoid overly selective query plans
 const DEFAULT_ROW_VOLUME: u64 = 100_000;
+const MIN_ROW_VOLUME: u64 = 1000;
 
 /// Estimate # of rows and width of the result of the scan
 ///
@@ -529,6 +530,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     let mut group_by_exprs = vec![];
     let mut group_by_query_ops = vec![];
     let mut add_col_query_ops = vec![];
+    let orig_col_num = group_query.as_select().unwrap().col_num;
 
     // Iterate each target expr
     for (i, node) in PgList::<Node>::from_pg((*groupedrel).exprs)
@@ -623,6 +625,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
     }
 
     // Success, we forget the AddColumn operations as this is performed later in get_foreign_plan
+    group_query.as_select_mut().unwrap().col_num = orig_col_num;
 
     // If the row estimate is not retrieved from the source
     // estimate it below

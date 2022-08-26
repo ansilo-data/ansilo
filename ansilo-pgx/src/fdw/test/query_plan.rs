@@ -10,6 +10,7 @@ macro_rules! assert_query_plan_expected {
     };
 }
 
+#[track_caller]
 pub fn assert_query_plan_expected_fn(spec_json: &str) {
     let json = serde_json::from_str::<serde_json::Value>(spec_json).unwrap();
 
