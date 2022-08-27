@@ -62,6 +62,7 @@ echo "Starting devcontainer..."
 sudo docker run \
     --detach \
     --privileged \
+    --cap-add=SYS_PTRACE \
     -p 2222:22 \
     --tmpfs /tmp:exec \
     --volume /storage:/store \
