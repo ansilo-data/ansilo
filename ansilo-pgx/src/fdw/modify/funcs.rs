@@ -106,7 +106,7 @@ pub unsafe extern "C" fn plan_foreign_modify(
 
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_INSERT => {
-            plan_foreign_insert(&mut ctx, root, plan, result_relation, table)
+            plan_foreign_insert(&mut ctx, root, plan, result_relation, rte, table)
         }
         pg_sys::CmdType_CMD_UPDATE => {
             plan_foreign_update(&mut ctx, root, plan, result_relation, rte, table)
@@ -124,11 +124,12 @@ pub unsafe extern "C" fn plan_foreign_modify(
     )
 }
 
-fn plan_foreign_insert(
+unsafe fn plan_foreign_insert(
     ctx: &mut PgBox<FdwContext>,
     root: *mut PlannerInfo,
     plan: *mut ModifyTable,
     result_relation: Index,
+    rte: *mut RangeTblEntry,
     table: PgTable,
 ) -> FdwQueryContext {
     // Create an insert query to insert a single row
@@ -136,8 +137,20 @@ fn plan_foreign_insert(
         .create_query(result_relation, sqlil::QueryType::Insert)
         .unwrap();
 
+    // Determine columns specified in the insert
+    let inserted_cols = if !table.trigdesc.is_null() && (*table.trigdesc).trig_insert_before_row {
+        // If the target table has a BEFORE INSERT trigger we have to include all columns
+        // as the trigger may change columns not specified in the query itself.
+        table.attrs().collect::<Vec<_>>()
+    } else {
+        // Otherwise we use the columns specified from the query itself
+        // TODO: This is potentially incompatible with columns with default values defined
+        // in the postgres schema, we dont support this as of now but may do later!
+        filtered_table_columns(&table, (*rte).insertedCols)
+    };
+
     // Add a parameter for each column
-    for att in table.attrs() {
+    for att in inserted_cols {
         let (col_name, att_type, param) = create_param_for_col(att, &mut query);
 
         let op = InsertQueryOperation::AddColumn((col_name, sqlil::Expr::Parameter(param.clone())));
@@ -151,7 +164,7 @@ fn plan_foreign_insert(
 
         let insert = query.as_insert_mut().unwrap();
         insert.remote_ops.push(op);
-        insert.params.push((param, att_type));
+        insert.params.push((param, att.attnum as _, att_type));
     }
 
     query
@@ -179,20 +192,7 @@ unsafe fn plan_foreign_update(
         // Otherwise we use the columns specified from the query itself
         let cols = pg_sys::bms_union((*rte).updatedCols, (*rte).extraUpdatedCols);
 
-        table
-            .attrs()
-            .filter(|col| {
-                // From pg src:
-                // updatedCols are bitmapsets, which cannot have negative integer members,
-                // so we subtract FirstLowInvalidHeapAttributeNumber from column
-                // numbers before storing them in these fields.
-                // @see https://doxygen.postgresql.org/parsenodes_8h_source.html#l01180
-                pg_sys::bms_is_member(
-                    col.attnum as i32 - pg_sys::FirstLowInvalidHeapAttributeNumber,
-                    cols,
-                )
-            })
-            .collect()
+        filtered_table_columns(&table, cols)
     };
 
     // Add a parameter for each column to update
@@ -246,6 +246,23 @@ unsafe fn plan_foreign_update(
     }
 
     query
+}
+
+unsafe fn filtered_table_columns(table: &PgTable, cols: *mut pg_sys::Bitmapset) -> Vec<&pg_sys::FormData_pg_attribute> {
+    table
+        .attrs()
+        .filter(|col| {
+            // From pg src:
+            // updatedCols are bitmapsets, which cannot have negative integer members,
+            // so we subtract FirstLowInvalidHeapAttributeNumber from column
+            // numbers before storing them in these fields.
+            // @see https://doxygen.postgresql.org/parsenodes_8h_source.html#l01180
+            pg_sys::bms_is_member(
+                col.attnum as i32 - pg_sys::FirstLowInvalidHeapAttributeNumber,
+                cols,
+            )
+        })
+        .collect()
 }
 
 unsafe fn plan_foreign_delete(
@@ -372,10 +389,10 @@ pub unsafe extern "C" fn exec_foreign_insert(
     let insert = query.as_insert().unwrap();
     let mut query_input = vec![];
 
-    for (idx, (param, type_oid)) in insert.params.iter().enumerate() {
+    for (param, att_num, type_oid) in insert.params.iter() {
         query_input.push((
             param.id,
-            slot_datum_into_data_val(slot, idx, *type_oid, &param.r#type),
+            slot_datum_into_data_val(slot, (att_num - 1) as _, *type_oid, &param.r#type),
         ));
     }
 

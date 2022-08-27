@@ -495,9 +495,9 @@ impl FdwSelectQuery {
 pub struct FdwInsertQuery {
     /// The operations applied to the insert query
     pub remote_ops: Vec<InsertQueryOperation>,
-    /// The list of query parameters and their respective pg type oid's
+    /// The list of query parameters and their respective attnum's and type oid's
     /// which are used to supply the insert row data for the query
-    pub params: Vec<(sqlil::Parameter, pg_sys::Oid)>,
+    pub params: Vec<(sqlil::Parameter, u32, pg_sys::Oid)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

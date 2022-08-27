@@ -10,7 +10,9 @@
                     "Node Type": "Foreign Scan",
                     "Operation": "Update",
                     "Relation Name": "people",
-                    "Remote Conds": [],
+                    "Remote Conds": [
+                        "(people.id = 4)"
+                    ],
                     "Remote Ops": [
                         {
                             "AddSet": {

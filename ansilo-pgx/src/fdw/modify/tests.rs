@@ -568,4 +568,41 @@ mod tests {
     fn test_fdw_delete_remote_cond_explain() {
         assert_query_plan_expected!("test_cases/0010_delete_remote_cond.json");
     }
+
+    #[pg_test]
+    fn test_fdw_insert_row_with_missing_cols() {
+        setup_test("insert_row_with_missing_cols");
+
+        let results = execute_query(
+            r#"
+            INSERT INTO "people" (id, first_name) 
+            VALUES (123, 'Barry');
+
+            SELECT * FROM "people";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            vec![
+                (1, "Mary".into(), Some("Jane".into())),
+                (2, "John".into(), Some("Smith".into())),
+                (3, "Gary".into(), Some("Gregson".into())),
+                (4, "Mary".into(), Some("Bennet".into())),
+                (123, "Barry".into(), None),
+            ]
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_insert_row_with_missing_cols_explain() {
+        assert_query_plan_expected!("test_cases/0011_insert_row_with_missing_cols.json");
+    }
 }
