@@ -1,7 +1,12 @@
-use std::{io::Write, os::unix::net::UnixStream};
+use std::{
+    io::{self, Read, Write},
+    mem::size_of,
+    os::unix::net::UnixStream,
+};
 
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{error, trace};
+use bincode::{Decode, Encode};
 
 use super::{
     bincode::bincode_conf,
@@ -38,18 +43,9 @@ impl IpcClientChannel {
     /// Sends the supplied message and waits for the response
     pub fn send(&mut self, req: ClientMessage) -> Result<ServerMessage> {
         trace!("Sending to fdw: {:?}", req);
-        bincode::encode_into_std_write::<ClientMessage, _, _>(
-            req,
-            &mut self.sock,
-            self.conf.clone(),
-        )
-        .context("Failed to send message")?;
+        send_message(&mut self.sock, req, &self.conf)?;
 
-        self.sock.flush().context("Failed to flush sock")?;
-
-        let res =
-            bincode::decode_from_std_read::<ServerMessage, _, _>(&mut self.sock, self.conf.clone())
-                .context("Failed to read message")?;
+        let res = recv_message(&mut self.sock, &self.conf)?;
         trace!("Response from fdw: {:?}", res);
 
         Ok(res)
@@ -61,14 +57,8 @@ impl IpcClientChannel {
             return Ok(());
         }
 
-        bincode::encode_into_std_write::<ClientMessage, _, _>(
-            ClientMessage::Close,
-            &mut self.sock,
-            self.conf.clone(),
-        )
-        .context("Failed to send message")?;
+        send_message(&mut self.sock, ClientMessage::Close, &self.conf)?;
 
-        self.sock.flush().context("Failed to flush sock")?;
         self.closed = true;
         Ok(())
     }
@@ -107,9 +97,7 @@ impl IpcServerChannel {
     where
         F: FnOnce(ClientMessage) -> Result<(Option<ServerMessage>, R)>,
     {
-        let req =
-            bincode::decode_from_std_read::<ClientMessage, _, _>(&mut self.sock, self.conf.clone())
-                .context("Failed to receive message")?;
+        let req = recv_message(&mut self.sock, &self.conf)?;
         trace!("Received from postgres: {:?}", req);
 
         let (res, ret) = cb(req)?;
@@ -121,17 +109,52 @@ impl IpcServerChannel {
         let res = res.unwrap();
         trace!("Response to postgres: {:?}", res);
 
-        bincode::encode_into_std_write::<ServerMessage, _, _>(
-            res,
-            &mut self.sock,
-            self.conf.clone(),
-        )
-        .context("Failed to send message")?;
-
-        self.sock.flush().context("Failed to flush sock")?;
+        send_message(&mut self.sock, res, &self.conf)?;
 
         Ok(ret)
     }
+}
+
+fn send_message<T: Encode>(
+    sock: &mut UnixStream,
+    msg: T,
+    conf: &bincode::config::Configuration,
+) -> Result<()> {
+    // let buff = io::Cursor::new(vec![0u8; size_of::<usize>()]);
+    // bincode::encode_into_std_write::<T, _>(msg, &mut buff, conf.clone())
+    //     .context("Failed to encode message")?;
+    // let buff = buff.into_inner();
+    // let len = buff.len() - size_of::<usize>();
+    // buff[..size_of::<usize>()].copy_from_slice(len.to_be_bytes());
+    let buff =
+        bincode::encode_to_vec::<T, _>(msg, conf.clone()).context("Failed to encode message")?;
+    let len = buff.len();
+
+    sock.write_all(&len.to_be_bytes())
+        .and_then(|_| sock.write_all(buff.as_slice()))
+        .context("Failed to send message")?;
+    sock.flush().context("Failed to flush sock")?;
+
+    Ok(())
+}
+
+fn recv_message<T: Decode>(
+    sock: &mut UnixStream,
+    conf: &bincode::config::Configuration,
+) -> Result<T> {
+    let mut len = [0u8; size_of::<usize>()];
+    sock.read_exact(&mut len)
+        .context("Failed to read message size")?;
+    let len = usize::from_be_bytes(len);
+
+    let mut buff = vec![0u8; len];
+    sock.read_exact(&mut buff[..len])
+        .context("Failed to read message")?;
+
+    let msg = bincode::decode_from_std_read::<T, _, _>(&mut io::Cursor::new(buff), conf.clone())
+        .context("Failed to decode message")?;
+
+    Ok(msg)
 }
 
 #[cfg(test)]

@@ -51,7 +51,7 @@ where
 
         Ok(Self {
             inner: DataReader::new(
-                BufReader::with_capacity(1024, ResultSetRead(inner)),
+                BufReader::with_capacity(10240, ResultSetRead(inner)),
                 structure.cols.iter().map(|i| i.1.clone()).collect(),
             ),
             structure,

@@ -57,7 +57,7 @@ where
 
         Ok(Self {
             inner: DataWriter::new(
-                BufWriter::with_capacity(1024, QueryHandleWrite(inner)),
+                BufWriter::with_capacity(10240, QueryHandleWrite(inner)),
                 Some(param_types),
             ),
             structure,
