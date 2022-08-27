@@ -54,6 +54,11 @@ unzip /tmp/awscliv2.zip
 sudo ./aws/install
 rm -rf /tmp/awscliv2.zip 
 
+echo "Configuring kernel..."
+# Allow unrestricted perf profiling
+sudo sh -c "echo 0 > /proc/sys/kernel/kptr_restrict"
+sudo sh -c "echo -1 > /proc/sys/kernel/perf_event_paranoid"
+
 echo "Pulling devcontainer ($DEVCONTAINER_IMAGE) ..."
 aws ecr get-login-password | sudo docker login --username AWS --password-stdin $ECR_REPO
 sudo docker pull $DEVCONTAINER_IMAGE
