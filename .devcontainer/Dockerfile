@@ -31,7 +31,8 @@ RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     sudo apt-get -y install openjdk-17-jdk maven
 RUN echo 'export JAVA_HOME="$(dirname $(dirname $(readlink -f $(which java))))"' | tee -a ~/.bashrc ~/.zshrc 
 RUN echo 'export MAVEN_OPTS="-Dmaven.repo.local=${WORKSPACE_HOME}/ansilo/.m2 -Djava.net.preferIPv4Stack=true"' | tee -a ~/.bashrc ~/.zshrc 
-RUN echo 'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$(dirname $(find $JAVA_HOME -name libjvm.so))"' | tee -a ~/.bashrc ~/.zshrc 
+# Ensure libjvm.so is in path
+RUN echo "$(dirname $(find $JAVA_HOME -name libjvm.so))" | sudo tee /etc/ld.so.conf.d/jdk.conf && sudo ldconfig
 
 # Maintain shell history between instances
 RUN echo 'export HISTFILE="${WORKSPACE_HOME}/.sh_history"' | tee -a ~/.bashrc ~/.zshrc 
@@ -90,6 +91,14 @@ RUN sudo apt install -y libnss3-tools && \
     curl --fail "https://dl.filippo.io/mkcert/latest?for=linux/amd64" -o ~/mkcert && \
     chmod +x ~/mkcert && \
     sudo mv ~/mkcert /usr/local/bin/mkcert
+
+# Install perf
+RUN cd /tmp && \
+    git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git && \
+    cd linux/tools/perf && \
+    make && \
+    cp perf /usr/bin && \
+    cd .. && rm -rf ./linux/
 
 # Add boot.sh file
 COPY ./boot.sh /boot.sh

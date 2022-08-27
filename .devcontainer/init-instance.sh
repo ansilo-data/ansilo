@@ -63,6 +63,7 @@ sudo docker run \
     --detach \
     --privileged \
     --cap-add=SYS_PTRACE \
+    --cap-add=SYS_ADMIN \
     -p 2222:22 \
     --tmpfs /tmp:exec \
     --volume /storage:/store \
