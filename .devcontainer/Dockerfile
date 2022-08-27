@@ -32,7 +32,7 @@ RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
 RUN echo 'export JAVA_HOME="$(dirname $(dirname $(readlink -f $(which java))))"' | tee -a ~/.bashrc ~/.zshrc 
 RUN echo 'export MAVEN_OPTS="-Dmaven.repo.local=${WORKSPACE_HOME}/ansilo/.m2 -Djava.net.preferIPv4Stack=true"' | tee -a ~/.bashrc ~/.zshrc 
 # Ensure libjvm.so is in path
-RUN echo "$(dirname $(find $JAVA_HOME -name libjvm.so))" | sudo tee /etc/ld.so.conf.d/jdk.conf && sudo ldconfig
+RUN echo "$(dirname $(dirname $(readlink -f $(which java))))/lib/server" | sudo tee /etc/ld.so.conf.d/jdk.conf && sudo ldconfig
 
 # Maintain shell history between instances
 RUN echo 'export HISTFILE="${WORKSPACE_HOME}/.sh_history"' | tee -a ~/.bashrc ~/.zshrc 
