@@ -2,21 +2,21 @@ use std::env;
 
 use ansilo_connectors_base::interface::{LoggedQuery, ResultSet};
 use ansilo_core::{data::DataValue, err::Result};
+use ansilo_e2e::current_dir;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
 
-use crate::assert::assert_rows_equal;
+use ansilo_e2e::util::assert::assert_rows_equal;
 
 #[test]
 #[serial]
 fn test_transaction_commit() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
+    let containers = ansilo_e2e::oracle::start_oracle();
     let mut oracle =
-        super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+        ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     client
         .batch_execute(
@@ -68,12 +68,11 @@ fn test_transaction_commit() {
 #[serial]
 fn test_transaction_rollback() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
+    let containers = ansilo_e2e::oracle::start_oracle();
     let mut oracle =
-        super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+        ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     client
         .batch_execute(
@@ -118,12 +117,11 @@ fn test_transaction_rollback() {
 #[serial]
 fn test_transaction_rollback_due_to_error() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
+    let containers = ansilo_e2e::oracle::start_oracle();
     let mut oracle =
-        super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+        ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     client
         .batch_execute(

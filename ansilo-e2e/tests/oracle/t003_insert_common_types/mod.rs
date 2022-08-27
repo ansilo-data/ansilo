@@ -5,21 +5,22 @@ use ansilo_core::{
     data::{chrono_tz::Tz, DataValue, DateTimeWithTZ},
     err::Result,
 };
+use ansilo_e2e::current_dir;
 use chrono::NaiveDateTime;
 use pretty_assertions::assert_eq;
 use rust_decimal::Decimal;
 
-use crate::assert::assert_rows_equal;
+use ansilo_e2e::util::assert::assert_rows_equal;
 
 #[test]
 fn test() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
+    let containers = ansilo_e2e::oracle::start_oracle();
     let mut oracle =
-        super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+        ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
     let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let rows = client
         .execute(

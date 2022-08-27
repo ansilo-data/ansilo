@@ -1,15 +1,16 @@
 use std::env;
 
 use ansilo_connectors_base::interface::LoggedQuery;
+use ansilo_e2e::current_dir;
 use pretty_assertions::assert_eq;
 
 #[test]
 fn test() {
     ansilo_logging::init_for_tests();
-    let _containers = super::common::start_oracle();
+    let _containers = ansilo_e2e::oracle::start_oracle();
 
     let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let rows = client.query("SELECT * FROM \"SYS.DUAL\"", &[]).unwrap();
 

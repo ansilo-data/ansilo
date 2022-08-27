@@ -1,6 +1,7 @@
 use std::env;
 
 use ansilo_connectors_base::interface::LoggedQuery;
+use ansilo_e2e::current_dir;
 use itertools::Itertools;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
@@ -9,11 +10,10 @@ use serial_test::serial;
 #[serial]
 fn test() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
-    super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+    let containers = ansilo_e2e::oracle::start_oracle();
+    ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let rows = client
         .query(

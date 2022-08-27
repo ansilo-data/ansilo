@@ -22,3 +22,8 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 pretty_assertions = "1.2"
 serial_test = "*"
+criterion = "0.3"
+
+[[bench]]
+name = "benches"
+harness = false

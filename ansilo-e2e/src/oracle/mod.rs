@@ -9,7 +9,7 @@ use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnec
 use ansilo_logging::info;
 use glob::glob;
 
-use crate::locking::FunctionCache;
+use crate::util::{dir::workspace_dir, locking::FunctionCache};
 
 static ORACLE_MUTEX: Mutex<()> = Mutex::new(());
 
@@ -33,7 +33,7 @@ pub fn start_oracle() -> ContainerInstances {
         return services;
     }
 
-    let infra_path = crate::dir::workspace_dir().join("ansilo-connectors/jdbc-oracle/tests");
+    let infra_path = workspace_dir().join("ansilo-connectors/jdbc-oracle/tests");
     let services = start_containers(
         "oracle",
         infra_path.clone(),

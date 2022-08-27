@@ -3,17 +3,17 @@ use std::env;
 use ansilo_connectors_base::interface::{LoggedQuery, ResultSet};
 use ansilo_core::data::DataValue;
 
+use ansilo_e2e::current_dir;
 use pretty_assertions::assert_eq;
 
 #[test]
 fn test() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
+    let containers = ansilo_e2e::oracle::start_oracle();
     let mut oracle =
-        super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+        ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let _rows = client
         .execute(r#"DELETE FROM "ANSILO_ADMIN.T005__TEST_TAB""#, &[])

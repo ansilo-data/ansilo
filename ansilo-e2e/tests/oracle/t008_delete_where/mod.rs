@@ -2,6 +2,7 @@ use std::env;
 
 use ansilo_connectors_base::interface::{LoggedQuery, ResultSet};
 use ansilo_core::err::Result;
+use ansilo_e2e::current_dir;
 use itertools::Itertools;
 use pretty_assertions::assert_eq;
 use rust_decimal::prelude::ToPrimitive;
@@ -11,12 +12,12 @@ use serial_test::serial;
 #[serial]
 fn test_delete_where_remote() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
+    let containers = ansilo_e2e::oracle::start_oracle();
     let mut oracle =
-        super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+        ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
     let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let _rows = client
         .execute(
@@ -73,12 +74,12 @@ fn test_delete_where_remote() {
 #[serial]
 fn test_delete_where_local() {
     ansilo_logging::init_for_tests();
-    let containers = super::common::start_oracle();
+    let containers = ansilo_e2e::oracle::start_oracle();
     let mut oracle =
-        super::common::init_oracle_sql(&containers, crate::current_dir!().join("oracle-sql/*.sql"));
+        ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
     let (instance, mut client) =
-        crate::main::run_instance(crate::current_dir!().join("config.yml"));
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let _rows = client
         .execute(
