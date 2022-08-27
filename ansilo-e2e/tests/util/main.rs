@@ -1,7 +1,7 @@
 use std::{
     env,
     path::PathBuf,
-    sync::atomic::{AtomicU16, Ordering},
+    sync::{atomic::{AtomicU16, Ordering}, Mutex},
     time::Duration,
 };
 
@@ -14,8 +14,11 @@ use postgres::{Client, NoTls};
 
 static PORT: AtomicU16 = AtomicU16::new(60000);
 
+static LOCK: Mutex<()> = Mutex::new(());
+
 /// Runs an instance of ansilo using the supplied config
 pub fn run_instance(config_path: PathBuf) -> (Ansilo, Client) {
+    let _ = LOCK.lock().unwrap(); 
     let port = PORT.fetch_add(1, Ordering::SeqCst);
 
     // Allow port to be referenced in config file

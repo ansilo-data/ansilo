@@ -156,8 +156,15 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
                 .ok()
                 .and_then(|i| i.as_u_int16().cloned());
 
-            DataType::Decimal(DecimalOptions::new(precision, scale))
+            match (precision, scale) {
+                (Some(0..=2), Some(0)) => DataType::Int8,
+                (Some(0..=4), Some(0)) => DataType::Int16,
+                (Some(0..=9), Some(0)) => DataType::Int32,
+                (Some(0..=18), Some(0)) => DataType::Int64,
+                _ => DataType::Decimal(DecimalOptions::new(precision, scale)),
+            }
         }
+            
         "BINARY_FLOAT" => DataType::Float32,
         "BINARY_DOUBLE" => DataType::Float64,
         "RAW" | "LONG RAW" | "LONG" | "BFILE" | "BLOB" => DataType::Binary,

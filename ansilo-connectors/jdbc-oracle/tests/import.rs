@@ -7,8 +7,9 @@ use ansilo_connectors_jdbc_oracle::{
 };
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
-    data::{DataType, StringOptions},
+    data::{DataType, DecimalOptions, StringOptions},
 };
+use pretty_assertions::assert_eq;
 use serial_test::serial;
 
 mod common;
@@ -112,4 +113,74 @@ fn test_oracle_jdbc_discover_entities_with_filter_wildcard() {
     assert!(entities.len() > 0);
 
     assert!(entities.iter().all(|e| e.id.starts_with("SYS.")));
+}
+
+#[test]
+#[serial]
+fn test_oracle_jdbc_discover_entities_number_type_mapping() {
+    let containers = common::start_oracle();
+    let mut con = common::connect_to_oracle(&containers);
+
+    con.execute(
+        "
+        BEGIN
+        EXECUTE IMMEDIATE 'DROP TABLE IMPORT_NUMBER_TYPES';
+        EXCEPTION
+        WHEN OTHERS THEN NULL;
+        END;
+        ",
+        vec![],
+    )
+    .unwrap();
+
+    con.execute(
+        "
+        CREATE TABLE IMPORT_NUMBER_TYPES (
+            INT8 NUMBER(2),
+            INT16 NUMBER(4),
+            INT32 NUMBER(9),
+            INT64 NUMBER(18),
+            DEC1 NUMBER(19),
+            DEC2 NUMBER(5, 1)
+        ) 
+        ",
+        vec![],
+    )
+    .unwrap();
+
+    let entities = OracleJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_NUMBER_TYPES%"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "ANSILO_ADMIN.IMPORT_NUMBER_TYPES",
+            vec![
+                EntityAttributeConfig::nullable("INT8", DataType::Int8),
+                EntityAttributeConfig::nullable("INT16", DataType::Int16),
+                EntityAttributeConfig::nullable("INT32", DataType::Int32),
+                EntityAttributeConfig::nullable("INT64", DataType::Int64),
+                EntityAttributeConfig::nullable(
+                    "DEC1",
+                    DataType::Decimal(DecimalOptions::new(Some(19), Some(0)),)
+                ),
+                EntityAttributeConfig::nullable(
+                    "DEC2",
+                    DataType::Decimal(DecimalOptions::new(Some(5), Some(1)),)
+                ),
+            ],
+            EntitySourceConfig::from(OracleJdbcEntitySourceConfig::Table(
+                OracleJdbcTableOptions::new(
+                    Some("ANSILO_ADMIN".into()),
+                    "IMPORT_NUMBER_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
 }

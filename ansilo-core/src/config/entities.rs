@@ -120,6 +120,16 @@ impl EntityAttributeConfig {
             nullable: false,
         }
     }
+
+    pub fn nullable(id: impl Into<String>, r#type: DataType) -> Self {
+        Self {
+            id: id.into(),
+            description: None,
+            r#type,
+            primary_key: false,
+            nullable: true,
+        }
+    }
 }
 
 /// A constraint on the entity
