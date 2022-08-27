@@ -14,3 +14,4 @@ pub mod t012_select_limit_offset;
 pub mod t013_select_joins;
 pub mod t014_select_combined;
 pub mod t015_insert_default_values;
+pub mod t016_transactions;
