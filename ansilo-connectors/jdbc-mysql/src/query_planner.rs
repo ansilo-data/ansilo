@@ -1,5 +1,5 @@
 use ansilo_core::{
-    data::{rust_decimal::prelude::ToPrimitive, DataType, DataValue, StringOptions},
+    data::{DataType, DataValue, StringOptions},
     err::{bail, Context, Result},
     sqlil as sql,
 };
@@ -13,7 +13,7 @@ use ansilo_connectors_base::{
     },
 };
 
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
 
 use super::{MysqlJdbcConnectorEntityConfig, MysqlJdbcEntitySourceConfig, MysqlJdbcQueryCompiler};
 
@@ -31,14 +31,23 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
     ) -> Result<OperationCost> {
         // TODO: multiple sample options
 
-        let table = MysqlJdbcQueryCompiler::compile_source_identifier(&entity.source)?;
+        let tab = match &entity.source {
+            MysqlJdbcEntitySourceConfig::Table(tab) => tab,
+        };
 
         let mut query = connection.prepare(JdbcQuery::new(
-            format!(
-                "SELECT GREATEST(COUNT(*), 1) * 1000 FROM {} SAMPLE(0.1)",
-                table
-            ),
-            vec![],
+            r#"
+            SELECT TABLE_ROWS FROM INFORMATION_SCHEMA.TABLES 
+            WHERE TABLE_SCHEMA = COALESCE(?, DATABASE())
+            AND TABLE_NAME = ?
+            "#,
+            vec![
+                JdbcQueryParam::Constant(match &tab.database_name {
+                    Some(db) => DataValue::Utf8String(db.clone()),
+                    None => DataValue::Null,
+                }),
+                JdbcQueryParam::Constant(DataValue::Utf8String(tab.table_name.clone())),
+            ],
         ))?;
 
         let mut result_set = query.execute()?.reader()?;
@@ -47,8 +56,31 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
             .context("Unexpected empty result set")?;
 
         let num_rows = match value {
-            DataValue::Decimal(dec) => dec.to_u64().unwrap_or(0),
+            DataValue::Null => None,
+            DataValue::UInt64(num) => Some(num),
             _ => bail!("Unexpected data value returned: {:?}", value),
+        };
+
+        let num_rows = if num_rows.is_none() {
+            // If could not determine from information schema, fallback to COUNT(*)
+            let table = MysqlJdbcQueryCompiler::compile_source_identifier(&entity.source)?;
+
+            let mut query = connection.prepare(JdbcQuery::new(
+                format!(r#"SELECT COUNT(*) FROM {}"#, table),
+                vec![],
+            ))?;
+
+            let mut result_set = query.execute()?.reader()?;
+            let value = result_set
+                .read_data_value()?
+                .context("Unexpected empty result set")?;
+
+            match value {
+                DataValue::UInt64(num) => num,
+                _ => bail!("Unexpected data value returned: {:?}", value),
+            }
+        } else {
+            num_rows.unwrap()
         };
 
         Ok(OperationCost::new(Some(num_rows as _), None, None, None))

@@ -199,8 +199,11 @@ impl FdwListener {
             };
 
             match (pool, &*entities) {
-                (ConnectionPools::OracleJdbc(pool), RwLockEntityConfigs::OracleJdbc(entities)) => {
+                (ConnectionPools::Jdbc(pool), RwLockEntityConfigs::OracleJdbc(entities)) => {
                     Self::process::<OracleJdbcConnector>(ds_id, nc, chan, pool, entities, log)
+                }
+                (ConnectionPools::Jdbc(pool), RwLockEntityConfigs::MysqlJdbc(entities)) => {
+                    Self::process::<MysqlJdbcConnector>(ds_id, nc, chan, pool, entities, log)
                 }
                 (ConnectionPools::Memory(pool), RwLockEntityConfigs::Memory(entities)) => {
                     Self::process::<MemoryConnector>(ds_id, nc, chan, pool, entities, log)
@@ -275,6 +278,9 @@ pub enum RwLockEntityConfigs {
     OracleJdbc(
         RwLock<ConnectorEntityConfig<<OracleJdbcConnector as Connector>::TEntitySourceConfig>>,
     ),
+    MysqlJdbc(
+        RwLock<ConnectorEntityConfig<<MysqlJdbcConnector as Connector>::TEntitySourceConfig>>,
+    ),
     Memory(RwLock<ConnectorEntityConfig<<MemoryConnector as Connector>::TEntitySourceConfig>>),
 }
 
@@ -282,6 +288,7 @@ impl From<ConnectorEntityConfigs> for RwLockEntityConfigs {
     fn from(conf: ConnectorEntityConfigs) -> Self {
         match conf {
             ConnectorEntityConfigs::OracleJdbc(e) => Self::OracleJdbc(RwLock::new(e)),
+            ConnectorEntityConfigs::MysqlJdbc(e) => Self::MysqlJdbc(RwLock::new(e)),
             ConnectorEntityConfigs::Memory(e) => Self::Memory(RwLock::new(e)),
         }
     }

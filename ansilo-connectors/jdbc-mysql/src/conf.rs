@@ -24,11 +24,19 @@ impl JdbcConnectionConfig for MysqlJdbcConnectionConfig {
     }
 
     fn get_jdbc_props(&self) -> HashMap<String, String> {
-        self.properties.clone()
+        let mut props = self.properties.clone();
+        props.insert("characterEncoding".into(), "utf8".into());
+        props.insert("characterSetResults".into(), "utf8mb4".into());
+
+        props
     }
 
     fn get_pool_config(&self) -> Option<JdbcConnectionPoolConfig> {
         self.pool.clone()
+    }
+
+    fn get_java_jdbc_data_mapping(&self) -> String {
+        "com.ansilo.connectors.mysql.mapping.MysqlJdbcDataMapping".into()
     }
 }
 

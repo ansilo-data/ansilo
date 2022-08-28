@@ -10,6 +10,7 @@ ansilo-core = { path = "../ansilo-core" }
 ansilo-connectors-base = { path = "../ansilo-connectors/base", features = ["test"] }
 ansilo-connectors-jdbc-base = { path = "../ansilo-connectors/jdbc-base" }
 ansilo-connectors-jdbc-oracle = { path = "../ansilo-connectors/jdbc-oracle" }
+ansilo-connectors-jdbc-mysql = { path = "../ansilo-connectors/jdbc-mysql" }
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-main = { path = "../ansilo-main" }
 chrono = "0.4"
