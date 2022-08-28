@@ -64,6 +64,7 @@ aws ecr get-login-password | sudo docker login --username AWS --password-stdin $
 sudo docker pull $DEVCONTAINER_IMAGE
 
 echo "Starting devcontainer..."
+sudo docker network create devcontainer
 sudo docker run \
     --detach \
     --privileged \
@@ -71,6 +72,7 @@ sudo docker run \
     --cap-add=SYS_ADMIN \
     -p 2222:22 \
     --tmpfs /tmp:exec \
+    --network devcontainer \
     --volume /storage:/store \
     --volume /var/run/docker.sock:/var/run/docker.sock \
     --entrypoint /bin/bash \
