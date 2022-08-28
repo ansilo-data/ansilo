@@ -100,5 +100,8 @@ RUN cd /tmp && \
     sudo cp perf /usr/bin && \
     cd / && sudo rm -rf /tmp/linux
 
+# Install docker
+RUN curl --fail https://get.docker.com | bash
+
 # Add boot.sh file
 COPY ./boot.sh /boot.sh

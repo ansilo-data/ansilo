@@ -72,6 +72,7 @@ sudo docker run \
     -p 2222:22 \
     --tmpfs /tmp:exec \
     --volume /storage:/store \
+    --volume /var/run/docker.sock:/var/run/docker.sock \
     --entrypoint /bin/bash \
     $DEVCONTAINER_IMAGE /boot.sh $DEV_USER $SPOT_FLEET_ID
 echo "Container started..."
