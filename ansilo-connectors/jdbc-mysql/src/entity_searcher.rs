@@ -29,7 +29,7 @@ impl EntitySearcher for MysqlJdbcEntitySearcher {
         _nc: &NodeConfig,
         opts: EntityDiscoverOptions,
     ) -> Result<Vec<EntityConfig>> {
-        // Query oracle's information schema tables to retrieve all column definitions
+        // Query mysql's information schema tables to retrieve all column definitions
         // Importantly we order the results by table and then by column position
         // when lets us efficiently group the result by table using `group_by` below.
         // Additionally, we the results to be deterministic and return the columns
@@ -38,23 +38,22 @@ impl EntitySearcher for MysqlJdbcEntitySearcher {
             .prepare(JdbcQuery::new(
                 r#"
                 SELECT
-                    T.OWNER,
+                    T.TABLE_SCHEMA,
                     T.TABLE_NAME,
                     C.COLUMN_NAME,
+                    C.COLUMN_KEY,
                     C.DATA_TYPE,
-                    C.NULLABLE,
-                    C.CHAR_LENGTH,
-                    C.DATA_PRECISION,
-                    C.DATA_SCALE,
-                    C.COLUMN_ID
-                FROM ALL_TABLES T
-                INNER JOIN ALL_TAB_COLUMNS C ON T.OWNER = C.OWNER AND T.TABLE_NAME = C.TABLE_NAME
+                    C.COLUMN_TYPE,
+                    C.IS_NULLABLE,
+                    C.CHARACTER_MAXIMUM_LENGTH,
+                    C.NUMERIC_PRECISION,
+                    C.NUMERIC_SCALE,
+                    C.ORDINAL_POSITION
+                FROM INFORMATION_SCHEMA.TABLES T
+                INNER JOIN INFORMATION_SCHEMA.COLUMNS C ON T.TABLE_SCHEMA = C.TABLE_SCHEMA AND T.TABLE_NAME = C.TABLE_NAME
                 WHERE 1=1
-                AND (T.OWNER || '.' || T.TABLE_NAME) LIKE ?
-                AND T.TEMPORARY = 'N'
-                AND T.NESTED = 'NO'
-                AND T.DROPPED = 'NO'
-                ORDER BY T.OWNER, T.TABLE_NAME, C.COLUMN_ID
+                AND CONCAT(T.TABLE_SCHEMA, '.', T.TABLE_NAME) LIKE ?
+                ORDER BY T.TABLE_SCHEMA, T.TABLE_NAME, C.ORDINAL_POSITION
             "#,
                 vec![JdbcQueryParam::Constant(DataValue::Utf8String(
                     opts.remote_schema
@@ -69,20 +68,20 @@ impl EntitySearcher for MysqlJdbcEntitySearcher {
         let cols = cols.reader()?.iter_rows().collect::<Result<Vec<_>>>()?;
         let tables = cols.into_iter().group_by(|row| {
             (
-                row["OWNER"].as_utf8_string().unwrap().clone(),
+                row["TABLE_SCHEMA"].as_utf8_string().unwrap().clone(),
                 row["TABLE_NAME"].as_utf8_string().unwrap().clone(),
             )
         });
 
         let entities = tables
             .into_iter()
-            .filter_map(|((owner, table), cols)| {
-                match parse_entity_config(&owner, &table, cols.into_iter()) {
+            .filter_map(|((db, table), cols)| {
+                match parse_entity_config(&db, &table, cols.into_iter()) {
                     Ok(conf) => Some(conf),
                     Err(err) => {
                         warn!(
                             "Failed to import schema for table \"{}.{}\": {:?}",
-                            owner, table, err
+                            db, table, err
                         );
                         None
                     }
@@ -95,12 +94,12 @@ impl EntitySearcher for MysqlJdbcEntitySearcher {
 }
 
 pub(crate) fn parse_entity_config(
-    owner: &String,
+    db: &String,
     table: &String,
     cols: impl Iterator<Item = HashMap<String, DataValue>>,
 ) -> Result<EntityConfig> {
     Ok(EntityConfig::minimal(
-        format!("{}.{}", owner.clone(), table.clone()),
+        format!("{}.{}", db.clone(), table.clone()),
         cols.map(|c| {
             Ok(EntityAttributeConfig::new(
                 c["COLUMN_NAME"]
@@ -108,34 +107,32 @@ pub(crate) fn parse_entity_config(
                     .context("COLUMN_NAME")?
                     .clone(),
                 None,
-                from_oracle_type(&c)?,
-                false,
-                c["NULLABLE"].as_utf8_string().context("NULLABLE")? == "Y",
+                from_mysql_type(&c)?,
+                c["COLUMN_KEY"].as_utf8_string().context("COLUMN_KEY")? == "PRI",
+                c["IS_NULLABLE"].as_utf8_string().context("IS_NULLABLE")? == "YES",
             ))
         })
         .collect::<Result<Vec<_>>>()?,
         EntitySourceConfig::from(MysqlJdbcEntitySourceConfig::Table(
-            MysqlJdbcTableOptions::new(Some(owner.clone()), table.clone(), HashMap::new()),
+            MysqlJdbcTableOptions::new(Some(db.clone()), table.clone(), HashMap::new()),
         ))?,
     ))
 }
 
-pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataType> {
-    let ora_type = col["DATA_TYPE"].as_utf8_string().context("DATA_TYPE")?;
+pub(crate) fn from_mysql_type(col: &HashMap<String, DataValue>) -> Result<DataType> {
+    let data_type = &col["DATA_TYPE"]
+        .as_utf8_string()
+        .context("DATA_TYPE")?
+        .to_uppercase();
+    let col_type = &col["COLUMN_TYPE"]
+        .as_utf8_string()
+        .context("COLUMN_TYPE")?
+        .to_uppercase();
 
-    // Strip out type modifiers, eg "TIMESTAMP(6)" --> "TIMESTAMP"
-    let normalised_type = ora_type
-        .chars()
-        .filter(|c| match c {
-            'A'..='Z' => true,
-            ' ' | '_' => true,
-            _ => false,
-        })
-        .collect::<String>();
-
-    Ok(match normalised_type.as_str() {
-        "CHAR" | "NCHAR" | "VARCHAR" | "VARCHAR2" | "NVARCHAR" | "NVARCHAR2" | "CLOB" | "NCLOB" => {
-            let length = col["CHAR_LENGTH"]
+    Ok(match data_type.as_str() {
+        "CHAR" | "NCHAR" | "VARCHAR" | "NVARCHAR" | "TINYTEXT" | "TEXT" | "MEDIUMTEXT"
+        | "LONGTEXT" => {
+            let length = col["CHARACTER_MAXIMUM_LENGTH"]
                 .clone()
                 .try_coerce_into(&DataType::UInt32)
                 .ok()
@@ -144,37 +141,46 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
 
             DataType::Utf8String(StringOptions::new(length))
         }
-        "NUMBER" | "FLOAT" => {
-            let precision = col["DATA_PRECISION"]
+        "BIT" if col_type == "BIT(1)" => DataType::Boolean,
+        "TINYINT" if col_type.contains("UNSIGNED") => DataType::UInt8,
+        "SMALLINT" if col_type.contains("UNSIGNED") => DataType::UInt16,
+        "INT" if col_type.contains("UNSIGNED") => DataType::UInt32,
+        "BIGINT" if col_type.contains("UNSIGNED") => DataType::UInt64,
+        "TINYINT" => DataType::Int8,
+        "SMALLINT" => DataType::Int16,
+        "INT" => DataType::Int32,
+        "BIGINT" => DataType::Int64,
+        "DECIMAL" => {
+            let precision = col["NUMERIC_PRECISION"]
                 .clone()
                 .try_coerce_into(&DataType::UInt16)
                 .ok()
                 .and_then(|i| i.as_u_int16().cloned());
-            let scale = col["DATA_SCALE"]
+            let scale = col["NUMERIC_SCALE"]
                 .clone()
                 .try_coerce_into(&DataType::UInt16)
                 .ok()
                 .and_then(|i| i.as_u_int16().cloned());
 
-            match (precision, scale) {
-                (Some(0..=2), Some(0)) => DataType::Int8,
-                (Some(0..=4), Some(0)) => DataType::Int16,
-                (Some(0..=9), Some(0)) => DataType::Int32,
-                (Some(0..=18), Some(0)) => DataType::Int64,
-                _ => DataType::Decimal(DecimalOptions::new(precision, scale)),
-            }
+            DataType::Decimal(DecimalOptions::new(precision, scale))
         }
-            
-        "BINARY_FLOAT" => DataType::Float32,
-        "BINARY_DOUBLE" => DataType::Float64,
-        "RAW" | "LONG RAW" | "LONG" | "BFILE" | "BLOB" => DataType::Binary,
+
+        "FLOAT" => DataType::Float32,
+        "DOUBLE" => DataType::Float64,
+        "BINARY" | "VARBINARY" | "BIT" | "TINYBLOB" | "MEDIUMBLOB" | "BLOB" | "LONGBLOB" => {
+            DataType::Binary
+        }
         "JSON" => DataType::JSON,
+        // Just map ENUM/SET to strings
+        "ENUM" | "SET" => DataType::Utf8String(StringOptions::default()),
         "DATE" => DataType::Date,
-        "TIMESTAMP" => DataType::DateTime,
-        "TIMESTAMP WITH TIME ZONE" | "TIMESTAMP WITH LOCAL TIME ZONE" => DataType::DateTimeWithTZ,
+        "TIME" => DataType::Time,
+        "DATETIME" => DataType::DateTime,
+        "TIMESTAMP" => DataType::DateTimeWithTZ,
+        "YEAR" => DataType::UInt16,
         // Default unknown data types to json
         _ => {
-            warn!("Encountered unknown data type '{ora_type}', defaulting to JSON seralisation");
+            warn!("Encountered unknown data type '{col_type}', defaulting to JSON seralisation");
             DataType::JSON
         }
     })

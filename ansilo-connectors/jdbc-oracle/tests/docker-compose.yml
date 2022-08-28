@@ -10,4 +10,4 @@ services:
       options:
         awslogs-group: /ecs/ansilo-connectors
         awslogs-region: ap-southeast-2
-        awslogs-stream-prefix: oracle-jdbc
+        awslogs-stream-prefix: jdbc-oracle

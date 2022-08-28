@@ -19,7 +19,7 @@ function cleanup {
 trap cleanup EXIT INT TERM
 
 echo "Starting mysql..."
-docker-entrypoint.sh &
+docker-entrypoint.sh mysqld &
 MYSQL_PID=$$
 echo "Mysql started as pid $MYSQL_PID"
 

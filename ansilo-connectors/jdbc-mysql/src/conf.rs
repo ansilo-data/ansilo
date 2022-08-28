@@ -78,12 +78,12 @@ pub struct MysqlJdbcTableOptions {
 
 impl MysqlJdbcTableOptions {
     pub fn new(
-        owner_name: Option<String>,
+        database_name: Option<String>,
         table_name: String,
         attribute_column_map: HashMap<String, String>,
     ) -> Self {
         Self {
-            database_name: owner_name,
+            database_name,
             table_name,
             attribute_column_map,
         }
@@ -128,7 +128,7 @@ properties:
         let conf = config::parse_config(
             r#"
 type: "Table"
-owner_name: "db"
+database_name: "db"
 table_name: "table"
 attribute_column_map:
   a: b

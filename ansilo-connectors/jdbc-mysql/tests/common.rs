@@ -27,7 +27,14 @@ macro_rules! current_dir {
 /// script which will exit automatically after idleing for 30 min
 pub fn start_mysql() -> ContainerInstances {
     let infra_path = current_dir!().to_path_buf();
-    let services = start_containers("oracle", infra_path.clone(), false, Duration::from_secs(60));
+    let services = start_containers("mysql", infra_path.clone(), false, Duration::from_secs(120));
+
+    wait_for_log(
+        infra_path.clone(),
+        services.get("mysql").unwrap(),
+        "ready for connections",
+        Duration::from_secs(60),
+    );
 
     services
 }

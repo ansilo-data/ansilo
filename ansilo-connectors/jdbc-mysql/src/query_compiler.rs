@@ -286,12 +286,12 @@ impl MysqlJdbcQueryCompiler {
     fn compile_offet_limit(row_skip: u64, row_limit: Option<u64>) -> Result<String> {
         let mut parts = vec![];
 
-        if row_skip > 0 {
-            parts.push(format!("OFFSET {} ROWS", row_skip));
+        if let Some(lim) = row_limit {
+            parts.push(format!("LIMIT {}", lim));
         }
 
-        if let Some(lim) = row_limit {
-            parts.push(format!("FETCH FIRST {} ROWS ONLY", lim));
+        if row_skip > 0 {
+            parts.push(format!("OFFSET {}", row_skip));
         }
 
         Ok(parts.join(" "))
@@ -667,7 +667,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity""#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity`"#,
                 vec![]
             )
         );
@@ -689,7 +689,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" WHERE (("entity"."col1") = (?))"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` WHERE ((`entity`.`col1`) = (?))"#,
                 vec![JdbcQueryParam::Dynamic(1, DataType::Int32)]
             )
         );
@@ -715,7 +715,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" INNER JOIN "other" "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` INNER JOIN `other` AS `other` ON ((`entity`.`col1`) = (`other`.`othercol1`))"#,
                 vec![]
             )
         );
@@ -741,7 +741,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" LEFT JOIN "other" "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` LEFT JOIN `other` AS `other` ON ((`entity`.`col1`) = (`other`.`othercol1`))"#,
                 vec![]
             )
         );
@@ -767,33 +767,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" RIGHT JOIN "other" "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
-                vec![]
-            )
-        );
-    }
-
-    #[test]
-    fn test_oracle_jdbc_compile_select_full_join() {
-        let mut select = sql::Select::new(sql::source("entity", "entity"));
-        select
-            .cols
-            .push(("COL".to_string(), sql::Expr::attr("entity", "attr1")));
-        select.joins.push(sql::Join::new(
-            sql::JoinType::Full,
-            sql::source("other", "other"),
-            vec![sql::Expr::BinaryOp(sql::BinaryOp::new(
-                sql::Expr::attr("entity", "attr1"),
-                sql::BinaryOpType::Equal,
-                sql::Expr::attr("other", "otherattr1"),
-            ))],
-        ));
-        let compiled = compile_select(select, mock_entity_table());
-
-        assert_eq!(
-            compiled,
-            JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" FULL JOIN "other" "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` RIGHT JOIN `other` AS `other` ON ((`entity`.`col1`) = (`other`.`othercol1`))"#,
                 vec![]
             )
         );
@@ -814,7 +788,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" GROUP BY "entity"."col1", ?"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` GROUP BY `entity`.`col1`, ?"#,
                 vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
             )
         );
@@ -839,7 +813,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" ORDER BY "entity"."col1" ASC, ? DESC"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` ORDER BY `entity`.`col1` ASC, ? DESC"#,
                 vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
             )
         );
@@ -858,7 +832,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" OFFSET 10 ROWS FETCH FIRST 20 ROWS ONLY"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` LIMIT 20 OFFSET 10"#,
                 vec![]
             )
         );
@@ -876,7 +850,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" OFFSET 10 ROWS"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` OFFSET 10"#,
                 vec![]
             )
         );
@@ -894,7 +868,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" FETCH FIRST 20 ROWS ONLY"#,
+                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` LIMIT 20"#,
                 vec![]
             )
         );
@@ -915,7 +889,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT LENGTH("entity"."col1") AS "COL" FROM "table" "entity" OFFSET 10 ROWS"#,
+                r#"SELECT LENGTH(`entity`.`col1`) AS `COL` FROM `table` AS `entity` OFFSET 10"#,
                 vec![]
             )
         );
@@ -936,7 +910,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" "entity" OFFSET 10 ROWS"#,
+                r#"SELECT SUM(`entity`.`col1`) AS `COL` FROM `table` AS `entity` OFFSET 10"#,
                 vec![]
             )
         );
@@ -957,7 +931,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" "entity" FOR UPDATE"#,
+                r#"SELECT SUM(`entity`.`col1`) AS `COL` FROM `table` AS `entity` FOR UPDATE"#,
                 vec![]
             )
         );
@@ -976,7 +950,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"INSERT INTO "table" ("col1") VALUES (?)"#,
+                r#"INSERT INTO `table` (`col1`) VALUES (?)"#,
                 vec![JdbcQueryParam::Dynamic(1, DataType::Int8)]
             )
         );
@@ -994,7 +968,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"UPDATE "table" SET "col1" = ?"#,
+                r#"UPDATE `table` SET `col1` = ?"#,
                 vec![JdbcQueryParam::Constant(DataValue::Int8(1))]
             )
         );
@@ -1018,7 +992,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"UPDATE "table" SET "col1" = ? WHERE (("table"."col1") = (?))"#,
+                r#"UPDATE `table` SET `col1` = ? WHERE ((`table`.`col1`) = (?))"#,
                 vec![
                     JdbcQueryParam::Constant(DataValue::Int8(1)),
                     JdbcQueryParam::Dynamic(1, DataType::Int32)
@@ -1032,7 +1006,7 @@ mod tests {
         let delete = sql::Delete::new(sql::source("entity", "entity"));
         let compiled = compile_delete(delete, mock_entity_table());
 
-        assert_eq!(compiled, JdbcQuery::new(r#"DELETE FROM "table""#, vec![]));
+        assert_eq!(compiled, JdbcQuery::new(r#"DELETE FROM `table`"#, vec![]));
     }
 
     #[test]
@@ -1050,7 +1024,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"DELETE FROM "table" WHERE (("table"."col1") = (?))"#,
+                r#"DELETE FROM `table` WHERE ((`table`.`col1`) = (?))"#,
                 vec![JdbcQueryParam::Dynamic(1, DataType::Int32)]
             )
         );

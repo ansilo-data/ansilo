@@ -1,4 +1,3 @@
-# Creates an oracle image which is tuned for fast start up
 FROM mysql-base
 
 ENV MYSQL_ROOT_PASSWORD=ansilo_root

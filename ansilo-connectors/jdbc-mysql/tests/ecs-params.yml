@@ -3,12 +3,10 @@ task_definition:
   ecs_network_mode: awsvpc
   task_execution_role: arn:aws:iam::635198228996:role/ECSTaskExecutionRoleForPullingECR
   task_size:
-    cpu_limit: 4096
-    mem_limit: 8GB
-  ephemeral_storage:
-    size_in_gib: 40
+    cpu_limit: 2048
+    mem_limit: 4GB
   services:
-    oracle:
+    mysql:
       essential: true
 run_params:
   network_configuration:
