@@ -1,7 +1,7 @@
 use std::{env, fs, path::PathBuf};
 
 use ansilo_core::err::{bail, Context, Result};
-use ansilo_logging::{debug, warn};
+use ansilo_logging::{debug, warn, info};
 use jni::{objects::JObject, InitArgsBuilder, JNIEnv, JNIVersion, JavaVM};
 
 // Global JVM instance
@@ -13,10 +13,24 @@ lazy_static::lazy_static! {
         let jvm_args = InitArgsBuilder::new()
             .version(JNIVersion::V8)
             .option(format!("-Djava.class.path={}", jars.join(":")).as_str())
-            .option("-Dorg.sqlite.tmpdir=/store/workspace/elliot/tmp/")
             // TODO: configurable temp directory
-            .option("-Xcheck:jni")
-            // .option("-verbose:jni")
+            .option("-Xcheck:jni");
+
+        #[cfg(debug_assertions)]
+        let jvm_args ={
+            let port = 63000 + std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_millis();
+
+            info!("JVM Debug port: {}", port);
+
+            jvm_args
+                .option(&format!("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address={}", port))
+                // .option("-verbose:jni")
+        };
+
+        let jvm_args = jvm_args
             .build()
             .context("Failed to init JVM args")?;
 

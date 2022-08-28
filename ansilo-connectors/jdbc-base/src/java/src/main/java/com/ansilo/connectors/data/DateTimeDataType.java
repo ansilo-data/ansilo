@@ -1,11 +1,8 @@
 package com.ansilo.connectors.data;
 
 import java.nio.ByteBuffer;
-import java.sql.Timestamp;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
 import java.time.LocalDateTime;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 
@@ -20,7 +17,7 @@ public class DateTimeDataType implements FixedSizeDataType {
 
     @Override
     public int getFixedSize() {
-        return 15;
+        return 14;
     }
 
     @Override
