@@ -58,6 +58,7 @@ echo "Configuring kernel..."
 # Allow unrestricted perf profiling
 sudo sh -c "echo 0 > /proc/sys/kernel/kptr_restrict"
 sudo sh -c "echo -1 > /proc/sys/kernel/perf_event_paranoid"
+sudo sh -c "echo 0 > /proc/sys/kernel/yama/ptrace_scope"
 
 echo "Pulling devcontainer ($DEVCONTAINER_IMAGE) ..."
 aws ecr get-login-password | sudo docker login --username AWS --password-stdin $ECR_REPO
