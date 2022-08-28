@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  oracle:
+    image: mysql:8
+    ports:
+      - "3307:330"
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/ansilo-connectors
+        awslogs-region: ap-southeast-2
+        awslogs-stream-prefix: oracle-jdbc

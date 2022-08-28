@@ -7,21 +7,19 @@ use ansilo_core::{
 use ansilo_connectors_base::interface::QueryCompiler;
 use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
 
-use super::{
-    OracleJdbcConnectorEntityConfig, OracleJdbcEntitySourceConfig, OracleJdbcTableOptions,
-};
+use super::{MysqlJdbcConnectorEntityConfig, MysqlJdbcEntitySourceConfig, MysqlJdbcTableOptions};
 
-/// Query compiler for Oracle JDBC driver
-pub struct OracleJdbcQueryCompiler;
+/// Query compiler for Mysql JDBC driver
+pub struct MysqlJdbcQueryCompiler;
 
-impl QueryCompiler for OracleJdbcQueryCompiler {
+impl QueryCompiler for MysqlJdbcQueryCompiler {
     type TConnection = JdbcConnection;
     type TQuery = JdbcQuery;
-    type TEntitySourceConfig = OracleJdbcEntitySourceConfig;
+    type TEntitySourceConfig = MysqlJdbcEntitySourceConfig;
 
     fn compile_query(
         _con: &mut Self::TConnection,
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: sql::Query,
     ) -> Result<JdbcQuery> {
         match &query {
@@ -33,9 +31,9 @@ impl QueryCompiler for OracleJdbcQueryCompiler {
     }
 }
 
-impl OracleJdbcQueryCompiler {
+impl MysqlJdbcQueryCompiler {
     fn compile_select_query(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         select: &sql::Select,
     ) -> Result<JdbcQuery> {
@@ -64,11 +62,10 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_insert_query(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         insert: &sql::Insert,
     ) -> Result<JdbcQuery> {
-        // TODO: custom query support
         let mut params = Vec::<JdbcQueryParam>::new();
 
         let query = [
@@ -103,11 +100,10 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_update_query(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         update: &sql::Update,
     ) -> Result<JdbcQuery> {
-        // TODO: custom query support
         let mut params = Vec::<JdbcQueryParam>::new();
 
         let query = [
@@ -142,11 +138,10 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_delete_query(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         delete: &sql::Delete,
     ) -> Result<JdbcQuery> {
-        // TODO: custom query support
         let mut params = Vec::<JdbcQueryParam>::new();
 
         let query = [
@@ -163,7 +158,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_cols(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         cols: &Vec<(String, sql::Expr)>,
         params: &mut Vec<JdbcQueryParam>,
@@ -182,7 +177,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_joins(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         joins: &Vec<sql::Join>,
         params: &mut Vec<JdbcQueryParam>,
@@ -195,7 +190,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_join(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         join: &sql::Join,
         params: &mut Vec<JdbcQueryParam>,
@@ -218,12 +213,12 @@ impl OracleJdbcQueryCompiler {
             sql::JoinType::Inner => format!("INNER JOIN {} ON {}", target, cond),
             sql::JoinType::Left => format!("LEFT JOIN {} ON {}", target, cond),
             sql::JoinType::Right => format!("RIGHT JOIN {} ON {}", target, cond),
-            sql::JoinType::Full => format!("FULL JOIN {} ON {}", target, cond),
+            sql::JoinType::Full => panic!("MySql does not support FULL OUTER JOIN"),
         })
     }
 
     fn compile_where(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         r#where: &Vec<sql::Expr>,
         params: &mut Vec<JdbcQueryParam>,
@@ -242,7 +237,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_select_group_by(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         group_bys: &Vec<sql::Expr>,
         params: &mut Vec<JdbcQueryParam>,
@@ -261,7 +256,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_order_by(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         order_bys: &Vec<sql::Ordering>,
         params: &mut Vec<JdbcQueryParam>,
@@ -311,7 +306,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_expr(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         expr: &sql::Expr,
         params: &mut Vec<JdbcQueryParam>,
@@ -333,16 +328,16 @@ impl OracleJdbcQueryCompiler {
     }
 
     pub fn compile_identifier(id: String) -> Result<String> {
-        // @see https://docs.oracle.com/cd/B19306_01/server.102/b14200/sql_elements008.htm
-        if id.contains('"') || id.contains("\0") {
-            bail!("Invalid identifier: \"{id}\", cannot contain '\"' or '\\0' chars");
+        // @see https://dev.mysql.com/doc/refman/8.0/en/identifiers.html#:~:text=An%20identifier%20may%20be%20quoted,it%20need%20not%20be%20quoted.)
+        if id.contains("\0") {
+            bail!("Invalid identifier: \"{id}\", cannot contain '\\0' chars");
         }
 
-        Ok(format!("\"{}\"", id))
+        Ok(format!("`{}`", id.replace("`", "``")))
     }
 
     pub fn compile_entity_source(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         source: &sql::EntitySource,
         include_alias: bool,
     ) -> Result<String> {
@@ -355,17 +350,16 @@ impl OracleJdbcQueryCompiler {
         Ok(if include_alias {
             let alias = Self::compile_identifier(source.alias.clone())?;
 
-            format!("{id} {alias}")
+            format!("{id} AS {alias}")
         } else {
             id
         })
     }
 
-    pub fn compile_source_identifier(source: &OracleJdbcEntitySourceConfig) -> Result<String> {
-        // TODO: custom query
+    pub fn compile_source_identifier(source: &MysqlJdbcEntitySourceConfig) -> Result<String> {
         Ok(match &source {
-            OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
-                owner_name: Some(db),
+            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions {
+                database_name: Some(db),
                 table_name: table,
                 ..
             }) => format!(
@@ -373,17 +367,16 @@ impl OracleJdbcQueryCompiler {
                 Self::compile_identifier(db.clone())?,
                 Self::compile_identifier(table.clone())?
             ),
-            OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
-                owner_name: None,
+            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions {
+                database_name: None,
                 table_name: table,
                 ..
             }) => Self::compile_identifier(table.clone())?,
-            OracleJdbcEntitySourceConfig::CustomQueries(_) => todo!(),
         })
     }
 
     fn compile_attribute_identifier(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         eva: &sql::AttributeId,
         include_table: bool,
@@ -393,10 +386,8 @@ impl OracleJdbcQueryCompiler {
             .get(&source.entity)
             .with_context(|| format!("Failed to find entity {:?}", source.entity.clone()))?;
 
-        // TODO: custom query
         let table = match &entity.source {
-            OracleJdbcEntitySourceConfig::Table(table) => table,
-            OracleJdbcEntitySourceConfig::CustomQueries(_) => todo!(),
+            MysqlJdbcEntitySourceConfig::Table(table) => table,
         };
 
         let column = table
@@ -432,7 +423,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_unary_op(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         op: &sql::UnaryOp,
         params: &mut Vec<JdbcQueryParam>,
@@ -442,14 +433,14 @@ impl OracleJdbcQueryCompiler {
         Ok(match op.r#type {
             sql::UnaryOpType::LogicalNot => format!("!({})", inner),
             sql::UnaryOpType::Negate => format!("-({})", inner),
-            sql::UnaryOpType::BitwiseNot => format!("UTL_RAW.BIT_COMPLEMENT({})", inner),
+            sql::UnaryOpType::BitwiseNot => format!("~({})", inner),
             sql::UnaryOpType::IsNull => format!("({}) IS NULL", inner),
             sql::UnaryOpType::IsNotNull => format!("({}) IS NOT NULL", inner),
         })
     }
 
     fn compile_binary_op(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         op: &sql::BinaryOp,
         params: &mut Vec<JdbcQueryParam>,
@@ -464,19 +455,17 @@ impl OracleJdbcQueryCompiler {
             sql::BinaryOpType::Divide => format!("({}) / ({})", l, r),
             sql::BinaryOpType::LogicalAnd => format!("({}) AND ({})", l, r),
             sql::BinaryOpType::LogicalOr => format!("({}) OR ({})", l, r),
-            sql::BinaryOpType::Modulo => format!("MOD({}, {})", l, r),
-            sql::BinaryOpType::Exponent => format!("POWER({}, {})", l, r),
-            sql::BinaryOpType::BitwiseAnd => format!("UTL_RAW.BIT_AND({}, {})", l, r),
-            sql::BinaryOpType::BitwiseOr => format!("UTL_RAW.BIT_OR({}, {})", l, r),
-            sql::BinaryOpType::BitwiseXor => format!("UTL_RAW.BIT_XOR({}, {})", l, r),
-            sql::BinaryOpType::BitwiseShiftLeft => unimplemented!(),
-            sql::BinaryOpType::BitwiseShiftRight => unimplemented!(),
-            sql::BinaryOpType::Concat => format!("({}) || ({})", l, r),
+            sql::BinaryOpType::Modulo => format!("({}) % ({})", l, r),
+            sql::BinaryOpType::Exponent => format!("POW({}, {})", l, r),
+            sql::BinaryOpType::BitwiseAnd => format!("({}) & ({})", l, r),
+            sql::BinaryOpType::BitwiseOr => format!("({}) | ({})", l, r),
+            sql::BinaryOpType::BitwiseXor => format!("({}) ^ ({})", l, r),
+            sql::BinaryOpType::BitwiseShiftLeft => format!("({}) << ({})", l, r),
+            sql::BinaryOpType::BitwiseShiftRight => format!("({}) >> ({})", l, r),
+            sql::BinaryOpType::Concat => format!("CONCAT({}, {})", l, r),
             sql::BinaryOpType::Regexp => format!("REGEXP_LIKE({}, {})", l, r),
             sql::BinaryOpType::Equal => format!("({}) = ({})", l, r),
-            sql::BinaryOpType::NullSafeEqual => {
-                format!("SYS_OP_MAP_NONNULL({}) = SYS_OP_MAP_NONNULL({})", l, r)
-            }
+            sql::BinaryOpType::NullSafeEqual => format!("({}) <=> ({})", l, r),
             sql::BinaryOpType::NotEqual => format!("({}) != ({})", l, r),
             sql::BinaryOpType::GreaterThan => format!("({}) > ({})", l, r),
             sql::BinaryOpType::GreaterThanOrEqual => format!("({}) >= ({})", l, r),
@@ -486,7 +475,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_cast(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         cast: &sql::Cast,
         params: &mut Vec<JdbcQueryParam>,
@@ -494,32 +483,35 @@ impl OracleJdbcQueryCompiler {
         let arg = Self::compile_expr(conf, query, &cast.expr, params)?;
 
         Ok(match &cast.r#type {
-            DataType::Utf8String(_) => format!("TO_NCHAR({})", arg),
-            DataType::Binary => format!("UTL_RAW.CAST_TO_RAW({})", arg),
+            DataType::Utf8String(_) => format!("CAST({} AS NCHAR)", arg),
+            DataType::Binary => format!("CAST({} AS BINARY)", arg),
             DataType::Boolean => format!("CASE WHEN ({}) THEN TRUE ELSE FALSE END", arg),
-            DataType::Int8
-            | DataType::UInt8
-            | DataType::Int16
-            | DataType::UInt16
-            | DataType::Int32
-            | DataType::UInt32
-            | DataType::Int64
-            | DataType::UInt64
-            | DataType::Decimal(_) => format!("TO_NUMBER({})", arg),
-            DataType::Float32 => format!("TO_BINARY_FLOAT({})", arg),
-            DataType::Float64 => format!("TO_BINARY_DOUBLE({})", arg),
-            DataType::JSON => format!("JSON_SERIALIZE({})", arg),
-            DataType::Date => format!("TO_DATE({})", arg),
-            DataType::DateTime => format!("TO_TIMESTAMP({})", arg),
-            DataType::DateTimeWithTZ => format!("TO_TIMESTAMP_TZ({})", arg),
+            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
+                format!("CAST({} AS SIGNED)", arg)
+            }
+            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
+                format!("CAST({} AS UNSIGNED)", arg)
+            }
+            DataType::Decimal(opts) => format!(
+                "CAST({} AS DECIMAL({}, {}))",
+                arg,
+                opts.precision.unwrap_or(65),
+                opts.scale.unwrap_or(30)
+            ),
+            DataType::Float32 => format!("CAST({} AS FLOAT)", arg),
+            DataType::Float64 => format!("CAST({} AS DOUBLE)", arg),
+            DataType::JSON => format!("CAST({} AS JSON)", arg),
+            DataType::Date => format!("CAST({} AS DATE)", arg),
+            DataType::DateTime => format!("CAST({} AS DATETIME)", arg),
+            DataType::DateTimeWithTZ => panic!("MySQL does not support Date Time TZ types"),
             DataType::Null => format!("CASE WHEN ({}) THEN NULL ELSE NULL END", arg),
-            DataType::Uuid => unimplemented!(),
-            DataType::Time => unimplemented!(),
+            DataType::Uuid => panic!("MySQL does not support UUID types"),
+            DataType::Time => format!("CAST({} AS TIME)", arg),
         })
     }
 
     fn compile_function_call(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         func: &sql::FunctionCall,
         params: &mut Vec<JdbcQueryParam>,
@@ -546,7 +538,7 @@ impl OracleJdbcQueryCompiler {
                 Self::compile_expr(conf, query, &*call.start, params)?,
                 Self::compile_expr(conf, query, &*call.len, params)?
             ),
-            sql::FunctionCall::Uuid => "SYS_GUID()".into(),
+            sql::FunctionCall::Uuid => "UUID()".into(),
             sql::FunctionCall::Coalesce(args) => format!(
                 "COALECSE({})",
                 args.iter()
@@ -558,7 +550,7 @@ impl OracleJdbcQueryCompiler {
     }
 
     fn compile_aggregate_call(
-        conf: &OracleJdbcConnectorEntityConfig,
+        conf: &MysqlJdbcConnectorEntityConfig,
         query: &sql::Query,
         agg: &sql::AggregateCall,
         params: &mut Vec<JdbcQueryParam>,
@@ -586,7 +578,7 @@ impl OracleJdbcQueryCompiler {
                     call.separator.clone(),
                 )));
                 format!(
-                    "LISTAGG({}, ?) WITHIN GROUP (ORDER BY NULL)",
+                    "GROUP_CONCAT({} SEPARATOR ?)",
                     Self::compile_expr(conf, query, &call.expr, params)?,
                 )
             }
@@ -607,46 +599,46 @@ mod tests {
 
     use super::*;
 
-    fn compile_select(select: sql::Select, conf: OracleJdbcConnectorEntityConfig) -> JdbcQuery {
+    fn compile_select(select: sql::Select, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
         let query = sql::Query::Select(select);
-        OracleJdbcQueryCompiler::compile_select_query(&conf, &query, query.as_select().unwrap())
+        MysqlJdbcQueryCompiler::compile_select_query(&conf, &query, query.as_select().unwrap())
             .unwrap()
     }
 
-    fn compile_insert(insert: sql::Insert, conf: OracleJdbcConnectorEntityConfig) -> JdbcQuery {
+    fn compile_insert(insert: sql::Insert, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
         let query = sql::Query::Insert(insert);
-        OracleJdbcQueryCompiler::compile_insert_query(&conf, &query, query.as_insert().unwrap())
+        MysqlJdbcQueryCompiler::compile_insert_query(&conf, &query, query.as_insert().unwrap())
             .unwrap()
     }
 
-    fn compile_update(update: sql::Update, conf: OracleJdbcConnectorEntityConfig) -> JdbcQuery {
+    fn compile_update(update: sql::Update, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
         let query = sql::Query::Update(update);
-        OracleJdbcQueryCompiler::compile_update_query(&conf, &query, query.as_update().unwrap())
+        MysqlJdbcQueryCompiler::compile_update_query(&conf, &query, query.as_update().unwrap())
             .unwrap()
     }
 
-    fn compile_delete(delete: sql::Delete, conf: OracleJdbcConnectorEntityConfig) -> JdbcQuery {
+    fn compile_delete(delete: sql::Delete, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
         let query = sql::Query::Delete(delete);
-        OracleJdbcQueryCompiler::compile_delete_query(&conf, &query, query.as_delete().unwrap())
+        MysqlJdbcQueryCompiler::compile_delete_query(&conf, &query, query.as_delete().unwrap())
             .unwrap()
     }
 
     fn create_entity_config(
         id: &str,
-        source: OracleJdbcEntitySourceConfig,
-    ) -> EntitySource<OracleJdbcEntitySourceConfig> {
+        source: MysqlJdbcEntitySourceConfig,
+    ) -> EntitySource<MysqlJdbcEntitySourceConfig> {
         EntitySource::new(
             EntityConfig::minimal(id, vec![], EntitySourceConfig::minimal("")),
             source,
         )
     }
 
-    fn mock_entity_table() -> OracleJdbcConnectorEntityConfig {
-        let mut conf = OracleJdbcConnectorEntityConfig::new();
+    fn mock_entity_table() -> MysqlJdbcConnectorEntityConfig {
+        let mut conf = MysqlJdbcConnectorEntityConfig::new();
 
         conf.add(create_entity_config(
             "entity",
-            OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions::new(
+            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions::new(
                 None,
                 "table".to_string(),
                 HashMap::from([("attr1".to_string(), "col1".to_string())]),
@@ -654,7 +646,7 @@ mod tests {
         ));
         conf.add(create_entity_config(
             "other",
-            OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions::new(
+            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions::new(
                 None,
                 "other".to_string(),
                 HashMap::from([("otherattr1".to_string(), "othercol1".to_string())]),

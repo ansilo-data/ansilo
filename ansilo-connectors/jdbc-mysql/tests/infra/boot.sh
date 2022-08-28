@@ -5,27 +5,27 @@
 set -e
 
 TIMEOUT_DURATION=1800
-LISTEN_PORT=1522
+LISTEN_PORT=3307
 
 function cleanup {
-    if [[ ! -z "$ORACLE_PID" ]];
+    if [[ ! -z "$MYSQL_PID" ]];
     then
         set +e
-        echo "Terminating oracle..."
-        kill -INT $ORACLE_PID
+        echo "Terminating mysql..."
+        kill -INT $MYSQL_PID
     fi
 }
 
 trap cleanup EXIT INT TERM
 
-echo "Starting oracle..."
-/bin/sh -c $ORACLE_BASE/$RUN_FILE &
-ORACLE_PID=$$
-echo "Oracle started as pid $ORACLE_PID"
+echo "Starting mysql..."
+docker-entrypoint.sh &
+MYSQL_PID=$$
+echo "Mysql started as pid $MYSQL_PID"
 
-echo "Running lazyprox"
+echo "Running lazyprox..."
 lazyprox \
     --listen 0.0.0.0:$LISTEN_PORT \
-    --dest localhost:1521 \
+    --dest localhost:3306 \
     --idle-timeout-secs $TIMEOUT_DURATION
 

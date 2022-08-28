@@ -1,5 +1,5 @@
 [package]
-name = "ansilo-connectors-jdbc-oracle"
+name = "ansilo-connectors-jdbc-mysql"
 version = "0.1.0"
 edition = "2021"
 
