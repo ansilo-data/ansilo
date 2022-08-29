@@ -2,7 +2,6 @@ package com.ansilo.connectors.mysql.mapping;
 
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.data.*;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 
@@ -29,6 +28,9 @@ public class MysqlJdbcDataMapping extends JdbcDataMapping {
 
             case "TIMESTAMP":
                 return new DateTimeWithTzDataType();
+
+            case "JSON":
+                return new JsonDataType();
 
             default:
                 break;
