@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, fs, path::PathBuf, sync::Mutex, time::Duration};
+use std::{collections::HashMap, env, fs, path::PathBuf, sync::Mutex, time::Duration, thread};
 
 use ansilo_connectors_base::{
     interface::{Connection, QueryHandle},
@@ -39,6 +39,8 @@ pub fn start_mysql() -> ContainerInstances {
         "ready for connections",
         Duration::from_secs(60),
     );
+
+    thread::sleep(Duration::from_secs(15));
 
     cache.save(&services);
 
