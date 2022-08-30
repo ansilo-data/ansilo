@@ -21,6 +21,7 @@ pub mod initdb;
 pub mod manager;
 pub mod proc;
 pub mod server;
+pub mod proto;
 
 mod configure;
 #[cfg(test)]
