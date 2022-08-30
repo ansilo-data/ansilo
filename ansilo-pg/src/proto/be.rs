@@ -1,17 +1,14 @@
 // @see https://www.postgresql.org/docs/current/protocol-message-formats.html
 
-use std::{
-    ffi::CString,
-    io::{Cursor, Write},
-};
+use std::{ffi::CString, io::Cursor};
 
 use ansilo_core::err::{Context, Result};
-use tokio::io::AsyncWrite;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::common::PostgresMessage;
 
 /// Postgres messages that are sent from the backend.
-/// We only care about authentication and error messages, rest we treat as opaque.
+/// We only care about authentication, query and error messages, we treat the rest as opaque.
 #[derive(Debug, PartialEq, Clone)]
 pub enum PostgresBackendMessage {
     AuthenticationOk,
@@ -21,6 +18,7 @@ pub enum PostgresBackendMessage {
     AuthenticationSaslFinal(Vec<u8>),
     AuthenticationCleartextPassword,
     ErrorResponse(String),
+    ReadyForQuery(u8),
     Other(PostgresMessage),
 }
 
@@ -39,9 +37,30 @@ impl PostgresBackendMessage {
         Ok(())
     }
 
+    /// Reads a message from the postgres backend
+    ///
+    /// NOTE: We dont currently parse all the types as defined in `PostgresBackendMessage`,
+    /// only those needed for querying postgres. All messages not supported will be returned
+    /// as the `Other` variant.
+    pub async fn read(stream: &mut (impl AsyncRead + Unpin)) -> Result<Self> {
+        let message = PostgresMessage::read(stream).await?;
+
+        Ok(match message.tag() {
+            b'Z' => Self::ReadyForQuery(
+                *message
+                    .body()
+                    .get(0)
+                    .context("Malformed ReadyForQuery message from backend")?,
+            ),
+            _ => Self::Other(message),
+        })
+    }
+
     /// Converts the message into a postgres message that can
     /// be sent over the wire.
     pub fn serialise(self) -> Result<PostgresMessage> {
+        use std::io::Write;
+
         fn write_i32(body: &mut Cursor<Vec<u8>>, val: i32) -> Result<()> {
             body.write_all(val.to_be_bytes().as_slice())?;
             Ok(())
@@ -83,6 +102,10 @@ impl PostgresBackendMessage {
                 body.write_all(data.as_slice())?;
                 Ok(())
             })?,
+            Self::ReadyForQuery(status) => PostgresMessage::build(b'Z', |body| {
+                body.write_all(&[status])?;
+                Ok(())
+            })?,
             Self::ErrorResponse(msg) => {
                 PostgresMessage::build(b'E', |body| {
                     // @see https://www.postgresql.org/docs/current/protocol-error-fields.html
@@ -111,6 +134,11 @@ mod tests {
     use tokio_test::io::Builder;
 
     use super::*;
+
+    async fn parse(buf: &[u8]) -> Result<PostgresBackendMessage> {
+        let mut stream = Builder::new().read(buf).build();
+        PostgresBackendMessage::read(&mut stream).await
+    }
 
     fn to_buff(msg: PostgresBackendMessage) -> Vec<u8> {
         msg.serialise().unwrap().into_raw()
@@ -234,5 +262,34 @@ mod tests {
             ]))),
             vec![1u8, 2, 3]
         )
+    }
+
+    #[test]
+    fn test_proto_be_serialise_ready_for_query() {
+        assert_eq!(
+            to_buff(PostgresBackendMessage::ReadyForQuery(b'I')),
+            vec![
+                b'Z', // tag
+                0, 0, 0, 5,    // len
+                b'I', // status
+            ]
+        )
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_ready_for_query() {
+        let parsed = parse(&[b'Z', 0, 0, 0, 5, b'I']).await.unwrap();
+
+        assert_eq!(parsed, PostgresBackendMessage::ReadyForQuery(b'I'));
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_other() {
+        let parsed = parse(&[b'T', 0, 0, 0, 4]).await.unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::Other(PostgresMessage::new(vec![b'T', 0, 0, 0, 4]))
+        );
     }
 }
