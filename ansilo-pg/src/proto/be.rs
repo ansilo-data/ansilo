@@ -23,20 +23,6 @@ pub enum PostgresBackendMessage {
 }
 
 impl PostgresBackendMessage {
-    /// Writes the message to the supplied stream
-    pub async fn write(self, stream: &mut (impl AsyncWrite + Unpin)) -> Result<()> {
-        use tokio::io::AsyncWriteExt;
-
-        let msg = self.serialise()?;
-
-        stream
-            .write_all(msg.as_slice())
-            .await
-            .context("Failed to write postgres backend message")?;
-
-        Ok(())
-    }
-
     /// Reads a message from the postgres backend
     ///
     /// NOTE: We dont currently parse all the types as defined in `PostgresBackendMessage`,
@@ -54,6 +40,20 @@ impl PostgresBackendMessage {
             ),
             _ => Self::Other(message),
         })
+    }
+    
+    /// Writes the message to the supplied stream
+    pub async fn write(self, stream: &mut (impl AsyncWrite + Unpin)) -> Result<()> {
+        use tokio::io::AsyncWriteExt;
+
+        let msg = self.serialise()?;
+
+        stream
+            .write_all(msg.as_slice())
+            .await
+            .context("Failed to write postgres backend message")?;
+
+        Ok(())
     }
 
     /// Converts the message into a postgres message that can
@@ -146,7 +146,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_proto_be_write() {
-        let msg = PostgresBackendMessage::Other(PostgresMessage::new(vec![1, 2, 3]));
+        let msg = PostgresBackendMessage::Other(PostgresMessage::Tagged(vec![1, 2, 3]));
 
         let mut stream = Builder::new().write(&[1, 2, 3]).build();
 
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn test_proto_be_serialise_other() {
         assert_eq!(
-            to_buff(PostgresBackendMessage::Other(PostgresMessage::new(vec![
+            to_buff(PostgresBackendMessage::Other(PostgresMessage::Tagged(vec![
                 1, 2, 3
             ]))),
             vec![1u8, 2, 3]
@@ -289,7 +289,7 @@ mod tests {
 
         assert_eq!(
             parsed,
-            PostgresBackendMessage::Other(PostgresMessage::new(vec![b'T', 0, 0, 0, 4]))
+            PostgresBackendMessage::Other(PostgresMessage::Tagged(vec![b'T', 0, 0, 0, 4]))
         );
     }
 }
