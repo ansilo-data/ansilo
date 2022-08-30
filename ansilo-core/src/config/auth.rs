@@ -1,101 +1,125 @@
-use std::collections::HashMap;
-
-use serde::{Serialize, Deserialize};
-
-use super::*;
+use serde::{Deserialize, Serialize};
 
 /// Authentication options for the node
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub struct AuthConfig {
-    /// List of node authorities, used to validate incoming auth tokens
-    pub authorities: Vec<AuthorityConfig>,
-    /// List of roles which grant permissions to entities
-    pub roles: Vec<RoleConfig>,
-    // TODO
+    /// List of auth providers, used to validate incoming auth tokens
+    pub providers: Vec<AuthProviderConfig>,
+    /// List of users
+    pub users: Vec<UserConfig>,
+    /// List of service users
+    pub service_users: Vec<ServiceUserConfig>,
 }
 
-/// Defines an authority, used to authenticate tokens
-// TODO: possibly use strongly-typed enum
+/// Defines an auth provider, used to authenticate tokens
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct AuthorityConfig {
-    /// The authority's name
-    pub name: String,
-    /// The type of the authority
-    pub r#type: String,
-    /// Type-specific options for the authority
-    pub options: HashMap<String, String>,
-    /// Rules mapping from token claims to roles
-    pub auth_mappings: Vec<AuthMappingConfig>,
-}
-
-/// Defines a role which grants permissions when assumed
-/// TODO: consider versioning
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct RoleConfig {
-    /// The ID of the role
+pub struct AuthProviderConfig {
+    /// The id of the auth provider
     pub id: String,
-    /// The role's name
-    pub name: String,
-    /// A description of the role
-    pub description: String,
-    /// The permissions granted by the role
-    pub permissions: Vec<PermissionConfig>,
+    /// The type-specific options
+    #[serde(flatten)]
+    pub r#type: AuthProviderTypeConfig,
 }
 
-/// Defines a permission which grants access 
-/// TODO: Maybe it would be nice to have a more SQL-like GRANT syntax?
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct PermissionConfig {
-    /// The resources which this permission applies to
-    /// The format is:
-    ///     `ansilo:[node]:[type]:...`
-    /// Currently only entities are supported:
-    ///     `ansilo:self:entity:[name]:[version]:[attributes]`
-    /// For example:
-    ///     `ansilo:self:entity:contacts:1.*:*`
-    pub resources: Vec<ARI>,
-    /// The actions allowed on this resource
-    pub actions: Vec<PermissionAction>,
-    /// Conditions to validate on this resource
-    pub conditions: Vec<PermissionCondition>,
+#[serde(tag = "type")]
+pub enum AuthProviderTypeConfig {
+    #[serde(rename = "jwt")]
+    Jwt(JwtAuthProviderConfig),
+    #[serde(rename = "saml")]
+    Saml(SamlAuthProviderConfig),
+    #[serde(rename = "custom")]
+    Custom(CustomAuthProviderConfig),
 }
 
-/// Actions that can be performed
+/// Defines options used for JWT token authentication
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub enum PermissionAction {
-    Select,
-    Insert,
-    Update,
-    Delete,
+pub struct JwtAuthProviderConfig {
+    /// URL of a JWK file used to retrieve token public keys
+    pub jwk: Option<String>,
+    /// Inline token public key
+    pub public_key: Option<String>,
 }
 
-/// Conditions to be applied on the permissions
-/// TODO: strong typing?
+/// Defines options used for SAML2 authentication
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct PermissionCondition {
-    /// The type of the condition
-    pub r#type: String,
-    /// The options associated to the permission
-    pub options: HashMap<String, String>,
+pub struct SamlAuthProviderConfig {
+    /// URL of a IDP XML metadata file used to retrieve SAML signing certs
+    pub metadata: Option<String>,
+    /// Inline signing certificate
+    pub x509_certificate: Option<String>,
 }
 
-/// Mappings rules from incoming (authenticated) tokens to roles
+/// Defines options used for custom authentication
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct AuthMappingConfig {
-    /// Checks to make on the token 
-    pub checks: Vec<TokenCheckConfig>,
-    /// The inherited roles if the checks pass
-    pub roles: Vec<String>
+pub struct CustomAuthProviderConfig {
+    /// Shell script to invoke to validate authentication
+    pub shell: Option<String>,
 }
 
-/// Checks to apply to the token
+/// Defines a user
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct TokenCheckConfig {
-    /// The claim to check on the incoming token
-    pub claim: String,
-    /// The operator used to check the claim
-    /// TODO: use enum
-    pub operator: String,
-    /// The value to check against
-    pub value: String
+pub struct UserConfig {
+    /// The username used to login
+    pub username: String,
+    /// A description of the user
+    pub description: Option<String>,
+    /// The provider used to authenticate this user
+    pub provider: String,
+    /// Authenticate type specific options
+    #[serde(flatten)]
+    pub r#type: UserTypeOptions,
+}
+
+/// Type-specific authentication options for this user
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum UserTypeOptions {
+    #[serde(rename = "password")]
+    Password(PasswordUserConfig),
+    #[serde(rename = "jwt")]
+    Jwt(JwtUserConfig),
+    #[serde(rename = "saml")]
+    Saml(SamlUserConfig),
+    #[serde(rename = "custom")]
+    Custom(serde_yaml::Mapping),
+}
+
+/// Defines options for user password authentication
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct PasswordUserConfig {
+    /// The password
+    pub password: String
+}
+
+/// Defines options used for JWT user authentication
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct JwtUserConfig {
+    /// Defines which claims are required to pass authentication
+    /// All claims defined in this node must be present in the token
+    /// to succeed.
+    pub claims: serde_yaml::Value,
+}
+
+/// Defines options used for SAML user authentication
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct SamlUserConfig {
+    /// Defines which assertions are required to pass authentication
+    /// All assertions defined in this node must be present in the SAML payload
+    /// to succeed.
+    pub assertions: serde_yaml::Value,
+}
+
+/// Defines a service user, used to authenticate during build, cron jobs etc
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ServiceUserConfig {
+    /// The id of the service user
+    pub id: String,
+    /// The username to authenticate as
+    pub username: String,
+    /// A description of the user
+    pub description: Option<String>,
+    /// The shell script to invoke used to retrieve the token
+    /// used to authenticate as this user
+    pub shell: String,
 }

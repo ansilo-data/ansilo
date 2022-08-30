@@ -26,6 +26,22 @@ impl ConnectionHandler for PostgresConnectionHandler {
         // We should either have pooling of these sockets in some fashion
         // or become fully aware of the protocol messages and channel it
         // through the postgres connection API
+        
+
+        // process:
+        // 1. get username from startup request
+        // 2. get user from config
+        // 3. get auth provider for user
+        // 4. auth context = match provider and perform authentication (password = sasl, jwt|saml = cleartext token)
+        // 5. acquire postgres connection
+        // 6. nonce = generate secret
+        // 7. assume user: exec ansilo_set_user(username, nonce)
+        // 8. set auth context: exec ansilo_set_auth_context(context)
+        // 9. proxy queries and results
+        // 10. clear session: pg discard all (possibly ansilo_clear_auth_context() if required)
+        // 11. reset user to ansiloapp: exec ansilo_reset_user(nonce)
+        // 12. release connection back to pool
+
         let sock_path = self.conf.pg.pg_socket_path();
         let mut con = UnixStream::connect(sock_path).await?;
 
