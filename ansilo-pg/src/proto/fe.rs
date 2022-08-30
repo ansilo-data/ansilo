@@ -7,13 +7,15 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::common::PostgresMessage;
 
+const PG_PROTO_VERSION: i32 = 196608;
+
 /// Messages recieved from the postgres frontend.
 /// We only care about authentication query, and terminate messages, the rest we treat as opaque
 #[derive(Debug, Clone, PartialEq)]
 pub enum PostgresFrontendMessage {
     StartupMessage(PostgresFrontendStartupMessage),
     PasswordMessage(Vec<u8>),
-    Query(CString),
+    Query(String),
     Terminate,
     Other(PostgresMessage),
 }
@@ -27,6 +29,15 @@ pub struct PostgresFrontendStartupMessage {
     params: HashMap<String, String>,
 }
 
+impl PostgresFrontendStartupMessage {
+    pub fn new(params: HashMap<String, String>) -> Self {
+        Self {
+            protocol_version: PG_PROTO_VERSION,
+            params,
+        }
+    }
+}
+
 impl PostgresFrontendMessage {
     /// Reads a postgres startup message from the supplied stream
     pub async fn read_startup(
@@ -37,7 +48,10 @@ impl PostgresFrontendMessage {
         ensure!(message.body_length() >= 4, "Invalid startup message length");
 
         let protocol_version = i32::from_be_bytes(message.body()[..4].try_into().unwrap());
-        ensure!(protocol_version == 196608, "Unexpected protocol version");
+        ensure!(
+            protocol_version == PG_PROTO_VERSION,
+            "Unexpected protocol version"
+        );
 
         let body = message.body();
 
@@ -76,9 +90,10 @@ impl PostgresFrontendMessage {
 
         Ok(match message.tag() {
             b'P' | b'D' | b'E' | b'B' | b'S' | b'C' | b'd' | b'c' | b'f' => Self::Other(message),
-            b'Q' => {
-                Self::Query(CString::new(message.body()).context("Failed to parse query string")?)
-            }
+            b'Q' => Self::Query(
+                String::from_utf8(message.body().to_vec())
+                    .context("Failed to parse query string")?,
+            ),
             b'X' => Self::Terminate,
             b'p' => Self::PasswordMessage(message.body().to_vec()),
             _ => bail!("Unknown postgres frontend message: {:?}", message),
@@ -121,7 +136,7 @@ impl PostgresFrontendMessage {
                 Ok(())
             })?,
             Self::Query(query) => PostgresMessage::build(b'Q', |body| {
-                body.write_all(query.as_bytes_with_nul())?;
+                body.write_all(CString::new(query)?.as_bytes_with_nul())?;
                 Ok(())
             })?,
             Self::Terminate => PostgresMessage::build(b'X', |_| Ok(()))?,
@@ -229,9 +244,7 @@ mod tests {
     #[test]
     fn test_proto_fe_message_serialise_query() {
         assert_eq!(
-            to_buff(PostgresFrontendMessage::Query(
-                CString::new("test").unwrap()
-            )),
+            to_buff(PostgresFrontendMessage::Query("test".into())),
             vec![
                 b'Q', // tag
                 0, 0, 0, 9, // len

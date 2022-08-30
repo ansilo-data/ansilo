@@ -88,7 +88,7 @@ mod tests {
         let conf = PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
             postgres_conf_path: None,
-            data_dir: PathBuf::from(format!("/tmp/ansilo-tests/initdb-test/{}", test_name)),
+            data_dir: PathBuf::from(format!("/tmp/ansilo-tests/initdb-test/data/{}", test_name)),
             socket_dir_path: PathBuf::from("/tmp/"),
             fdw_socket_path: PathBuf::from("not-used"),
         };

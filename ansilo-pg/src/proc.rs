@@ -41,7 +41,7 @@ impl ChildProc {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
-                .with_context(|| format!("{} Failed to spawn process", log_prefix))?,
+                .with_context(|| format!("{} Failed to spawn process: {:?}", log_prefix, cmd))?,
         })
     }
 

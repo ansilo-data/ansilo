@@ -32,6 +32,14 @@ impl PostgresBackendMessage {
         let message = PostgresMessage::read(stream).await?;
 
         Ok(match message.tag() {
+            b'R' if message.body_length() == 4 => {
+                let auth_type = i32::from_be_bytes(message.body().try_into().unwrap());
+
+                match auth_type {
+                    0 => Self::AuthenticationOk,
+                    _ => Self::Other(message),
+                }
+            }
             b'Z' => Self::ReadyForQuery(
                 *message
                     .body()
@@ -41,7 +49,7 @@ impl PostgresBackendMessage {
             _ => Self::Other(message),
         })
     }
-    
+
     /// Writes the message to the supplied stream
     pub async fn write(self, stream: &mut (impl AsyncWrite + Unpin)) -> Result<()> {
         use tokio::io::AsyncWriteExt;
@@ -257,9 +265,9 @@ mod tests {
     #[test]
     fn test_proto_be_serialise_other() {
         assert_eq!(
-            to_buff(PostgresBackendMessage::Other(PostgresMessage::Tagged(vec![
-                1, 2, 3
-            ]))),
+            to_buff(PostgresBackendMessage::Other(PostgresMessage::Tagged(
+                vec![1, 2, 3]
+            ))),
             vec![1u8, 2, 3]
         )
     }
@@ -281,6 +289,13 @@ mod tests {
         let parsed = parse(&[b'Z', 0, 0, 0, 5, b'I']).await.unwrap();
 
         assert_eq!(parsed, PostgresBackendMessage::ReadyForQuery(b'I'));
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_authentication_ok() {
+        let parsed = parse(&[b'R', 0, 0, 0, 8, 0, 0, 0, 0]).await.unwrap();
+
+        assert_eq!(parsed, PostgresBackendMessage::AuthenticationOk);
     }
 
     #[tokio::test]

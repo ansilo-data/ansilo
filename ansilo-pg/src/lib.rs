@@ -16,6 +16,7 @@ use manager::PostgresServerManager;
 /// ansilo process over a unix socket.
 pub mod conf;
 pub mod connection;
+pub mod raw_connection;
 pub mod fdw;
 pub mod initdb;
 pub mod manager;
@@ -160,7 +161,7 @@ mod tests {
         let conf = PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
             postgres_conf_path: None,
-            data_dir: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}", test_name)),
+            data_dir: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}/data/", test_name)),
             socket_dir_path: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}", test_name)),
             fdw_socket_path: PathBuf::from("not-used"),
         };
