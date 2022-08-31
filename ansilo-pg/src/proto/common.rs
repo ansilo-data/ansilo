@@ -91,8 +91,8 @@ impl PostgresMessage {
         buff.flush().context("Failed to flush buffer")?;
 
         let mut buff = buff.into_inner();
-        let len = i32::try_from(buff.len())
-            .context("Body is too large to write to postgres message")?;
+        let len =
+            i32::try_from(buff.len()).context("Body is too large to write to postgres message")?;
 
         buff[0..=3].copy_from_slice(len.to_be_bytes().as_slice());
 
@@ -108,10 +108,10 @@ impl PostgresMessage {
     }
 
     /// Gets the postgres message tag
-    pub fn tag(&self) -> u8 {
+    pub fn tag(&self) -> Option<u8> {
         match self {
-            Self::Tagged(b) => b[0],
-            Self::Untagged(_) => panic!("Message is not tagged"),
+            Self::Tagged(b) => Some(b[0]),
+            Self::Untagged(_) => None,
         }
     }
 
@@ -197,7 +197,7 @@ mod tests {
 
         assert_eq!(parsed, PostgresMessage::Tagged(vec![b'A', 0, 0, 0, 4]));
 
-        assert_eq!(parsed.tag(), b'A');
+        assert_eq!(parsed.tag().unwrap(), b'A');
         assert_eq!(parsed.raw_length(), 4);
         assert_eq!(parsed.body_length(), 0);
         assert_eq!(parsed.as_slice(), &[b'A', 0, 0, 0, 4]);
@@ -213,7 +213,7 @@ mod tests {
             PostgresMessage::Tagged(vec![b'A', 0, 0, 0, 7, 1, 2, 3])
         );
 
-        assert_eq!(parsed.tag(), b'A');
+        assert_eq!(parsed.tag().unwrap(), b'A');
         assert_eq!(parsed.raw_length(), 7);
         assert_eq!(parsed.body_length(), 3);
         assert_eq!(parsed.as_slice(), &[b'A', 0, 0, 0, 7, 1, 2, 3]);
@@ -307,6 +307,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(built, PostgresMessage::Untagged(vec![0, 0, 0, 7, 1, 2, 3]));
+        assert_eq!(built.tag(), None);
     }
 
     #[test]

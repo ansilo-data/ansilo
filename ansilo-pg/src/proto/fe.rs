@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, ffi::CString};
 
-use ansilo_core::err::{bail, ensure, Context, Result};
+use ansilo_core::err::{bail, ensure, Context, Error, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::common::PostgresMessage;
@@ -10,7 +10,7 @@ use super::common::PostgresMessage;
 const PG_PROTO_VERSION: i32 = 196608;
 
 /// Messages recieved from the postgres frontend.
-/// We only care about authentication query, and terminate messages, the rest we treat as opaque
+/// We only care about authentication, query and terminate messages, the rest we treat as opaque
 #[derive(Debug, Clone, PartialEq)]
 pub enum PostgresFrontendMessage {
     StartupMessage(PostgresFrontendStartupMessage),
@@ -18,6 +18,49 @@ pub enum PostgresFrontendMessage {
     Query(String),
     Terminate,
     Other(PostgresMessage),
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum PostgresFrontendMessageTag {
+    AuthenticationData = b'p',
+    Bind = b'B',
+    Close = b'C',
+    CopyData = b'd',
+    CopyDone = b'c',
+    CopyFail = b'f',
+    Describe = b'D',
+    Execute = b'E',
+    Flush = b'H',
+    FunctionCall = b'F',
+    Parse = b'P',
+    Query = b'Q',
+    Sync = b'S',
+    Terminate = b'X',
+}
+
+impl TryFrom<u8> for PostgresFrontendMessageTag {
+    type Error = Error;
+
+    fn try_from(value: u8) -> Result<Self> {
+        Ok(match value {
+            b'p' => Self::AuthenticationData,
+            b'B' => Self::Bind,
+            b'C' => Self::Close,
+            b'd' => Self::CopyData,
+            b'c' => Self::CopyDone,
+            b'f' => Self::CopyFail,
+            b'D' => Self::Describe,
+            b'E' => Self::Execute,
+            b'H' => Self::Flush,
+            b'F' => Self::FunctionCall,
+            b'P' => Self::Parse,
+            b'Q' => Self::Query,
+            b'S' => Self::Sync,
+            b'X' => Self::Terminate,
+            _ => bail!("Unexpected frontend message tag: {}", value),
+        })
+    }
 }
 
 /// Postgres frontend startup message
@@ -88,15 +131,17 @@ impl PostgresFrontendMessage {
     pub async fn read(stream: &mut (impl AsyncRead + Unpin)) -> Result<Self> {
         let message = PostgresMessage::read(stream).await?;
 
-        Ok(match message.tag() {
-            b'P' | b'D' | b'E' | b'B' | b'S' | b'C' | b'd' | b'c' | b'f' => Self::Other(message),
-            b'Q' => Self::Query(
-                String::from_utf8(message.body().to_vec())
-                    .context("Failed to parse query string")?,
+        Ok(match message.tag().unwrap().try_into()? {
+            PostgresFrontendMessageTag::Query => Self::Query(
+                String::from_utf8(
+                    CString::from_vec_with_nul(message.body().to_vec())
+                        .context("Failed to parse query string")?
+                        .into_bytes(),
+                )
+                .context("Failed to parse query string")?,
             ),
-            b'X' => Self::Terminate,
-            b'p' => Self::PasswordMessage(message.body().to_vec()),
-            _ => bail!("Unknown postgres frontend message: {:?}", message),
+            PostgresFrontendMessageTag::Terminate => Self::Terminate,
+            _ => Self::Other(message),
         })
     }
 
@@ -131,15 +176,35 @@ impl PostgresFrontendMessage {
 
                 Ok(())
             })?,
-            Self::PasswordMessage(p) => PostgresMessage::build(b'p', |body| {
-                body.write_all(p.as_slice())?;
-                Ok(())
-            })?,
-            Self::Query(query) => PostgresMessage::build(b'Q', |body| {
-                body.write_all(CString::new(query)?.as_bytes_with_nul())?;
-                Ok(())
-            })?,
-            Self::Terminate => PostgresMessage::build(b'X', |_| Ok(()))?,
+            Self::PasswordMessage(p) => PostgresMessage::build(
+                PostgresFrontendMessageTag::AuthenticationData as _,
+                |body| {
+                    body.write_all(p.as_slice())?;
+                    Ok(())
+                },
+            )?,
+            Self::Query(query) => {
+                PostgresMessage::build(PostgresFrontendMessageTag::Query as _, |body| {
+                    body.write_all(CString::new(query)?.as_bytes_with_nul())?;
+                    Ok(())
+                })?
+            }
+            Self::Terminate => {
+                PostgresMessage::build(PostgresFrontendMessageTag::Terminate as _, |_| Ok(()))?
+            }
+        })
+    }
+
+    // Gets the message tag for this message if available
+    pub fn tag(&self) -> Result<PostgresFrontendMessageTag> {
+        Ok(match self {
+            Self::StartupMessage(_) => {
+                bail!("Startup message does not have a tag")
+            }
+            Self::PasswordMessage(_) => PostgresFrontendMessageTag::AuthenticationData,
+            Self::Query(_) => PostgresFrontendMessageTag::Query,
+            Self::Terminate => PostgresFrontendMessageTag::Terminate,
+            Self::Other(msg) => msg.tag().context("Untagged message")?.try_into()?,
         })
     }
 }
@@ -190,17 +255,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_proto_fe_message_parse_password_manage() {
-        let parsed = parse(&[b'p', 0, 0, 0, 5, 1]).await.unwrap();
-
-        assert_eq!(parsed, PostgresFrontendMessage::PasswordMessage(vec![1]));
-    }
-
-    #[tokio::test]
     async fn test_proto_fe_message_parse_terminate() {
         let parsed = parse(&[b'X', 0, 0, 0, 4]).await.unwrap();
 
         assert_eq!(parsed, PostgresFrontendMessage::Terminate);
+        assert_eq!(parsed.tag().unwrap(), PostgresFrontendMessageTag::Terminate);
     }
 
     #[tokio::test]
@@ -213,6 +272,7 @@ mod tests {
                 b'P', 0, 0, 0, 7, 1, 2, 3
             ]))
         );
+        assert_eq!(parsed.tag().unwrap(), PostgresFrontendMessageTag::Parse);
     }
 
     #[tokio::test]

@@ -2,7 +2,7 @@
 
 use std::{ffi::CString, io::Cursor};
 
-use ansilo_core::err::{Context, Result};
+use ansilo_core::err::{bail, Context, Error, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::common::PostgresMessage;
@@ -22,6 +22,65 @@ pub enum PostgresBackendMessage {
     Other(PostgresMessage),
 }
 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum PostgresBackendMessageTag {
+    Authentication = b'R',
+    BackendKeyData = b'K',
+    BindComplete = b'2',
+    CloseComplete = b'3',
+    CommandComplete = b'C',
+    CopyInResponse = b'G',
+    CopyOutResponse = b'H',
+    CopyBothResponse = b'W',
+    DataRow = b'D',
+    EmptyQueryResponse = b'I',
+    ErrorResponse = b'E',
+    FunctionCallResponse = b'V',
+    NegotiateProtocolVersion = b'v',
+    NoData = b'n',
+    NoticeResponse = b'N',
+    NotificationResponse = b'A',
+    ParameterDescription = b't',
+    ParameterStatus = b'S',
+    ParseComplete = b'1',
+    PortalSuspended = b's',
+    ReadyForQuery = b'Z',
+    RowDescription = b'T',
+}
+
+impl TryFrom<u8> for PostgresBackendMessageTag {
+    type Error = Error;
+
+    fn try_from(value: u8) -> Result<Self> {
+        Ok(match value {
+            b'R' => Self::Authentication,
+            b'K' => Self::BackendKeyData,
+            b'2' => Self::BindComplete,
+            b'3' => Self::CloseComplete,
+            b'C' => Self::CommandComplete,
+            b'G' => Self::CopyInResponse,
+            b'H' => Self::CopyOutResponse,
+            b'W' => Self::CopyBothResponse,
+            b'D' => Self::DataRow,
+            b'I' => Self::EmptyQueryResponse,
+            b'E' => Self::ErrorResponse,
+            b'V' => Self::FunctionCallResponse,
+            b'v' => Self::NegotiateProtocolVersion,
+            b'n' => Self::NoData,
+            b'N' => Self::NoticeResponse,
+            b'A' => Self::NotificationResponse,
+            b't' => Self::ParameterDescription,
+            b'S' => Self::ParameterStatus,
+            b'1' => Self::ParseComplete,
+            b's' => Self::PortalSuspended,
+            b'Z' => Self::ReadyForQuery,
+            b'T' => Self::RowDescription,
+            _ => bail!("Unknown backend message tag: {}", value),
+        })
+    }
+}
+
 impl PostgresBackendMessage {
     /// Reads a message from the postgres backend
     ///
@@ -31,8 +90,8 @@ impl PostgresBackendMessage {
     pub async fn read(stream: &mut (impl AsyncRead + Unpin)) -> Result<Self> {
         let message = PostgresMessage::read(stream).await?;
 
-        Ok(match message.tag() {
-            b'R' if message.body_length() == 4 => {
+        Ok(match message.tag().unwrap().try_into()? {
+            PostgresBackendMessageTag::Authentication if message.body_length() == 4 => {
                 let auth_type = i32::from_be_bytes(message.body().try_into().unwrap());
 
                 match auth_type {
@@ -40,7 +99,7 @@ impl PostgresBackendMessage {
                     _ => Self::Other(message),
                 }
             }
-            b'Z' => Self::ReadyForQuery(
+            PostgresBackendMessageTag::ReadyForQuery => Self::ReadyForQuery(
                 *message
                     .body()
                     .get(0)
@@ -76,46 +135,61 @@ impl PostgresBackendMessage {
 
         Ok(match self {
             Self::Other(m) => m,
-            Self::AuthenticationOk => PostgresMessage::build(b'R', |body| {
-                write_i32(body, 0)?;
-                Ok(())
-            })?,
-            Self::AuthenticationCleartextPassword => PostgresMessage::build(b'R', |body| {
-                write_i32(body, 3)?;
-                Ok(())
-            })?,
-            Self::AuthenticationMd5Password(salt) => PostgresMessage::build(b'R', |body| {
-                write_i32(body, 5)?;
-                body.write_all(salt.as_slice())?;
-                Ok(())
-            })?,
-            Self::AuthenticationSasl(methods) => PostgresMessage::build(b'R', move |body| {
-                write_i32(body, 10)?;
-                for method in methods.into_iter() {
-                    body.write_all(
-                        CString::new(&*method)
-                            .context("Cannot convert sasl method to cstring")?
-                            .as_bytes_with_nul(),
-                    )?;
-                }
-                Ok(())
-            })?,
-            Self::AuthenticationSaslContinue(data) => PostgresMessage::build(b'R', |body| {
-                write_i32(body, 11)?;
-                body.write_all(data.as_slice())?;
-                Ok(())
-            })?,
-            Self::AuthenticationSaslFinal(data) => PostgresMessage::build(b'R', |body| {
-                write_i32(body, 12)?;
-                body.write_all(data.as_slice())?;
-                Ok(())
-            })?,
-            Self::ReadyForQuery(status) => PostgresMessage::build(b'Z', |body| {
-                body.write_all(&[status])?;
-                Ok(())
-            })?,
+            Self::AuthenticationOk => {
+                PostgresMessage::build(PostgresBackendMessageTag::Authentication as _, |body| {
+                    write_i32(body, 0)?;
+                    Ok(())
+                })?
+            }
+            Self::AuthenticationCleartextPassword => {
+                PostgresMessage::build(PostgresBackendMessageTag::Authentication as _, |body| {
+                    write_i32(body, 3)?;
+                    Ok(())
+                })?
+            }
+            Self::AuthenticationMd5Password(salt) => {
+                PostgresMessage::build(PostgresBackendMessageTag::Authentication as _, |body| {
+                    write_i32(body, 5)?;
+                    body.write_all(salt.as_slice())?;
+                    Ok(())
+                })?
+            }
+            Self::AuthenticationSasl(methods) => PostgresMessage::build(
+                PostgresBackendMessageTag::Authentication as _,
+                move |body| {
+                    write_i32(body, 10)?;
+                    for method in methods.into_iter() {
+                        body.write_all(
+                            CString::new(&*method)
+                                .context("Cannot convert sasl method to cstring")?
+                                .as_bytes_with_nul(),
+                        )?;
+                    }
+                    Ok(())
+                },
+            )?,
+            Self::AuthenticationSaslContinue(data) => {
+                PostgresMessage::build(PostgresBackendMessageTag::Authentication as _, |body| {
+                    write_i32(body, 11)?;
+                    body.write_all(data.as_slice())?;
+                    Ok(())
+                })?
+            }
+            Self::AuthenticationSaslFinal(data) => {
+                PostgresMessage::build(PostgresBackendMessageTag::Authentication as _, |body| {
+                    write_i32(body, 12)?;
+                    body.write_all(data.as_slice())?;
+                    Ok(())
+                })?
+            }
+            Self::ReadyForQuery(status) => {
+                PostgresMessage::build(PostgresBackendMessageTag::ReadyForQuery as _, |body| {
+                    body.write_all(&[status])?;
+                    Ok(())
+                })?
+            }
             Self::ErrorResponse(msg) => {
-                PostgresMessage::build(b'E', |body| {
+                PostgresMessage::build(PostgresBackendMessageTag::ErrorResponse as _, |body| {
                     // @see https://www.postgresql.org/docs/current/protocol-error-fields.html
                     // Strings must be null terminated
                     body.write_all(&[b'S'])?;
@@ -133,6 +207,21 @@ impl PostgresBackendMessage {
                     Ok(())
                 })?
             }
+        })
+    }
+
+    /// Gets the message tag if there is one
+    pub fn tag(&self) -> Result<PostgresBackendMessageTag> {
+        Ok(match self {
+            Self::AuthenticationOk => PostgresBackendMessageTag::Authentication,
+            Self::AuthenticationMd5Password(_) => PostgresBackendMessageTag::Authentication,
+            Self::AuthenticationSasl(_) => PostgresBackendMessageTag::Authentication,
+            Self::AuthenticationSaslContinue(_) => PostgresBackendMessageTag::Authentication,
+            Self::AuthenticationSaslFinal(_) => PostgresBackendMessageTag::Authentication,
+            Self::AuthenticationCleartextPassword => PostgresBackendMessageTag::Authentication,
+            Self::ErrorResponse(_) => PostgresBackendMessageTag::ErrorResponse,
+            Self::ReadyForQuery(_) => PostgresBackendMessageTag::ReadyForQuery,
+            Self::Other(msg) => msg.tag().context("Untagged message")?.try_into()?,
         })
     }
 }
@@ -289,6 +378,10 @@ mod tests {
         let parsed = parse(&[b'Z', 0, 0, 0, 5, b'I']).await.unwrap();
 
         assert_eq!(parsed, PostgresBackendMessage::ReadyForQuery(b'I'));
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::ReadyForQuery
+        );
     }
 
     #[tokio::test]
@@ -296,6 +389,10 @@ mod tests {
         let parsed = parse(&[b'R', 0, 0, 0, 8, 0, 0, 0, 0]).await.unwrap();
 
         assert_eq!(parsed, PostgresBackendMessage::AuthenticationOk);
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::Authentication
+        );
     }
 
     #[tokio::test]
@@ -305,6 +402,10 @@ mod tests {
         assert_eq!(
             parsed,
             PostgresBackendMessage::Other(PostgresMessage::Tagged(vec![b'T', 0, 0, 0, 4]))
+        );
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::RowDescription
         );
     }
 }

@@ -11,7 +11,7 @@ use super::connection::LlPostgresConnection;
 
 /// Postgres connection pool
 #[derive(Debug, Clone)]
-pub(crate) struct LlPostgresConnectionPool {
+pub struct LlPostgresConnectionPool {
     /// The inner r2d2 pool
     pool: Pool<R2d2Adaptor<LlPostgresConnectionManager>>,
 }
