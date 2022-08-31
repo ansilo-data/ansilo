@@ -17,11 +17,12 @@ use pgx::{
 };
 
 use crate::{
+    auth::ctx::AuthContext,
     fdw::ctx::{FdwContext, FdwGlobalContext},
     sqlil::get_entity_id_from_foreign_table,
 };
 
-use super::{current_auth_token, ServerOptions};
+use super::ServerOptions;
 
 // We store a global hash map of all active connections present in the session.
 // Each connection is unique per data source. This is important when we perform
@@ -139,7 +140,10 @@ unsafe fn get_connection(opts: ServerOptions) -> Result<Arc<FdwIpcConnection>> {
     let mut client = IpcClientChannel::new(sock);
 
     // Try authenticated using the current authentication token
-    let auth = AuthDataSource::new(current_auth_token(), &opts.data_source);
+    let auth = AuthDataSource::new(
+        AuthContext::get().map(|c| c.context).unwrap_or_default(),
+        &opts.data_source,
+    );
     let response = client
         .send(ClientMessage::AuthDataSource(auth.clone()))
         .context("Failed to authenticate")?;

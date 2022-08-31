@@ -79,16 +79,16 @@ pub enum ClientQueryMessage {
 /// Message sent by the client to initialise the connection
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub struct AuthDataSource {
-    /// The authentication token
-    pub token: String,
+    /// The authentication context
+    pub context: String,
     /// The data source id
     pub data_source_id: String,
 }
 
 impl AuthDataSource {
-    pub fn new(token: impl Into<String>, data_source_id: impl Into<String>) -> Self {
+    pub fn new(context: impl Into<String>, data_source_id: impl Into<String>) -> Self {
         Self {
-            token: token.into(),
+            context: context.into(),
             data_source_id: data_source_id.into(),
         }
     }
