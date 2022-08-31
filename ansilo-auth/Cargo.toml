@@ -8,3 +8,6 @@ edition = "2021"
 [dependencies]
 ansilo-core = { path = "../ansilo-core" }
 ansilo-pg = { path = "../ansilo-pg" }
+jsonwebtoken = "8.1"
+md-5 = "0.10"
+subtle = "2.4"

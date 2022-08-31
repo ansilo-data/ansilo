@@ -38,7 +38,8 @@ impl ConnectionHandler for PostgresConnectionHandler {
         // 7. set auth context: exec ansilo_set_auth_context(context, nonce)
         // 8. proxy queries and results
         // 9. reset user context: exec ansilo_clear_auth_context(nonce)
-        // 10. release connection back to pool
+        // 10. clean connection: exec discard all
+        // 11. release connection back to pool
 
         let sock_path = self.conf.pg.pg_socket_path();
         let mut con = UnixStream::connect(sock_path).await?;

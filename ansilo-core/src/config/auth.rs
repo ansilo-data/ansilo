@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use serde::{Deserialize, Serialize};
 
 /// Authentication options for the node
@@ -86,10 +88,18 @@ pub enum UserTypeOptions {
 }
 
 /// Defines options for user password authentication
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Clone, Serialize, Deserialize)]
 pub struct PasswordUserConfig {
     /// The password
-    pub password: String
+    pub password: String,
+}
+
+impl Debug for PasswordUserConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PasswordUserConfig")
+            .field("password", &"***REDACTED***")
+            .finish()
+    }
 }
 
 /// Defines options used for JWT user authentication
