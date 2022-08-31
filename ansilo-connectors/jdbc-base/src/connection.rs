@@ -1,12 +1,13 @@
-use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use ansilo_core::{
     data::DataValue,
     err::{bail, Context, Result},
 };
 use ansilo_logging::warn;
+use ansilo_util_r2d2::manager::{OurManageConnection, R2d2Adaptor};
 use jni::objects::{GlobalRef, JValue};
-use r2d2::{ManageConnection, PooledConnection};
+use r2d2::PooledConnection;
 
 use ansilo_connectors_base::{
     common::data::QueryHandleWriter,
@@ -20,7 +21,7 @@ use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, Jvm};
 /// Implementation for opening JDBC connections
 #[derive(Clone)]
 pub struct JdbcConnectionPool {
-    pool: r2d2::Pool<Manager>,
+    pool: r2d2::Pool<R2d2Adaptor<Manager>>,
 }
 
 struct Manager {
@@ -42,7 +43,8 @@ impl JdbcConnectionPool {
             jdbc_props: options.get_jdbc_props(),
             connection_class: options.get_java_connection().replace('.', "/"),
             data_mapping_class: options.get_java_jdbc_data_mapping().replace('.', "/"),
-        };
+        }
+        .adaptor();
 
         // TODO: add event handler with handle_checkin callback to "clean" the connection
         // this will be different per db, eg for postgres it is "DISCARD ALL"
@@ -69,35 +71,10 @@ impl JdbcConnectionPool {
     }
 }
 
-// TODO: Clean up
-#[derive(Debug)]
-struct PoolError(ansilo_core::err::Error);
-
-impl Display for PoolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl std::error::Error for PoolError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.0.source()
-    }
-
-    fn description(&self) -> &str {
-        "deprecated"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.0.source()
-    }
-}
-
-impl ManageConnection for Manager {
+impl OurManageConnection for Manager {
     type Connection = JdbcConnectionState;
-    type Error = PoolError;
 
-    fn connect(&self) -> Result<Self::Connection, Self::Error> {
+    fn connect(&self) -> Result<Self::Connection> {
         let jdbc_con = self
             .jvm
             .with_local_frame(32, |env| {
@@ -140,8 +117,7 @@ impl ManageConnection for Manager {
                 let jdbc_con = env.new_global_ref(jdbc_con)?;
 
                 Ok(jdbc_con)
-            })
-            .map_err(|e| PoolError(e))?;
+            })?;
 
         Ok(JdbcConnectionState {
             jvm: Arc::clone(&self.jvm),
@@ -149,8 +125,8 @@ impl ManageConnection for Manager {
         })
     }
 
-    fn is_valid(&self, conn: &mut Self::Connection) -> Result<(), Self::Error> {
-        conn.is_valid().map_err(|e| PoolError(e))
+    fn is_valid(&self, conn: &mut Self::Connection) -> Result<()> {
+        conn.is_valid()
     }
 
     fn has_broken(&self, conn: &mut Self::Connection) -> bool {
@@ -172,7 +148,10 @@ impl ConnectionPool for JdbcConnectionPool {
 }
 
 /// Wrapper of of the JDBC connection
-pub struct JdbcConnection(PooledConnection<Manager>, JdbcTransactionManager);
+pub struct JdbcConnection(
+    PooledConnection<R2d2Adaptor<Manager>>,
+    JdbcTransactionManager,
+);
 
 /// Implementation of the JDBC connection
 #[derive(Clone)]

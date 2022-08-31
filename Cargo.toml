@@ -15,5 +15,6 @@ members = [
     "ansilo-deploy",
     "ansilo-logging",
     "ansilo-dev",
+    "ansilo-util/*",
     "ansilo-e2e",
 ]

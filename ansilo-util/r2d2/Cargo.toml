@@ -1,0 +1,10 @@
+[package]
+name = "ansilo-util-r2d2"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansilo-core = { path = "../../ansilo-core" }
+r2d2 = "0.8"

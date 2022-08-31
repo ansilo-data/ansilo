@@ -16,13 +16,13 @@ use manager::PostgresServerManager;
 /// ansilo process over a unix socket.
 pub mod conf;
 pub mod connection;
-pub mod raw_connection;
 pub mod fdw;
 pub mod initdb;
 pub mod manager;
 pub mod proc;
 pub mod server;
 pub mod proto;
+pub mod low_level;
 
 mod configure;
 #[cfg(test)]

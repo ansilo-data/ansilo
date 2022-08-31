@@ -10,6 +10,7 @@ ansilo-connectors-base = { path = "../ansilo-connectors/base" }
 ansilo-connectors-all = { path = "../ansilo-connectors/all" }
 ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
+ansilo-util-r2d2 = { path = "../ansilo-util/r2d2" }
 bincode = { version = "2.0.0-rc.1" }
 serde_json = "1.0"
 nix = "0.24"
