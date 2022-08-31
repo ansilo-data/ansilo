@@ -1,6 +1,7 @@
 mod fdw;
-pub mod sqlil;
-pub mod util;
+mod sqlil;
+mod util;
+mod auth;
 
 use pgx::{
     pg_sys::{self},
