@@ -1,74 +1,89 @@
-use std::{ffi::CString, ptr};
-
 use pgx::*;
 
-use crate::util::{
-    string::{parse_to_owned_utf8_string, to_pg_cstr},
-    syscache::PgSysCacheItem,
-};
+use crate::auth::ctx::AuthContextState;
 
 use super::ctx::AuthContext;
 
+// TODO: move to private schema
 #[pg_extern(volatile, parallel_unsafe)]
 fn ansilo_set_auth_context(context: String, reset_nonce: String) -> String {
     info!("Requested set auth context to '{}'", context.clone());
 
-    assert!(AuthContext::context().is_none(), "Already in auth context");
+    assert!(AuthContext::get().is_none(), "Already in auth context");
 
     if unsafe { pg_sys::IsTransactionBlock() } {
-        panic!("Cannot assume user in transaction");
+        panic!("Cannot change auth context in transaction");
     }
 
     assert!(
-        reset_nonce.len() < 16,
+        reset_nonce.len() >= 16,
         "Nonce must be at least 16 bytes long"
     );
 
-    let original_user_id = unsafe { pg_sys::GetUserId() };
-    let original_user_name = unsafe {
-        let name = pg_sys::GetUserNameFromId(original_user_id, false);
-        parse_to_owned_utf8_string(name).unwrap()
-    };
-
-    let assumed_user_name = username;
-    let assumed_user_id = {
-        let name_str = CString::new(assumed_user_name.clone()).unwrap();
-        let item = PgSysCacheItem::<pg_sys::FormData_pg_authid>::search(
-            pg_sys::SysCacheIdentifier_AUTHNAME,
-            [name_str.as_ptr().into()],
-        );
-
-        if item.is_none() {
-            panic!("User '{}' does not exist", assumed_user_name);
-        }
-
-        let item = item.unwrap();
-
-        assert!(!item.rolsuper, "Cannot assume to superuser");
-
-        item.oid
-    };
-
-    let ctx = AuthContext::Set(AuthContext {
-        assumed_user_id,
-        assumed_user_name: assumed_user_name.clone(),
-        original_user_id,
-        original_user_name: original_user_name.clone(),
+    AuthContext::update(AuthContext::Set(AuthContextState {
+        context,
         reset_nonce,
-    });
+    }));
 
-    AuthContext::update(ctx);
-
-    info!(
-        "Assuming from user '{}' to user '{}'",
-        original_user_name, assumed_user_name
-    );
-
-    unsafe {
-        pg_sys::SetCurrentRoleId(assumed_user_role, false);
-    }
-
-    info!("Now assumed user '{}'", assumed_user_name);
+    info!("Auth context updated");
 
     "OK".into()
+}
+
+#[cfg(any(test, feature = "pg_test"))]
+#[pg_schema]
+mod tests {
+    use std::panic::catch_unwind;
+
+    use super::*;
+
+    #[pg_test]
+    fn test_set_auth_context_invalid_nonce() {
+        catch_unwind(|| ansilo_set_auth_context("test".into(), "test".into())).unwrap_err();
+        catch_unwind(|| ansilo_set_auth_context("test".into(), "123456789012345".into()))
+            .unwrap_err();
+    }
+
+    #[pg_test]
+    fn test_set_auth_context_valid() {
+        let (mut client, _) = pgx_tests::client();
+
+        client
+            .batch_execute(
+                r#"
+            DO $$BEGIN
+               ASSERT ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+            END$$
+        "#,
+            )
+            .unwrap();
+    }
+
+    #[pg_test]
+    fn test_set_auth_context_fails_when_already_set() {
+        let (mut client, _) = pgx_tests::client();
+
+        client
+            .batch_execute(
+                r#"
+            DO $$BEGIN
+                ASSERT ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+            END$$
+            "#,
+            )
+            .unwrap();
+
+        client
+            .batch_execute(r#"SELECT ansilo_set_auth_context('test', '1234567890123456');"#)
+            .unwrap_err();
+    }
+
+    #[pg_test]
+    fn test_set_auth_context_fails_when_in_transaction() {
+        let (mut client, _) = pgx_tests::client();
+        let mut t = client.transaction().unwrap();
+
+        t.batch_execute(r#"SELECT ansilo_set_auth_context('test', '1234567890123456');"#)
+            .unwrap_err();
+    }
 }

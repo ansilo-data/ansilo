@@ -6,7 +6,13 @@ use lazy_static::lazy_static;
 #[derive(Clone, PartialEq)]
 pub enum AuthContext {
     None,
-    Set(String),
+    Set(AuthContextState),
+}
+
+#[derive(Clone, PartialEq)]
+pub struct AuthContextState {
+    pub context: String,
+    pub reset_nonce: String,
 }
 
 lazy_static! {
@@ -14,12 +20,12 @@ lazy_static! {
 }
 
 impl AuthContext {
-    pub fn get<'a>() -> MutexGuard<'a, Self> {
+    fn lock<'a>() -> MutexGuard<'a, Self> {
         AUTH_CONTEXT.lock().expect("Failed to lock auth context")
     }
 
-    pub fn context() -> Option<String> {
-        let ctx = AUTH_CONTEXT.lock().expect("Failed to lock auth context");
+    pub fn get() -> Option<AuthContextState> {
+        let ctx = Self::lock();
 
         match &*ctx {
             Self::None => None,
@@ -28,7 +34,7 @@ impl AuthContext {
     }
 
     pub fn update(new: Self) {
-        let mut ctx = AUTH_CONTEXT.lock().expect("Failed to lock auth context");
+        let mut ctx = Self::lock();
 
         *ctx = new;
     }
