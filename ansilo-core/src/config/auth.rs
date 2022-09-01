@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{collections::HashMap, fmt::Debug};
 
 use serde::{Deserialize, Serialize};
 
@@ -39,8 +39,12 @@ pub enum AuthProviderTypeConfig {
 pub struct JwtAuthProviderConfig {
     /// URL of a JWK file used to retrieve token public keys
     pub jwk: Option<String>,
-    /// Inline token public key
-    pub public_key: Option<String>,
+    /// URL of RSA public key
+    pub rsa_public_key: Option<String>,
+    /// URL of EC public key
+    pub ec_public_key: Option<String>,
+    /// URL of ED public key
+    pub ed_public_key: Option<String>,
 }
 
 /// Defines options used for SAML2 authentication
@@ -108,7 +112,7 @@ pub struct JwtUserConfig {
     /// Defines which claims are required to pass authentication
     /// All claims defined in this node must be present in the token
     /// to succeed.
-    pub claims: serde_yaml::Value,
+    pub claims: HashMap<String, TokenClaimCheck>,
 }
 
 /// Defines options used for SAML user authentication
@@ -117,7 +121,16 @@ pub struct SamlUserConfig {
     /// Defines which assertions are required to pass authentication
     /// All assertions defined in this node must be present in the SAML payload
     /// to succeed.
-    pub assertions: serde_yaml::Value,
+    pub assertions: HashMap<String, TokenClaimCheck>,
+}
+
+/// Defines a claim validation for a token
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+
+pub enum TokenClaimCheck {
+    Eq(String),
+    Any(Vec<String>),
+    All(Vec<String>),
 }
 
 /// Defines a service user, used to authenticate during build, cron jobs etc

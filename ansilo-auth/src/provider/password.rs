@@ -1,6 +1,11 @@
-use ansilo_core::{config::PasswordUserConfig, err::Result};
+use ansilo_core::{
+    config::PasswordUserConfig,
+    err::{bail, Result},
+};
 use md5::{Digest, Md5};
 use subtle::ConstantTimeEq;
+
+use crate::ctx::PasswordAuthContext;
 
 /// Used for validating passwords
 ///
@@ -15,7 +20,7 @@ impl PasswordAuthProvider {
         &self,
         user: &PasswordUserConfig,
         md5_password_hash: &[u8],
-    ) -> Result<bool> {
+    ) -> Result<PasswordAuthContext> {
         let mut hasher = Md5::new();
         hasher.update(user.password.as_bytes());
 
@@ -23,7 +28,11 @@ impl PasswordAuthProvider {
 
         let matches = expected.as_slice().ct_eq(md5_password_hash);
 
-        Ok(matches.unwrap_u8() == 1)
+        if matches.unwrap_u8() != 1 {
+            bail!("Incorrect password")
+        }
+
+        Ok(PasswordAuthContext::default())
     }
 }
 
@@ -38,7 +47,7 @@ mod tests {
             password: "abc123".into(),
         };
 
-        assert!(!provider.authenticate(&user, b"fgsdgfgfdgd").unwrap());
+        assert!(provider.authenticate(&user, b"fgsdgfgfdgd").is_err());
     }
 
     #[test]
@@ -48,11 +57,14 @@ mod tests {
             password: "abc123".into(),
         };
 
-        assert!(provider
-            .authenticate(
-                &user,
-                &[233, 154, 24, 196, 40, 203, 56, 213, 242, 96, 133, 54, 120, 146, 46, 3]
-            )
-            .unwrap());
+        assert!(
+            provider
+                .authenticate(
+                    &user,
+                    &[233, 154, 24, 196, 40, 203, 56, 213, 242, 96, 133, 54, 120, 146, 46, 3]
+                )
+                .unwrap()
+                == PasswordAuthContext::default()
+        );
     }
 }
