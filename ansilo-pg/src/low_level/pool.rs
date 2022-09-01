@@ -1,102 +1,110 @@
 use std::{path::PathBuf, time::Duration};
 
-use ansilo_core::err::{Context, Result};
-use ansilo_util_r2d2::manager::{OurManageConnection, R2d2Adaptor};
+use ansilo_core::err::{bail, Context, Error, Result};
+use ansilo_logging::info;
+use deadpool::{
+    async_trait,
+    managed::{Object, Pool, PoolConfig, PoolError, RecycleError, RecycleResult},
+};
 use postgres::Config;
-use r2d2_postgres::r2d2::{Pool, PooledConnection};
 
 use crate::conf::PostgresConf;
 
 use super::connection::LlPostgresConnection;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct LlPostgresConnectionPoolConfig {
+    pg: &'static PostgresConf,
+    user: String,
+    database: String,
+    max_size: usize,
+    recycle_query: Option<String>,
+    connect_timeout: Duration,
+}
+
 /// Postgres connection pool
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LlPostgresConnectionPool {
-    /// The inner r2d2 pool
-    pool: Pool<R2d2Adaptor<LlPostgresConnectionManager>>,
+    /// The inner deadpool pool
+    pool: Pool<LlPostgresConnectionManager>,
 }
 
 impl LlPostgresConnectionPool {
     /// Constructs a new connection pool
-    pub fn new(
-        conf: &PostgresConf,
-        user: &str,
-        database: &str,
-        min_size: u32,
-        max_size: u32,
-        connect_timeout: Duration,
-    ) -> Result<Self> {
+    pub fn new(conf: LlPostgresConnectionPoolConfig) -> Result<Self> {
         let mut pg_conf = postgres::Config::new();
-        pg_conf.user(user);
-        pg_conf.dbname(database);
+        pg_conf.user(&conf.user);
+        pg_conf.dbname(&conf.database);
 
-        let socket_path = conf.pg_socket_path();
+        let socket_path = conf.pg.pg_socket_path();
 
         Ok(Self {
-            pool: Pool::builder()
-                .min_idle(Some(min_size))
-                .max_size(max_size)
-                .max_lifetime(Some(Duration::from_secs(60 * 60)))
-                .idle_timeout(Some(Duration::from_secs(30 * 60)))
-                .connection_timeout(connect_timeout)
-                .build(LlPostgresConnectionManager::new(socket_path, pg_conf).into())
-                .context("Failed to create postgres connection pool")?,
+            pool: Pool::builder(LlPostgresConnectionManager::new(conf.clone(), pg_conf))
+                .max_size(conf.max_size)
+                .create_timeout(Some(conf.connect_timeout))
+                .runtime(deadpool::Runtime::Tokio1)
+                .build()
+                .map_err(|e| {
+                    Error::msg(format!(
+                        "Failed to create postgres connection pool: {:?}",
+                        e
+                    ))
+                })?,
         })
     }
 
     /// Aquires a connection from the pool
-    pub fn acquire(
+    pub async fn acquire(
         &mut self,
-    ) -> Result<PooledConnection<R2d2Adaptor<LlPostgresConnectionManager>>> {
-        self.pool
-            .get()
-            .context("Failed to acquire a connection from the connection pool")
+    ) -> Result<Object<LlPostgresConnectionManager>, PoolError<Error>> {
+        self.pool.get().await
     }
 }
 
 #[derive(Debug)]
 pub struct LlPostgresConnectionManager {
-    socket_path: PathBuf,
-    config: Config,
+    conf: LlPostgresConnectionPoolConfig,
+    pg_conf: Config,
 }
 
 impl LlPostgresConnectionManager {
-    pub fn new(socket_path: PathBuf, config: Config) -> Self {
-        Self {
-            socket_path,
-            config,
-        }
+    pub fn new(conf: LlPostgresConnectionPoolConfig, pg_conf: Config) -> Self {
+        Self { conf, pg_conf }
     }
 }
 
-impl OurManageConnection for LlPostgresConnectionManager {
-    type Connection = LlPostgresConnection;
+#[async_trait]
+impl deadpool::managed::Manager for LlPostgresConnectionManager {
+    type Type = LlPostgresConnection;
+    type Error = Error;
 
-    fn connect(&self) -> Result<Self::Connection> {
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .context("failed to create runtime")?;
-
-        Ok(LlPostgresConnection::connect(
-            runtime,
-            self.socket_path.clone(),
-            self.config.clone(),
-        )?)
+    async fn create(&self) -> Result<Self::Type> {
+        Ok(
+            LlPostgresConnection::connect(self.conf.pg.pg_socket_path(), self.pg_conf.clone())
+                .await?,
+        )
     }
 
-    fn is_valid(&self, con: &mut Self::Connection) -> Result<()> {
-        con.execute_sync("SELECT 1")
-    }
+    async fn recycle(&self, con: &mut Self::Type) -> RecycleResult<Self::Error> {
+        if con.broken() {
+            info!("Postgres connection is broken, cannot recycle");
+            return Err(RecycleError::StaticMessage("Connection is broken"));
+        }
 
-    fn has_broken(&self, con: &mut Self::Connection) -> bool {
-        con.broken()
+        // Clean the connection
+        if let Some(query) = self.conf.recycle_query.as_ref() {
+            con.execute(query).await?;
+        }
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{path::PathBuf, thread};
+
+    use deadpool::Status;
 
     use crate::{initdb::PostgresInitDb, server::PostgresServer, PG_SUPER_USER};
 
@@ -122,37 +130,38 @@ mod tests {
     #[test]
     fn test_postgres_connection_pool_new() {
         let conf = test_pg_config("new");
-        let pool = LlPostgresConnectionPool::new(
-            conf,
-            PG_SUPER_USER,
-            "postgres",
-            0,
-            5,
-            Duration::from_secs(1),
-        )
+        let pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
+            pg: conf,
+            user: PG_SUPER_USER.into(),
+            database: "postgres".into(),
+            max_size: 5,
+            recycle_query: None,
+            connect_timeout: Duration::from_secs(1),
+        })
         .unwrap();
 
-        assert_eq!(pool.pool.min_idle(), Some(0));
-        assert_eq!(pool.pool.max_size(), 5);
-        assert_eq!(pool.pool.state().connections, 0);
+        assert_eq!(pool.pool.status().max_size, 5);
+        assert_eq!(pool.pool.status().size, 0);
     }
 
-    #[test]
-    fn test_postgres_connection_pool_without_server() {
+    #[tokio::test]
+    async fn test_postgres_connection_pool_get_without_server() {
         let conf = test_pg_config("down");
-        LlPostgresConnectionPool::new(
-            conf,
-            PG_SUPER_USER,
-            "postgres",
-            1,
-            5,
-            Duration::from_secs(1),
-        )
-        .unwrap_err();
+        let mut pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
+            pg: conf,
+            user: PG_SUPER_USER.into(),
+            database: "postgres".into(),
+            max_size: 5,
+            recycle_query: None,
+            connect_timeout: Duration::from_secs(1),
+        })
+        .unwrap();
+
+        assert!(pool.acquire().await.is_err());
     }
 
-    #[test]
-    fn test_postgres_connection_pool_with_running_server() {
+    #[tokio::test]
+    async fn test_postgres_connection_pool_with_running_server() {
         ansilo_logging::init_for_tests();
         let conf = test_pg_config("up");
         PostgresInitDb::reset(conf).unwrap();
@@ -161,17 +170,17 @@ mod tests {
         thread::spawn(move || _server.wait());
         thread::sleep(Duration::from_secs(2));
 
-        let mut pool = LlPostgresConnectionPool::new(
-            conf,
-            PG_SUPER_USER,
-            "postgres",
-            1,
-            5,
-            Duration::from_secs(5),
-        )
+        let mut pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
+            pg: conf,
+            user: PG_SUPER_USER.into(),
+            database: "postgres".into(),
+            max_size: 5,
+            recycle_query: None,
+            connect_timeout: Duration::from_secs(1),
+        })
         .unwrap();
 
-        let mut con = pool.acquire().unwrap();
-        con.execute_sync("SELECT 3 + 4").unwrap();
+        let mut con = pool.acquire().await.unwrap();
+        con.execute("SELECT 3 + 4").await.unwrap();
     }
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, os::raw::c_int, thread};
+use std::{collections::HashMap, os::raw::c_int, thread, time::Duration};
 
 use crate::{
     args::Command,
@@ -27,6 +27,7 @@ pub use ansilo_pg::fdw::log::RemoteQueryLog;
 
 use build::*;
 use conf::*;
+use tokio::runtime::Runtime;
 
 /// This struct represents a running instance of ansilo and its subsystems.
 ///
@@ -43,6 +44,8 @@ pub struct Ansilo {
 }
 
 struct Subsystems {
+    /// The tokio runtime
+    runtime: Runtime,
     /// The postgres instance
     postgres: PostgresInstance,
     /// The FDW server
@@ -102,6 +105,12 @@ impl Ansilo {
             });
         }
 
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("ansilo-tokio-worker")
+            .enable_all()
+            .build()
+            .context("Failed to create tokio runtime")?;
+
         info!("Starting proxy server...");
         let proxy_conf = Box::leak(Box::new(init_proxy_conf(
             conf,
@@ -113,13 +122,16 @@ impl Ansilo {
         )));
 
         let mut proxy = ProxyServer::new(proxy_conf);
-        proxy.start().context("Failed to start proxy server")?;
+        runtime
+            .block_on(proxy.start())
+            .context("Failed to start proxy server")?;
 
         info!("Start up complete...");
         Ok(Self {
             command,
             conf,
             subsystems: Some(Subsystems {
+                runtime,
                 postgres,
                 fdw,
                 proxy,
@@ -189,6 +201,9 @@ impl Ansilo {
         }
         if let Err(err) = subsystems.fdw.terminate() {
             warn!("Failed to terminate fdw server: {:?}", err);
+        }
+        if let Err(err) = subsystems.runtime.shutdown_timeout(Duration::from_secs(3)) {
+            warn!("Failed to terminate tokio runtime: {:?}", err);
         }
 
         info!("Shutdown sequence complete");

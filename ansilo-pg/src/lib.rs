@@ -139,7 +139,7 @@ impl PostgresInstance {
 
 impl PostgresConnectionPools {
     /// Gets a connection with admin privileges to the database
-    /// IMPORTANT: Only use this connection for known queries
+    /// IMPORTANT: Only use this connection for trusted queries
     /// and not queries supplied by the user
     pub fn admin(&mut self) -> Result<PostgresConnection> {
         self.admin.acquire()

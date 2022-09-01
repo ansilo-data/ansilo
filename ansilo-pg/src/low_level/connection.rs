@@ -14,7 +14,6 @@ use tokio::{
         unix::{OwnedReadHalf, OwnedWriteHalf},
         UnixStream,
     },
-    runtime::Runtime,
 };
 
 use crate::proto::{
@@ -33,14 +32,12 @@ pub struct LlPostgresConnection {
 
 /// Shared connection state
 struct State {
-    runtime: Runtime,
     broken: AtomicBool,
 }
 
 impl State {
-    fn new(runtime: Runtime) -> Self {
+    fn new() -> Self {
         Self {
-            runtime,
             broken: AtomicBool::new(false),
         }
     }
@@ -56,8 +53,8 @@ impl State {
 
 impl LlPostgresConnection {
     /// Creates a new connection over the supplied stream
-    pub(crate) fn new(runtime: Runtime, stream: UnixStream) -> Self {
-        let state = Arc::new(State::new(runtime));
+    pub(crate) fn new(stream: UnixStream) -> Self {
+        let state = Arc::new(State::new());
         let (read, write) = stream.into_split();
 
         Self {
@@ -68,19 +65,14 @@ impl LlPostgresConnection {
     }
 
     /// Connects to a postgres instance at the supplied socket path
-    pub(crate) fn connect(runtime: Runtime, socket_path: PathBuf, config: Config) -> Result<Self> {
-        let stream = runtime.block_on(async {
-            UnixStream::connect(&socket_path)
-                .await
-                .with_context(|| format!("Failed to connect to socket: {}", socket_path.display()))
-        })?;
+    pub(crate) async fn connect(socket_path: PathBuf, config: Config) -> Result<Self> {
+        let stream = UnixStream::connect(&socket_path)
+            .await
+            .with_context(|| format!("Failed to connect to socket: {}", socket_path.display()))?;
 
-        let mut con = Self::new(runtime, stream);
+        let mut con = Self::new(stream);
 
-        con.state
-            .clone()
-            .runtime
-            .block_on(con.authenticate(config))?;
+        con.authenticate(config).await?;
 
         Ok(con)
     }
@@ -135,19 +127,9 @@ impl LlPostgresConnection {
         self.writer.send(message).await
     }
 
-    /// Sends the supplied message to postgres syncronously
-    pub fn send_sync(&mut self, message: PostgresFrontendMessage) -> Result<()> {
-        self.writer.send_sync(message)
-    }
-
     /// Receivs a message from the postgres backend
     pub async fn receive(&mut self) -> Result<PostgresBackendMessage> {
         self.reader.receive().await
-    }
-
-    /// Receives a message from the postgres backend synchronously.
-    pub fn receive_sync(&mut self) -> Result<PostgresBackendMessage> {
-        self.reader.receive_sync()
     }
 
     /// Executes the supplied query on the postgres connection.
@@ -182,13 +164,6 @@ impl LlPostgresConnection {
         }
 
         Ok(())
-    }
-
-    /// Executes the supplied query on the postgres connection synchronously.
-    /// We dont support returning any results from the query, only reporting
-    /// if it was successful or not.
-    pub fn execute_sync(&mut self, sql: impl Into<String>) -> Result<()> {
-        self.state.clone().runtime.block_on(self.execute(sql))
     }
 
     /// Returns whether the connection has been broken.
@@ -231,11 +206,6 @@ impl PgReader {
 
         res
     }
-
-    /// Receives a message from the postgres backend synchronously.
-    pub fn receive_sync(&mut self) -> Result<PostgresBackendMessage> {
-        self.0.clone().runtime.block_on(self.receive())
-    }
 }
 
 impl PgWriter {
@@ -260,11 +230,6 @@ impl PgWriter {
         }
 
         Ok(())
-    }
-
-    /// Sends the supplied message to postgres syncronously
-    pub fn send_sync(&mut self, message: PostgresFrontendMessage) -> Result<()> {
-        self.0.clone().runtime.block_on(self.send(message))
     }
 }
 
@@ -311,100 +276,95 @@ mod tests {
         }
     }
 
-    fn create_connection(conf: &'static PostgresConf, pg_conf: Config) -> LlPostgresConnection {
+    async fn create_connection(
+        conf: &'static PostgresConf,
+        pg_conf: Config,
+    ) -> LlPostgresConnection {
         let socket_path = conf.pg_socket_path().clone();
 
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-
-        LlPostgresConnection::connect(runtime, socket_path, pg_conf).unwrap()
+        LlPostgresConnection::connect(socket_path, pg_conf)
+            .await
+            .unwrap()
     }
 
-    #[test]
-    fn test_low_level_postgres_connection_auth() {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let (client, mut server) = runtime.block_on(async { UnixStream::pair().unwrap() });
+    #[tokio::test]
+    async fn test_low_level_postgres_connection_auth() {
+        let (client, mut server) = UnixStream::pair().unwrap();
 
-        let mut con = LlPostgresConnection::new(runtime, client);
+        let mut con = LlPostgresConnection::new(client);
 
         let mut pg_conf = Config::new();
         pg_conf.user("username");
         pg_conf.dbname("db");
 
-        con.state.clone().runtime.block_on(async move {
-            tokio::try_join!(con.authenticate(pg_conf), async move {
-                let msg = PostgresFrontendMessage::read_startup(&mut server)
-                    .await
-                    .unwrap();
+        tokio::try_join!(con.authenticate(pg_conf), async move {
+            let msg = PostgresFrontendMessage::read_startup(&mut server)
+                .await
+                .unwrap();
 
-                assert_eq!(
-                    msg,
-                    PostgresFrontendStartupMessage::new(
-                        [
-                            ("client_encoding".into(), "UTF8".into()),
-                            ("user".into(), "username".into()),
-                            ("database".into(), "db".into())
-                        ]
-                        .into_iter()
-                        .collect()
-                    )
-                );
-
-                PostgresBackendMessage::AuthenticationOk
-                    .write(&mut server)
-                    .await
-                    .unwrap();
-
-                PostgresBackendMessage::ReadyForQuery(b'I')
-                    .write(&mut server)
-                    .await
-                    .unwrap();
-
-                server.flush().await.unwrap();
-                Ok(())
-            })
-            .unwrap();
-        });
-    }
-
-    #[test]
-    fn test_low_level_postgres_connection_execute_query() {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let (client, mut server) = runtime.block_on(async { UnixStream::pair().unwrap() });
-
-        let mut con = LlPostgresConnection::new(runtime, client);
-
-        con.state.clone().runtime.block_on(async move {
-            tokio::try_join!(con.execute("Example Query"), async move {
-                let msg = PostgresFrontendMessage::read(&mut server).await.unwrap();
-
-                assert_eq!(msg, PostgresFrontendMessage::Query("Example Query".into()));
-
-                PostgresBackendMessage::Other(
-                    PostgresMessage::build(PostgresBackendMessageTag::CommandComplete as _, |_| {
-                        Ok(())
-                    })
-                    .unwrap(),
+            assert_eq!(
+                msg,
+                PostgresFrontendStartupMessage::new(
+                    [
+                        ("client_encoding".into(), "UTF8".into()),
+                        ("user".into(), "username".into()),
+                        ("database".into(), "db".into())
+                    ]
+                    .into_iter()
+                    .collect()
                 )
+            );
+
+            PostgresBackendMessage::AuthenticationOk
                 .write(&mut server)
                 .await
                 .unwrap();
 
-                PostgresBackendMessage::ReadyForQuery(b'I')
-                    .write(&mut server)
-                    .await
-                    .unwrap();
+            PostgresBackendMessage::ReadyForQuery(b'I')
+                .write(&mut server)
+                .await
+                .unwrap();
 
-                server.flush().await.unwrap();
-                Ok(())
-            })
+            server.flush().await.unwrap();
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_low_level_postgres_connection_execute_query() {
+        let (client, mut server) = UnixStream::pair().unwrap();
+
+        let mut con = LlPostgresConnection::new(client);
+
+        tokio::try_join!(con.execute("Example Query"), async move {
+            let msg = PostgresFrontendMessage::read(&mut server).await.unwrap();
+
+            assert_eq!(msg, PostgresFrontendMessage::Query("Example Query".into()));
+
+            PostgresBackendMessage::Other(
+                PostgresMessage::build(PostgresBackendMessageTag::CommandComplete as _, |_| Ok(()))
+                    .unwrap(),
+            )
+            .write(&mut server)
+            .await
             .unwrap();
-        });
+
+            PostgresBackendMessage::ReadyForQuery(b'I')
+                .write(&mut server)
+                .await
+                .unwrap();
+
+            server.flush().await.unwrap();
+            Ok(())
+        })
+        .unwrap();
     }
 
     // Integration tests against a real postgres...
 
-    #[test]
-    fn test_low_level_postgres_connection_connect() {
+    #[tokio::test]
+    async fn test_low_level_postgres_connection_connect() {
         let conf = test_pg_config("connect");
         startup_postgres(conf);
 
@@ -412,12 +372,12 @@ mod tests {
         pg_conf.user(PG_SUPER_USER);
         pg_conf.dbname("postgres");
 
-        let mut con = create_connection(conf, pg_conf);
-        con.execute_sync("SELECT 3 + 4").unwrap();
+        let mut con = create_connection(conf, pg_conf).await;
+        con.execute("SELECT 3 + 4").await.unwrap();
     }
 
-    #[test]
-    fn test_low_level_postgres_connection_invalid_query() {
+    #[tokio::test]
+    async fn test_low_level_postgres_connection_invalid_query() {
         let conf = test_pg_config("invalid-query");
         startup_postgres(conf);
 
@@ -425,12 +385,12 @@ mod tests {
         pg_conf.user(PG_SUPER_USER);
         pg_conf.dbname("postgres");
 
-        let mut con = create_connection(conf, pg_conf);
-        con.execute_sync("INVALID QUERY").unwrap_err();
+        let mut con = create_connection(conf, pg_conf).await;
+        con.execute("INVALID QUERY").await.unwrap_err();
     }
 
-    #[test]
-    fn test_low_level_postgres_connection_split() {
+    #[tokio::test]
+    async fn test_low_level_postgres_connection_split() {
         let conf = test_pg_config("connection-split");
         startup_postgres(conf);
 
@@ -439,32 +399,33 @@ mod tests {
         pg_conf.dbname("postgres");
 
         // First split
-        let con = create_connection(conf, pg_conf);
+        let con = create_connection(conf, pg_conf).await;
         let (mut reader, mut writer) = con.split();
 
         writer
-            .send_sync(PostgresFrontendMessage::Query("SELECT 1".into()))
+            .send(PostgresFrontendMessage::Query("SELECT 1".into()))
+            .await
             .unwrap();
 
         assert_eq!(
-            reader.receive_sync().unwrap().tag().unwrap(),
+            reader.receive().await.unwrap().tag().unwrap(),
             PostgresBackendMessageTag::RowDescription
         );
         assert_eq!(
-            reader.receive_sync().unwrap().tag().unwrap(),
+            reader.receive().await.unwrap().tag().unwrap(),
             PostgresBackendMessageTag::DataRow
         );
         assert_eq!(
-            reader.receive_sync().unwrap().tag().unwrap(),
+            reader.receive().await.unwrap().tag().unwrap(),
             PostgresBackendMessageTag::CommandComplete
         );
         assert_eq!(
-            reader.receive_sync().unwrap().tag().unwrap(),
+            reader.receive().await.unwrap().tag().unwrap(),
             PostgresBackendMessageTag::ReadyForQuery
         );
 
         // Now recombine
         let mut con = LlPostgresConnection::combine(reader, writer);
-        con.execute_sync("SELECT 2").unwrap();
+        con.execute("SELECT 2").await.unwrap();
     }
 }

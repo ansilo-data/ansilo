@@ -18,6 +18,7 @@ postgres = "0.19"
 r2d2_postgres = "0.18"
 lazy_static = "1.4"
 tokio = { version = "1.20", features = ["macros", "rt", "rt-multi-thread", "io-util"] }
+deadpool = { version = "0.9", features = ["rt_tokio_1"] }
 
 [dev-dependencies]
 ansilo-connectors-memory = { path = "../ansilo-connectors/memory" }
