@@ -7,6 +7,7 @@ use ansilo_core::err::Result;
 use async_trait::async_trait;
 use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
 use tokio::net::UnixStream;
+use tokio_native_tls::native_tls::Certificate;
 
 use crate::{
     conf::{ProxyConf, TlsConf},
@@ -99,24 +100,24 @@ pub fn mock_config_tls() -> &'static ProxyConf {
     Box::leak(Box::new(conf))
 }
 
-pub fn mock_tls_client_config() -> rustls::ClientConfig {
-    let mut root_store = rustls::RootCertStore::empty();
-    root_store.add_parsable_certificates(
-        rustls_pemfile::certs(&mut io::BufReader::new(
-            fs::File::open(Path::new(concat!(
-                env!("CARGO_MANIFEST_DIR"),
-                "/src/mock-certs/rootCA.pem"
-            )))
-            .unwrap(),
-        ))
-        .unwrap()
-        .as_slice(),
-    );
+pub fn mock_tls_connector() -> tokio_native_tls::TlsConnector {
+    let mut builder = tokio_native_tls::native_tls::TlsConnector::builder();
 
-    rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_root_certificates(root_store)
-        .with_no_client_auth()
+    rustls_pemfile::certs(&mut io::BufReader::new(
+        fs::File::open(Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/mock-certs/rootCA.pem"
+        )))
+        .unwrap(),
+    ))
+    .unwrap()
+    .into_iter()
+    .map(|c| Certificate::from_der(c.as_slice()).unwrap())
+    .for_each(|c| {
+        builder.add_root_certificate(c);
+    });
+
+    builder.build().unwrap().into()
 }
 
 pub fn create_socket_pair() -> (UnixStream, UnixStream) {
@@ -134,10 +135,10 @@ pub fn create_socket_pair() -> (UnixStream, UnixStream) {
             StdUnixStream::from_raw_fd(fd2),
         )
     };
-    
+
     s1.set_nonblocking(true).unwrap();
     s2.set_nonblocking(true).unwrap();
-    
+
     let (s1, s2) = (
         UnixStream::from_std(s1).unwrap(),
         UnixStream::from_std(s2).unwrap(),

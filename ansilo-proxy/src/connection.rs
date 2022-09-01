@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ansilo_core::err::{bail, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -43,8 +41,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> Connection<S> {
         }
 
         // Otherwise, for http, we require TLS transport layer
-        let config = Arc::clone(&self.conf.tls.as_ref().unwrap().server_config);
-        let tls = tokio_rustls::TlsAcceptor::from(config);
+        let tls = self.conf.tls.as_ref().unwrap().acceptor()?;
         let mut con = Peekable::new(tls.accept(self.inner).await?);
 
         // Now check for http/2, http/1
@@ -95,7 +92,7 @@ mod tests {
     };
 
     use crate::test::{
-        create_socket_pair, mock_config_no_tls, mock_config_tls, mock_tls_client_config,
+        create_socket_pair, mock_config_no_tls, mock_config_tls, mock_tls_connector,
         MockConnectionHandler,
     };
 
@@ -233,8 +230,7 @@ mod tests {
         assert_eq!(client.read_u8().await.unwrap(), b'S');
 
         // Perform TLS-hanshake
-        let client_config = mock_tls_client_config();
-        let _client_con = tokio_rustls::TlsConnector::from(Arc::new(client_config))
+        let _client_con = mock_tls_connector()
             .connect("mock.test".try_into().unwrap(), client)
             .await
             .unwrap();
@@ -261,8 +257,7 @@ mod tests {
         });
 
         // Perform TLS-hanshake
-        let client_config = mock_tls_client_config();
-        let mut client_con = tokio_rustls::TlsConnector::from(Arc::new(client_config))
+        let mut client_con = mock_tls_connector()
             .connect("mock.test".try_into().unwrap(), client)
             .await
             .unwrap();
@@ -297,8 +292,7 @@ mod tests {
         });
 
         // Perform TLS-hanshake
-        let client_config = mock_tls_client_config();
-        let mut client_con = tokio_rustls::TlsConnector::from(Arc::new(client_config))
+        let mut client_con = mock_tls_connector()
             .connect("mock.test".try_into().unwrap(), client)
             .await
             .unwrap();
@@ -349,8 +343,7 @@ mod tests {
         });
 
         // Perform TLS-hanshake
-        let client_config = mock_tls_client_config();
-        let mut client_con = tokio_rustls::TlsConnector::from(Arc::new(client_config))
+        let mut client_con = mock_tls_connector()
             .connect("mock.test".try_into().unwrap(), client)
             .await
             .unwrap();

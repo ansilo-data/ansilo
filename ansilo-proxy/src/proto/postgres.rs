@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
 use ansilo_core::err::{bail, Result};
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio_rustls::TlsAcceptor;
 
 use crate::{conf::ProxyConf, peekable::Peekable, stream::Stream};
 
@@ -79,8 +76,14 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> Protocol<S> for Postgre
             con.flush().await?;
 
             // Process TLS
-            let config = Arc::clone(&self.conf.tls.as_ref().unwrap().server_config);
-            let con = TlsAcceptor::from(config).accept(con).await?;
+            let con = self
+                .conf
+                .tls
+                .as_ref()
+                .unwrap()
+                .acceptor()?
+                .accept(con)
+                .await?;
 
             // At this point the client should send StartupMessage
             self.conf
@@ -118,7 +121,7 @@ mod tests {
     use tokio::net::UnixStream;
 
     use crate::test::{
-        create_socket_pair, mock_config_no_tls, mock_config_tls, mock_tls_client_config,
+        create_socket_pair, mock_config_no_tls, mock_config_tls, mock_tls_connector,
         MockConnectionHandler,
     };
 
@@ -264,8 +267,7 @@ mod tests {
             assert_eq!(client_con.read(&mut buf).await.unwrap(), 1);
             assert_eq!(&buf, b"S");
 
-            let client_config = mock_tls_client_config();
-            let mut client_con = tokio_rustls::TlsConnector::from(Arc::new(client_config))
+            let mut client_con = mock_tls_connector()
                 .connect("mock.test".try_into().unwrap(), client_con)
                 .await
                 .unwrap();
@@ -284,7 +286,7 @@ mod tests {
 
         // Process the server-side of the TLS connection
         let mut server_con = handler.received.lock().unwrap();
-        let server_con: &mut Stream<tokio_rustls::server::TlsStream<Peekable<UnixStream>>> =
+        let server_con: &mut Stream<tokio_native_tls::TlsStream<Peekable<UnixStream>>> =
             server_con[0].as_any().downcast_mut().unwrap();
 
         // Should receive the data sent from the client thread

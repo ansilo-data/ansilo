@@ -1,6 +1,10 @@
-use std::{fs, io::BufReader, net::SocketAddr, path::Path, sync::Arc};
+use std::{fs, net::SocketAddr, path::Path};
 
-use ansilo_core::err::{bail, Context, Result};
+use ansilo_core::err::{Context, Result};
+use tokio_native_tls::{
+    native_tls::{self, Protocol},
+    TlsAcceptor,
+};
 
 use crate::handler::ConnectionHandler;
 
@@ -17,57 +21,36 @@ pub struct ProxyConf {
 /// TLS configuration
 #[derive(Clone)]
 pub struct TlsConf {
-    /// Server config
-    pub server_config: Arc<rustls::ServerConfig>,
+    /// Server cert and key
+    pub identity: native_tls::Identity,
 }
 
 impl TlsConf {
     pub fn new(private_key_path: &Path, certificate_path: &Path) -> Result<Self> {
         Ok(Self {
-            server_config: Arc::new(Self::server_config(private_key_path, certificate_path)?),
+            identity: Self::server_identity(private_key_path, certificate_path)?,
         })
     }
 
-    fn server_config(
+    fn server_identity(
         private_key_path: &Path,
         certificate_path: &Path,
-    ) -> Result<rustls::ServerConfig> {
-        let mut cert_rdr = BufReader::new(fs::File::open(certificate_path)?);
-        let cert = rustls_pemfile::certs(&mut cert_rdr)
-            .context("Failed to read TLS certificate")?
-            .into_iter()
-            .map(rustls::Certificate)
-            .collect();
+    ) -> Result<native_tls::Identity> {
+        let cert = fs::read(certificate_path).context("Failed to read TLS certificate")?;
+        let key = fs::read(private_key_path).context("Failed to read TLS private key")?;
 
-        let key = {
-            // convert it to Vec<u8> to allow reading it again if key is RSA
-            let key_vec = fs::read(private_key_path)?;
+        let identity = native_tls::Identity::from_pkcs8(cert.as_slice(), key.as_slice())
+            .context("Failed to parse TLS cert and key")?;
 
-            if key_vec.is_empty() {
-                bail!("Private key is empty");
-            }
+        Ok(identity)
+    }
 
-            let mut pkcs8 = rustls_pemfile::pkcs8_private_keys(&mut key_vec.as_slice())?;
-
-            if !pkcs8.is_empty() {
-                rustls::PrivateKey(pkcs8.remove(0))
-            } else {
-                let mut rsa = rustls_pemfile::rsa_private_keys(&mut key_vec.as_slice())?;
-
-                if !rsa.is_empty() {
-                    rustls::PrivateKey(rsa.remove(0))
-                } else {
-                    bail!("Private key is empty");
-                }
-            }
-        };
-
-        let mut config = rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_no_client_auth()
-            .with_single_cert(cert, key)?;
-        config.alpn_protocols = vec!["h2".into(), "http/1.1".into()];
-        Ok(config)
+    pub fn acceptor(&self) -> Result<TlsAcceptor> {
+        native_tls::TlsAcceptor::builder(self.identity.clone())
+            .min_protocol_version(Some(Protocol::Tlsv11))
+            .build()
+            .map(|a| a.into())
+            .context("Failed to build TLS acceptor")
     }
 }
 
