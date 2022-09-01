@@ -14,12 +14,12 @@ use jsonwebkey::KeyUse;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
 use serde::Deserialize;
 
-use crate::{common::validate_check, ctx::JwtAuthContext};
+use crate::{ctx::JwtAuthContext, provider::check::validate_check};
 
 /// Used for validating JWT tokens.
-pub struct JwtAuthPorvider {
+pub struct JwtAuthProvider {
     /// Provider config
-    _conf: JwtAuthProviderConfig,
+    _conf: &'static JwtAuthProviderConfig,
     /// Shared state
     state: Arc<Mutex<State>>,
 }
@@ -41,17 +41,17 @@ struct VerificationKey {
     key: DecodingKey,
 }
 
-impl JwtAuthPorvider {
-    pub fn new(conf: JwtAuthProviderConfig) -> Result<Self> {
+impl JwtAuthProvider {
+    pub fn new(conf: &'static JwtAuthProviderConfig) -> Result<Self> {
         ensure!(
             conf.jwk.is_some() || conf.rsa_public_key.is_some() || conf.ec_public_key.is_some()  || conf.ed_public_key.is_some(),
             "Must specify either 'jwk', 'rsa_public_key', 'ec_public_key', or 'ed_public_key' options for jwt auth provider"
         );
 
-        let keys = Self::retrieve_decoding_keys(&conf)?;
+        let keys = Self::retrieve_decoding_keys(conf)?;
         let state = Arc::new(Mutex::new(State::new(keys)));
 
-        Self::periodically_update_keys(conf.clone(), Arc::clone(&state));
+        Self::periodically_update_keys(conf, Arc::clone(&state));
 
         Ok(Self { _conf: conf, state })
     }
@@ -109,7 +109,9 @@ impl JwtAuthPorvider {
     }
 
     /// Retrieves a new decoding key
-    fn retrieve_decoding_keys(conf: &JwtAuthProviderConfig) -> Result<Vec<VerificationKey>> {
+    fn retrieve_decoding_keys(
+        conf: &'static JwtAuthProviderConfig,
+    ) -> Result<Vec<VerificationKey>> {
         if let Some(jwk_url) = conf.jwk.as_ref() {
             #[derive(Deserialize)]
             struct JwkSet {
@@ -176,7 +178,7 @@ impl JwtAuthPorvider {
         unreachable!()
     }
 
-    fn periodically_update_keys(conf: JwtAuthProviderConfig, state: Arc<Mutex<State>>) {
+    fn periodically_update_keys(conf: &'static JwtAuthProviderConfig, state: Arc<Mutex<State>>) {
         thread::spawn(move || {
             loop {
                 // TODO[low]: configurable update interval
@@ -209,7 +211,7 @@ impl JwtAuthPorvider {
     }
 }
 
-impl Drop for JwtAuthPorvider {
+impl Drop for JwtAuthProvider {
     fn drop(&mut self) {
         if let Ok(mut state) = self.state.lock() {
             state.dropped = true;
@@ -365,7 +367,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
     fn test_validate_rsa_token() {
         let (encoding_key, decoding_key_path) = create_rsa_key_pair();
 
-        let conf = JwtAuthProviderConfig {
+        let conf = Box::leak(Box::new(JwtAuthProviderConfig {
             jwk: None,
             rsa_public_key: Some(format!(
                 "file://{}",
@@ -373,7 +375,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
             )),
             ec_public_key: None,
             ed_public_key: None,
-        };
+        }));
 
         let user = JwtUserConfig {
             claims: HashMap::new(),
@@ -387,7 +389,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
             &encoding_key,
         );
 
-        let provider = JwtAuthPorvider::new(conf).unwrap();
+        let provider = JwtAuthProvider::new(conf).unwrap();
         let ctx = provider.authenticate(&user, &token).unwrap();
 
         assert_eq!(ctx.raw_token, token);
@@ -405,7 +407,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
     fn test_validate_ec_token() {
         let (encoding_key, decoding_key_path) = create_ec_key_pair();
 
-        let conf = JwtAuthProviderConfig {
+        let conf = Box::leak(Box::new(JwtAuthProviderConfig {
             jwk: None,
             rsa_public_key: None,
             ec_public_key: Some(format!(
@@ -413,7 +415,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
                 decoding_key_path.path().to_str().unwrap()
             )),
             ed_public_key: None,
-        };
+        }));
 
         let user = JwtUserConfig {
             claims: HashMap::new(),
@@ -427,7 +429,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
             &encoding_key,
         );
 
-        let provider = JwtAuthPorvider::new(conf).unwrap();
+        let provider = JwtAuthProvider::new(conf).unwrap();
         let ctx = provider.authenticate(&user, &token).unwrap();
 
         assert_eq!(ctx.raw_token, token);
@@ -445,7 +447,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
     fn test_validate_ed_token() {
         let (encoding_key, decoding_key_path) = create_ed_key_pair();
 
-        let conf = JwtAuthProviderConfig {
+        let conf = Box::leak(Box::new(JwtAuthProviderConfig {
             jwk: None,
             rsa_public_key: None,
             ec_public_key: None,
@@ -453,7 +455,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
                 "file://{}",
                 decoding_key_path.path().to_str().unwrap()
             )),
-        };
+        }));
 
         let user = JwtUserConfig {
             claims: HashMap::new(),
@@ -467,7 +469,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
             &encoding_key,
         );
 
-        let provider = JwtAuthPorvider::new(conf).unwrap();
+        let provider = JwtAuthProvider::new(conf).unwrap();
         let ctx = provider.authenticate(&user, &token).unwrap();
 
         assert_eq!(ctx.raw_token, token);
@@ -486,12 +488,12 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
         let (encoding_key, _) = create_rsa_key_pair();
         let jwk_path = save_to_temp_file(JWK_JSON);
 
-        let conf = JwtAuthProviderConfig {
+        let conf = Box::leak(Box::new(JwtAuthProviderConfig {
             jwk: Some(format!("file://{}", jwk_path.path().to_str().unwrap())),
             rsa_public_key: None,
             ec_public_key: None,
             ed_public_key: None,
-        };
+        }));
 
         let user = JwtUserConfig {
             claims: HashMap::new(),
@@ -505,7 +507,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
             &encoding_key,
         );
 
-        let provider = JwtAuthPorvider::new(conf).unwrap();
+        let provider = JwtAuthProvider::new(conf).unwrap();
         let ctx = provider.authenticate(&user, &token).unwrap();
 
         assert_eq!(ctx.raw_token, token);
@@ -519,7 +521,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
     fn test_validate_claim_check() {
         let (encoding_key, decoding_key_path) = create_ed_key_pair();
 
-        let conf = JwtAuthProviderConfig {
+        let conf = Box::leak(Box::new(JwtAuthProviderConfig {
             jwk: None,
             rsa_public_key: None,
             ec_public_key: None,
@@ -527,7 +529,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
                 "file://{}",
                 decoding_key_path.path().to_str().unwrap()
             )),
-        };
+        }));
 
         let user = JwtUserConfig {
             claims: [("sub".into(), TokenClaimCheck::Eq("bar".into()))]
@@ -543,7 +545,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
             &encoding_key,
         );
 
-        let provider = JwtAuthPorvider::new(conf).unwrap();
+        let provider = JwtAuthProvider::new(conf).unwrap();
         provider.authenticate(&user, &token).unwrap_err();
     }
 
@@ -551,7 +553,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
     fn test_validate_exp_claim() {
         let (encoding_key, decoding_key_path) = create_ed_key_pair();
 
-        let conf = JwtAuthProviderConfig {
+        let conf = Box::leak(Box::new(JwtAuthProviderConfig {
             jwk: None,
             rsa_public_key: None,
             ec_public_key: None,
@@ -559,7 +561,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
                 "file://{}",
                 decoding_key_path.path().to_str().unwrap()
             )),
-        };
+        }));
 
         let user = JwtUserConfig {
             claims: HashMap::new(),
@@ -573,7 +575,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
             &encoding_key,
         );
 
-        let provider = JwtAuthPorvider::new(conf).unwrap();
+        let provider = JwtAuthProvider::new(conf).unwrap();
         provider.authenticate(&user, &token).unwrap_err();
     }
 }
