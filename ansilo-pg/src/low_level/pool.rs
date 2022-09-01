@@ -1,32 +1,37 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
-use ansilo_core::err::{bail, Context, Error, Result};
-use ansilo_logging::info;
+use ansilo_core::err::{Error, Result};
+use ansilo_logging::{debug, info};
 use deadpool::{
     async_trait,
-    managed::{Object, Pool, PoolConfig, PoolError, RecycleError, RecycleResult},
+    managed::{Manager, Object, Pool, RecycleError, RecycleResult},
 };
 use postgres::Config;
+use tokio::sync::broadcast::{self, Receiver, Sender};
 
 use crate::conf::PostgresConf;
 
 use super::connection::LlPostgresConnection;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct LlPostgresConnectionPoolConfig {
-    pg: &'static PostgresConf,
-    user: String,
-    database: String,
-    max_size: usize,
-    recycle_query: Option<String>,
-    connect_timeout: Duration,
-}
+pub type AppPostgresConnection = Object<LlPostgresConnectionManager>;
 
 /// Postgres connection pool
 #[derive(Clone)]
 pub struct LlPostgresConnectionPool {
     /// The inner deadpool pool
     pool: Pool<LlPostgresConnectionManager>,
+    /// Upon drop will shutdown background tasks
+    _terminator: Sender<()>,
+}
+
+/// Configuration options for the pool
+#[derive(Debug, Clone, PartialEq)]
+pub struct LlPostgresConnectionPoolConfig {
+    pub pg: &'static PostgresConf,
+    pub user: String,
+    pub database: String,
+    pub max_size: usize,
+    pub connect_timeout: Duration,
 }
 
 impl LlPostgresConnectionPool {
@@ -36,28 +41,50 @@ impl LlPostgresConnectionPool {
         pg_conf.user(&conf.user);
         pg_conf.dbname(&conf.database);
 
-        let socket_path = conf.pg.pg_socket_path();
+        let pool = Pool::builder(LlPostgresConnectionManager::new(conf.clone(), pg_conf))
+            .max_size(conf.max_size)
+            .create_timeout(Some(conf.connect_timeout))
+            .runtime(deadpool::Runtime::Tokio1)
+            .build()
+            .map_err(|e| {
+                Error::msg(format!(
+                    "Failed to create postgres connection pool: {:?}",
+                    e
+                ))
+            })?;
+
+        let (terminator, receiver) = broadcast::channel(1);
+        Self::drop_old_connections(pool.clone(), receiver);
 
         Ok(Self {
-            pool: Pool::builder(LlPostgresConnectionManager::new(conf.clone(), pg_conf))
-                .max_size(conf.max_size)
-                .create_timeout(Some(conf.connect_timeout))
-                .runtime(deadpool::Runtime::Tokio1)
-                .build()
-                .map_err(|e| {
-                    Error::msg(format!(
-                        "Failed to create postgres connection pool: {:?}",
-                        e
-                    ))
-                })?,
+            pool,
+            _terminator: terminator,
         })
     }
 
+    fn drop_old_connections(pool: Pool<LlPostgresConnectionManager>, mut terminator: Receiver<()>) {
+        tokio::spawn(async move {
+            // TODO[low]: Make max connection age configurable
+            let max_age = Duration::from_secs(3600);
+
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(30)) => {}
+                    _ = terminator.recv() => return,
+                }
+
+                debug!("Dropping old postgres connections");
+                pool.retain(|_, metrics| metrics.last_used() < max_age);
+            }
+        });
+    }
+
     /// Aquires a connection from the pool
-    pub async fn acquire(
-        &mut self,
-    ) -> Result<Object<LlPostgresConnectionManager>, PoolError<Error>> {
-        self.pool.get().await
+    pub async fn acquire(&self) -> Result<AppPostgresConnection> {
+        self.pool
+            .get()
+            .await
+            .map_err(|e| Error::msg(format!("Failed to acquire connection: {:?}", e)))
     }
 }
 
@@ -74,7 +101,7 @@ impl LlPostgresConnectionManager {
 }
 
 #[async_trait]
-impl deadpool::managed::Manager for LlPostgresConnectionManager {
+impl Manager for LlPostgresConnectionManager {
     type Type = LlPostgresConnection;
     type Error = Error;
 
@@ -92,7 +119,7 @@ impl deadpool::managed::Manager for LlPostgresConnectionManager {
         }
 
         // Clean the connection
-        if let Some(query) = self.conf.recycle_query.as_ref() {
+        if let Some(query) = con.recycle_query.take().as_ref() {
             con.execute(query).await?;
         }
 
@@ -103,8 +130,6 @@ impl deadpool::managed::Manager for LlPostgresConnectionManager {
 #[cfg(test)]
 mod tests {
     use std::{path::PathBuf, thread};
-
-    use deadpool::Status;
 
     use crate::{initdb::PostgresInitDb, server::PostgresServer, PG_SUPER_USER};
 
@@ -123,19 +148,20 @@ mod tests {
                 test_name
             )),
             fdw_socket_path: PathBuf::from("not-used"),
+            app_users: vec![],
+            init_db_sql: vec![],
         };
         Box::leak(Box::new(conf))
     }
 
-    #[test]
-    fn test_postgres_connection_pool_new() {
+    #[tokio::test]
+    async fn test_postgres_connection_pool_new() {
         let conf = test_pg_config("new");
         let pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
             pg: conf,
             user: PG_SUPER_USER.into(),
             database: "postgres".into(),
             max_size: 5,
-            recycle_query: None,
             connect_timeout: Duration::from_secs(1),
         })
         .unwrap();
@@ -147,12 +173,11 @@ mod tests {
     #[tokio::test]
     async fn test_postgres_connection_pool_get_without_server() {
         let conf = test_pg_config("down");
-        let mut pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
+        let pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
             pg: conf,
             user: PG_SUPER_USER.into(),
             database: "postgres".into(),
             max_size: 5,
-            recycle_query: None,
             connect_timeout: Duration::from_secs(1),
         })
         .unwrap();
@@ -170,12 +195,11 @@ mod tests {
         thread::spawn(move || _server.wait());
         thread::sleep(Duration::from_secs(2));
 
-        let mut pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
+        let pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
             pg: conf,
             user: PG_SUPER_USER.into(),
             database: "postgres".into(),
             max_size: 5,
-            recycle_query: None,
             connect_timeout: Duration::from_secs(1),
         })
         .unwrap();

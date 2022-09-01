@@ -78,6 +78,8 @@ mod tests {
                 test_name
             )),
             fdw_socket_path: PathBuf::from("not-used"),
+            app_users: vec![],
+            init_db_sql: vec![],
         };
         Box::leak(Box::new(conf))
     }

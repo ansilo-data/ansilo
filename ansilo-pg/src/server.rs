@@ -69,6 +69,8 @@ mod tests {
             data_dir: PathBuf::from("/tmp/ansilo-tests/pg-server/data"),
             socket_dir_path: PathBuf::from("/tmp/ansilo-tests/pg-server"),
             fdw_socket_path: PathBuf::from("not-used"),
+            app_users: vec![],
+            init_db_sql: vec![],
         };
         Box::leak(Box::new(conf))
     }

@@ -202,9 +202,8 @@ impl Ansilo {
         if let Err(err) = subsystems.fdw.terminate() {
             warn!("Failed to terminate fdw server: {:?}", err);
         }
-        if let Err(err) = subsystems.runtime.shutdown_timeout(Duration::from_secs(3)) {
-            warn!("Failed to terminate tokio runtime: {:?}", err);
-        }
+
+        subsystems.runtime.shutdown_timeout(Duration::from_secs(3));
 
         info!("Shutdown sequence complete");
 

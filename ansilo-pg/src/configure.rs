@@ -8,10 +8,19 @@ use crate::{
 pub(crate) fn configure(conf: &PostgresConf, mut superuser_con: PostgresConnection) -> Result<()> {
     configure_roles(conf, &mut superuser_con)?;
     configure_extension(conf, &mut superuser_con)?;
+
+    for sql in conf.init_db_sql.iter() {
+        superuser_con
+            .batch_execute(sql)
+            .context("Failed run db initialisation sql")?;
+    }
+
     Ok(())
 }
 
-fn configure_roles(_conf: &PostgresConf, superuser_con: &mut PostgresConnection) -> Result<()> {
+fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) -> Result<()> {
+    // Create standard users
+    // TODO: Remove ansiloapp user
     superuser_con
         .batch_execute(
             format!(
@@ -26,7 +35,16 @@ fn configure_roles(_conf: &PostgresConf, superuser_con: &mut PostgresConnection)
             )
             .as_str(),
         )
-        .context("Failed to initialise roles")
+        .context("Failed to initialise roles")?;
+
+    // Configure app users
+    for user in conf.app_users.iter() {
+        superuser_con
+            .batch_execute(format!(r#"CREATE USER {user} PASSWORD NULL;"#).as_str())
+            .context("Failed to initialise app user")?;
+    }
+
+    Ok(())
 }
 
 /// We cannot rely this extension being available when we build run tests

@@ -91,6 +91,8 @@ mod tests {
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/initdb-test/data/{}", test_name)),
             socket_dir_path: PathBuf::from("/tmp/"),
             fdw_socket_path: PathBuf::from("not-used"),
+            app_users: vec![],
+            init_db_sql: vec![],
         };
         Box::leak(Box::new(conf))
     }

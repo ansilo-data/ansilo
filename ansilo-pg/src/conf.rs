@@ -17,13 +17,17 @@ pub struct PostgresConf {
     /// Path to the unix socket which ansilo listens on
     /// acting as the data source for the FDW
     pub fdw_socket_path: PathBuf,
+    /// Applicaton users which have been configured to authenticate as.
+    pub app_users: Vec<String>,
+    /// Additional queries to run on database initialisation
+    /// Used to bootstrap any initial configuration
+    pub init_db_sql: Vec<String>,
 }
 
 impl PostgresConf {
     /// Gets the full path of the postgres unix socket
     pub fn pg_socket_path(&self) -> PathBuf {
-        self.socket_dir_path
-            .join(format!(".s.PGSQL.{}", PG_PORT))
+        self.socket_dir_path.join(format!(".s.PGSQL.{}", PG_PORT))
     }
 }
 
@@ -39,6 +43,8 @@ mod tests {
             data_dir: PathBuf::from("/"),
             socket_dir_path: PathBuf::from("/var/run/pg/"),
             fdw_socket_path: PathBuf::from("/"),
+            app_users: vec![],
+            init_db_sql: vec![],
         };
 
         assert_eq!(

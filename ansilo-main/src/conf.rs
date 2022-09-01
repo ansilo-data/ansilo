@@ -46,17 +46,39 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
         install_dir: pg_conf
             .install_dir
             .unwrap_or("/usr/lib/postgresql/14/".into()),
+        //
         postgres_conf_path: pg_conf.config_path,
+        //
         data_dir: pg_conf
             .data_dir
             .unwrap_or("/var/run/postgresql/ansilo/data".into()),
+        //
         socket_dir_path: pg_conf
             .listen_socket_dir_path
             .unwrap_or("/var/run/postgresql/ansilo/".into()),
+        //
         fdw_socket_path: pg_conf
             .fdw_socket_path
             .unwrap_or("/var/run/postgresql/ansilo/fdw.sock".into()),
+        //
+        app_users: node
+            .auth
+            .as_ref()
+            .map(|a| {
+                a.users
+                    .iter()
+                    .map(|i| i.username.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+        //
+        init_db_sql: create_db_init_sql(node),
     }
+}
+
+fn create_db_init_sql(_node: &NodeConfig) -> Vec<String> {
+    // TODO (automatically run CREATE SERVER for each data source)
+    vec![]
 }
 
 /// Initialises the proxy configuration

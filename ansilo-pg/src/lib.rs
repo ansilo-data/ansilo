@@ -6,6 +6,10 @@ use conf::PostgresConf;
 use configure::configure;
 use connection::{PostgresConnection, PostgresConnectionPool};
 use initdb::PostgresInitDb;
+use low_level::{
+    multi_pool::{MultiUserPostgresConnectionPool, MultiUserPostgresConnectionPoolConfig},
+    pool::AppPostgresConnection,
+};
 use manager::PostgresServerManager;
 
 /// This module orchestrates our postgres instance and provides an api
@@ -18,11 +22,11 @@ pub mod conf;
 pub mod connection;
 pub mod fdw;
 pub mod initdb;
+pub mod low_level;
 pub mod manager;
 pub mod proc;
-pub mod server;
 pub mod proto;
-pub mod low_level;
+pub mod server;
 
 mod configure;
 #[cfg(test)]
@@ -45,7 +49,6 @@ pub(crate) const PG_ADMIN_USER: &str = "ansiloadmin";
 pub(crate) const PG_APP_USER: &str = "ansiloapp";
 
 /// The entrypoint for managing our postgres instance
-#[derive(Debug)]
 pub struct PostgresInstance {
     /// The postgres configuration
     conf: &'static PostgresConf,
@@ -56,12 +59,12 @@ pub struct PostgresInstance {
 }
 
 /// Thread-safe connection pools to access postgres
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct PostgresConnectionPools {
     /// The admin user connection pool
     admin: PostgresConnectionPool,
     /// The app user connection pool
-    app: PostgresConnectionPool,
+    app: MultiUserPostgresConnectionPool,
 }
 
 impl PostgresInstance {
@@ -109,14 +112,13 @@ impl PostgresInstance {
                     5,
                     connect_timeout,
                 )?,
-                app: PostgresConnectionPool::new(
-                    conf,
-                    PG_APP_USER,
-                    PG_DATABASE,
-                    1,
-                    50,
+                app: MultiUserPostgresConnectionPool::new(MultiUserPostgresConnectionPoolConfig {
+                    pg: conf,
+                    users: conf.app_users.clone(),
+                    database: PG_DATABASE.into(),
+                    max_cons_per_user: 50,
                     connect_timeout,
-                )?,
+                })?,
             },
         })
     }
@@ -145,9 +147,9 @@ impl PostgresConnectionPools {
         self.admin.acquire()
     }
 
-    /// Gets a connection with standard privileges to the database
-    pub fn app(&mut self) -> Result<PostgresConnection> {
-        self.app.acquire()
+    /// Gets a connection authenticated as the supplied app user
+    pub async fn app(&mut self, username: &str) -> Result<AppPostgresConnection> {
+        self.app.acquire(username).await
     }
 }
 
@@ -164,6 +166,8 @@ mod tests {
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}/data/", test_name)),
             socket_dir_path: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}", test_name)),
             fdw_socket_path: PathBuf::from("not-used"),
+            app_users: vec![],
+            init_db_sql: vec![],
         };
         Box::leak(Box::new(conf))
     }
@@ -183,7 +187,7 @@ mod tests {
         ansilo_logging::init_for_tests();
 
         let conf = test_pg_config("start_without_configure");
-        PostgresInstance::start(&conf).unwrap_err();
+        assert!(PostgresInstance::start(&conf).is_err());
     }
 
     #[test]
