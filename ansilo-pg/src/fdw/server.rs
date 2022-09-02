@@ -110,7 +110,7 @@ impl FdwServer {
         let thread = {
             let _ = fs::remove_file(&path);
             fs::create_dir_all(path.parent().context("Failed to get path parent")?)
-                .context("Could not create parent path")?;
+                .with_context(|| format!("Could not create parent path for {}", path.display()))?;
             let listener = UnixListener::bind(path)
                 .with_context(|| format!("Failed to bind socket at {}", path.display()))?;
             let terminated = Arc::clone(&terminated);

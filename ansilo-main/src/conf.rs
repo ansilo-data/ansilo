@@ -63,14 +63,10 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
         //
         app_users: node
             .auth
-            .as_ref()
-            .map(|a| {
-                a.users
-                    .iter()
-                    .map(|i| i.username.clone())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default(),
+            .users
+            .iter()
+            .map(|i| i.username.clone())
+            .collect::<Vec<_>>(),
         //
         init_db_sql: create_db_init_sql(node),
     }

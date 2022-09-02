@@ -32,7 +32,7 @@ pub struct NodeConfig {
     /// Networking options
     pub networking: NetworkingConfig,
     /// Auth options
-    pub auth: Option<AuthConfig>,
+    pub auth: AuthConfig,
     /// List of data source configurations for the node
     #[serde(default)]
     pub sources: Vec<DataSourceConfig>,

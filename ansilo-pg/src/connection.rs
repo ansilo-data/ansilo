@@ -50,7 +50,7 @@ impl PostgresConnectionPool {
     }
 
     /// Aquires a connection from the pool
-    pub fn acquire(&mut self) -> Result<PostgresConnection> {
+    pub fn acquire(&self) -> Result<PostgresConnection> {
         self.pool
             .get()
             .context("Failed to acquire a connection from the connection pool")
@@ -125,7 +125,7 @@ mod tests {
         let mut _server = PostgresServer::boot(conf).unwrap();
         thread::spawn(move || _server.wait());
 
-        let mut pool = PostgresConnectionPool::new(
+        let pool = PostgresConnectionPool::new(
             conf,
             PG_SUPER_USER,
             "postgres",

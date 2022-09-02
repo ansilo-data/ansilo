@@ -6,10 +6,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub struct AuthConfig {
     /// List of auth providers, used to validate incoming auth tokens
+    #[serde(default)]
     pub providers: Vec<AuthProviderConfig>,
     /// List of users
     pub users: Vec<UserConfig>,
     /// List of service users
+    #[serde(default)]
     pub service_users: Vec<ServiceUserConfig>,
 }
 
@@ -79,15 +81,11 @@ pub struct UserConfig {
 
 /// Type-specific authentication options for this user
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(untagged)]
 pub enum UserTypeOptions {
-    #[serde(rename = "password")]
     Password(PasswordUserConfig),
-    #[serde(rename = "jwt")]
     Jwt(JwtUserConfig),
-    #[serde(rename = "saml")]
     Saml(SamlUserConfig),
-    #[serde(rename = "custom")]
     Custom(serde_yaml::Mapping),
 }
 

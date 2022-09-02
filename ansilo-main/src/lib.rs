@@ -5,6 +5,7 @@ use crate::{
     build::BuildInfo,
     handlers::{Http1ConnectionHandler, Http2ConnectionHandler, PostgresConnectionHandler},
 };
+use ansilo_auth::Authenticator;
 use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs, Connectors};
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{info, warn};
@@ -52,6 +53,8 @@ struct Subsystems {
     fdw: FdwServer,
     /// The proxy server
     proxy: ProxyServer,
+    /// The authentication system
+    authenticator: Authenticator,
 }
 
 impl Ansilo {
@@ -74,6 +77,13 @@ impl Ansilo {
         // We are happy to let the app-wide config leak for the rest of the program
         let conf: &'static _ = Box::leak(Box::new(init_conf(&config_path)));
 
+        // Boot tokio
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .thread_name("ansilo-tokio-worker")
+            .enable_all()
+            .build()
+            .context("Failed to create tokio runtime")?;
+
         let pools = Self::init_connectors(conf);
 
         info!("Starting fdw listener...");
@@ -90,9 +100,9 @@ impl Ansilo {
         {
             info!("Build occurred at {}", build_info.built_at().to_rfc3339());
             info!("Starting postgres...");
-            PostgresInstance::start(&conf.pg)?
+            PostgresInstance::start(&conf.pg, runtime.handle().clone())?
         } else {
-            build(conf)?
+            build(conf, runtime.handle().clone())?
         };
 
         if command.is_build() {
@@ -105,17 +115,17 @@ impl Ansilo {
             });
         }
 
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .thread_name("ansilo-tokio-worker")
-            .enable_all()
-            .build()
-            .context("Failed to create tokio runtime")?;
+        info!("Starting authenticator...");
+        let authenticator = Authenticator::init(&conf.node.auth)?;
 
         info!("Starting proxy server...");
         let proxy_conf = Box::leak(Box::new(init_proxy_conf(
             conf,
             HandlerConf::new(
-                PostgresConnectionHandler::new(conf, postgres.connections().clone()),
+                PostgresConnectionHandler::new(
+                    authenticator.clone(),
+                    postgres.connections().clone(),
+                ),
                 Http2ConnectionHandler::new(postgres.connections().clone()),
                 Http1ConnectionHandler::new(postgres.connections().clone()),
             ),
@@ -135,6 +145,7 @@ impl Ansilo {
                 postgres,
                 fdw,
                 proxy,
+                authenticator,
             }),
             log,
         })
@@ -193,6 +204,9 @@ impl Ansilo {
         };
 
         info!("Terminating...");
+        if let Err(err) = subsystems.authenticator.terminate() {
+            warn!("Failed to terminate authenticator: {:?}", err);
+        }
         if let Err(err) = subsystems.proxy.terminate() {
             warn!("Failed to terminate proxy server: {:?}", err);
         }

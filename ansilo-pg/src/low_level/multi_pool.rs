@@ -2,6 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use ansilo_core::err::{bail, Result};
 use deadpool::managed::Object;
+use tokio::runtime::Handle;
 
 use crate::conf::PostgresConf;
 
@@ -30,20 +31,23 @@ pub struct MultiUserPostgresConnectionPoolConfig {
 
 impl MultiUserPostgresConnectionPool {
     /// Creates a new multi-user connection pool
-    pub fn new(conf: MultiUserPostgresConnectionPoolConfig) -> Result<Self> {
+    pub fn new(handle: Handle, conf: MultiUserPostgresConnectionPoolConfig) -> Result<Self> {
         let pools = conf
             .users
             .iter()
             .map(|user| {
                 Ok((
                     user.to_string(),
-                    LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
-                        pg: conf.pg,
-                        user: user.into(),
-                        database: conf.database.clone(),
-                        max_size: conf.max_cons_per_user,
-                        connect_timeout: conf.connect_timeout,
-                    })?,
+                    LlPostgresConnectionPool::new(
+                        handle.clone(),
+                        LlPostgresConnectionPoolConfig {
+                            pg: conf.pg,
+                            user: user.into(),
+                            database: conf.database.clone(),
+                            max_size: conf.max_cons_per_user,
+                            connect_timeout: conf.connect_timeout,
+                        },
+                    )?,
                 ))
             })
             .collect::<Result<HashMap<String, _>>>()?;
@@ -92,14 +96,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_postgres_connection_pool_new() {
+        let handle = tokio::runtime::Handle::try_current().unwrap();
         let conf = test_pg_config("new");
-        let pool = MultiUserPostgresConnectionPool::new(MultiUserPostgresConnectionPoolConfig {
-            pg: conf,
-            users: vec!["user1".into(), "user2".into()],
-            database: "postgres".into(),
-            max_cons_per_user: 5,
-            connect_timeout: Duration::from_secs(1),
-        })
+        let pool = MultiUserPostgresConnectionPool::new(
+            handle,
+            MultiUserPostgresConnectionPoolConfig {
+                pg: conf,
+                users: vec!["user1".into(), "user2".into()],
+                database: "postgres".into(),
+                max_cons_per_user: 5,
+                connect_timeout: Duration::from_secs(1),
+            },
+        )
         .unwrap();
 
         assert!(pool.pools.contains_key("user1"));

@@ -115,7 +115,7 @@ impl JwtAuthProvider {
         if let Some(jwk_url) = conf.jwk.as_ref() {
             #[derive(Deserialize)]
             struct JwkSet {
-                jwk: Vec<jsonwebkey::JsonWebKey>,
+                keys: Vec<jsonwebkey::JsonWebKey>,
             }
 
             info!("Retrieving JWK's from {}", jwk_url);
@@ -123,10 +123,10 @@ impl JwtAuthProvider {
             let set: JwkSet =
                 serde_json::from_slice(data.as_slice()).context("Failed to parse JWK JSON")?;
 
-            ensure!(set.jwk.len() > 0, "Found empty JWK set");
+            ensure!(set.keys.len() > 0, "Found empty JWK set");
 
             return set
-                .jwk
+                .keys
                 .into_iter()
                 .filter(|j| j.key_use.is_none() || j.key_use.unwrap() == KeyUse::Signing)
                 .map(|j| {
@@ -301,7 +301,7 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
 
     /// JWK generated from `RSA_PRIVATE_KEY_PEM`
     /// @see https://russelldavies.github.io/jwk-creator/
-    pub const JWK_JSON: &[u8] = br#"{"jwk":
+    pub const JWK_JSON: &[u8] = br#"{"keys":
 [
     {
         "kty": "RSA",

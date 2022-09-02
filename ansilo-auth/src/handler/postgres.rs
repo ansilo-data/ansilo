@@ -8,7 +8,7 @@ use ansilo_pg::proto::{
     fe::{PostgresFrontendMessage, PostgresFrontendMessageTag, PostgresFrontendStartupMessage},
 };
 use ansilo_proxy::stream::IOStream;
-use rand::{rngs::ThreadRng, Rng};
+use rand::Rng;
 
 use crate::{
     ctx::{
@@ -108,7 +108,7 @@ impl Authenticator {
         conf: &PasswordUserConfig,
     ) -> Result<PasswordAuthContext> {
         // TODO: use sasl-scram
-        let salt = ThreadRng::default().gen::<[u8; 4]>();
+        let salt = rand::thread_rng().gen::<[u8; 4]>();
         PostgresBackendMessage::AuthenticationMd5Password(salt)
             .write(client)
             .await

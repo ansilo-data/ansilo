@@ -174,7 +174,12 @@ impl LlPostgresConnection {
     }
 
     /// Splits the connection into a reader and writer which can be used concurrently
-    pub fn split(self) -> (PgReader, PgWriter) {
+    pub fn split<'a>(&'a mut self) -> (&'a mut PgReader, &'a mut PgWriter) {
+        (&mut self.reader, &mut self.writer)
+    }
+
+    /// Splits the connection into a reader and writer which can be used concurrently
+    pub fn into_split(self) -> (PgReader, PgWriter) {
         (self.reader, self.writer)
     }
 
@@ -409,8 +414,47 @@ mod tests {
         pg_conf.dbname("postgres");
 
         // First split
+        let mut con = create_connection(conf, pg_conf).await;
+        let (reader, writer) = con.split();
+
+        writer
+            .send(PostgresFrontendMessage::Query("SELECT 1".into()))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            reader.receive().await.unwrap().tag().unwrap(),
+            PostgresBackendMessageTag::RowDescription
+        );
+        assert_eq!(
+            reader.receive().await.unwrap().tag().unwrap(),
+            PostgresBackendMessageTag::DataRow
+        );
+        assert_eq!(
+            reader.receive().await.unwrap().tag().unwrap(),
+            PostgresBackendMessageTag::CommandComplete
+        );
+        assert_eq!(
+            reader.receive().await.unwrap().tag().unwrap(),
+            PostgresBackendMessageTag::ReadyForQuery
+        );
+
+        // Now recombine
+        con.execute("SELECT 2").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_low_level_postgres_connection_into_split() {
+        let conf = test_pg_config("connection-into-split");
+        startup_postgres(conf);
+
+        let mut pg_conf = Config::new();
+        pg_conf.user(PG_SUPER_USER);
+        pg_conf.dbname("postgres");
+
+        // First split
         let con = create_connection(conf, pg_conf).await;
-        let (mut reader, mut writer) = con.split();
+        let (mut reader, mut writer) = con.into_split();
 
         writer
             .send(PostgresFrontendMessage::Query("SELECT 1".into()))

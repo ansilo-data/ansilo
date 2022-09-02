@@ -11,6 +11,7 @@ use low_level::{
     pool::AppPostgresConnection,
 };
 use manager::PostgresServerManager;
+use tokio::runtime::Handle;
 
 /// This module orchestrates our postgres instance and provides an api
 /// to execute queries against it. Postgres is run as a child process.
@@ -70,15 +71,15 @@ pub struct PostgresConnectionPools {
 impl PostgresInstance {
     /// Boots an already-initialised postgres instance based on the
     /// supplied configuration
-    pub fn start(conf: &'static PostgresConf) -> Result<Self> {
+    pub fn start(conf: &'static PostgresConf, handle: Handle) -> Result<Self> {
         let server = PostgresServerManager::new(conf);
 
-        Self::connect(conf, server)
+        Self::connect(conf, server, handle)
     }
 
     /// Boots and initialises postgres instance based on the
     /// supplied configuration
-    pub fn configure(conf: &'static PostgresConf) -> Result<Self> {
+    pub fn configure(conf: &'static PostgresConf, handle: Handle) -> Result<Self> {
         let connect_timeout = Duration::from_secs(5);
 
         info!("Running initdb...");
@@ -93,10 +94,14 @@ impl PostgresInstance {
         info!("Configuring postgres...");
         configure(conf, superuser_con)?;
 
-        Self::connect(conf, server)
+        Self::connect(conf, server, handle)
     }
 
-    fn connect(conf: &'static PostgresConf, server: PostgresServerManager) -> Result<Self> {
+    fn connect(
+        conf: &'static PostgresConf,
+        server: PostgresServerManager,
+        handle: Handle,
+    ) -> Result<Self> {
         let connect_timeout = Duration::from_secs(10);
 
         // TODO: configurable pool sizes
@@ -112,13 +117,16 @@ impl PostgresInstance {
                     5,
                     connect_timeout,
                 )?,
-                app: MultiUserPostgresConnectionPool::new(MultiUserPostgresConnectionPoolConfig {
-                    pg: conf,
-                    users: conf.app_users.clone(),
-                    database: PG_DATABASE.into(),
-                    max_cons_per_user: 50,
-                    connect_timeout,
-                })?,
+                app: MultiUserPostgresConnectionPool::new(
+                    handle,
+                    MultiUserPostgresConnectionPoolConfig {
+                        pg: conf,
+                        users: conf.app_users.clone(),
+                        database: PG_DATABASE.into(),
+                        max_cons_per_user: 50,
+                        connect_timeout,
+                    },
+                )?,
             },
         })
     }
@@ -143,12 +151,12 @@ impl PostgresConnectionPools {
     /// Gets a connection with admin privileges to the database
     /// IMPORTANT: Only use this connection for trusted queries
     /// and not queries supplied by the user
-    pub fn admin(&mut self) -> Result<PostgresConnection> {
+    pub fn admin(&self) -> Result<PostgresConnection> {
         self.admin.acquire()
     }
 
     /// Gets a connection authenticated as the supplied app user
-    pub async fn app(&mut self, username: &str) -> Result<AppPostgresConnection> {
+    pub async fn app(&self, username: &str) -> Result<AppPostgresConnection> {
         self.app.acquire(username).await
     }
 }
@@ -175,9 +183,11 @@ mod tests {
     #[test]
     fn test_postgres_instance_configure() {
         ansilo_logging::init_for_tests();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = runtime.handle().clone();
 
         let conf = test_pg_config("configure");
-        let instance = PostgresInstance::configure(&conf).unwrap();
+        let instance = PostgresInstance::configure(&conf, handle).unwrap();
 
         assert!(instance.server.running());
     }
@@ -185,21 +195,25 @@ mod tests {
     #[test]
     fn test_postgres_instance_start_without_configure() {
         ansilo_logging::init_for_tests();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = runtime.handle().clone();
 
         let conf = test_pg_config("start_without_configure");
-        assert!(PostgresInstance::start(&conf).is_err());
+        assert!(PostgresInstance::start(&conf, handle).is_err());
     }
 
     #[test]
     fn test_postgres_instance_configure_then_init() {
         ansilo_logging::init_for_tests();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = runtime.handle().clone();
 
         let conf = test_pg_config("configure_then_start");
-        let instance = PostgresInstance::configure(conf).unwrap();
+        let instance = PostgresInstance::configure(conf, handle.clone()).unwrap();
         assert!(instance.server.running());
         drop(instance);
 
-        let instance = PostgresInstance::start(conf).unwrap();
+        let instance = PostgresInstance::start(conf, handle).unwrap();
         assert!(instance.server.running());
     }
 }

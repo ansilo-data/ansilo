@@ -9,16 +9,17 @@ use ansilo_logging::info;
 use ansilo_pg::PostgresInstance;
 use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
+use tokio::runtime::Handle;
 
 use crate::conf::*;
 
 /// Initialises the postgres database
-pub fn build(conf: &'static AppConf) -> Result<PostgresInstance> {
+pub fn build(conf: &'static AppConf, handle: Handle) -> Result<PostgresInstance> {
     info!("Running build...");
 
     // Initialize postgres via initdb
     let mut postgres =
-        PostgresInstance::configure(&conf.pg).context("Failed to initialise postgres")?;
+        PostgresInstance::configure(&conf.pg, handle).context("Failed to initialise postgres")?;
 
     // Connect to it
     let mut con = postgres

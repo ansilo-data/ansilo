@@ -7,7 +7,10 @@ use deadpool::{
     managed::{Manager, Object, Pool, RecycleError, RecycleResult},
 };
 use postgres::Config;
-use tokio::sync::broadcast::{self, Receiver, Sender};
+use tokio::{
+    runtime::Handle,
+    sync::broadcast::{self, Receiver, Sender},
+};
 
 use crate::conf::PostgresConf;
 
@@ -36,7 +39,7 @@ pub struct LlPostgresConnectionPoolConfig {
 
 impl LlPostgresConnectionPool {
     /// Constructs a new connection pool
-    pub fn new(conf: LlPostgresConnectionPoolConfig) -> Result<Self> {
+    pub fn new(handle: Handle, conf: LlPostgresConnectionPoolConfig) -> Result<Self> {
         let mut pg_conf = postgres::Config::new();
         pg_conf.user(&conf.user);
         pg_conf.dbname(&conf.database);
@@ -54,7 +57,7 @@ impl LlPostgresConnectionPool {
             })?;
 
         let (terminator, receiver) = broadcast::channel(1);
-        Self::drop_old_connections(pool.clone(), receiver);
+        Self::drop_old_connections(handle, pool.clone(), receiver);
 
         Ok(Self {
             pool,
@@ -62,8 +65,12 @@ impl LlPostgresConnectionPool {
         })
     }
 
-    fn drop_old_connections(pool: Pool<LlPostgresConnectionManager>, mut terminator: Receiver<()>) {
-        tokio::spawn(async move {
+    fn drop_old_connections(
+        handle: Handle,
+        pool: Pool<LlPostgresConnectionManager>,
+        mut terminator: Receiver<()>,
+    ) {
+        handle.spawn(async move {
             // TODO[low]: Make max connection age configurable
             let max_age = Duration::from_secs(3600);
 
@@ -156,14 +163,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_postgres_connection_pool_new() {
+        let handle = tokio::runtime::Handle::try_current().unwrap();
         let conf = test_pg_config("new");
-        let pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
-            pg: conf,
-            user: PG_SUPER_USER.into(),
-            database: "postgres".into(),
-            max_size: 5,
-            connect_timeout: Duration::from_secs(1),
-        })
+        let pool = LlPostgresConnectionPool::new(
+            handle,
+            LlPostgresConnectionPoolConfig {
+                pg: conf,
+                user: PG_SUPER_USER.into(),
+                database: "postgres".into(),
+                max_size: 5,
+                connect_timeout: Duration::from_secs(1),
+            },
+        )
         .unwrap();
 
         assert_eq!(pool.pool.status().max_size, 5);
@@ -172,14 +183,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_postgres_connection_pool_get_without_server() {
+        let handle = tokio::runtime::Handle::try_current().unwrap();
         let conf = test_pg_config("down");
-        let pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
-            pg: conf,
-            user: PG_SUPER_USER.into(),
-            database: "postgres".into(),
-            max_size: 5,
-            connect_timeout: Duration::from_secs(1),
-        })
+        let pool = LlPostgresConnectionPool::new(
+            handle,
+            LlPostgresConnectionPoolConfig {
+                pg: conf,
+                user: PG_SUPER_USER.into(),
+                database: "postgres".into(),
+                max_size: 5,
+                connect_timeout: Duration::from_secs(1),
+            },
+        )
         .unwrap();
 
         assert!(pool.acquire().await.is_err());
@@ -187,6 +202,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_postgres_connection_pool_with_running_server() {
+        let handle = tokio::runtime::Handle::try_current().unwrap();
         ansilo_logging::init_for_tests();
         let conf = test_pg_config("up");
         PostgresInitDb::reset(conf).unwrap();
@@ -195,13 +211,16 @@ mod tests {
         thread::spawn(move || _server.wait());
         thread::sleep(Duration::from_secs(2));
 
-        let pool = LlPostgresConnectionPool::new(LlPostgresConnectionPoolConfig {
-            pg: conf,
-            user: PG_SUPER_USER.into(),
-            database: "postgres".into(),
-            max_size: 5,
-            connect_timeout: Duration::from_secs(1),
-        })
+        let pool = LlPostgresConnectionPool::new(
+            handle,
+            LlPostgresConnectionPoolConfig {
+                pg: conf,
+                user: PG_SUPER_USER.into(),
+                database: "postgres".into(),
+                max_size: 5,
+                connect_timeout: Duration::from_secs(1),
+            },
+        )
         .unwrap();
 
         let mut con = pool.acquire().await.unwrap();

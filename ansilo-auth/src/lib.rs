@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ansilo_core::{
     config::{AuthConfig, UserConfig},
     err::{bail, Context, Result},
@@ -12,11 +14,12 @@ pub mod provider;
 /// The entrypoint to the authentication functionality.
 ///
 /// This provides the authentication logic across the supported protocols.
+#[derive(Clone)]
 pub struct Authenticator {
     /// The authentication config
     conf: &'static AuthConfig,
     /// The authentication providers
-    providers: Vec<(String, AuthProvider)>,
+    providers: Arc<Vec<(String, AuthProvider)>>,
 }
 
 impl Authenticator {
@@ -50,7 +53,10 @@ impl Authenticator {
             );
         }
 
-        Ok(Self { conf, providers })
+        Ok(Self {
+            conf,
+            providers: Arc::new(providers),
+        })
     }
 
     /// Gets the requested user from the auth configuration
@@ -69,5 +75,11 @@ impl Authenticator {
             .find(|(id, _)| id == provider_id)
             .map(|(_, provider)| provider)
             .with_context(|| format!("Auth provider '{}' does not exist", provider_id))
+    }
+
+    /// Terminates the authenticator
+    pub fn terminate(self) -> Result<()> {
+        // no op as of now
+        Ok(())
     }
 }

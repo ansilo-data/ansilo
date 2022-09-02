@@ -1,5 +1,6 @@
 use std::{ffi::CString, sync::mpsc::channel, time::Duration};
 
+use ansilo_core::err::Context;
 use ansilo_logging::{info, warn};
 use nix::sys::signal;
 use notify::{watcher, RecursiveMode, Watcher};
@@ -16,6 +17,7 @@ pub fn signal_on_config_update(conf: &AppConf) {
     // Watch for changes on root config file
     watcher
         .watch(&conf.path, RecursiveMode::NonRecursive)
+        .context(conf.path.clone().to_string_lossy().to_string())
         .unwrap();
 
     // Watch for changes on sql files
@@ -42,6 +44,7 @@ pub fn signal_on_config_update(conf: &AppConf) {
 
         watcher
             .watch(init_sql_path, RecursiveMode::Recursive)
+            .context(init_sql_path.clone().to_string_lossy().to_string())
             .unwrap();
     }
 

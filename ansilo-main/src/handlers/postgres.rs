@@ -1,33 +1,34 @@
-use ansilo_core::err::Result;
-use ansilo_pg::PostgresConnectionPools;
+use ansilo_auth::Authenticator;
+use ansilo_core::err::{Context, Result};
+use ansilo_logging::warn;
+use ansilo_pg::{
+    low_level::connection::{PgReader, PgWriter},
+    proto::{be::PostgresBackendMessage, fe::PostgresFrontendMessage},
+    PostgresConnectionPools,
+};
 use ansilo_proxy::{handler::ConnectionHandler, stream::IOStream};
 use async_trait::async_trait;
-use tokio::net::UnixStream;
-
-use crate::conf::AppConf;
+use rand::distributions::{Alphanumeric, DistString};
+use tokio::io::{ReadHalf, WriteHalf};
 
 /// Handler for postgres-wire-protocol connections
 pub struct PostgresConnectionHandler {
-    conf: &'static AppConf,
+    authenticator: Authenticator,
     pool: PostgresConnectionPools,
 }
 
 impl PostgresConnectionHandler {
-    pub fn new(conf: &'static AppConf, pool: PostgresConnectionPools) -> Self {
-        Self { conf, pool }
+    pub fn new(authenticator: Authenticator, pool: PostgresConnectionPools) -> Self {
+        Self {
+            authenticator,
+            pool,
+        }
     }
 }
 
 #[async_trait]
 impl ConnectionHandler for PostgresConnectionHandler {
     async fn handle(&self, mut client: Box<dyn IOStream>) -> Result<()> {
-        // TODO: We currently bypass the connection pool and proxy
-        // data directly to a new connection socket.
-        // We should either have pooling of these sockets in some fashion
-        // or become fully aware of the protocol messages and channel it
-        // through the postgres connection API
-        
-
         // process:
         // 1. get username from startup request
         // 2. get user from config
@@ -41,10 +42,86 @@ impl ConnectionHandler for PostgresConnectionHandler {
         // 10. clean connection: exec discard all
         // 11. release connection back to pool
 
-        let sock_path = self.conf.pg.pg_socket_path();
-        let mut con = UnixStream::connect(sock_path).await?;
+        let (auth, _startup) = self
+            .authenticator
+            .authenticate_postgres(&mut client)
+            .await?;
 
-        tokio::io::copy_bidirectional(&mut client, &mut con).await?;
+        // TODO: forward startup connection params
+        let mut con = self.pool.app(&auth.username).await?;
+        let reset_token = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+
+        con.execute(format!(
+            "SELECT ansilo_set_auth_context('{}', '{}')",
+            serde_json::to_string(&auth).context("Failed to serialise auth context")?,
+            reset_token
+        ))
+        .await?;
+
+        con.recycle_query(Some(format!(
+            "SELECT ansilo_reset_auth_context('{}'); DISCARD ALL;",
+            reset_token
+        )));
+
+        let (mut client_reader, mut client_writer) = tokio::io::split(client);
+        let (mut pg_reader, mut pg_writer) = con.split();
+
+        match Self::proxy(
+            &mut client_reader,
+            &mut client_writer,
+            &mut pg_reader,
+            &mut pg_writer,
+        )
+        .await
+        {
+            Ok(_) => {}
+            Err(err) => {
+                warn!("Error during postgres connection: {:?}", err);
+                let _ = PostgresBackendMessage::ErrorResponse(format!("Error: {}", err))
+                    .write(&mut client_writer)
+                    .await;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl PostgresConnectionHandler {
+    async fn proxy(
+        client_reader: &mut ReadHalf<Box<dyn IOStream>>,
+        client_writer: &mut WriteHalf<Box<dyn IOStream>>,
+        pg_reader: &mut PgReader,
+        pg_writer: &mut PgWriter,
+    ) -> Result<()> {
+        let input = async move {
+            loop {
+                let msg = PostgresFrontendMessage::read(client_reader).await?;
+
+                if msg == PostgresFrontendMessage::Terminate {
+                    break;
+                }
+
+                pg_writer.send(msg).await?;
+            }
+
+            Result::<()>::Ok(())
+        };
+
+        let output = async move {
+            loop {
+                let msg = pg_reader.receive().await?;
+                msg.write(client_writer).await?;
+            }
+
+            #[allow(unreachable_code)]
+            Result::<()>::Ok(())
+        };
+
+        tokio::select! {
+            res = input => res?,
+            res = output => res?,
+        };
 
         Ok(())
     }
