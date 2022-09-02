@@ -1,6 +1,8 @@
 use ansilo_core::{
-    config::{JwtUserConfig, Mapping, PasswordUserConfig, SamlUserConfig, UserTypeOptions},
-    err::{bail, Context, Result},
+    config::{
+        CustomUserConfig, JwtUserConfig, PasswordUserConfig, SamlUserConfig, UserTypeOptions,
+    },
+    err::{bail, ensure, Context, Result},
 };
 use ansilo_logging::{info, warn};
 use ansilo_pg::proto::{
@@ -65,7 +67,7 @@ impl Authenticator {
         let ctx = match (provider, &user.r#type) {
             (AuthProvider::Password(provider), UserTypeOptions::Password(conf)) => {
                 ProviderAuthContext::Password(
-                    self.do_postgres_password_auth(client, provider, conf)
+                    self.do_postgres_password_auth(client, username, provider, conf)
                         .await?,
                 )
             }
@@ -104,6 +106,7 @@ impl Authenticator {
     async fn do_postgres_password_auth(
         &self,
         client: &mut Box<dyn IOStream>,
+        username: &str,
         provider: &PasswordAuthProvider,
         conf: &PasswordUserConfig,
     ) -> Result<PasswordAuthContext> {
@@ -118,7 +121,10 @@ impl Authenticator {
             .await
             .context("Failed to read response from hash request")?;
 
-        let hash = match res {
+        // @see https://doxygen.postgresql.org/md5__common_8c_source.html#l00144
+        // Output format is "md5" followed by a 32-hex-digit MD5 checksum.
+        // Hence, the output buffer "buf" must be at least 36 bytes long.
+        let data = match res {
             PostgresFrontendMessage::Other(msg)
                 if msg.tag() == Some(PostgresFrontendMessageTag::AuthenticationData as _) =>
             {
@@ -127,7 +133,11 @@ impl Authenticator {
             _ => bail!("Unexpected response message to hash request: {:?}", res),
         };
 
-        provider.authenticate(conf, &salt, &hash)
+        ensure!(data.len() == 36, "Invalid password hash");
+        let hex = &data[3..35];
+        let hash = hex::decode(hex).context("Invalid password hash")?;
+
+        provider.authenticate(conf, username, &salt, hash.as_slice())
     }
 
     async fn do_postgres_jwt_auth(
@@ -145,7 +155,7 @@ impl Authenticator {
             .await
             .context("Failed to read response from jwt request")?;
 
-        let jwt = match res {
+        let mut jwt = match res {
             PostgresFrontendMessage::Other(msg)
                 if msg.tag() == Some(PostgresFrontendMessageTag::AuthenticationData as _) =>
             {
@@ -153,6 +163,11 @@ impl Authenticator {
             }
             _ => bail!("Unexpected response message to hash request: {:?}", res),
         };
+
+        // Trim trailing null byte if present
+        if jwt.last().cloned() == Some(0) {
+            jwt.remove(jwt.len() - 1);
+        }
 
         let jwt = String::from_utf8(jwt).context("Supplied jwt is invalid")?;
 
@@ -172,7 +187,7 @@ impl Authenticator {
         &self,
         _client: &mut Box<dyn IOStream>,
         _provider: &CustomAuthProvider,
-        _conf: &Mapping,
+        _conf: &CustomUserConfig,
     ) -> Result<CustomAuthContext> {
         todo!()
     }

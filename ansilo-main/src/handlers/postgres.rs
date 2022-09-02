@@ -1,6 +1,6 @@
 use ansilo_auth::Authenticator;
 use ansilo_core::err::{Context, Result};
-use ansilo_logging::warn;
+use ansilo_logging::{debug, warn};
 use ansilo_pg::{
     low_level::connection::{PgReader, PgWriter},
     proto::{be::PostgresBackendMessage, fe::PostgresFrontendMessage},
@@ -58,13 +58,18 @@ impl ConnectionHandler for PostgresConnectionHandler {
         ))
         .await?;
 
-        con.recycle_query(Some(format!(
-            "SELECT ansilo_reset_auth_context('{}'); DISCARD ALL;",
-            reset_token
-        )));
+        con.recycle_queries(Some(vec![
+            format!("SELECT ansilo_reset_auth_context('{}')", reset_token),
+            "DISCARD ALL".into(),
+        ]));
 
         let (mut client_reader, mut client_writer) = tokio::io::split(client);
         let (mut pg_reader, mut pg_writer) = con.split();
+
+        PostgresBackendMessage::ReadyForQuery(b'I')
+            .write(&mut client_writer)
+            .await
+            .context("Faild to send ready for query")?;
 
         match Self::proxy(
             &mut client_reader,
@@ -74,7 +79,9 @@ impl ConnectionHandler for PostgresConnectionHandler {
         )
         .await
         {
-            Ok(_) => {}
+            Ok(_) => {
+                debug!("Postgres connection closed gracefully");
+            }
             Err(err) => {
                 warn!("Error during postgres connection: {:?}", err);
                 let _ = PostgresBackendMessage::ErrorResponse(format!("Error: {}", err))

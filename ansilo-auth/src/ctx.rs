@@ -42,9 +42,13 @@ impl AuthContext {
 #[cfg_attr(test, derive(Debug))]
 #[serde(tag = "type")]
 pub enum ProviderAuthContext {
+    #[serde(rename = "password")]
     Password(PasswordAuthContext),
+    #[serde(rename = "jwt")]
     Jwt(JwtAuthContext),
+    #[serde(rename = "saml")]
     Saml(SamlAuthContext),
+    #[serde(rename = "custom")]
     Custom(CustomAuthContext),
 }
 

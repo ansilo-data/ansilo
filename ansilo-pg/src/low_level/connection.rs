@@ -28,7 +28,7 @@ pub struct LlPostgresConnection {
     state: Arc<State>,
     reader: PgReader,
     writer: PgWriter,
-    pub(crate) recycle_query: Option<String>,
+    pub(crate) recycle_queries: Option<Vec<String>>,
 }
 
 /// Shared connection state
@@ -62,7 +62,7 @@ impl LlPostgresConnection {
             state: Arc::clone(&state),
             reader: PgReader(Arc::clone(&state), read),
             writer: PgWriter(Arc::clone(&state), write),
-            recycle_query: None,
+            recycle_queries: None,
         }
     }
 
@@ -193,13 +193,13 @@ impl LlPostgresConnection {
             state: Arc::clone(&reader.0),
             reader,
             writer,
-            recycle_query: None,
+            recycle_queries: None,
         }
     }
 
     /// Sets the query to use upon recycling the connection
-    pub fn recycle_query(&mut self, query: Option<String>) {
-        self.recycle_query = query;
+    pub fn recycle_queries(&mut self, queries: Option<Vec<String>>) {
+        self.recycle_queries = queries;
     }
 }
 

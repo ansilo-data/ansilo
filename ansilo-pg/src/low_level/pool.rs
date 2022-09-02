@@ -126,7 +126,7 @@ impl Manager for LlPostgresConnectionManager {
         }
 
         // Clean the connection
-        if let Some(query) = con.recycle_query.take().as_ref() {
+        for query in con.recycle_queries.take().unwrap_or(vec![]).iter() {
             con.execute(query).await?;
         }
 

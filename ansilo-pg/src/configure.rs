@@ -25,6 +25,9 @@ fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) 
         .batch_execute(
             format!(
                 r#"
+            -- Important: remove default CREATE on public schema
+            REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+
             CREATE USER {PG_ADMIN_USER} PASSWORD NULL;
             GRANT CREATE ON DATABASE {PG_DATABASE} TO {PG_ADMIN_USER};
             GRANT ALL ON SCHEMA public TO {PG_ADMIN_USER};
@@ -40,7 +43,9 @@ fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) 
     // Configure app users
     for user in conf.app_users.iter() {
         superuser_con
-            .batch_execute(format!(r#"CREATE USER {user} PASSWORD NULL;"#).as_str())
+            .batch_execute(format!(r#"
+            CREATE USER {user} PASSWORD NULL;
+            "#).as_str())
             .context("Failed to initialise app user")?;
     }
 

@@ -44,8 +44,10 @@ pub fn build(conf: &'static AppConf, handle: Handle) -> Result<PostgresInstance>
         let script = script.context("Failed to read sql file")?;
 
         info!("Running {}", script.display());
-        let sql = fs::read_to_string(script).context("Failed to read sql file")?;
-        con.batch_execute(&sql).context("Failed to execute sql")?;
+        let sql = fs::read_to_string(&script)
+            .with_context(|| format!("Failed to read sql file: {}", script.display()))?;
+        con.batch_execute(&sql)
+            .with_context(|| format!("Failed to execute sql script: {}", script.display()))?;
     }
 
     BuildInfo::new().store(conf)?;

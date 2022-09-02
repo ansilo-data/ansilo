@@ -83,10 +83,14 @@ pub struct UserConfig {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum UserTypeOptions {
+    #[serde(rename = "password")]
     Password(PasswordUserConfig),
+    #[serde(rename = "jwt")]
     Jwt(JwtUserConfig),
+    #[serde(rename = "saml")]
     Saml(SamlUserConfig),
-    Custom(serde_yaml::Mapping),
+    #[serde(rename = "custom")]
+    Custom(CustomUserConfig),
 }
 
 /// Defines options for user password authentication
@@ -122,12 +126,21 @@ pub struct SamlUserConfig {
     pub assertions: HashMap<String, TokenClaimCheck>,
 }
 
+/// Defines options used for custom user authentication
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct CustomUserConfig {
+    /// Any custom value
+    pub custom: serde_yaml::Value
+}
+
 /// Defines a claim validation for a token
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-
 pub enum TokenClaimCheck {
+    #[serde(rename = "eq")]
     Eq(String),
+    #[serde(rename = "any")]
     Any(Vec<String>),
+    #[serde(rename = "all")]
     All(Vec<String>),
 }
 

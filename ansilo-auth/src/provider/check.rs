@@ -20,7 +20,7 @@ pub(crate) fn validate_check(
     match (check, claim) {
         (TokenClaimCheck::Eq(expected), Value::String(actual)) => {
             if expected != actual {
-                bail!("Expected {claim_type} '{claim}' to be '{expected}' but found '{actual}'")
+                bail!("Expected {claim_type} '{name}' to be '{expected}' but found '{actual}'")
             }
         }
         (TokenClaimCheck::Any(expected), Value::Array(actual)) => {
@@ -29,7 +29,7 @@ pub(crate) fn validate_check(
                 .any(|c| actual.contains(&Value::String(c.into())))
             {
                 bail!(
-                    "Expected {claim_type} '{claim}' to have at least one of {}",
+                    "Expected {claim_type} '{name}' to have at least one of {}",
                     expected
                         .iter()
                         .map(|s| format!("'{s}'"))
@@ -44,7 +44,7 @@ pub(crate) fn validate_check(
                 .all(|c| actual.contains(&Value::String(c.into())))
             {
                 bail!(
-                    "Expected {claim_type} '{claim}' to have all {}",
+                    "Expected {claim_type} '{name}' to have all {}",
                     expected
                         .iter()
                         .map(|s| format!("'{s}'"))

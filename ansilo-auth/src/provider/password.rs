@@ -19,13 +19,21 @@ impl PasswordAuthProvider {
     pub fn authenticate(
         &self,
         user: &PasswordUserConfig,
+        username: &str,
         salt: &[u8],
         md5_password_hash: &[u8],
     ) -> Result<PasswordAuthContext> {
+        // Stage 1 is md5(password + username)
         let mut hasher = Md5::new();
         hasher.update(user.password.as_bytes());
-        hasher.update(salt);
+        hasher.update(username);
+        let stage1 = hasher.finalize().to_vec();
 
+        // Stage 2 is md5(hex(stage1) + salt)
+        let stage1 = hex::encode(stage1);
+        let mut hasher = Md5::new();
+        hasher.update(stage1.as_bytes());
+        hasher.update(salt);
         let expected = hasher.finalize().to_vec();
 
         let matches = expected.as_slice().ct_eq(md5_password_hash);
@@ -50,13 +58,14 @@ mod tests {
         };
 
         assert!(provider
-            .authenticate(&user, b"fgsdgfgfdgd", &[1, 2, 3])
+            .authenticate(&user, "user", b"fgsdgfgfdgd", &[1, 2, 3])
             .is_err());
     }
 
     #[test]
     fn test_password_auth_valid() {
         let provider = PasswordAuthProvider::default();
+        let username = "user";
         let user = PasswordUserConfig {
             password: "abc123".into(),
         };
@@ -65,9 +74,10 @@ mod tests {
             provider
                 .authenticate(
                     &user,
-                    &[1, 2, 3],
-                    // echo "$(echo -n "abc123" | xxd -p)010203" | xxd -r -p | md5sum | xxd -r -p | od -tu1
-                    &[98, 206, 227, 198, 78, 191, 205, 14, 44, 113, 220, 206, 231, 72, 227, 210]
+                    username,
+                    &[b'f', b'o', b'o'],
+                    // echo -n "$(echo -n "abc123user" | md5sum | cut -d' ' -f1)foo" | md5sum | cut -d' ' -f1 | xxd -r -p | od -tu1
+                    &[95, 186, 186, 149, 71, 220, 39, 145, 178, 249, 92, 58, 85, 30, 103, 164]
                 )
                 .unwrap()
                 == PasswordAuthContext::default()
