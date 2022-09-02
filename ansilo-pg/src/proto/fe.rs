@@ -67,9 +67,9 @@ impl TryFrom<u8> for PostgresFrontendMessageTag {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostgresFrontendStartupMessage {
     /// The protocol version number (196608 for v3)
-    protocol_version: i32,
+    pub protocol_version: i32,
     /// Parameters
-    params: HashMap<String, String>,
+    pub params: HashMap<String, String>,
 }
 
 impl PostgresFrontendStartupMessage {

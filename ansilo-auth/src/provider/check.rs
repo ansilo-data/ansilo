@@ -12,7 +12,7 @@ pub(crate) fn validate_check(
     check: &TokenClaimCheck,
 ) -> Result<()> {
     if claim.is_none() {
-        bail!("Must provide {claim_type} '{name}");
+        bail!("Must provide {claim_type} '{name}'");
     }
 
     let claim = claim.unwrap();

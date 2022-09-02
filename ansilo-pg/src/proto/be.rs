@@ -1,6 +1,6 @@
 // @see https://www.postgresql.org/docs/current/protocol-message-formats.html
 
-use std::{ffi::CString, io::{Cursor, self}};
+use std::{ffi::CString, io::Cursor};
 
 use ansilo_core::err::{bail, Context, Error, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -83,38 +83,52 @@ impl TryFrom<u8> for PostgresBackendMessageTag {
 
 impl PostgresBackendMessage {
     /// Reads a message from the postgres backend
-    ///
-    /// NOTE: We dont currently parse all the types as defined in `PostgresBackendMessage`,
-    /// only those needed for querying postgres. All messages not supported will be returned
-    /// as the `Other` variant.
     pub async fn read(stream: &mut (impl AsyncRead + Unpin)) -> Result<Self> {
         let message = PostgresMessage::read(stream).await?;
 
         Ok(match message.tag().unwrap().try_into()? {
-            PostgresBackendMessageTag::Authentication if message.body_length() == 4 => {
-                let auth_type = i32::from_be_bytes(message.body().try_into().unwrap());
-
-                match auth_type {
-                    0 => Self::AuthenticationOk,
-                    _ => Self::Other(message),
-                }
-            }
             PostgresBackendMessageTag::ReadyForQuery => Self::ReadyForQuery(
                 *message
                     .body()
                     .get(0)
                     .context("Malformed ReadyForQuery message from backend")?,
             ),
-            PostgresBackendMessageTag::ErrorResponse => {
-                use std::io::Read;
-                let body = io::Cursor::new(message.body());
+            PostgresBackendMessageTag::Authentication if message.body_length() >= 4 => {
+                let auth_type = i32::from_be_bytes(message.body()[..4].try_into().unwrap());
 
-                loop {
-                    let mut field = [0u8];
-                    body.read_exact(&mut field).context("Failed to read message type")?;
+                match auth_type {
+                    0 => Self::AuthenticationOk,
+                    3 => Self::AuthenticationCleartextPassword,
+                    5 if message.body_length() == 8 => {
+                        Self::AuthenticationMd5Password(message.body()[4..8].try_into().unwrap())
+                    }
+                    10 => {
+                        let methods = message.body()[4..]
+                            .split(|i| *i == 0)
+                            .filter(|i| i.len() > 0)
+                            .map(|i| {
+                                String::from_utf8(i.to_vec())
+                                    .context("Failed to parse sasl auth method")
+                            })
+                            .collect::<Result<Vec<_>>>()?;
 
-
+                        Self::AuthenticationSasl(methods)
+                    }
+                    11 => Self::AuthenticationSaslContinue(message.body()[4..].to_vec()),
+                    12 => Self::AuthenticationSaslFinal(message.body()[4..].to_vec()),
+                    _ => Self::Other(message),
                 }
+            }
+            PostgresBackendMessageTag::ErrorResponse => {
+                let message = message
+                    .body()
+                    .split(|i| *i == 0)
+                    .find(|g| g.first().cloned() == Some(b'M'))
+                    .context("Failed to find message field in error response")?;
+
+                let message = String::from_utf8_lossy(&message[1..]).to_string();
+
+                Self::ErrorResponse(message)
             }
             _ => Self::Other(message),
         })
@@ -403,6 +417,99 @@ mod tests {
         assert_eq!(
             parsed.tag().unwrap(),
             PostgresBackendMessageTag::Authentication
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_authentication_clear_text() {
+        let parsed = parse(&[b'R', 0, 0, 0, 8, 0, 0, 0, 3]).await.unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::AuthenticationCleartextPassword
+        );
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::Authentication
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_authentication_md5() {
+        let parsed = parse(&[b'R', 0, 0, 0, 12, 0, 0, 0, 5, 1, 2, 3, 4])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::AuthenticationMd5Password([1, 2, 3, 4])
+        );
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::Authentication
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_authentication_sasl() {
+        let parsed = parse(&[
+            b'R', 0, 0, 0, 16, 0, 0, 0, 10, b'a', b'b', b'c', 0, b'1', b'2', b'3', 0,
+        ])
+        .await
+        .unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::AuthenticationSasl(vec!["abc".into(), "123".into()])
+        );
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::Authentication
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_authentication_sasl_continue() {
+        let parsed = parse(&[b'R', 0, 0, 0, 11, 0, 0, 0, 11, 1, 2, 3])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::AuthenticationSaslContinue(vec![1, 2, 3])
+        );
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::Authentication
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_authentication_sasl_final() {
+        let parsed = parse(&[b'R', 0, 0, 0, 11, 0, 0, 0, 12, 1, 2, 3])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::AuthenticationSaslFinal(vec![1, 2, 3])
+        );
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::Authentication
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_error_response() {
+        let parsed = parse(&[b'E', 0, 0, 0, 8, b'M', b'm', b's', b'g'])
+            .await
+            .unwrap();
+
+        assert_eq!(parsed, PostgresBackendMessage::ErrorResponse("msg".into()));
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::ErrorResponse
         );
     }
 

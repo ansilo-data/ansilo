@@ -5,7 +5,7 @@ use ansilo_core::{
 use ansilo_logging::{info, warn};
 use ansilo_pg::proto::{
     be::PostgresBackendMessage,
-    fe::{PostgresFrontendMessage, PostgresFrontendStartupMessage},
+    fe::{PostgresFrontendMessage, PostgresFrontendMessageTag, PostgresFrontendStartupMessage},
 };
 use ansilo_proxy::stream::IOStream;
 use rand::{rngs::ThreadRng, Rng};
@@ -89,6 +89,12 @@ impl Authenticator {
             user.username, user.provider
         );
 
+        // Send authentication success to client
+        PostgresBackendMessage::AuthenticationOk
+            .write(client)
+            .await
+            .context("Failed to send authentication success message")?;
+
         Ok((
             AuthContext::new(&user.username, &user.provider, ctx),
             startup,
@@ -113,7 +119,11 @@ impl Authenticator {
             .context("Failed to read response from hash request")?;
 
         let hash = match res {
-            PostgresFrontendMessage::PasswordMessage(hash) => hash,
+            PostgresFrontendMessage::Other(msg)
+                if msg.tag() == Some(PostgresFrontendMessageTag::AuthenticationData as _) =>
+            {
+                msg.body().to_vec()
+            }
             _ => bail!("Unexpected response message to hash request: {:?}", res),
         };
 
@@ -136,8 +146,12 @@ impl Authenticator {
             .context("Failed to read response from jwt request")?;
 
         let jwt = match res {
-            PostgresFrontendMessage::PasswordMessage(jwt) => jwt,
-            _ => bail!("Unexpected response message to jwt request: {:?}", res),
+            PostgresFrontendMessage::Other(msg)
+                if msg.tag() == Some(PostgresFrontendMessageTag::AuthenticationData as _) =>
+            {
+                msg.body().to_vec()
+            }
+            _ => bail!("Unexpected response message to hash request: {:?}", res),
         };
 
         let jwt = String::from_utf8(jwt).context("Supplied jwt is invalid")?;
@@ -170,7 +184,8 @@ mod tests {
         AuthConfig, AuthProviderConfig, JwtAuthProviderConfig, TokenClaimCheck, UserConfig,
     };
     use ansilo_proxy::stream::Stream;
-    use jsonwebtoken::EncodingKey;
+    use jsonwebtoken::{Algorithm, EncodingKey, Header};
+    use md5::{Digest, Md5};
     use tokio::net::UnixStream;
 
     use super::*;
@@ -180,7 +195,7 @@ mod tests {
         let conf = Box::leak(Box::new(AuthConfig {
             providers: vec![],
             users: vec![UserConfig {
-                username: "user".into(),
+                username: "john".into(),
                 description: None,
                 provider: "password".into(),
                 r#type: UserTypeOptions::Password(PasswordUserConfig {
@@ -210,13 +225,16 @@ mod tests {
                 }),
             }],
             users: vec![UserConfig {
-                username: "user".into(),
+                username: "mary".into(),
                 description: None,
                 provider: "jwt".into(),
                 r#type: UserTypeOptions::Jwt(JwtUserConfig {
-                    claims: vec![("scope".into(), TokenClaimCheck::All(vec!["data".into()]))]
-                        .into_iter()
-                        .collect(),
+                    claims: vec![(
+                        "scope".into(),
+                        TokenClaimCheck::All(vec!["access_data".into()]),
+                    )]
+                    .into_iter()
+                    .collect(),
                 }),
             }],
             service_users: vec![],
@@ -248,11 +266,262 @@ mod tests {
             // should error
             let res = PostgresBackendMessage::read(&mut client).await.unwrap();
             assert_eq!(
-                res.serialise(),
-                PostgresBackendMessage::ErrorResponse("test".into()).serialise()
+                res,
+                PostgresBackendMessage::ErrorResponse(
+                    "Error: User 'invalid' does not exist".into()
+                )
             )
         });
 
         auth_res.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_auth_invalid_password() {
+        let (mut client, mut output) = mock_client_stream();
+        let auth = mock_password_authentictor();
+
+        let (auth_res, _) = tokio::join!(auth.authenticate_postgres(&mut output), async move {
+            // send startup
+            PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
+                [("user".into(), "john".into())].into_iter().collect(),
+            ))
+            .write(&mut client)
+            .await
+            .unwrap();
+
+            // should receive password hash request
+            let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+            let salt = match res {
+                PostgresBackendMessage::AuthenticationMd5Password(salt) => salt,
+                _ => panic!("Unexpected response {:?}", res),
+            };
+
+            let mut hasher = Md5::new();
+            hasher.update("invalid".as_bytes());
+            hasher.update(salt);
+            let hash = hasher.finalize().to_vec();
+
+            // send hash
+            PostgresFrontendMessage::PasswordMessage(hash)
+                .write(&mut client)
+                .await
+                .unwrap();
+
+            // should error
+            let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+            assert_eq!(
+                res,
+                PostgresBackendMessage::ErrorResponse("Error: Incorrect password".into())
+            )
+        });
+
+        auth_res.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_auth_valid_password() {
+        let (mut client, mut output) = mock_client_stream();
+        let auth = mock_password_authentictor();
+
+        let (auth_res, _) = tokio::join!(auth.authenticate_postgres(&mut output), async move {
+            // send startup
+            PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
+                [("user".into(), "john".into())].into_iter().collect(),
+            ))
+            .clone()
+            .write(&mut client)
+            .await
+            .unwrap();
+
+            // should receive password hash request
+            let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+            let salt = match res {
+                PostgresBackendMessage::AuthenticationMd5Password(salt) => salt,
+                _ => panic!("Unexpected response {:?}", res),
+            };
+
+            let mut hasher = Md5::new();
+            hasher.update("password1".as_bytes());
+            hasher.update(salt);
+            let hash = hasher.finalize().to_vec();
+
+            // send hash
+            PostgresFrontendMessage::PasswordMessage(hash)
+                .write(&mut client)
+                .await
+                .unwrap();
+
+            // should authenticate
+            let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+            assert_eq!(res, PostgresBackendMessage::AuthenticationOk)
+        });
+
+        let (ctx, startup) = auth_res.unwrap();
+
+        assert_eq!(ctx.username, "john".to_string());
+        assert_eq!(ctx.provider, "password".to_string());
+        assert_eq!(
+            ctx.more,
+            ProviderAuthContext::Password(PasswordAuthContext {})
+        );
+        assert_eq!(
+            startup,
+            PostgresFrontendStartupMessage::new(
+                [("user".into(), "john".into())].into_iter().collect(),
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn test_postgres_auth_invalid_jwt() {
+        let (mut client, mut output) = mock_client_stream();
+        let (auth, _encoding_key) = mock_jwt_authentictor();
+
+        let (auth_res, _) = tokio::join!(auth.authenticate_postgres(&mut output), async move {
+            // send startup
+            PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
+                [("user".into(), "mary".into())].into_iter().collect(),
+            ))
+            .write(&mut client)
+            .await
+            .unwrap();
+
+            // should receive password token request
+            let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+            assert_eq!(res, PostgresBackendMessage::AuthenticationCleartextPassword);
+
+            // send token
+            PostgresFrontendMessage::PasswordMessage("invalid.token".into())
+                .write(&mut client)
+                .await
+                .unwrap();
+
+            // should error
+            let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+            assert_eq!(
+                res,
+                PostgresBackendMessage::ErrorResponse("Error: Failed to decode JWT header".into())
+            )
+        });
+
+        auth_res.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_auth_valid_jwt_missing_claim() {
+        let (mut client, mut output) = mock_client_stream();
+        let (auth, encoding_key) = mock_jwt_authentictor();
+
+        let (auth_res, _) = tokio::join!(auth.authenticate_postgres(&mut output), async move {
+            // send startup
+            PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
+                [("user".into(), "mary".into())].into_iter().collect(),
+            ))
+            .clone()
+            .write(&mut client)
+            .await
+            .unwrap();
+
+            // should receive password token request
+            let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+            assert_eq!(res, PostgresBackendMessage::AuthenticationCleartextPassword);
+
+            // generate valid token
+            let header = Header::new(Algorithm::RS512);
+            let exp = get_valid_exp_claim();
+            let token = create_token(
+                &header,
+                &format!(r#"{{"sub":"foo", "exp": {exp}}}"#),
+                &encoding_key,
+            );
+
+            // send token
+            PostgresFrontendMessage::PasswordMessage(token.into())
+                .write(&mut client)
+                .await
+                .unwrap();
+
+            // should error
+            let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+            assert_eq!(
+                res,
+                PostgresBackendMessage::ErrorResponse("Error: Must provide claim 'scope'".into())
+            )
+        });
+
+        auth_res.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn test_postgres_auth_valid_jwt_with_correct_claims() {
+        let (mut client, mut output) = mock_client_stream();
+        let (auth, encoding_key) = mock_jwt_authentictor();
+
+        let (auth_res, (raw_token, exp)) =
+            tokio::join!(auth.authenticate_postgres(&mut output), async move {
+                // send startup
+                PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
+                    [("user".into(), "mary".into())].into_iter().collect(),
+                ))
+                .clone()
+                .write(&mut client)
+                .await
+                .unwrap();
+
+                // should receive password token request
+                let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+                assert_eq!(res, PostgresBackendMessage::AuthenticationCleartextPassword);
+
+                // generate valid token
+                let header = Header::new(Algorithm::RS512);
+                let exp = get_valid_exp_claim();
+                let token = create_token(
+                    &header,
+                    &format!(r#"{{"scope":["access_data"], "exp": {exp}}}"#),
+                    &encoding_key,
+                );
+
+                // send token
+                PostgresFrontendMessage::PasswordMessage(token.clone().into())
+                    .write(&mut client)
+                    .await
+                    .unwrap();
+
+                // should authenticate
+                let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+                assert_eq!(res, PostgresBackendMessage::AuthenticationOk);
+
+                (token, exp)
+            });
+
+        let (ctx, startup) = auth_res.unwrap();
+
+        assert_eq!(ctx.username, "mary".to_string());
+        assert_eq!(ctx.provider, "jwt".to_string());
+        assert_eq!(
+            ctx.more,
+            ProviderAuthContext::Jwt(JwtAuthContext {
+                raw_token,
+                header: Header::new(Algorithm::RS512),
+                claims: [
+                    (
+                        "scope".into(),
+                        serde_json::Value::Array(vec![serde_json::Value::String(
+                            "access_data".into()
+                        )])
+                    ),
+                    ("exp".into(), serde_json::Value::Number(exp.into()))
+                ]
+                .into_iter()
+                .collect()
+            })
+        );
+        assert_eq!(
+            startup,
+            PostgresFrontendStartupMessage::new(
+                [("user".into(), "mary".into())].into_iter().collect(),
+            )
+        );
     }
 }
