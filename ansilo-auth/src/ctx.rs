@@ -1,9 +1,13 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use serde::{Deserialize, Serialize};
 
 /// Data associated to an authenticated user session
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Debug))]
 pub struct AuthContext {
     /// The authenticate user
     pub username: String,
@@ -16,7 +20,26 @@ pub struct AuthContext {
     pub more: ProviderAuthContext,
 }
 
+impl AuthContext {
+    pub fn new(
+        username: impl Into<String>,
+        provider: impl Into<String>,
+        more: ProviderAuthContext,
+    ) -> Self {
+        Self {
+            username: username.into(),
+            provider: provider.into(),
+            authenticated_at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            more,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Debug))]
 #[serde(tag = "type")]
 pub enum ProviderAuthContext {
     Password(PasswordAuthContext),
@@ -26,6 +49,7 @@ pub enum ProviderAuthContext {
 }
 
 #[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(test, derive(Debug))]
 pub struct PasswordAuthContext {
     // Currently no context for password auth
 }

@@ -229,7 +229,7 @@ impl State {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::{
         io::Write,
         time::{SystemTime, UNIX_EPOCH},
@@ -242,7 +242,7 @@ mod tests {
 
     use super::*;
 
-    const RSA_PRIVATE_KEY_PEM: &[u8] = b"-----BEGIN RSA PRIVATE KEY-----
+    pub const RSA_PRIVATE_KEY_PEM: &[u8] = b"-----BEGIN RSA PRIVATE KEY-----
 MIIEogIBAAKCAQEA0RNM7roNOPOvflr5JfMsvHSqlbNo0zorU6GSq1kzj5aHPzom
 q6+IOpEEPYVqz+uGOkI4z9uUrc5e+OnN0y6s/3IKzC5rvTn9mu34jQGFG9wvJn4j
 nUhTXi0onQpNQeQjT/bNcYaE1QNu/xZWloaGL2h7lMPkgKCUrMvMhfgmHjYl1wyU
@@ -270,7 +270,7 @@ pK7ZAoGASCyceEUCCcrO8Kn8mbJoTFHhnHDhP+W7Px0+bfkppbrdxp1rqM9eGOTa
 TR21kbl8mPTdQhVp9+9N756yOL5EoI6KyMtYx3qzpWyGz6Ix1vs=
 -----END RSA PRIVATE KEY-----";
 
-    const RSA_PUBLIC_KEY_PEM: &[u8] = b"-----BEGIN PUBLIC KEY-----
+    pub const RSA_PUBLIC_KEY_PEM: &[u8] = b"-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0RNM7roNOPOvflr5JfMs
 vHSqlbNo0zorU6GSq1kzj5aHPzomq6+IOpEEPYVqz+uGOkI4z9uUrc5e+OnN0y6s
 /3IKzC5rvTn9mu34jQGFG9wvJn4jnUhTXi0onQpNQeQjT/bNcYaE1QNu/xZWloaG
@@ -280,28 +280,28 @@ DKctQgxrjkNFDntkaZ5CkhZBaEFQMxodcPRAFpey7c4Ps0SHtYEiIvt5KunEQdxW
 VQIDAQAB
 -----END PUBLIC KEY-----";
 
-    const EC_PRIVATE_KEY_PEM: &[u8] = b"-----BEGIN PRIVATE KEY-----
+    pub const EC_PRIVATE_KEY_PEM: &[u8] = b"-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgQpX/DEI9Y5T4fy9g
 faOzjWWvb8W/gmtENdKWZLL8gFKhRANCAATUGEhVz6Sx8z7c4f/r1CtOvvIiQEuj
 nkfEnv/3inIgPMiQdSgaGZS2hJHjcA1jLZ2Ymf/tzEPU+/6o60PqdG5J
 -----END PRIVATE KEY-----";
 
-    const EC_PUBLIC_KEY_PEM: &[u8] = b"-----BEGIN PUBLIC KEY-----
+    pub const EC_PUBLIC_KEY_PEM: &[u8] = b"-----BEGIN PUBLIC KEY-----
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE1BhIVc+ksfM+3OH/69QrTr7yIkBL
 o55HxJ7/94pyIDzIkHUoGhmUtoSR43ANYy2dmJn/7cxD1Pv+qOtD6nRuSQ==
 -----END PUBLIC KEY-----";
 
-    const ED_PRIVATE_KEY_PEM: &[u8] = b"-----BEGIN PRIVATE KEY-----
+    pub const ED_PRIVATE_KEY_PEM: &[u8] = b"-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEILXRgqo5hf7tNsxH4J4mDZer9WVmeSxTHqF/Hzj7xdKd
 -----END PRIVATE KEY-----";
 
-    const ED_PUBLIC_KEY_PEM: &[u8] = b"-----BEGIN PUBLIC KEY-----
+    pub const ED_PUBLIC_KEY_PEM: &[u8] = b"-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
 -----END PUBLIC KEY-----";
 
     /// JWK generated from `RSA_PRIVATE_KEY_PEM`
     /// @see https://russelldavies.github.io/jwk-creator/
-    const JWK_JSON: &[u8] = br#"{"jwk":
+    pub const JWK_JSON: &[u8] = br#"{"jwk":
 [
     {
         "kty": "RSA",
@@ -320,28 +320,28 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
 ]
 }"#;
 
-    fn create_rsa_key_pair() -> (EncodingKey, NamedTempFile) {
+    pub fn create_rsa_key_pair() -> (EncodingKey, NamedTempFile) {
         (
             EncodingKey::from_rsa_pem(RSA_PRIVATE_KEY_PEM).unwrap(),
             save_to_temp_file(RSA_PUBLIC_KEY_PEM),
         )
     }
 
-    fn create_ec_key_pair() -> (EncodingKey, NamedTempFile) {
+    pub fn create_ec_key_pair() -> (EncodingKey, NamedTempFile) {
         (
             EncodingKey::from_ec_pem(EC_PRIVATE_KEY_PEM).unwrap(),
             save_to_temp_file(EC_PUBLIC_KEY_PEM),
         )
     }
 
-    fn create_ed_key_pair() -> (EncodingKey, NamedTempFile) {
+    pub fn create_ed_key_pair() -> (EncodingKey, NamedTempFile) {
         (
             EncodingKey::from_ed_pem(ED_PRIVATE_KEY_PEM).unwrap(),
             save_to_temp_file(ED_PUBLIC_KEY_PEM),
         )
     }
 
-    fn save_to_temp_file(key: &[u8]) -> NamedTempFile {
+    pub fn save_to_temp_file(key: &[u8]) -> NamedTempFile {
         let mut file = NamedTempFile::new().unwrap();
 
         file.write_all(key).unwrap();
@@ -349,12 +349,12 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
         file
     }
 
-    fn create_token(header: &Header, claims: &str, key: &EncodingKey) -> String {
+    pub fn create_token(header: &Header, claims: &str, key: &EncodingKey) -> String {
         let parsed: serde_json::Value = serde_json::from_str(claims).unwrap();
         encode(&header, &parsed, key).unwrap()
     }
 
-    fn get_valid_exp_claim() -> u64 {
+    pub fn get_valid_exp_claim() -> u64 {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()

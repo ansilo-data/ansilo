@@ -1,6 +1,6 @@
 // @see https://www.postgresql.org/docs/current/protocol-message-formats.html
 
-use std::{ffi::CString, io::Cursor};
+use std::{ffi::CString, io::{Cursor, self}};
 
 use ansilo_core::err::{bail, Context, Error, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -105,6 +105,17 @@ impl PostgresBackendMessage {
                     .get(0)
                     .context("Malformed ReadyForQuery message from backend")?,
             ),
+            PostgresBackendMessageTag::ErrorResponse => {
+                use std::io::Read;
+                let body = io::Cursor::new(message.body());
+
+                loop {
+                    let mut field = [0u8];
+                    body.read_exact(&mut field).context("Failed to read message type")?;
+
+
+                }
+            }
             _ => Self::Other(message),
         })
     }

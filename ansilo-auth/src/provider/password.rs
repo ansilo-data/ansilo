@@ -19,10 +19,12 @@ impl PasswordAuthProvider {
     pub fn authenticate(
         &self,
         user: &PasswordUserConfig,
+        salt: &[u8],
         md5_password_hash: &[u8],
     ) -> Result<PasswordAuthContext> {
         let mut hasher = Md5::new();
         hasher.update(user.password.as_bytes());
+        hasher.update(salt);
 
         let expected = hasher.finalize().to_vec();
 
@@ -47,7 +49,9 @@ mod tests {
             password: "abc123".into(),
         };
 
-        assert!(provider.authenticate(&user, b"fgsdgfgfdgd").is_err());
+        assert!(provider
+            .authenticate(&user, b"fgsdgfgfdgd", &[1, 2, 3])
+            .is_err());
     }
 
     #[test]
@@ -61,7 +65,9 @@ mod tests {
             provider
                 .authenticate(
                     &user,
-                    &[233, 154, 24, 196, 40, 203, 56, 213, 242, 96, 133, 54, 120, 146, 46, 3]
+                    &[1, 2, 3],
+                    // echo "$(echo -n "abc123" | xxd -p)010203" | xxd -r -p | md5sum | xxd -r -p | od -tu1
+                    &[98, 206, 227, 198, 78, 191, 205, 14, 44, 113, 220, 206, 231, 72, 227, 210]
                 )
                 .unwrap()
                 == PasswordAuthContext::default()

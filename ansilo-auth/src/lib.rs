@@ -3,7 +3,6 @@ use ansilo_core::{
     err::{bail, Context, Result},
 };
 use ansilo_logging::info;
-use ansilo_proxy::Protocol;
 use provider::{password::PasswordAuthProvider, AuthProvider};
 
 pub mod ctx;
@@ -42,7 +41,7 @@ impl Authenticator {
         if let Some(invalid) = conf
             .users
             .iter()
-            .find(|u| providers.iter().any(|(p, _)| p == &u.provider))
+            .find(|u| !providers.iter().any(|(p, _)| p == &u.provider))
         {
             bail!(
                 "Auth provider '{}' defined on user '{}' does not exist",
@@ -71,7 +70,4 @@ impl Authenticator {
             .map(|(_, provider)| provider)
             .with_context(|| format!("Auth provider '{}' does not exist", provider_id))
     }
-
-    // Performs authentication on a postgres connection
-    // pub fn authenticate_postgres(&self, )
 }
