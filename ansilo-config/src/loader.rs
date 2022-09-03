@@ -49,9 +49,12 @@ impl ConfigLoader {
 
     /// Loads the node configuration from the supplied file
     pub fn load(&self, path: &Path) -> Result<NodeConfig> {
+        let path = path
+            .canonicalize()
+            .context("Failed to get full config path")?;
         info!("Loading config from path {}", path.display());
 
-        let processed = self.load_yaml(path)?;
+        let processed = self.load_yaml(path.as_path())?;
         debug!("Parsing into {}", type_name::<NodeConfig>());
         let config: NodeConfig =
             serde_yaml::from_value(processed).context("Failed to parse yaml into NodeConfig")?;
