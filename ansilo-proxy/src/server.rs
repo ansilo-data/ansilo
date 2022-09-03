@@ -103,7 +103,7 @@ impl ProxyListener {
 
         socket
             .bind(&addr.into())
-            .context("Failed to bind to address")?;
+            .with_context(|| format!("Failed to bind to address: {}", addr))?;
         socket.listen(128)?;
 
         socket

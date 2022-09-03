@@ -6,7 +6,11 @@ use std::{
 use ansilo_config::loader::ConfigLoader;
 use ansilo_core::{config::NodeConfig, err::Context};
 use ansilo_logging::info;
-use ansilo_pg::conf::PostgresConf;
+use ansilo_pg::{
+    conf::PostgresConf,
+    query::{pg_quote_identifier, pg_str_literal},
+    PG_ADMIN_USER,
+};
 use ansilo_proxy::conf::{HandlerConf, ProxyConf, TlsConf};
 
 /// Container for the application config
@@ -72,9 +76,26 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
     }
 }
 
-fn create_db_init_sql(_node: &NodeConfig) -> Vec<String> {
-    // TODO (automatically run CREATE SERVER for each data source)
-    vec![]
+fn create_db_init_sql(node: &NodeConfig) -> Vec<String> {
+    // Run CREATE SERVER for each data source
+    node.sources
+        .iter()
+        .map(|source| {
+            let name = pg_quote_identifier(&source.id);
+            let id = pg_str_literal(&source.id);
+            format!(
+                r#"
+                CREATE SERVER {name}
+                FOREIGN DATA WRAPPER ansilo_fdw
+                OPTIONS (
+                    data_source {id}
+                );
+                
+                GRANT ALL ON FOREIGN SERVER {name} TO {PG_ADMIN_USER};
+            "#
+            )
+        })
+        .collect()
 }
 
 /// Initialises the proxy configuration

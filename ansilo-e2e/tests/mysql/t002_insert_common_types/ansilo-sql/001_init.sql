@@ -1,9 +1,3 @@
-CREATE SERVER mysql
-FOREIGN DATA WRAPPER ansilo_fdw 
-OPTIONS (
-    data_source 'mysql'
-);
-
 IMPORT FOREIGN SCHEMA "db.t002__test_tab%" 
 FROM SERVER mysql INTO public;
 

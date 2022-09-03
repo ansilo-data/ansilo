@@ -1,7 +1,7 @@
 use ansilo_core::err::{Context, Result};
 
 use crate::{
-    conf::PostgresConf, connection::PostgresConnection, PG_ADMIN_USER, PG_APP_USER, PG_DATABASE,
+    conf::PostgresConf, connection::PostgresConnection, PG_ADMIN_USER, PG_DATABASE,
 };
 
 /// Configures a new postgres database such that is ready for use
@@ -20,7 +20,6 @@ pub(crate) fn configure(conf: &PostgresConf, mut superuser_con: PostgresConnecti
 
 fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) -> Result<()> {
     // Create standard users
-    // TODO: Remove ansiloapp user
     superuser_con
         .batch_execute(
             format!(
@@ -28,19 +27,17 @@ fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) 
             -- Important: remove default CREATE on public schema
             REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 
+            -- Create admin user
             CREATE USER {PG_ADMIN_USER} PASSWORD NULL;
-            GRANT CREATE ON DATABASE {PG_DATABASE} TO {PG_ADMIN_USER};
-            GRANT ALL ON SCHEMA public TO {PG_ADMIN_USER};
-
-            CREATE USER {PG_APP_USER} PASSWORD NULL;
-            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {PG_APP_USER};
+            GRANT CREATE ON DATABASE {PG_DATABASE} TO {PG_ADMIN_USER} WITH GRANT OPTION;
+            GRANT ALL ON SCHEMA public TO {PG_ADMIN_USER} WITH GRANT OPTION;
             "#
             )
             .as_str(),
         )
         .context("Failed to initialise roles")?;
 
-    // Configure app users
+    // Configure user-provided users
     for user in conf.app_users.iter() {
         superuser_con
             .batch_execute(format!(r#"

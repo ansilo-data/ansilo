@@ -1,9 +1,3 @@
-CREATE SERVER oracle
-FOREIGN DATA WRAPPER ansilo_fdw 
-OPTIONS (
-    data_source 'oracle'
-);
-
 IMPORT FOREIGN SCHEMA "ANSILO_ADMIN.T008__TEST_TAB" 
 FROM SERVER oracle INTO public;
 

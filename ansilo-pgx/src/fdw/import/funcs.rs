@@ -2,6 +2,7 @@ use std::ptr;
 
 use ansilo_core::sqlil::EntityId;
 use ansilo_pg::fdw::proto::EntityDiscoverOptions;
+use ansilo_pg::query::pg_str_literal;
 use itertools::Itertools;
 use pgx::pg_sys::{GetForeignServer, ImportForeignSchemaStmt, List, Oid};
 use pgx::*;
@@ -9,7 +10,7 @@ use pgx::*;
 use crate::fdw::common::connect_server;
 use crate::sqlil::to_pg_type_name;
 use crate::util::def_elem::parse_def_elems_to_hash_map;
-use crate::util::string::{parse_to_owned_utf8_string, to_pg_cstr, to_pg_str_literal};
+use crate::util::string::{parse_to_owned_utf8_string, to_pg_cstr};
 
 #[pg_guard]
 pub unsafe extern "C" fn import_foreign_schema(
@@ -36,7 +37,7 @@ pub unsafe extern "C" fn import_foreign_schema(
                     .unwrap();
             let server_name =
                 parse_to_owned_utf8_string(pg_sys::quote_identifier((*server).servername)).unwrap();
-            let config = to_pg_str_literal(&serde_yaml::to_string(&e.source.options).unwrap());
+            let config = pg_str_literal(&serde_yaml::to_string(&e.source.options).unwrap());
 
             let cols = e
                 .attributes

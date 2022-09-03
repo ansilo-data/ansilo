@@ -1,9 +1,3 @@
-CREATE SERVER oracle
-FOREIGN DATA WRAPPER ansilo_fdw 
-OPTIONS (
-    data_source 'oracle'
-);
-
 IMPORT FOREIGN SCHEMA "SYS.DUAL" 
 FROM SERVER oracle INTO public;
 

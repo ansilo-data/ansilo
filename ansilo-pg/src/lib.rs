@@ -28,26 +28,24 @@ pub mod manager;
 pub mod proc;
 pub mod proto;
 pub mod server;
+pub mod query;
 
 mod configure;
 #[cfg(test)]
 mod test;
 
 /// Use the default database created by initdb
-pub(crate) const PG_DATABASE: &str = "postgres";
+pub const PG_DATABASE: &str = "postgres";
 
 /// NOTE: we disable listening over TCP/IP and only connect via unix sockets
 /// This is purely used to have a stable unix socket path for connecting
-pub(crate) const PG_PORT: u16 = 5432;
+pub const PG_PORT: u16 = 5432;
 
-/// The username of the super user
-pub(crate) const PG_SUPER_USER: &str = "ansilosuperuser";
+/// The username of the super user used to bootstrap and configure postgres
+pub const PG_SUPER_USER: &str = "ansilosuperuser";
 
-/// The username of the admin user which can create and modify the schema
-pub(crate) const PG_ADMIN_USER: &str = "ansiloadmin";
-
-/// The username of the app user which has DML access to all tables
-pub(crate) const PG_APP_USER: &str = "ansiloapp";
+/// The username of the admin user which executes the user-provided initialisation scripts
+pub const PG_ADMIN_USER: &str = "ansiloadmin";
 
 /// The entrypoint for managing our postgres instance
 pub struct PostgresInstance {
