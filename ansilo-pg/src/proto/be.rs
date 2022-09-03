@@ -119,6 +119,7 @@ impl PostgresBackendMessage {
                     _ => Self::Other(message),
                 }
             }
+            // TODO: Parse full response
             PostgresBackendMessageTag::ErrorResponse => {
                 let message = message
                     .body()

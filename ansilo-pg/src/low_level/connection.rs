@@ -7,6 +7,7 @@ use std::{
 };
 
 use ansilo_core::err::{bail, Context, Result};
+use ansilo_logging::trace;
 use postgres::Config;
 use tokio::{
     io::AsyncWriteExt,
@@ -28,7 +29,7 @@ pub struct LlPostgresConnection {
     state: Arc<State>,
     reader: PgReader,
     writer: PgWriter,
-    pub(crate) recycle_queries: Option<Vec<String>>,
+    pub(crate) recycle_queries: Vec<String>,
 }
 
 /// Shared connection state
@@ -50,6 +51,14 @@ impl State {
     fn broken(&self) -> bool {
         self.broken.load(Ordering::Relaxed)
     }
+
+    fn check_broken(&self) -> Result<()> {
+        if self.broken() {
+            bail!("Connection is broken")
+        }
+
+        Ok(())
+    }
 }
 
 impl LlPostgresConnection {
@@ -62,7 +71,7 @@ impl LlPostgresConnection {
             state: Arc::clone(&state),
             reader: PgReader(Arc::clone(&state), read),
             writer: PgWriter(Arc::clone(&state), write),
-            recycle_queries: None,
+            recycle_queries: vec![],
         }
     }
 
@@ -138,7 +147,12 @@ impl LlPostgresConnection {
     /// We dont support returning any results from the query, only reporting
     /// if it was successful or not.
     pub async fn execute(&mut self, sql: impl Into<String>) -> Result<()> {
-        self.send(PostgresFrontendMessage::Query(sql.into()))
+        self.state.check_broken()?;
+
+        let sql = sql.into();
+        trace!("Executing SQL: {}", &sql);
+        
+        self.send(PostgresFrontendMessage::Query(sql))
             .await
             .context("Failed to execute query")?;
 
@@ -173,6 +187,11 @@ impl LlPostgresConnection {
         self.state.broken()
     }
 
+    /// Marks the connection as broken, disallowing it to be used in future sessions
+    pub fn set_broken(&self) {
+        self.state.set_broken()
+    }
+
     /// Splits the connection into a reader and writer which can be used concurrently
     pub fn split<'a>(&'a mut self) -> (&'a mut PgReader, &'a mut PgWriter) {
         (&mut self.reader, &mut self.writer)
@@ -193,13 +212,13 @@ impl LlPostgresConnection {
             state: Arc::clone(&reader.0),
             reader,
             writer,
-            recycle_queries: None,
+            recycle_queries: vec![],
         }
     }
 
-    /// Sets the query to use upon recycling the connection
-    pub fn recycle_queries(&mut self, queries: Option<Vec<String>>) {
-        self.recycle_queries = queries;
+    /// Appends the query to use upon recycling the connection
+    pub fn recycle_queries(&mut self, mut queries: Vec<String>) {
+        self.recycle_queries.append(&mut queries);
     }
 }
 
@@ -209,6 +228,8 @@ pub struct PgWriter(Arc<State>, OwnedWriteHalf);
 impl PgReader {
     /// Receivs a message from the postgres backend
     pub async fn receive(&mut self) -> Result<PostgresBackendMessage> {
+        self.0.check_broken()?;
+
         let res = PostgresBackendMessage::read(&mut self.1)
             .await
             .context("Failed to read message from unix socket");
@@ -224,6 +245,8 @@ impl PgReader {
 impl PgWriter {
     /// Sends the supplied message to postgres
     pub async fn send(&mut self, message: PostgresFrontendMessage) -> Result<()> {
+        self.0.check_broken()?;
+
         let res = self
             .1
             .write_all(message.serialise()?.as_slice())

@@ -80,11 +80,11 @@ mod tests {
             install_dir: PathBuf::from("/home/vscode/.pgx/14.5/pgx-install/"),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!(
-                "/tmp/ansilo-tests/pg-ll-connection-pool/{}",
+                "/tmp/ansilo-tests/pg-multi-user-ll-connection-pool/{}",
                 test_name
             )),
             socket_dir_path: PathBuf::from(format!(
-                "/tmp/ansilo-tests/pg-ll-connection-pool/{}",
+                "/tmp/ansilo-tests/pg-multi-user-ll-connection-pool/{}",
                 test_name
             )),
             fdw_socket_path: PathBuf::from("not-used"),

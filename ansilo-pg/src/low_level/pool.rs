@@ -126,7 +126,7 @@ impl Manager for LlPostgresConnectionManager {
         }
 
         // Clean the connection
-        for query in con.recycle_queries.take().unwrap_or(vec![]).iter() {
+        for query in con.recycle_queries.drain(..).collect::<Vec<_>>() {
             con.execute(query).await?;
         }
 
