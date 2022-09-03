@@ -1,9 +1,6 @@
-use std::{
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-};
+use std::collections::HashSet;
 
-use ansilo_auth::{ctx::AuthContext, Authenticator};
+use ansilo_auth::Authenticator;
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{debug, warn};
 use ansilo_pg::{
@@ -100,7 +97,7 @@ impl ConnectionHandler for PostgresConnectionHandler {
             Ok(_) => debug!("Postgres connection closed gracefully"),
             Err(err) => {
                 warn!("Error during postgres connection: {:?}", err);
-                let _ = PostgresBackendMessage::ErrorResponse(format!("Error: {}", err))
+                let _ = PostgresBackendMessage::error_msg(format!("Error: {}", err))
                     .write(&mut client_writer)
                     .await;
             }

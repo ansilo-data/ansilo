@@ -17,7 +17,7 @@ pub enum PostgresBackendMessage {
     AuthenticationSaslContinue(Vec<u8>),
     AuthenticationSaslFinal(Vec<u8>),
     AuthenticationCleartextPassword,
-    ErrorResponse(String),
+    ErrorResponse(Vec<(u8, String)>),
     ReadyForQuery(u8),
     Other(PostgresMessage),
 }
@@ -119,17 +119,20 @@ impl PostgresBackendMessage {
                     _ => Self::Other(message),
                 }
             }
-            // TODO: Parse full response
+            // @see https://www.postgresql.org/docs/current/protocol-error-fields.html
             PostgresBackendMessageTag::ErrorResponse => {
-                let message = message
+                let fields = message
                     .body()
                     .split(|i| *i == 0)
-                    .find(|g| g.first().cloned() == Some(b'M'))
-                    .context("Failed to find message field in error response")?;
+                    .filter(|g| g.len() > 0)
+                    .map(|f| {
+                        let key = f.first().cloned().unwrap();
+                        let val = String::from_utf8_lossy(&f[1..]).to_string();
+                        (key, val)
+                    })
+                    .collect();
 
-                let message = String::from_utf8_lossy(&message[1..]).to_string();
-
-                Self::ErrorResponse(message)
+                Self::ErrorResponse(fields)
             }
             _ => Self::Other(message),
         })
@@ -218,16 +221,14 @@ impl PostgresBackendMessage {
                 PostgresMessage::build(PostgresBackendMessageTag::ErrorResponse as _, |body| {
                     // @see https://www.postgresql.org/docs/current/protocol-error-fields.html
                     // Strings must be null terminated
-                    body.write_all(&[b'S'])?;
-                    body.write_all(b"ERROR\0")?;
-                    body.write_all(&[b'C'])?;
-                    body.write_all(b"XX000\0")?;
-                    body.write_all(&[b'M'])?;
-                    body.write_all(
-                        CString::new(&*msg)
-                            .context("Cannot convert error message to cstring")?
-                            .as_bytes_with_nul(),
-                    )?;
+                    for (key, val) in msg.into_iter() {
+                        body.write_all(&[key])?;
+                        body.write_all(
+                            CString::new(val.as_bytes())
+                                .context("Cannot convert error field to cstring")?
+                                .as_bytes_with_nul(),
+                        )?;
+                    }
                     body.write_all(&[0])?;
 
                     Ok(())
@@ -249,6 +250,15 @@ impl PostgresBackendMessage {
             Self::ReadyForQuery(_) => PostgresBackendMessageTag::ReadyForQuery,
             Self::Other(msg) => msg.tag().context("Untagged message")?.try_into()?,
         })
+    }
+
+    /// Creates a custom error response
+    pub fn error_msg(msg: impl Into<String>) -> Self {
+        Self::ErrorResponse(vec![
+            (b'S', "ERROR".into()),
+            (b'C', "XX000".into()),
+            (b'M', msg.into()),
+        ])
     }
 }
 
@@ -365,7 +375,11 @@ mod tests {
     #[test]
     fn test_proto_be_serialise_error_response() {
         assert_eq!(
-            to_buff(PostgresBackendMessage::ErrorResponse("MSG".into())),
+            to_buff(PostgresBackendMessage::ErrorResponse(vec![
+                (b'S', "ERROR".into()),
+                (b'C', "XX000".into()),
+                (b'M', "MSG".into())
+            ])),
             vec![
                 b'E', // tag
                 0, 0, 0, 24, // len
@@ -503,11 +517,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_proto_be_read_error_response() {
-        let parsed = parse(&[b'E', 0, 0, 0, 8, b'M', b'm', b's', b'g'])
-            .await
-            .unwrap();
+        let parsed = parse(&[
+            b'E', 0, 0, 0, 15, b'S', b'E', b'R', b'R', 0, b'M', b'm', b's', b'g', 0, 0,
+        ])
+        .await
+        .unwrap();
 
-        assert_eq!(parsed, PostgresBackendMessage::ErrorResponse("msg".into()));
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::ErrorResponse(vec![(b'S', "ERR".into()), (b'M', "msg".into())])
+        );
         assert_eq!(
             parsed.tag().unwrap(),
             PostgresBackendMessageTag::ErrorResponse
