@@ -62,7 +62,8 @@ impl Authenticator {
             .context("Username not specified")?;
 
         let user = self.get_user(username)?;
-        let provider = self.get_provider(&user.provider)?;
+        let provider_id = user.provider.clone().unwrap_or("password".into());
+        let provider = self.get_provider(&provider_id)?;
 
         let ctx = match (provider, &user.r#type) {
             (AuthProvider::Password(provider), UserTypeOptions::Password(conf)) => {
@@ -88,7 +89,7 @@ impl Authenticator {
 
         info!(
             "Postgres connection authenticated as '{}' using '{}' provider",
-            user.username, user.provider
+            user.username, provider_id
         );
 
         // Send authentication success to client
@@ -97,10 +98,7 @@ impl Authenticator {
             .await
             .context("Failed to send authentication success message")?;
 
-        Ok((
-            AuthContext::new(&user.username, &user.provider, ctx),
-            startup,
-        ))
+        Ok((AuthContext::new(&user.username, &provider_id, ctx), startup))
     }
 
     async fn do_postgres_password_auth(
@@ -212,7 +210,7 @@ mod tests {
             users: vec![UserConfig {
                 username: "john".into(),
                 description: None,
-                provider: "password".into(),
+                provider: Some("password".into()),
                 r#type: UserTypeOptions::Password(PasswordUserConfig {
                     password: "password1".into(),
                 }),
@@ -242,7 +240,7 @@ mod tests {
             users: vec![UserConfig {
                 username: "mary".into(),
                 description: None,
-                provider: "jwt".into(),
+                provider: Some("jwt".into()),
                 r#type: UserTypeOptions::Jwt(JwtUserConfig {
                     claims: vec![(
                         "scope".into(),

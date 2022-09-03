@@ -73,7 +73,7 @@ pub struct UserConfig {
     /// A description of the user
     pub description: Option<String>,
     /// The provider used to authenticate this user
-    pub provider: String,
+    pub provider: Option<String>,
     /// Authenticate type specific options
     #[serde(flatten)]
     pub r#type: UserTypeOptions,

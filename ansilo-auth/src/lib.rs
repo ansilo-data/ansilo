@@ -41,14 +41,15 @@ impl Authenticator {
             AuthProvider::Password(PasswordAuthProvider::default()),
         ));
 
-        if let Some(invalid) = conf
-            .users
-            .iter()
-            .find(|u| !providers.iter().any(|(p, _)| p == &u.provider))
-        {
+        if let Some(invalid) = conf.users.iter().find(|u| {
+            u.provider.is_some()
+                && !providers
+                    .iter()
+                    .any(|(p, _)| p == u.provider.as_ref().unwrap())
+        }) {
             bail!(
                 "Auth provider '{}' defined on user '{}' does not exist",
-                invalid.provider,
+                invalid.provider.as_ref().unwrap(),
                 invalid.username
             );
         }

@@ -3,6 +3,11 @@ name: Oracle
 networking:
   port: ${env:ANSILO_PORT}
 
+auth:
+  users:
+    - username: app
+      password: pass
+
 sources:
   - id: oracle
     type: jdbc.oracle
