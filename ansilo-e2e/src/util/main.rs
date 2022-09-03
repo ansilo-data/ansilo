@@ -1,10 +1,14 @@
 use std::{
     env,
     path::PathBuf,
-    sync::{atomic::{AtomicU16, Ordering}, Mutex},
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        Mutex,
+    },
     time::Duration,
 };
 
+use ansilo_core::err::Result;
 use ansilo_logging::info;
 use ansilo_main::{
     args::{Args, Command},
@@ -18,7 +22,16 @@ static LOCK: Mutex<()> = Mutex::new(());
 
 /// Runs an instance of ansilo using the supplied config
 pub fn run_instance(config_path: PathBuf) -> (Ansilo, Client) {
-    let _ = LOCK.lock().unwrap(); 
+    let (instance, port) = run_instance_without_connect(config_path);
+
+    let client = connect(port);
+
+    (instance, client)
+}
+
+/// Runs an instance of ansilo using the supplied config
+pub fn run_instance_without_connect(config_path: PathBuf) -> (Ansilo, u16) {
+    let _ = LOCK.lock().unwrap();
     let port = PORT.fetch_add(1, Ordering::SeqCst);
 
     // Allow port to be referenced in config file
@@ -30,23 +43,29 @@ pub fn run_instance(config_path: PathBuf) -> (Ansilo, Client) {
     )
     .unwrap();
 
-    let client = connect(port);
-
-    (instance, client)
+    (instance, port)
 }
 
 /// Connects to the ansilo instance running on the supplied port
-fn connect(port: u16) -> Client {
+/// Authenticates using "app" / "pass" as a convention
+pub fn connect(port: u16) -> Client {
     // TODO: auth
     info!("Connection to local instance on localhost:{}", port);
 
-    Client::configure()
+    connect_opts("app", "pass", port).unwrap()
+}
+
+/// Connects to the ansilo instance running on the supplied port
+pub fn connect_opts(user: &str, pass: &str, port: u16) -> Result<Client> {
+    // TODO: auth
+    info!("Connection to local instance on localhost:{}", port);
+
+    Ok(Client::configure()
         .connect_timeout(Duration::from_secs(30))
         .port(port)
         .host("localhost")
-        .user("app")
-        .password("pass")
+        .user(user)
+        .password(pass)
         .dbname("postgres")
-        .connect(NoTls)
-        .unwrap()
+        .connect(NoTls)?)
 }

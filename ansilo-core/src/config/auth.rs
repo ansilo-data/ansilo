@@ -130,7 +130,7 @@ pub struct SamlUserConfig {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct CustomUserConfig {
     /// Any custom value
-    pub custom: serde_yaml::Value
+    pub custom: serde_yaml::Value,
 }
 
 /// Defines a claim validation for a token

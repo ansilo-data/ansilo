@@ -14,7 +14,7 @@ use jsonwebkey::KeyUse;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
 use serde::Deserialize;
 
-use crate::{ctx::JwtAuthContext, provider::check::validate_check};
+use crate::{ctx::JwtAuthContext, provider::check::validate_jwt_claim};
 
 /// Used for validating JWT tokens.
 pub struct JwtAuthProvider {
@@ -97,7 +97,7 @@ impl JwtAuthProvider {
         // Verify claims
         for (claim, check) in user.claims.iter() {
             let actual = decoded_token.claims.get(claim);
-            validate_check("claim", claim, actual, check)?;
+            validate_jwt_claim(claim, actual, check)?;
         }
 
         // Token verified and passes checks

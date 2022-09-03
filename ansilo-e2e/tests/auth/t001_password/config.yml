@@ -1,0 +1,17 @@
+name: Auth
+
+networking:
+  port: ${env:ANSILO_PORT}
+
+auth:
+  users:
+    - username: test_user
+      password: password123
+
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-sql/*.sql
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json
