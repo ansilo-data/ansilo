@@ -84,3 +84,48 @@ impl Authenticator {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ansilo_core::config::{PasswordUserConfig, UserTypeOptions};
+
+    use super::*;
+
+    #[test]
+    fn init_default() {
+        let conf = Box::leak(Box::new(AuthConfig {
+            providers: vec![],
+            users: vec![],
+            service_users: vec![],
+        }));
+        let authenticator = Authenticator::init(conf).unwrap();
+
+        assert!(matches!(
+            authenticator.get_provider("password").unwrap(),
+            AuthProvider::Password(_)
+        ));
+        assert_eq!(authenticator.providers.len(), 1);
+    }
+
+    #[test]
+    fn test_get_user() {
+        let conf = Box::leak(Box::new(AuthConfig {
+            providers: vec![],
+            users: vec![UserConfig {
+                username: "mary".into(),
+                description: None,
+                provider: None,
+                r#type: UserTypeOptions::Password(PasswordUserConfig {
+                    password: "foo".into(),
+                }),
+            }],
+            service_users: vec![],
+        }));
+        let authenticator = Authenticator::init(conf).unwrap();
+
+        assert_eq!(
+            authenticator.get_user("mary").unwrap(),
+            &conf.users[0]
+        );
+    }
+}

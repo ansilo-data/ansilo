@@ -310,13 +310,22 @@ mod tests {
                 _ => panic!("Unexpected response {:?}", res),
             };
 
+            // stage 1
             let mut hasher = Md5::new();
             hasher.update("invalid".as_bytes());
+            hasher.update("john".as_bytes());
+            let stage1 = hex::encode(hasher.finalize().to_vec());
+
+            // stage 2
+            let mut hasher = Md5::new();
+            hasher.update(stage1.as_bytes());
             hasher.update(salt);
-            let hash = hasher.finalize().to_vec();
+            let hash = hex::encode(hasher.finalize().to_vec());
+
+            let r#final = format!("md5{hash}\0").as_bytes().to_vec();
 
             // send hash
-            PostgresFrontendMessage::PasswordMessage(hash)
+            PostgresFrontendMessage::PasswordMessage(r#final)
                 .write(&mut client)
                 .await
                 .unwrap();
@@ -354,13 +363,22 @@ mod tests {
                 _ => panic!("Unexpected response {:?}", res),
             };
 
+            // stage 1
             let mut hasher = Md5::new();
             hasher.update("password1".as_bytes());
+            hasher.update("john".as_bytes());
+            let stage1 = hex::encode(hasher.finalize().to_vec());
+
+            // stage 2
+            let mut hasher = Md5::new();
+            hasher.update(stage1.as_bytes());
             hasher.update(salt);
-            let hash = hasher.finalize().to_vec();
+            let hash = hex::encode(hasher.finalize().to_vec());
+
+            let r#final = format!("md5{hash}\0").as_bytes().to_vec();
 
             // send hash
-            PostgresFrontendMessage::PasswordMessage(hash)
+            PostgresFrontendMessage::PasswordMessage(r#final)
                 .write(&mut client)
                 .await
                 .unwrap();
