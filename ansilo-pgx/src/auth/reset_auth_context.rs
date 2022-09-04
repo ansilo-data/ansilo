@@ -1,6 +1,8 @@
 use pgx::*;
 use subtle::ConstantTimeEq;
 
+use crate::fdw::common::clear_fdw_ipc_connections;
+
 use super::ctx::AuthContextState;
 
 extension_sql!(
@@ -40,6 +42,7 @@ fn ansilo_reset_auth_context(reset_nonce: String) -> String {
     }
 
     AuthContextState::update(AuthContextState::None);
+    clear_fdw_ipc_connections();
 
     info!("Auth context reset");
 
@@ -77,9 +80,7 @@ mod tests {
             .unwrap_err();
 
         // Invalid nonce should close the connection
-        client
-            .batch_execute(r#"SELECT 1"#)
-            .unwrap_err();
+        client.batch_execute(r#"SELECT 1"#).unwrap_err();
     }
 
     #[pg_test]

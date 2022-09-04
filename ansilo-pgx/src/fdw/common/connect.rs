@@ -158,3 +158,12 @@ unsafe fn get_connection(opts: ServerOptions) -> Result<Arc<FdwIpcConnection>> {
 
     Ok(con)
 }
+
+/// Clears all current active connections
+pub fn clear_fdw_ipc_connections() {
+    let mut active = ACTIVE_CONNECTIONS
+        .lock()
+        .expect("Failed to lock active connections mutex");
+
+    active.clear();
+}
