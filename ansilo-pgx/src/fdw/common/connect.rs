@@ -30,7 +30,7 @@ use super::ServerOptions;
 // connection.
 //
 // We dont take special care to remove free'd weak references from the map as we
-// assume the number of elements will be small and will be refreshed frequently.
+// assume the number of elements will be small and will be cleared frequently.
 lazy_static! {
     static ref ACTIVE_CONNECTIONS: Mutex<HashMap<String, Weak<FdwIpcConnection>>> =
         Mutex::new(HashMap::new());

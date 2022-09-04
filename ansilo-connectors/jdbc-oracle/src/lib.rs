@@ -67,6 +67,6 @@ impl OracleJdbcConnector {
             &NodeConfig::default(),
             &ConnectorEntityConfig::new(),
         )?
-        .acquire()
+        .acquire(None)
     }
 }

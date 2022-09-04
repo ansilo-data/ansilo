@@ -14,6 +14,7 @@ use ansilo_connectors_base::{
     interface::*,
 };
 use ansilo_core::{
+    auth::AuthContext,
     config::{EntityConfig, NodeConfig},
     data::DataType,
     err::{bail, Context, Result},
@@ -31,6 +32,8 @@ use super::{
 pub(crate) struct FdwConnection<'a, TConnector: Connector> {
     /// ID of the data source
     data_source_id: String,
+    /// Authentication context of the client
+    auth: Option<AuthContext>,
     /// Global config
     nc: &'static NodeConfig,
     /// The unix socket the server listens on
@@ -67,6 +70,7 @@ enum FdwQueryState<TConnector: Connector> {
 impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     pub(crate) fn new(
         data_source_id: String,
+        auth: Option<AuthContext>,
         nc: &'static NodeConfig,
         chan: IpcServerChannel,
         entities: &'a RwLock<ConnectorEntityConfig<TConnector::TEntitySourceConfig>>,
@@ -75,6 +79,7 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     ) -> Self {
         Self {
             data_source_id,
+            auth,
             nc,
             chan: Some(chan),
             entities,
@@ -195,7 +200,7 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
 
     fn connect(&mut self) -> Result<()> {
         if let FdwConnectionState::New = &self.connection {
-            let con = self.pool.acquire()?;
+            let con = self.pool.acquire(self.auth.as_ref())?;
             self.connection = FdwConnectionState::Connected(con);
         }
 
@@ -680,6 +685,7 @@ mod tests {
 
             let mut fdw = FdwConnection::<MemoryConnector>::new(
                 "memory".into(),
+                None,
                 &NODE_CONFIG,
                 server_chan,
                 entities,

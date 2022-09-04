@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use ansilo_core::{
+    auth::AuthContext,
     data::DataValue,
     err::{bail, Context, Result},
 };
@@ -135,7 +136,7 @@ impl OurManageConnection for Manager {
 impl ConnectionPool for JdbcConnectionPool {
     type TConnection = JdbcConnection;
 
-    fn acquire(&mut self) -> Result<JdbcConnection> {
+    fn acquire(&mut self, _auth: Option<&AuthContext>) -> Result<JdbcConnection> {
         let state = self
             .pool
             .get()
@@ -386,7 +387,7 @@ mod tests {
             HashMap::new(),
         ))
         .unwrap()
-        .acquire()
+        .acquire(None)
         .unwrap()
     }
 
@@ -402,7 +403,7 @@ mod tests {
             HashMap::new(),
         ))
         .unwrap()
-        .acquire();
+        .acquire(None);
 
         assert!(res.is_err());
     }

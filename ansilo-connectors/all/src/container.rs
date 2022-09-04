@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use ansilo_connectors_jdbc_mysql::{MysqlJdbcConnectionConfig, MysqlJdbcEntitySourceConfig};
 use ansilo_core::{
+    auth::AuthContext,
     config::{self, NodeConfig},
     err::{bail, Context, Result},
 };
@@ -202,10 +203,10 @@ impl FromStr for Connectors {
 impl ConnectionPool for ConnectionPools {
     type TConnection = Connections;
 
-    fn acquire(&mut self) -> Result<Self::TConnection> {
+    fn acquire(&mut self, auth: Option<&AuthContext>) -> Result<Self::TConnection> {
         Ok(match self {
-            ConnectionPools::Jdbc(p) => Connections::Jdbc(p.acquire()?),
-            ConnectionPools::Memory(p) => Connections::Memory(p.acquire()?),
+            ConnectionPools::Jdbc(p) => Connections::Jdbc(p.acquire(auth)?),
+            ConnectionPools::Memory(p) => Connections::Memory(p.acquire(auth)?),
         })
     }
 }

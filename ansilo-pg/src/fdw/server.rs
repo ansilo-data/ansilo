@@ -22,7 +22,7 @@ use super::{
     channel::IpcServerChannel,
     connection::FdwConnection,
     log::RemoteQueryLog,
-    proto::{ClientMessage, ServerMessage},
+    proto::{AuthDataSource, ClientMessage, ServerMessage},
 };
 
 /// Handles connections back from postgres
@@ -190,7 +190,7 @@ impl FdwListener {
         let _ = thread::spawn(move || {
             let mut chan = IpcServerChannel::new(socket);
 
-            let (ds_id, pool, entities) = match Self::auth(&mut chan, pool) {
+            let (auth, pool, entities) = match Self::auth(&mut chan, pool) {
                 Ok(pool) => pool,
                 Err(err) => {
                     warn!("Failed to authenticate client: {:?}", err);
@@ -200,13 +200,13 @@ impl FdwListener {
 
             match (pool, &*entities) {
                 (ConnectionPools::Jdbc(pool), RwLockEntityConfigs::OracleJdbc(entities)) => {
-                    Self::process::<OracleJdbcConnector>(ds_id, nc, chan, pool, entities, log)
+                    Self::process::<OracleJdbcConnector>(auth, nc, chan, pool, entities, log)
                 }
                 (ConnectionPools::Jdbc(pool), RwLockEntityConfigs::MysqlJdbc(entities)) => {
-                    Self::process::<MysqlJdbcConnector>(ds_id, nc, chan, pool, entities, log)
+                    Self::process::<MysqlJdbcConnector>(auth, nc, chan, pool, entities, log)
                 }
                 (ConnectionPools::Memory(pool), RwLockEntityConfigs::Memory(entities)) => {
-                    Self::process::<MemoryConnector>(ds_id, nc, chan, pool, entities, log)
+                    Self::process::<MemoryConnector>(auth, nc, chan, pool, entities, log)
                 }
                 _ => {
                     panic!("Unknown types or mismatch between pool and entities",)
@@ -220,19 +220,17 @@ impl FdwListener {
     fn auth(
         chan: &mut IpcServerChannel,
         pools: Arc<HashMap<String, (ConnectionPools, Arc<RwLockEntityConfigs>)>>,
-    ) -> Result<(String, ConnectionPools, Arc<RwLockEntityConfigs>)> {
+    ) -> Result<(AuthDataSource, ConnectionPools, Arc<RwLockEntityConfigs>)> {
         chan.recv_with_return(|msg| {
             let auth = match msg {
                 ClientMessage::AuthDataSource(auth) => auth,
                 _ => bail!("Received unexpected message from client: {:?}", msg),
             };
 
-            // TODO: auth token
-
             let pool = pools
                 .get(&auth.data_source_id)
                 .cloned()
-                .map(|(pool, entities)| (auth.data_source_id.clone(), pool, entities))
+                .map(|(pool, entities)| (auth.clone(), pool, entities))
                 .with_context(|| {
                     format!(
                         "Failed to find data source with id: {}",
@@ -250,15 +248,22 @@ impl FdwListener {
     }
 
     fn process<TConnector: Connector>(
-        data_source_id: String,
+        auth: AuthDataSource,
         nc: &'static NodeConfig,
         chan: IpcServerChannel,
         pool: TConnector::TConnectionPool,
         entities: &RwLock<ConnectorEntityConfig<TConnector::TEntitySourceConfig>>,
         log: RemoteQueryLog,
     ) {
-        let mut fdw_con =
-            FdwConnection::<TConnector>::new(data_source_id, nc, chan, entities, pool, log);
+        let mut fdw_con = FdwConnection::<TConnector>::new(
+            auth.data_source_id,
+            auth.context,
+            nc,
+            chan,
+            entities,
+            pool,
+            log,
+        );
 
         if let Err(err) = fdw_con.process() {
             error!("Error while processing FDW connection: {:?}", err);

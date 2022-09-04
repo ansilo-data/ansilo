@@ -1,6 +1,9 @@
 use std::{mem, sync::Arc};
 
-use ansilo_core::err::{bail, Result};
+use ansilo_core::{
+    auth::AuthContext,
+    err::{bail, Result},
+};
 
 use ansilo_connectors_base::{
     common::entity::ConnectorEntityConfig,
@@ -35,7 +38,7 @@ impl MemoryConnectionPool {
 impl ConnectionPool for MemoryConnectionPool {
     type TConnection = MemoryConnection;
 
-    fn acquire(&mut self) -> Result<MemoryConnection> {
+    fn acquire(&mut self, _auth: Option<&AuthContext>) -> Result<MemoryConnection> {
         Ok(MemoryConnection::new(
             Arc::clone(&self.conf),
             self.entities.clone(),

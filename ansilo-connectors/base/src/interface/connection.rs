@@ -1,6 +1,4 @@
-use ansilo_core::{
-    err::Result,
-};
+use ansilo_core::{auth::AuthContext, err::Result};
 
 use super::QueryHandle;
 
@@ -9,7 +7,7 @@ pub trait ConnectionPool: Clone + Sized + Send + Sync + 'static {
     type TConnection: Connection;
 
     /// Acquires a connection to the target data source
-    fn acquire(&mut self) -> Result<Self::TConnection>;
+    fn acquire(&mut self, auth: Option<&AuthContext>) -> Result<Self::TConnection>;
 }
 
 /// An open connection to a data source
@@ -39,7 +37,7 @@ pub trait TransactionManager {
 
     /// Commits the current transaction
     fn commit_transaction(&mut self) -> Result<()>;
-    
+
     // TODO[low]: implement support for 2PC
 }
 

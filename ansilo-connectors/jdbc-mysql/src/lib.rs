@@ -67,6 +67,6 @@ impl MysqlJdbcConnector {
             &NodeConfig::default(),
             &ConnectorEntityConfig::new(),
         )?
-        .acquire()
+        .acquire(None)
     }
 }

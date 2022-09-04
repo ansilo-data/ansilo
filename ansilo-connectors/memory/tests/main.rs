@@ -50,7 +50,7 @@ fn test_memory_select_query_execution() {
     let mut pool =
         MemoryConnector::create_connection_pool(data, &NodeConfig::default(), &entities).unwrap();
 
-    let mut connection = pool.acquire().unwrap();
+    let mut connection = pool.acquire(None).unwrap();
 
     let mut select = sqlil::Select::new(sqlil::source("people", "people"));
     select.cols.push((
