@@ -13,15 +13,6 @@ use bincode::{Decode, Encode};
 
 pub type QueryId = u32;
 
-/// TODO: Rather than expecting all entities to be configured up-front
-/// we will lazily register them from postgres.
-/// This allows for the creation of entities, driven by user-defined SQL init scripts
-/// and will fully support IMPORT FOREIGN SCHEMA.
-/// For efficiency, the FDW will assume the entities are registered until told otherwise.
-/// This will be driven by a dedicated ServerMessage::UnknownEntity
-/// that the FDW can use to send a ClientMessage::RegisterEntity and retry the query
-/// operation
-
 /// Protocol messages sent by postgres
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub enum ClientMessage {

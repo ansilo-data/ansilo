@@ -49,7 +49,6 @@ pub fn run_instance_without_connect(config_path: PathBuf) -> (Ansilo, u16) {
 /// Connects to the ansilo instance running on the supplied port
 /// Authenticates using "app" / "pass" as a convention
 pub fn connect(port: u16) -> Client {
-    // TODO: auth
     info!("Connection to local instance on localhost:{}", port);
 
     connect_opts("app", "pass", port).unwrap()
@@ -57,7 +56,6 @@ pub fn connect(port: u16) -> Client {
 
 /// Connects to the ansilo instance running on the supplied port
 pub fn connect_opts(user: &str, pass: &str, port: u16) -> Result<Client> {
-    // TODO: auth
     info!("Connection to local instance on localhost:{}", port);
 
     Ok(Client::configure()

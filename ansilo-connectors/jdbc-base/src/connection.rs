@@ -46,8 +46,6 @@ impl JdbcConnectionPool {
         }
         .adaptor();
 
-        // TODO: add event handler with handle_checkin callback to "clean" the connection
-        // this will be different per db, eg for postgres it is "DISCARD ALL"
         let pool = if let Some(conf) = options.get_pool_config().as_ref() {
             r2d2::Builder::new()
                 .min_idle(Some(conf.min_cons))
