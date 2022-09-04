@@ -1,0 +1,23 @@
+name: Auth
+
+networking:
+  port: ${env:ANSILO_PORT}
+
+auth:
+  providers:
+    - id: jwt
+      type: jwt
+      rsa_public_key: file://${dir}/keys/public.key
+
+  users:
+    - username: token
+      provider: jwt
+      claims: {}
+
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-sql/*.sql
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json

@@ -14,7 +14,7 @@ use ansilo_main::{
     args::{Args, Command},
     Ansilo, RemoteQueryLog,
 };
-use postgres::{Client, NoTls};
+use postgres::{Client, Config, NoTls};
 
 static PORT: AtomicU16 = AtomicU16::new(60000);
 
@@ -51,19 +51,28 @@ pub fn run_instance_without_connect(config_path: PathBuf) -> (Ansilo, u16) {
 pub fn connect(port: u16) -> Client {
     info!("Connection to local instance on localhost:{}", port);
 
-    connect_opts("app", "pass", port).unwrap()
+    connect_opts("app", "pass", port, |_| ()).unwrap()
 }
 
 /// Connects to the ansilo instance running on the supplied port
-pub fn connect_opts(user: &str, pass: &str, port: u16) -> Result<Client> {
+pub fn connect_opts(
+    user: &str,
+    pass: &str,
+    port: u16,
+    mut cb: impl FnMut(&mut Config),
+) -> Result<Client> {
     info!("Connection to local instance on localhost:{}", port);
 
-    Ok(Client::configure()
-        .connect_timeout(Duration::from_secs(30))
+    let mut conf = Client::configure();
+
+    conf.connect_timeout(Duration::from_secs(30))
         .port(port)
         .host("localhost")
         .user(user)
         .password(pass)
-        .dbname("postgres")
-        .connect(NoTls)?)
+        .dbname("postgres");
+
+    cb(&mut conf);
+
+    Ok(conf.connect(NoTls)?)
 }

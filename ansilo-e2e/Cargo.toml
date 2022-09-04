@@ -24,6 +24,7 @@ serde_yaml = "0.9"
 pretty_assertions = "1.2"
 serial_test = "*"
 criterion = "0.3"
+jsonwebtoken = "*"
 
 [[bench]]
 name = "benches"
