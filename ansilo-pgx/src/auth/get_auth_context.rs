@@ -31,7 +31,7 @@ mod tests {
             .batch_execute(
                 r#"
                     DO $$BEGIN
-                    ASSERT ansilo_set_auth_context('test123', '1234567890123456') = 'OK';
+                    ASSERT __ansilo_auth.ansilo_set_auth_context('test123', '1234567890123456') = 'OK';
                     ASSERT auth_context() = 'test123';
                     END$$
                 "#,
@@ -47,9 +47,9 @@ mod tests {
             .batch_execute(
                 r#"
                     DO $$BEGIN
-                    ASSERT ansilo_set_auth_context('test123', '1234567890123456') = 'OK';
+                    ASSERT __ansilo_auth.ansilo_set_auth_context('test123', '1234567890123456') = 'OK';
                     ASSERT auth_context() = 'test123';
-                    ASSERT ansilo_reset_auth_context('1234567890123456') = 'OK';
+                    ASSERT __ansilo_auth.ansilo_reset_auth_context('1234567890123456') = 'OK';
                     END$$
                 "#,
             )

@@ -59,14 +59,14 @@ impl ConnectionHandler for PostgresConnectionHandler {
             &serde_json::to_string(&auth).context("Failed to serialise auth context")?,
         );
         con.execute(format!(
-            "SELECT ansilo_set_auth_context({auth_context}, {reset_token})"
+            "SELECT __ansilo_auth.ansilo_set_auth_context({auth_context}, {reset_token})"
         ))
         .await?;
 
         // We ensure the connection is clean when it is next recycled
         con.recycle_queries(vec![
             // Ensure the auth context is appropriately reset
-            format!("SELECT ansilo_reset_auth_context({reset_token})"),
+            format!("SELECT __ansilo_auth.ansilo_reset_auth_context({reset_token})"),
             // Clean any other temporary state
             "DISCARD ALL".into(),
         ]);

@@ -127,7 +127,7 @@ pub unsafe fn into_datum(
 }
 
 /// Converts the supplied DataValue into a pgalloc'd Datum
-pub unsafe fn into_datum_pg_alloc(
+pub(crate) unsafe fn into_datum_pg_alloc(
     type_oid: Oid,
     r#type: &DataType,
     val: DataValue,

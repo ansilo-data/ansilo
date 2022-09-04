@@ -1,18 +1,18 @@
-mod fdw;
-mod sqlil;
-mod util;
-mod auth;
-
 use pgx::{
     pg_sys::{self},
     *,
 };
 
+mod auth;
+mod fdw;
+mod sqlil;
+mod util;
+
 pg_module_magic!();
 
+// Register our FDW
 extension_sql!(
     r#"
-        -- Register our FDW
         CREATE FUNCTION "ansilo_fdw_handler_typed"() RETURNS fdw_handler STRICT LANGUAGE c AS 'MODULE_PATHNAME', 'ansilo_fdw_handler_wrapper';
         CREATE FOREIGN DATA WRAPPER ansilo_fdw HANDLER ansilo_fdw_handler_typed;
 "#,

@@ -52,7 +52,7 @@ fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) 
 /// We cannot rely this extension being available when we build run tests
 /// for this crate
 #[cfg(not(test))]
-fn configure_extension(_conf: &PostgresConf, superuser_con: &mut PostgresConnection) -> Result<()> {
+fn configure_extension(conf: &PostgresConf, superuser_con: &mut PostgresConnection) -> Result<()> {
     superuser_con
         .batch_execute(
             format!(
@@ -60,11 +60,23 @@ fn configure_extension(_conf: &PostgresConf, superuser_con: &mut PostgresConnect
                 CREATE EXTENSION ansilo_pgx;
                 
                 GRANT USAGE ON FOREIGN DATA WRAPPER ansilo_fdw to {PG_ADMIN_USER};
+                GRANT USAGE ON SCHEMA __ansilo_auth to {PG_ADMIN_USER};
             "#
             )
             .as_str(),
         )
-        .context("Failed to initialise ansilo extension")
+        .context("Failed to initialise ansilo extension")?;
+
+    // Configure user-provided users
+    for user in conf.app_users.iter() {
+        superuser_con
+            .batch_execute(format!(r#"
+            GRANT USAGE ON SCHEMA __ansilo_auth to {user};
+            "#).as_str())
+            .context("Failed to initialise app user")?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -3,8 +3,21 @@ use subtle::ConstantTimeEq;
 
 use super::ctx::AuthContext;
 
-// TODO: move to private schema
-#[pg_extern(volatile, parallel_unsafe)]
+extension_sql!(
+    r#"
+    CREATE FUNCTION __ansilo_auth."ansilo_reset_auth_context"(
+        "reset_nonce" text
+    ) RETURNS text
+    VOLATILE PARALLEL UNSAFE STRICT
+    LANGUAGE c /* Rust */
+    AS 'MODULE_PATHNAME', 'ansilo_reset_auth_context_wrapper';
+    
+"#,
+    name = "ansilo_reset_auth_context",
+    requires = ["ansilo_auth_schema"]
+);
+
+#[pg_extern(sql = "")]
 fn ansilo_reset_auth_context(reset_nonce: String) -> String {
     info!("Requested to reset auth context");
 
@@ -53,14 +66,14 @@ mod tests {
             .batch_execute(
                 r#"
             DO $$BEGIN
-               ASSERT ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+               ASSERT __ansilo_auth.ansilo_set_auth_context('test', '1234567890123456') = 'OK';
             END$$
         "#,
             )
             .unwrap();
 
         client
-            .batch_execute(r#"SELECT ansilo_reset_auth_context('invalid');"#)
+            .batch_execute(r#"SELECT __ansilo_auth.ansilo_reset_auth_context('invalid');"#)
             .unwrap_err();
 
         // Invalid nonce should close the connection
@@ -79,8 +92,8 @@ mod tests {
                 .batch_execute(
                     r#"
                     DO $$BEGIN
-                    ASSERT ansilo_set_auth_context('test', '1234567890123456') = 'OK';
-                    ASSERT ansilo_reset_auth_context('1234567890123456') = 'OK';
+                    ASSERT __ansilo_auth.ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+                    ASSERT __ansilo_auth.ansilo_reset_auth_context('1234567890123456') = 'OK';
                     END$$
                 "#,
                 )
@@ -96,7 +109,7 @@ mod tests {
             .batch_execute(
                 r#"
             DO $$BEGIN
-               ASSERT ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+               ASSERT __ansilo_auth.ansilo_set_auth_context('test', '1234567890123456') = 'OK';
             END$$
         "#,
             )
