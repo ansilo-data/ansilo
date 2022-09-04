@@ -66,7 +66,6 @@ pub(super) unsafe fn convert_aggref(
         ));
     }
 
-    // TODO: map all functions
     Ok(sqlil::Expr::AggregateCall(
         match (func_name.as_str(), args.len()) {
             ("count", _) if (*node).aggstar => sqlil::AggregateCall::Count,

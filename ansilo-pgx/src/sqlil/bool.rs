@@ -44,7 +44,6 @@ pub(super) unsafe fn convert_bool_expr(
             sqlil::BinaryOpType::LogicalOr,
             right,
         )),
-        // TODO: add operators
         _ => bail!("Unsupported bool operator: '{}'", (*node).boolop),
     })
 }
