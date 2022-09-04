@@ -38,7 +38,7 @@ impl Authenticator {
             Err(err) => {
                 warn!("Error while authenticating postgres connection: {:?}", err);
 
-                let _ = PostgresBackendMessage::error_msg(format!("Error: {}", err))
+                let _ = PostgresBackendMessage::error_msg(format!("{}", err))
                     .write(client)
                     .await;
 
@@ -280,7 +280,7 @@ mod tests {
             let res = PostgresBackendMessage::read(&mut client).await.unwrap();
             assert_eq!(
                 res,
-                PostgresBackendMessage::error_msg("Error: User 'invalid' does not exist")
+                PostgresBackendMessage::error_msg("User 'invalid' does not exist")
             )
         });
 
@@ -332,7 +332,7 @@ mod tests {
             let res = PostgresBackendMessage::read(&mut client).await.unwrap();
             assert_eq!(
                 res,
-                PostgresBackendMessage::error_msg("Error: Incorrect password")
+                PostgresBackendMessage::error_msg("Incorrect password")
             )
         });
 
@@ -430,7 +430,7 @@ mod tests {
             let res = PostgresBackendMessage::read(&mut client).await.unwrap();
             assert_eq!(
                 res,
-                PostgresBackendMessage::error_msg("Error: Failed to decode JWT header")
+                PostgresBackendMessage::error_msg("Failed to decode JWT header")
             )
         });
 
@@ -475,7 +475,7 @@ mod tests {
             let res = PostgresBackendMessage::read(&mut client).await.unwrap();
             assert_eq!(
                 res,
-                PostgresBackendMessage::error_msg("Error: Must provide claim 'scope'")
+                PostgresBackendMessage::error_msg("Must provide claim 'scope'")
             )
         });
 

@@ -163,7 +163,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_postgres_connection_pool_new() {
-        let handle = tokio::runtime::Handle::try_current().unwrap();
+        let handle = tokio::runtime::Handle::current();
         let conf = test_pg_config("new");
         let pool = LlPostgresConnectionPool::new(
             handle,
@@ -183,7 +183,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_postgres_connection_pool_get_without_server() {
-        let handle = tokio::runtime::Handle::try_current().unwrap();
+        let handle = tokio::runtime::Handle::current();
         let conf = test_pg_config("down");
         let pool = LlPostgresConnectionPool::new(
             handle,
@@ -202,7 +202,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_postgres_connection_pool_with_running_server() {
-        let handle = tokio::runtime::Handle::try_current().unwrap();
+        let handle = tokio::runtime::Handle::current();
         ansilo_logging::init_for_tests();
         let conf = test_pg_config("up");
         PostgresInitDb::reset(conf).unwrap();

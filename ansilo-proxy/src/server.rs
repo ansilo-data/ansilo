@@ -136,7 +136,12 @@ impl ProxyListener {
                 }
             };
 
-            tokio::spawn(Connection::new(self.conf, con).handle());
+            let conf = self.conf;
+            tokio::spawn(async move {
+                if let Err(err) = Connection::new(conf, con).handle().await {
+                    warn!("Error while handling connection: {:?}", err)
+                }
+            });
         }
     }
 }

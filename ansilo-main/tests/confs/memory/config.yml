@@ -7,6 +7,8 @@ auth:
   providers:
 
   users:
+    - username: app
+      password: pass
 
 entities:
   - id: animals

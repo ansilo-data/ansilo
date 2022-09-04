@@ -1,6 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use ansilo_core::err::{bail, Result};
+use ansilo_logging::warn;
 use deadpool::managed::Object;
 use tokio::runtime::Handle;
 
@@ -59,10 +60,16 @@ impl MultiUserPostgresConnectionPool {
     pub async fn acquire(&self, username: &str) -> Result<Object<LlPostgresConnectionManager>> {
         let pool = match self.pools.get(username) {
             Some(pool) => pool,
-            None => bail!(
-                "User '{}' has not been configured in the connecton pool",
-                username
-            ),
+            None => {
+                warn!(
+                    "User '{}' has not been configured in the connecton pool",
+                    username
+                );
+                bail!(
+                    "User '{}' has not been configured in the connecton pool",
+                    username
+                )
+            }
         };
 
         pool.acquire().await
@@ -96,7 +103,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_postgres_connection_pool_new() {
-        let handle = tokio::runtime::Handle::try_current().unwrap();
+        let handle = tokio::runtime::Handle::current();
         let conf = test_pg_config("new");
         let pool = MultiUserPostgresConnectionPool::new(
             handle,

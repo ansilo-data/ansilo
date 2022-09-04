@@ -168,6 +168,7 @@ impl LlPostgresConnection {
                         PostgresBackendMessageTag::CommandComplete,
                         PostgresBackendMessageTag::RowDescription,
                         PostgresBackendMessageTag::DataRow,
+                        PostgresBackendMessageTag::ParameterStatus,
                         PostgresBackendMessageTag::NoticeResponse,
                     ]
                     .contains(&msg.tag()?) =>

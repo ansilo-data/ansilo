@@ -1,5 +1,6 @@
 use ansilo_core::{config::CustomAuthProviderConfig, err::Result};
 
+// TODO: implement
 pub struct CustomAuthProvider {
     _conf: &'static CustomAuthProviderConfig,
 }
