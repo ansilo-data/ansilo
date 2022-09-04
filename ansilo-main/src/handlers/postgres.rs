@@ -260,8 +260,8 @@ impl PostgresConnectionHandler {
 mod tests {
     use std::path::PathBuf;
 
-    use ansilo_auth::ctx::{AuthContext, PasswordAuthContext, ProviderAuthContext};
     use ansilo_core::{
+        auth::{AuthContext, PasswordAuthContext, ProviderAuthContext},
         config::{AuthConfig, PasswordUserConfig, UserConfig, UserTypeOptions},
         err::Error,
     };
@@ -419,8 +419,9 @@ mod tests {
                     .await?;
                 tokio::spawn(con);
 
-                let json: String = client.query_one("SELECT auth_context()", &[]).await?.get(0);
-                let ctx: AuthContext = serde_json::from_str(&json)?;
+                let json: serde_json::Value =
+                    client.query_one("SELECT auth_context()", &[]).await?.get(0);
+                let ctx: AuthContext = serde_json::from_value(json)?;
 
                 Result::<_, Error>::Ok(ctx)
             };
@@ -447,8 +448,9 @@ mod tests {
                     .await?;
                 tokio::spawn(con);
 
-                let json: String = client.query_one("SELECT auth_context()", &[]).await?.get(0);
-                let ctx: AuthContext = serde_json::from_str(&json)?;
+                let json: serde_json::Value =
+                    client.query_one("SELECT auth_context()", &[]).await?.get(0);
+                let ctx: AuthContext = serde_json::from_value(json)?;
 
                 Result::<_, Error>::Ok(ctx)
             };

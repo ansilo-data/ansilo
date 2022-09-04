@@ -3,10 +3,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
 /// Data associated to an authenticated user session
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct AuthContext {
     /// The authenticate user
     pub username: String,
@@ -37,7 +38,7 @@ impl AuthContext {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Encode, Decode)]
 #[serde(tag = "type")]
 pub enum ProviderAuthContext {
     #[serde(rename = "password")]
@@ -50,30 +51,33 @@ pub enum ProviderAuthContext {
     Custom(CustomAuthContext),
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default, Encode, Decode)]
 pub struct PasswordAuthContext {
     // Currently no context for password auth
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct JwtAuthContext {
     /// The JWT token itself
     pub raw_token: String,
     /// The decoded token header
-    pub header: jsonwebtoken::Header,
+    #[bincode(with_serde)]
+    pub header: serde_json::Value,
     /// The decoded token claims
+    #[bincode(with_serde)]
     pub claims: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct SamlAuthContext {
     /// The SAML XML itself
     pub raw_saml: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct CustomAuthContext {
     /// Context returned from the custom provider
     #[serde(flatten)]
+    #[bincode(with_serde)]
     pub data: serde_json::Value,
 }

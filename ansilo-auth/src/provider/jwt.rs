@@ -6,6 +6,7 @@ use std::{
 };
 
 use ansilo_core::{
+    auth::JwtAuthContext,
     config::{JwtAuthProviderConfig, JwtUserConfig},
     err::{bail, ensure, Context, Error, Result},
 };
@@ -14,7 +15,7 @@ use jsonwebkey::KeyUse;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, TokenData, Validation};
 use serde::Deserialize;
 
-use crate::{ctx::JwtAuthContext, provider::check::validate_jwt_claim};
+use crate::provider::check::validate_jwt_claim;
 
 /// Used for validating JWT tokens.
 pub struct JwtAuthProvider {
@@ -99,6 +100,8 @@ impl JwtAuthProvider {
             let actual = decoded_token.claims.get(claim);
             validate_jwt_claim(claim, actual, check)?;
         }
+
+        let header = serde_json::to_value(header).context("Failed to serialise token header")?;
 
         // Token verified and passes checks
         Ok(JwtAuthContext {
@@ -393,8 +396,10 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
         let ctx = provider.authenticate(&user, &token).unwrap();
 
         assert_eq!(ctx.raw_token, token);
-        assert_eq!(ctx.header, header);
-        assert_eq!(ctx.header, header);
+        assert_eq!(
+            ctx.header.as_object().unwrap()["alg"],
+            Value::String("RS512".into())
+        );
         assert_eq!(ctx.claims.get("sub"), Some(&Value::String("foo".into())));
         assert_eq!(ctx.claims.get("exp"), Some(&Value::Number(exp.into())));
 
@@ -433,8 +438,10 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
         let ctx = provider.authenticate(&user, &token).unwrap();
 
         assert_eq!(ctx.raw_token, token);
-        assert_eq!(ctx.header, header);
-        assert_eq!(ctx.header, header);
+        assert_eq!(
+            ctx.header.as_object().unwrap()["alg"],
+            Value::String("ES256".into())
+        );
         assert_eq!(ctx.claims.get("sub"), Some(&Value::String("foo".into())));
         assert_eq!(ctx.claims.get("exp"), Some(&Value::Number(exp.into())));
 
@@ -473,8 +480,10 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
         let ctx = provider.authenticate(&user, &token).unwrap();
 
         assert_eq!(ctx.raw_token, token);
-        assert_eq!(ctx.header, header);
-        assert_eq!(ctx.header, header);
+        assert_eq!(
+            ctx.header.as_object().unwrap()["alg"],
+            Value::String("EdDSA".into())
+        );
         assert_eq!(ctx.claims.get("sub"), Some(&Value::String("foo".into())));
         assert_eq!(ctx.claims.get("exp"), Some(&Value::Number(exp.into())));
 
@@ -511,8 +520,10 @@ MCowBQYDK2VwAyEAUOxZ1ei26f974AmcJc9sSe+sEtApcXqYgu+cGBoC7jw=
         let ctx = provider.authenticate(&user, &token).unwrap();
 
         assert_eq!(ctx.raw_token, token);
-        assert_eq!(ctx.header, header);
-        assert_eq!(ctx.header, header);
+        assert_eq!(
+            ctx.header.as_object().unwrap()["alg"],
+            Value::String("RS512".into())
+        );
         assert_eq!(ctx.claims.get("sub"), Some(&Value::String("foo".into())));
         assert_eq!(ctx.claims.get("exp"), Some(&Value::Number(exp.into())));
     }

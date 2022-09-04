@@ -17,7 +17,7 @@ use pgx::{
 };
 
 use crate::{
-    auth::ctx::AuthContext,
+    auth::ctx::AuthContextState,
     fdw::ctx::{FdwContext, FdwGlobalContext},
     sqlil::get_entity_id_from_foreign_table,
 };
@@ -141,7 +141,7 @@ unsafe fn get_connection(opts: ServerOptions) -> Result<Arc<FdwIpcConnection>> {
 
     // Try authenticated using the current authentication token
     let auth = AuthDataSource::new(
-        AuthContext::get().map(|c| c.context).unwrap_or_default(),
+        AuthContextState::get().map(|c| c.context),
         &opts.data_source,
     );
     let response = client

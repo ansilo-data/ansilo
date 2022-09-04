@@ -1,4 +1,8 @@
 use ansilo_core::{
+    auth::{
+        AuthContext, CustomAuthContext, JwtAuthContext, PasswordAuthContext, ProviderAuthContext,
+        SamlAuthContext,
+    },
     config::{
         CustomUserConfig, JwtUserConfig, PasswordUserConfig, SamlUserConfig, UserTypeOptions,
     },
@@ -13,10 +17,6 @@ use ansilo_proxy::stream::IOStream;
 use rand::Rng;
 
 use crate::{
-    ctx::{
-        AuthContext, CustomAuthContext, JwtAuthContext, PasswordAuthContext, ProviderAuthContext,
-        SamlAuthContext,
-    },
     provider::{
         custom::CustomAuthProvider, jwt::JwtAuthProvider, password::PasswordAuthProvider,
         saml::SamlAuthProvider, AuthProvider,
@@ -199,6 +199,7 @@ mod tests {
     use ansilo_proxy::stream::Stream;
     use jsonwebtoken::{Algorithm, EncodingKey, Header};
     use md5::{Digest, Md5};
+    use pretty_assertions::assert_eq;
     use tokio::net::UnixStream;
 
     use super::*;
@@ -330,10 +331,7 @@ mod tests {
 
             // should error
             let res = PostgresBackendMessage::read(&mut client).await.unwrap();
-            assert_eq!(
-                res,
-                PostgresBackendMessage::error_msg("Incorrect password")
-            )
+            assert_eq!(res, PostgresBackendMessage::error_msg("Incorrect password"))
         });
 
         auth_res.unwrap_err();
@@ -532,7 +530,14 @@ mod tests {
             ctx.more,
             ProviderAuthContext::Jwt(JwtAuthContext {
                 raw_token,
-                header: Header::new(Algorithm::RS512),
+                header: serde_json::Value::Object(
+                    [
+                        ("alg".to_string(), serde_json::Value::String("RS512".into())),
+                        ("typ".into(), serde_json::Value::String("JWT".into()))
+                    ]
+                    .into_iter()
+                    .collect()
+                ),
                 claims: [
                     (
                         "scope".into(),

@@ -5,6 +5,7 @@ pub use ansilo_connectors_base::interface::{
 };
 
 use ansilo_core::{
+    auth::AuthContext,
     config::EntityConfig,
     data::DataType,
     sqlil::{self, EntityId},
@@ -71,15 +72,15 @@ pub enum ClientQueryMessage {
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub struct AuthDataSource {
     /// The authentication context
-    pub context: String,
+    pub context: Option<AuthContext>,
     /// The data source id
     pub data_source_id: String,
 }
 
 impl AuthDataSource {
-    pub fn new(context: impl Into<String>, data_source_id: impl Into<String>) -> Self {
+    pub fn new(context: Option<AuthContext>, data_source_id: impl Into<String>) -> Self {
         Self {
-            context: context.into(),
+            context,
             data_source_id: data_source_id.into(),
         }
     }

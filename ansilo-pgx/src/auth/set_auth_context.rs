@@ -1,8 +1,9 @@
+use ansilo_core::{auth::AuthContext, err::Context};
 use pgx::*;
 
-use crate::auth::ctx::AuthContextState;
+use crate::auth::ctx::CurrentAuthContext;
 
-use super::ctx::AuthContext;
+use super::ctx::AuthContextState;
 
 extension_sql!(
     r#"
@@ -22,19 +23,27 @@ extension_sql!(
 fn ansilo_set_auth_context(context: String, reset_nonce: String) -> String {
     info!("Requested set auth context to '{}'", context.clone());
 
-    assert!(AuthContext::get().is_none(), "Already in auth context");
+    assert!(AuthContextState::get().is_none(), "Already in auth context");
 
     if unsafe { pg_sys::IsTransactionBlock() } {
         panic!("Cannot change auth context in transaction");
     }
+
+    let parsed: serde_json::Value = serde_json::from_str(&context)
+        .context("Failed to parse auth context as json")
+        .unwrap();
+    let context: AuthContext = serde_json::from_value(parsed.clone())
+        .context("Failed to parse auth context json structure")
+        .unwrap();
 
     assert!(
         reset_nonce.len() >= 16,
         "Nonce must be at least 16 bytes long"
     );
 
-    AuthContext::update(AuthContext::Set(AuthContextState {
+    AuthContextState::update(AuthContextState::Set(CurrentAuthContext {
         context,
+        parsed,
         reset_nonce,
     }));
 
@@ -58,6 +67,12 @@ mod tests {
     }
 
     #[pg_test]
+    fn test_set_auth_context_invalid_json() {
+        catch_unwind(|| ansilo_set_auth_context("not valid json".into(), "123456789012345".into()))
+            .unwrap_err();
+    }
+
+    #[pg_test]
     fn test_set_auth_context_valid() {
         let (mut client, _) = pgx_tests::client();
 
@@ -65,7 +80,7 @@ mod tests {
             .batch_execute(
                 r#"
             DO $$BEGIN
-               ASSERT __ansilo_auth.ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+               ASSERT __ansilo_auth.ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456') = 'OK';
             END$$
         "#,
             )
@@ -80,14 +95,14 @@ mod tests {
             .batch_execute(
                 r#"
             DO $$BEGIN
-                ASSERT __ansilo_auth.ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+                ASSERT __ansilo_auth.ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456') = 'OK';
             END$$
             "#,
             )
             .unwrap();
 
         client
-            .batch_execute(r#"SELECT ansilo_set_auth_context('test', '1234567890123456');"#)
+            .batch_execute(r#"SELECT ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456');"#)
             .unwrap_err();
     }
 
@@ -96,7 +111,7 @@ mod tests {
         let (mut client, _) = pgx_tests::client();
         let mut t = client.transaction().unwrap();
 
-        t.batch_execute(r#"SELECT ansilo_set_auth_context('test', '1234567890123456');"#)
+        t.batch_execute(r#"SELECT ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456');"#)
             .unwrap_err();
     }
 }

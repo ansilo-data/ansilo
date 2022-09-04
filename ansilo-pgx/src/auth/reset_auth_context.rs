@@ -1,7 +1,7 @@
 use pgx::*;
 use subtle::ConstantTimeEq;
 
-use super::ctx::AuthContext;
+use super::ctx::AuthContextState;
 
 extension_sql!(
     r#"
@@ -21,13 +21,13 @@ extension_sql!(
 fn ansilo_reset_auth_context(reset_nonce: String) -> String {
     info!("Requested to reset auth context");
 
-    assert!(AuthContext::get().is_some(), "Not in auth context");
+    assert!(AuthContextState::get().is_some(), "Not in auth context");
 
     if unsafe { pg_sys::IsTransactionBlock() } {
         panic!("Cannot change auth context in transaction");
     }
 
-    let context = AuthContext::get().unwrap();
+    let context = AuthContextState::get().unwrap();
 
     if context
         .reset_nonce
@@ -39,7 +39,7 @@ fn ansilo_reset_auth_context(reset_nonce: String) -> String {
         FATAL!("Invalid reset nonce when attempting to reset auth context, aborting process to prevent tampering");
     }
 
-    AuthContext::update(AuthContext::None);
+    AuthContextState::update(AuthContextState::None);
 
     info!("Auth context reset");
 
@@ -66,7 +66,7 @@ mod tests {
             .batch_execute(
                 r#"
             DO $$BEGIN
-               ASSERT __ansilo_auth.ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+               ASSERT __ansilo_auth.ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456') = 'OK';
             END$$
         "#,
             )
@@ -92,7 +92,7 @@ mod tests {
                 .batch_execute(
                     r#"
                     DO $$BEGIN
-                    ASSERT __ansilo_auth.ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+                    ASSERT __ansilo_auth.ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456') = 'OK';
                     ASSERT __ansilo_auth.ansilo_reset_auth_context('1234567890123456') = 'OK';
                     END$$
                 "#,
@@ -109,7 +109,7 @@ mod tests {
             .batch_execute(
                 r#"
             DO $$BEGIN
-               ASSERT __ansilo_auth.ansilo_set_auth_context('test', '1234567890123456') = 'OK';
+               ASSERT __ansilo_auth.ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456') = 'OK';
             END$$
         "#,
             )
@@ -117,7 +117,7 @@ mod tests {
 
         let mut t = client.transaction().unwrap();
 
-        t.batch_execute(r#"SELECT ansilo_reset_auth_context('test', '1234567890123456');"#)
+        t.batch_execute(r#"SELECT ansilo_reset_auth_context('1234567890123456');"#)
             .unwrap_err();
     }
 }

@@ -21,5 +21,6 @@ rand = "0.8"
 hex = "0.4"
 
 [dev-dependencies]
+pretty_assertions = "*"
 tempfile = "3.3"
 tokio = "1.20"

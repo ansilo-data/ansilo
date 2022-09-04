@@ -1,11 +1,9 @@
 use ansilo_core::{
     config::PasswordUserConfig,
-    err::{bail, Result},
+    err::{bail, Result}, auth::PasswordAuthContext,
 };
 use md5::{Digest, Md5};
 use subtle::ConstantTimeEq;
-
-use crate::ctx::PasswordAuthContext;
 
 /// Used for validating passwords
 ///

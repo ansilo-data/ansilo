@@ -381,7 +381,7 @@ mod tests {
     fn send_auth_token(client: &mut IpcClientChannel, data_source_id: &'static str) {
         let res = client
             .send(ClientMessage::AuthDataSource(AuthDataSource::new(
-                "TOKEN",
+                None,
                 data_source_id,
             )))
             .unwrap();
@@ -402,7 +402,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::AuthDataSource(AuthDataSource::new(
-                "TOKEN",
+                None,
                 "invalid_id",
             )))
             .unwrap();

@@ -427,7 +427,9 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             ),
         };
 
-        handle.flush().context("Failed to flush query parameter buffer")?;
+        handle
+            .flush()
+            .context("Failed to flush query parameter buffer")?;
         let result_set = handle.0.execute()?;
         let row_structure = result_set.get_structure()?;
 
@@ -920,7 +922,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::AuthDataSource(AuthDataSource::new(
-                "TOKEN",
+                None,
                 "DATA_SOURCE",
             )))
             .unwrap();

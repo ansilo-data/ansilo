@@ -1,14 +1,13 @@
 use pgx::*;
 
-use super::ctx::AuthContext;
+use super::ctx::AuthContextState;
 
 #[pg_extern(stable)]
-fn auth_context() -> String {
-    assert!(AuthContext::get().is_some(), "Not in auth context");
-
-    let context = AuthContext::get().unwrap();
-
-    context.context
+fn auth_context() -> Option<JsonB> {
+    match AuthContextState::get() {
+        Some(context) => Some(JsonB(context.parsed)),
+        None => None,
+    }
 }
 
 #[cfg(any(test, feature = "pg_test"))]
@@ -19,8 +18,8 @@ mod tests {
     use super::*;
 
     #[pg_test]
-    fn test_get_auth_context_fails_when_not_in_context() {
-        catch_unwind(|| auth_context()).unwrap_err();
+    fn test_get_auth_context_returns_null_when_not_in_context() {
+        assert!(auth_context().is_none());
     }
 
     #[pg_test]
@@ -31,8 +30,8 @@ mod tests {
             .batch_execute(
                 r#"
                     DO $$BEGIN
-                    ASSERT __ansilo_auth.ansilo_set_auth_context('test123', '1234567890123456') = 'OK';
-                    ASSERT auth_context() = 'test123';
+                    ASSERT __ansilo_auth.ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456') = 'OK';
+                    ASSERT auth_context() = '{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}';
                     END$$
                 "#,
             )
@@ -47,16 +46,13 @@ mod tests {
             .batch_execute(
                 r#"
                     DO $$BEGIN
-                    ASSERT __ansilo_auth.ansilo_set_auth_context('test123', '1234567890123456') = 'OK';
-                    ASSERT auth_context() = 'test123';
+                    ASSERT __ansilo_auth.ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456') = 'OK';
+                    ASSERT auth_context() = '{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}';
                     ASSERT __ansilo_auth.ansilo_reset_auth_context('1234567890123456') = 'OK';
+                    ASSERT auth_context() IS NULL;
                     END$$
                 "#,
             )
             .unwrap();
-
-        client
-            .batch_execute(r#"SELECT auth_context();"#)
-            .unwrap_err();
     }
 }

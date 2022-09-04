@@ -179,7 +179,7 @@ mod tests {
                 .recv(|req| {
                     assert_eq!(
                         req,
-                        ClientMessage::AuthDataSource(AuthDataSource::new("AUTH", "DATA_SOURCE"))
+                        ClientMessage::AuthDataSource(AuthDataSource::new(None, "DATA_SOURCE"))
                     );
                     Ok(Some(ServerMessage::AuthAccepted))
                 })
@@ -188,7 +188,7 @@ mod tests {
 
         let res = client
             .send(ClientMessage::AuthDataSource(AuthDataSource::new(
-                "AUTH",
+                None,
                 "DATA_SOURCE",
             )))
             .unwrap();

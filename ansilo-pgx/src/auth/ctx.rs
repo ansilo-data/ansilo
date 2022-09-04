@@ -1,30 +1,32 @@
 use std::sync::{Mutex, MutexGuard};
 
+use ansilo_core::auth::AuthContext;
 use lazy_static::lazy_static;
 
 /// Global state of additional authentication context
 #[derive(Clone, PartialEq)]
-pub enum AuthContext {
+pub enum AuthContextState {
     None,
-    Set(AuthContextState),
+    Set(CurrentAuthContext),
 }
 
 #[derive(Clone, PartialEq)]
-pub struct AuthContextState {
-    pub context: String,
+pub struct CurrentAuthContext {
+    pub context: AuthContext,
+    pub parsed: serde_json::Value,
     pub reset_nonce: String,
 }
 
 lazy_static! {
-    static ref AUTH_CONTEXT: Mutex<AuthContext> = Mutex::new(AuthContext::None);
+    static ref AUTH_CONTEXT: Mutex<AuthContextState> = Mutex::new(AuthContextState::None);
 }
 
-impl AuthContext {
+impl AuthContextState {
     fn lock<'a>() -> MutexGuard<'a, Self> {
         AUTH_CONTEXT.lock().expect("Failed to lock auth context")
     }
 
-    pub fn get() -> Option<AuthContextState> {
+    pub fn get() -> Option<CurrentAuthContext> {
         let ctx = Self::lock();
 
         match &*ctx {
