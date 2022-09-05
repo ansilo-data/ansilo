@@ -22,7 +22,7 @@ fn test_auto_increment() {
     let rows = client
         .execute(
             r#"
-            INSERT INTO "db.t006__auto_increment" 
+            INSERT INTO "t006__auto_increment" 
             (data) VALUES ('value'), ('another')
         "#,
             &[],
@@ -104,10 +104,10 @@ fn test_default() {
     client
         .batch_execute(
             r#"
-            INSERT INTO "db.t006__default" 
+            INSERT INTO "t006__default" 
             (data) VALUES ('first');
 
-            INSERT INTO "db.t006__default" 
+            INSERT INTO "t006__default" 
             (id, data) VALUES (123, 'second');
         "#,
         )

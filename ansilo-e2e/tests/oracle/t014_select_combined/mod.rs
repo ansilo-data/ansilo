@@ -19,8 +19,8 @@ fn test() {
         .query(
             r#"
             SELECT h."NAME", COUNT(*) as pets 
-            FROM "ANSILO_ADMIN.T014__PEOPLE" h
-            INNER JOIN "ANSILO_ADMIN.T014__PETS" p ON p."OWNER_ID" = h."ID"
+            FROM "T014__PEOPLE" h
+            INNER JOIN "T014__PETS" p ON p."OWNER_ID" = h."ID"
             WHERE p."NAME" != 'XXX'
             GROUP BY h."NAME"
             ORDER BY pets DESC

@@ -12,7 +12,7 @@ fn test() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let rows = client.query("SELECT * FROM \"SYS.DUAL\"", &[]).unwrap();
+    let rows = client.query("SELECT * FROM \"DUAL\"", &[]).unwrap();
 
     assert_eq!(rows.len(), 1);
     assert_eq!(

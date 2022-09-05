@@ -25,7 +25,7 @@ fn test_insert_select_local_values() {
     let rows = client
         .execute(
             r#"
-            INSERT INTO "ANSILO_ADMIN.T009__TEST_TARGET" (
+            INSERT INTO "T009__TEST_TARGET" (
                 "ID", "NAME", "SOURCE", "CREATED_AT"
             )
             SELECT 1, 'Jerry', 'SELECT', TIMESTAMP WITH TIME ZONE '1999-01-15 11:00:00 -5:00'
@@ -142,11 +142,11 @@ fn test_insert_select_from_remote_table() {
     let rows = client
         .execute(
             r#"
-            INSERT INTO "ANSILO_ADMIN.T009__TEST_TARGET" (
+            INSERT INTO "T009__TEST_TARGET" (
                 "ID", "NAME", "SOURCE", "CREATED_AT"
             )
             SELECT "ID", "NAME", 'REMOTE', TIMESTAMP WITH TIME ZONE '1999-01-15 11:00:00 +00:00'
-            FROM "ANSILO_ADMIN.T009__TEST_SOURCE"
+            FROM "T009__TEST_SOURCE"
         "#,
             &[],
         )

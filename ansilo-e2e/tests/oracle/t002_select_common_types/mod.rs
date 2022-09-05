@@ -18,7 +18,7 @@ fn test() {
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let rows = client
-        .query("SELECT * FROM \"ANSILO_ADMIN.T002__TEST_TAB\"", &[])
+        .query("SELECT * FROM \"T002__TEST_TAB\"", &[])
         .unwrap();
 
     assert_eq!(rows.len(), 1);

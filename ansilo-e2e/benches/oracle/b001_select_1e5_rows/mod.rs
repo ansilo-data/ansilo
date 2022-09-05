@@ -22,7 +22,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
 fn bench(client: &mut Client) {
     let rows = client
-        .query("SELECT * FROM \"ANSILO_ADMIN.B001__TEST_TAB\"", &[])
+        .query("SELECT * FROM \"B001__TEST_TAB\"", &[])
         .unwrap();
 
     assert_eq!(rows.len(), 100_000);

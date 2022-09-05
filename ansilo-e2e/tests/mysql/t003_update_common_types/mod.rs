@@ -25,7 +25,7 @@ fn test() {
     let _rows = client
         .execute(
             r#"
-            UPDATE "db.t003__test_tab"
+            UPDATE "t003__test_tab"
             SET
                 "col_char" = 'A',
                 "col_nchar" = '🔥',

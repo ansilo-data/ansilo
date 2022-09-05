@@ -19,7 +19,7 @@ fn test_select_remote_group_by_with_count_aggregation() {
         .query(
             r#"
             SELECT "COUNTRY", COUNT(*) 
-            FROM "ANSILO_ADMIN.T010__TEST_TAB"
+            FROM "T010__TEST_TAB"
             GROUP BY "COUNTRY"
             "#,
             &[],
@@ -66,7 +66,7 @@ fn test_select_local_group_by_with_count_aggregation() {
         .query(
             r#"
             SELECT REVERSE("COUNTRY"), COUNT(*) 
-            FROM "ANSILO_ADMIN.T010__TEST_TAB"
+            FROM "T010__TEST_TAB"
             GROUP BY REVERSE("COUNTRY")
             "#,
             &[],

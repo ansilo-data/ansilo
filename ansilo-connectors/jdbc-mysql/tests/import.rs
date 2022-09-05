@@ -69,7 +69,7 @@ fn test_mysql_jdbc_discover_entities_with_filter_wildcard() {
 
     assert_eq!(
         entities.iter().map(|i| i.id.clone()).collect_vec(),
-        vec!["db.test_import_wildcard"]
+        vec!["test_import_wildcard"]
     )
 }
 
@@ -109,7 +109,7 @@ fn test_mysql_jdbc_discover_entities_varchar_type_mapping() {
     assert_eq!(
         entities[0].clone(),
         EntityConfig::minimal(
-            "db.import_varchar_types",
+            "import_varchar_types",
             vec![
                 EntityAttributeConfig::nullable(
                     "VARCHAR",
@@ -179,7 +179,7 @@ fn test_mysql_jdbc_discover_entities_number_type_mapping() {
     assert_eq!(
         entities[0].clone(),
         EntityConfig::minimal(
-            "db.import_number_types",
+            "import_number_types",
             vec![
                 EntityAttributeConfig::nullable("INT8", DataType::Int8),
                 EntityAttributeConfig::nullable("INT16", DataType::Int16),

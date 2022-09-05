@@ -17,7 +17,7 @@ fn test() {
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let _rows = client
-        .execute(r#"DELETE FROM "db.t004__test_tab""#, &[])
+        .execute(r#"DELETE FROM "t004__test_tab""#, &[])
         .unwrap();
 
     // TODO: implement row count reporting for update / delete

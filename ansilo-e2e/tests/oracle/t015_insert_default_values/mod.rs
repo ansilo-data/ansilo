@@ -21,7 +21,7 @@ fn test_generated_always() {
     let rows = client
         .execute(
             r#"
-            INSERT INTO "ANSILO_ADMIN.T015__GENERATED_ALWAYS" (
+            INSERT INTO "T015__GENERATED_ALWAYS" (
                 "DATA"
             ) VALUES (
                 'value'
@@ -83,10 +83,10 @@ fn test_generated_default() {
     client
         .batch_execute(
             r#"
-            INSERT INTO "ANSILO_ADMIN.T015__GENERATED_DEFAULT" 
+            INSERT INTO "T015__GENERATED_DEFAULT" 
             ("DATA") VALUES ('first');
 
-            INSERT INTO "ANSILO_ADMIN.T015__GENERATED_DEFAULT" 
+            INSERT INTO "T015__GENERATED_DEFAULT" 
             ("ID", "DATA") VALUES (123, 'second');
         "#,
         )
@@ -167,10 +167,10 @@ fn test_default() {
     client
         .batch_execute(
             r#"
-            INSERT INTO "ANSILO_ADMIN.T015__DEFAULT" 
+            INSERT INTO "T015__DEFAULT" 
             ("DATA") VALUES ('first');
 
-            INSERT INTO "ANSILO_ADMIN.T015__DEFAULT" 
+            INSERT INTO "T015__DEFAULT" 
             ("ID", "DATA") VALUES (123, 'second');
         "#,
         )

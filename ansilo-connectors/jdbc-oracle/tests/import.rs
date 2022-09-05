@@ -32,16 +32,12 @@ fn test_oracle_jdbc_discover_entities() {
         "Oracle database should have many default tables"
     );
 
-    let dual = entities
-        .iter()
-        .find(|i| i.id == "SYS.DUAL")
-        .unwrap()
-        .clone();
+    let dual = entities.iter().find(|i| i.id == "DUAL").unwrap().clone();
 
     assert_eq!(
         dual,
         EntityConfig::minimal(
-            "SYS.DUAL",
+            "DUAL",
             vec![EntityAttributeConfig::new(
                 "DUMMY".into(),
                 None,
@@ -81,7 +77,7 @@ fn test_oracle_jdbc_discover_entities_with_filter_for_single_table() {
     assert_eq!(
         dual,
         EntityConfig::minimal(
-            "SYS.DUAL",
+            "DUAL",
             vec![EntityAttributeConfig::new(
                 "DUMMY".into(),
                 None,
@@ -112,7 +108,10 @@ fn test_oracle_jdbc_discover_entities_with_filter_wildcard() {
 
     assert!(entities.len() > 0);
 
-    assert!(entities.iter().all(|e| e.id.starts_with("SYS.")));
+    assert!(entities
+        .iter()
+        .all(|e| e.source.options.as_mapping().unwrap()["owner_name"]
+            == ansilo_core::config::Value::String("SYS".into())));
 }
 
 #[test]
@@ -158,7 +157,7 @@ fn test_oracle_jdbc_discover_entities_number_type_mapping() {
     assert_eq!(
         entities[0].clone(),
         EntityConfig::minimal(
-            "ANSILO_ADMIN.IMPORT_NUMBER_TYPES",
+            "IMPORT_NUMBER_TYPES",
             vec![
                 EntityAttributeConfig::nullable("INT8", DataType::Int8),
                 EntityAttributeConfig::nullable("INT16", DataType::Int16),

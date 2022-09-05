@@ -25,7 +25,7 @@ fn test() {
     let _rows = client
         .execute(
             r#"
-            UPDATE "ANSILO_ADMIN.T004__TEST_TAB"
+            UPDATE "T004__TEST_TAB"
             SET
                 "COL_CHAR" = 'A',
                 "COL_NCHAR" = '🔥',

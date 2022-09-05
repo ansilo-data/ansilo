@@ -19,7 +19,7 @@ fn test_select_remote_order_by() {
         .query(
             r#"
             SELECT "ID"::int, "COUNTRY", "NAME"
-            FROM "ANSILO_ADMIN.T011__TEST_TAB"
+            FROM "T011__TEST_TAB"
             ORDER BY "COUNTRY", "NAME" DESC
             "#,
             &[],
@@ -75,7 +75,7 @@ fn test_select_local_order_by() {
         .query(
             r#"
             SELECT "ID"::int, REVERSE("COUNTRY"), REVERSE("NAME")
-            FROM "ANSILO_ADMIN.T011__TEST_TAB"
+            FROM "T011__TEST_TAB"
             ORDER BY REVERSE("COUNTRY"), REVERSE("NAME") DESC
             "#,
             &[],

@@ -99,7 +99,7 @@ pub(crate) fn parse_entity_config(
     cols: impl Iterator<Item = HashMap<String, DataValue>>,
 ) -> Result<EntityConfig> {
     Ok(EntityConfig::minimal(
-        format!("{}.{}", db.clone(), table.clone()),
+        table.clone(),
         cols.map(|c| {
             Ok(EntityAttributeConfig::new(
                 c["COLUMN_NAME"]

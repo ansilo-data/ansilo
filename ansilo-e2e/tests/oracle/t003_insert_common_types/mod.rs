@@ -25,7 +25,7 @@ fn test() {
     let rows = client
         .execute(
             r#"
-            INSERT INTO "ANSILO_ADMIN.T003__TEST_TAB" (
+            INSERT INTO "T003__TEST_TAB" (
                 "COL_CHAR",
                 "COL_NCHAR",
                 "COL_VARCHAR2",

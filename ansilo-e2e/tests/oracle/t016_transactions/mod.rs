@@ -22,7 +22,7 @@ fn test_transaction_commit() {
         .batch_execute(
             r#"
         BEGIN;
-        INSERT INTO "ANSILO_ADMIN.T016__TEST_TAB" ("DATA") VALUES ('value');
+        INSERT INTO "T016__TEST_TAB" ("DATA") VALUES ('value');
         COMMIT;
         "#,
         )
@@ -78,7 +78,7 @@ fn test_transaction_rollback() {
         .batch_execute(
             r#"
         BEGIN;
-        INSERT INTO "ANSILO_ADMIN.T016__TEST_TAB" ("DATA") VALUES ('value');
+        INSERT INTO "T016__TEST_TAB" ("DATA") VALUES ('value');
         ROLLBACK;
         "#,
         )
@@ -128,7 +128,7 @@ fn test_transaction_rollback_due_to_error() {
             r#"
         BEGIN;
 
-        INSERT INTO "ANSILO_ADMIN.T016__TEST_TAB" ("DATA") VALUES ('value');
+        INSERT INTO "T016__TEST_TAB" ("DATA") VALUES ('value');
 
         DO $$BEGIN
             RAISE EXCEPTION "An error occurred!";

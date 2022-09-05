@@ -22,7 +22,7 @@ fn test_transaction_commit() {
         .batch_execute(
             r#"
         BEGIN;
-        INSERT INTO "db.t007__test_tab" (data) VALUES ('value');
+        INSERT INTO "t007__test_tab" (data) VALUES ('value');
         COMMIT;
         "#,
         )
@@ -78,7 +78,7 @@ fn test_transaction_rollback() {
         .batch_execute(
             r#"
         BEGIN;
-        INSERT INTO "db.t007__test_tab" (data) VALUES ('value');
+        INSERT INTO "t007__test_tab" (data) VALUES ('value');
         ROLLBACK;
         "#,
         )
@@ -128,7 +128,7 @@ fn test_transaction_rollback_due_to_error() {
             r#"
         BEGIN;
 
-        INSERT INTO "db.t007__test_tab" (data) VALUES ('value');
+        INSERT INTO "t007__test_tab" (data) VALUES ('value');
 
         DO $$BEGIN
             RAISE EXCEPTION "An error occurred!";

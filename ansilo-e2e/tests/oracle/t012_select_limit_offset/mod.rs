@@ -19,7 +19,7 @@ fn test_select_remote_limit() {
         .query(
             r#"
             SELECT "ID"::int
-            FROM "ANSILO_ADMIN.T012__TEST_TAB"
+            FROM "T012__TEST_TAB"
             LIMIT 3
             "#,
             &[],
@@ -64,7 +64,7 @@ fn test_select_remote_offset() {
         .query(
             r#"
             SELECT "ID"::int
-            FROM "ANSILO_ADMIN.T012__TEST_TAB"
+            FROM "T012__TEST_TAB"
             OFFSET 4
             "#,
             &[],
@@ -109,7 +109,7 @@ fn test_select_limit_and_offset() {
         .query(
             r#"
             SELECT "ID"::int
-            FROM "ANSILO_ADMIN.T012__TEST_TAB"
+            FROM "T012__TEST_TAB"
             LIMIT 2 OFFSET 3
             "#,
             &[],

@@ -25,7 +25,7 @@ fn test() {
     let rows = client
         .execute(
             r#"
-            INSERT INTO "db.t002__test_tab" (
+            INSERT INTO "t002__test_tab" (
                 col_char,
                 col_nchar,
                 col_varchar,

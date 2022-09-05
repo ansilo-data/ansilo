@@ -19,8 +19,8 @@ fn test_select_remote_inner_join() {
         .query(
             r#"
             SELECT h."NAME", p."NAME"
-            FROM "ANSILO_ADMIN.T013__PEOPLE" h
-            INNER JOIN "ANSILO_ADMIN.T013__PETS" p ON h."ID" = p."OWNER_ID"
+            FROM "T013__PEOPLE" h
+            INNER JOIN "T013__PETS" p ON h."ID" = p."OWNER_ID"
             "#,
             &[],
         )
@@ -69,8 +69,8 @@ fn test_select_local_inner_join() {
         .query(
             r#"
             SELECT h."NAME", p."NAME"
-            FROM "ANSILO_ADMIN.T013__PEOPLE" h
-            INNER JOIN "ANSILO_ADMIN.T013__PETS" p ON MD5(h."ID"::text) = MD5(p."OWNER_ID"::text)
+            FROM "T013__PEOPLE" h
+            INNER JOIN "T013__PETS" p ON MD5(h."ID"::text) = MD5(p."OWNER_ID"::text)
             "#,
             &[],
         )
@@ -132,8 +132,8 @@ fn test_select_remote_left_join() {
         .query(
             r#"
             SELECT h."NAME", p."NAME"
-            FROM "ANSILO_ADMIN.T013__PEOPLE" h
-            LEFT JOIN "ANSILO_ADMIN.T013__PETS" p ON h."ID" = p."OWNER_ID"
+            FROM "T013__PEOPLE" h
+            LEFT JOIN "T013__PETS" p ON h."ID" = p."OWNER_ID"
             "#,
             &[],
         )
@@ -183,8 +183,8 @@ fn test_select_local_left_join() {
         .query(
             r#"
             SELECT h."NAME", p."NAME"
-            FROM "ANSILO_ADMIN.T013__PEOPLE" h
-            LEFT JOIN "ANSILO_ADMIN.T013__PETS" p ON MD5(h."ID"::text) = MD5(p."OWNER_ID"::text)
+            FROM "T013__PEOPLE" h
+            LEFT JOIN "T013__PETS" p ON MD5(h."ID"::text) = MD5(p."OWNER_ID"::text)
             "#,
             &[],
         )
@@ -247,8 +247,8 @@ fn test_select_remote_right_join() {
         .query(
             r#"
             SELECT h."NAME", p."NAME"
-            FROM "ANSILO_ADMIN.T013__PEOPLE" h
-            RIGHT JOIN "ANSILO_ADMIN.T013__PETS" p ON h."ID" = p."OWNER_ID"
+            FROM "T013__PEOPLE" h
+            RIGHT JOIN "T013__PETS" p ON h."ID" = p."OWNER_ID"
             "#,
             &[],
         )
@@ -298,8 +298,8 @@ fn test_select_local_right_join() {
         .query(
             r#"
             SELECT h."NAME", p."NAME"
-            FROM "ANSILO_ADMIN.T013__PEOPLE" h
-            RIGHT JOIN "ANSILO_ADMIN.T013__PETS" p ON MD5(h."ID"::text) = MD5(p."OWNER_ID"::text)
+            FROM "T013__PEOPLE" h
+            RIGHT JOIN "T013__PETS" p ON MD5(h."ID"::text) = MD5(p."OWNER_ID"::text)
             "#,
             &[],
         )
@@ -362,8 +362,8 @@ fn test_select_remote_full_join() {
         .query(
             r#"
             SELECT h."NAME", p."NAME"
-            FROM "ANSILO_ADMIN.T013__PEOPLE" h
-            FULL JOIN "ANSILO_ADMIN.T013__PETS" p ON h."ID" = p."OWNER_ID"
+            FROM "T013__PEOPLE" h
+            FULL JOIN "T013__PETS" p ON h."ID" = p."OWNER_ID"
             "#,
             &[],
         )
@@ -413,8 +413,8 @@ fn test_select_local_full_join() {
         .query(
             r#"
             SELECT h."NAME", p."NAME"
-            FROM "ANSILO_ADMIN.T013__PEOPLE" h
-            FULL JOIN "ANSILO_ADMIN.T013__PETS" p ON MD5(h."ID"::text) = MD5(p."OWNER_ID"::text)
+            FROM "T013__PEOPLE" h
+            FULL JOIN "T013__PETS" p ON MD5(h."ID"::text) = MD5(p."OWNER_ID"::text)
             "#,
             &[],
         )

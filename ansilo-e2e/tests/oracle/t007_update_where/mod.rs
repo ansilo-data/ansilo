@@ -21,7 +21,7 @@ fn test_update_where_remote() {
     let _rows = client
         .execute(
             r#"
-            UPDATE "ANSILO_ADMIN.T007__TEST_TAB"
+            UPDATE "T007__TEST_TAB"
             SET "NAME" = 'Jannet'
             WHERE "ID" = 2
         "#,
@@ -90,7 +90,7 @@ fn test_update_where_local() {
     let _rows = client
         .execute(
             r#"
-            UPDATE "ANSILO_ADMIN.T007__TEST_TAB"
+            UPDATE "T007__TEST_TAB"
             SET "NAME" = 'Johnny'
             WHERE MD5("ID"::text) = MD5('1')
         "#,

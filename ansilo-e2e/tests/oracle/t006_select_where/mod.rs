@@ -19,7 +19,7 @@ fn test_select_where_constant_string() {
     let rows = client
         .query(
             r#"
-            SELECT * FROM "ANSILO_ADMIN.T006__TEST_TAB"
+            SELECT * FROM "T006__TEST_TAB"
             WHERE "NAME" = 'John'
             "#,
             &[],
@@ -60,7 +60,7 @@ fn test_select_where_constant_string_none_matching() {
     let rows = client
         .query(
             r#"
-            SELECT * FROM "ANSILO_ADMIN.T006__TEST_TAB"
+            SELECT * FROM "T006__TEST_TAB"
             WHERE "NAME" = 'Unknown...'
             "#,
             &[],
@@ -100,7 +100,7 @@ fn test_select_where_param_prepared_statement() {
     let statement = client
         .prepare(
             r#"
-            SELECT * FROM "ANSILO_ADMIN.T006__TEST_TAB"
+            SELECT * FROM "T006__TEST_TAB"
             WHERE "NAME" = $1
             "#,
         )
@@ -152,7 +152,7 @@ fn test_select_where_local_condition() {
     let rows = client
         .query(
             r#"
-            SELECT * FROM "ANSILO_ADMIN.T006__TEST_TAB"
+            SELECT * FROM "T006__TEST_TAB"
             WHERE MD5("NAME") = MD5('Jane')
             "#,
             &[],
@@ -192,7 +192,7 @@ fn test_select_where_remote_and_local_condition() {
     let rows = client
         .query(
             r#"
-            SELECT * FROM "ANSILO_ADMIN.T006__TEST_TAB"
+            SELECT * FROM "T006__TEST_TAB"
             WHERE "NAME" != 'John'
             AND MD5("NAME") != MD5('Mary')
             "#,

@@ -17,7 +17,7 @@ fn test() {
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let rows = client
-        .query("SELECT * FROM \"db.t008__test_view\"", &[])
+        .query("SELECT * FROM \"t008__test_view\"", &[])
         .unwrap();
 
     assert_eq!(rows.len(), 1);
@@ -57,7 +57,7 @@ fn test_cannot_insert() {
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let err = client
-        .execute("INSERT INTO \"db.t008__test_view\" VALUES ('test')", &[])
+        .execute("INSERT INTO \"t008__test_view\" VALUES ('test')", &[])
         .err()
         .unwrap();
 
@@ -77,7 +77,7 @@ fn test_cannot_update() {
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let err = client
-        .execute("UPDATE \"db.t008__test_view\" SET col = 'test'", &[])
+        .execute("UPDATE \"t008__test_view\" SET col = 'test'", &[])
         .err()
         .unwrap();
 
@@ -97,7 +97,7 @@ fn test_cannot_delete() {
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let err = client
-        .execute("DELETE FROM \"db.t008__test_view\"", &[])
+        .execute("DELETE FROM \"t008__test_view\"", &[])
         .err()
         .unwrap();
 

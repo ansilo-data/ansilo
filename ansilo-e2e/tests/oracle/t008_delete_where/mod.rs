@@ -22,7 +22,7 @@ fn test_delete_where_remote() {
     let _rows = client
         .execute(
             r#"
-            DELETE FROM "ANSILO_ADMIN.T008__TEST_TAB"
+            DELETE FROM "T008__TEST_TAB"
             WHERE "ID" = 2
         "#,
             &[],
@@ -84,7 +84,7 @@ fn test_delete_where_local() {
     let _rows = client
         .execute(
             r#"
-            DELETE FROM "ANSILO_ADMIN.T008__TEST_TAB"
+            DELETE FROM "T008__TEST_TAB"
             WHERE MD5("ID"::text) = MD5('1')
         "#,
             &[],
