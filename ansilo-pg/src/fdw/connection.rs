@@ -106,7 +106,7 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
                             err.downcast_ref::<UnknownEntityError>().unwrap().0.clone(),
                         ))
                     }
-                    Err(err) => Some(ServerMessage::Error(format!("{}", err))),
+                    Err(err) => Some(ServerMessage::Error(format!("{:?}", err))),
                 };
 
                 Ok(response)

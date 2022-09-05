@@ -14,3 +14,5 @@ pub mod t013_select_joins;
 pub mod t014_select_combined;
 pub mod t015_insert_default_values;
 pub mod t016_transactions;
+pub mod t017_select_view;
+pub mod t018_select_mview;

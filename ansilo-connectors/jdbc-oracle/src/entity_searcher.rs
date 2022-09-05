@@ -47,13 +47,19 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
                     C.DATA_PRECISION,
                     C.DATA_SCALE,
                     C.COLUMN_ID
-                FROM ALL_TABLES T
+                FROM (
+                    SELECT T.OWNER, T.TABLE_NAME 
+                    FROM ALL_TABLES T
+                    WHERE T.TEMPORARY = 'N' AND T.NESTED = 'NO' AND T.DROPPED = 'NO'
+                    UNION
+                    SELECT T.OWNER, T.VIEW_NAME 
+                    FROM ALL_VIEWS T
+                    UNION
+                    SELECT T.OWNER, T.MVIEW_NAME 
+                    FROM ALL_MVIEWS T
+                ) T
                 INNER JOIN ALL_TAB_COLUMNS C ON T.OWNER = C.OWNER AND T.TABLE_NAME = C.TABLE_NAME
-                WHERE 1=1
-                AND (T.OWNER || '.' || T.TABLE_NAME) LIKE ?
-                AND T.TEMPORARY = 'N'
-                AND T.NESTED = 'NO'
-                AND T.DROPPED = 'NO'
+                WHERE (T.OWNER || '.' || T.TABLE_NAME) LIKE ?
                 ORDER BY T.OWNER, T.TABLE_NAME, C.COLUMN_ID
             "#,
                 vec![JdbcQueryParam::Constant(DataValue::Utf8String(

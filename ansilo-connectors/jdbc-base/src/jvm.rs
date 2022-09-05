@@ -1,8 +1,11 @@
 use std::{env, fs, path::PathBuf};
 
-use ansilo_core::err::{bail, Context, Result};
-use ansilo_logging::{debug, warn, info};
-use jni::{objects::JObject, InitArgsBuilder, JNIEnv, JNIVersion, JavaVM};
+use ansilo_core::err::{bail, Context, Error, Result};
+use ansilo_logging::{debug, info, warn};
+use jni::{
+    objects::{JObject, JString},
+    InitArgsBuilder, JNIEnv, JNIVersion, JavaVM,
+};
 
 // Global JVM instance
 lazy_static::lazy_static! {
@@ -170,11 +173,52 @@ impl Jvm {
             .exception_check()
             .context("Failed to check for exception")?
         {
+            let exception = env.exception_occurred();
+
             env.exception_describe()
                 .context("Failed to describe exception")?;
+
             env.exception_clear().context("Failed to clear exception")?;
 
-            bail!("Java exception occured")
+            match exception {
+                Ok(ex) => {
+                    let msg = self.with_local_frame(32, |env| {
+                        let param = env.auto_local(
+                            env.call_method(ex, "getMessage", "()Ljava/lang/String;", &[])?
+                                .l()
+                                .context("Failed to convert to object")?,
+                        );
+
+                        if let Err(_) | Ok(true) = env.exception_check() {
+                            bail!("Exception while converting exception to string");
+                        }
+
+                        let exception_msg =
+                            env.get_string(JString::from(param.as_obj())).map(|i| {
+                                cesu8::from_java_cesu8(i.to_bytes())
+                                    .unwrap_or_else(|_| String::from_utf8_lossy(i.to_bytes()))
+                                    .to_string()
+                            })?;
+
+                        Ok(exception_msg)
+                    });
+
+                    match msg {
+                        Ok(msg) => {
+                            return Err(Error::msg(msg)
+                                .context("Java exception occurred, review logs for full trace"))
+                        }
+                        Err(err) => {
+                            warn!("Error while converting java exception to string: {:?}", err);
+                        }
+                    }
+                }
+                Err(err) => {
+                    warn!("Error retreiving java exception to string: {:?}", err);
+                }
+            }
+
+            bail!("Unknown java exception occurred, review logs for more details");
         }
 
         Ok(())

@@ -55,9 +55,9 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
             .read_data_value()?
             .context("Unexpected empty result set")?;
 
-        let num_rows = match value {
-            DataValue::Null => None,
-            DataValue::UInt64(num) => Some(num),
+        let num_rows = match value.clone().try_coerce_into(&DataType::UInt64) {
+            Ok(DataValue::UInt64(num)) => Some(num),
+            _ if value.is_null() => None,
             _ => bail!("Unexpected data value returned: {:?}", value),
         };
 
@@ -75,8 +75,8 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
                 .read_data_value()?
                 .context("Unexpected empty result set")?;
 
-            match value {
-                DataValue::UInt64(num) => num,
+            match value.clone().try_coerce_into(&DataType::UInt64) {
+                Ok(DataValue::UInt64(num)) => num,
                 _ => bail!("Unexpected data value returned: {:?}", value),
             }
         } else {
