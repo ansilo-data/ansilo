@@ -12,5 +12,5 @@ Cargo.lock
 *.out
 old/
 tmp/
-perf.data
+perf.data*
 flamegraph.svg

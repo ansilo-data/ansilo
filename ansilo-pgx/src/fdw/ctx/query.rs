@@ -6,7 +6,7 @@ use ansilo_core::{
     sqlil,
 };
 use ansilo_pg::fdw::{
-    data::{LoggedQuery, QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
+    data::{DataWriter, LoggedQuery, QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
     proto::{
         ClientMessage, ClientQueryMessage, DeleteQueryOperation, InsertQueryOperation,
         OperationCost, QueryId, QueryInputStructure, QueryOperation, QueryOperationResult,
@@ -260,6 +260,54 @@ impl FdwQueryContext {
     pub fn restart_query(&mut self) -> Result<()> {
         let writer = self.query_writer.as_mut().context("Query not executed")?;
         writer.restart()?;
+
+        Ok(())
+    }
+
+    pub fn execute_batch(&mut self, data: Vec<Vec<(u32, DataValue)>>) -> Result<()> {
+        let mut reqs = vec![];
+        let structure = self.get_input_structure()?;
+        let mut writer = DataWriter::new(std::io::Cursor::new(vec![]), Some(structure.types()));
+
+        for row in data.into_iter() {
+            let mut row = row.into_iter().collect::<HashMap<_, _>>();
+
+            for (param_id, _) in structure.params.iter() {
+                writer.write_data_value(row.remove(param_id).unwrap())?;
+            }
+
+            let data = std::mem::replace(writer.inner_mut(), std::io::Cursor::new(vec![]));
+            reqs.push(ClientMessage::Query(
+                self.connection.query_id,
+                ClientQueryMessage::WriteParams(data.into_inner()),
+            ));
+            reqs.push(ClientMessage::Query(
+                self.connection.query_id,
+                ClientQueryMessage::Execute,
+            ));
+            reqs.push(ClientMessage::Query(
+                self.connection.query_id,
+                ClientQueryMessage::Restart,
+            ));
+
+            writer.restart()?;
+        }
+
+        let res = self
+            .connection
+            .connection
+            .send(ClientMessage::Batch(reqs))?;
+
+        let results = match res {
+            ServerMessage::Batch(res) => res,
+            _ => return Err(unexpected_outer_response(res).context("batch execute")),
+        };
+
+        for res in results {
+            if let ServerMessage::Error(_) = res {
+                return Err(unexpected_outer_response(res).context("batch execute"));
+            }
+        }
 
         Ok(())
     }

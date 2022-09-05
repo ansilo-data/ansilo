@@ -41,6 +41,9 @@ pub enum ClientMessage {
     Close,
     /// Error occurred with message
     Error(String),
+    /// Multiple requests to execute serially
+    /// If an error occurs during the batch the following requests will not be executed
+    Batch(Vec<Self>),
 }
 
 /// Protocol messages sent by postgres to operate on a query instance
@@ -115,6 +118,8 @@ pub enum ServerMessage {
     UnknownEntity(EntityId),
     /// Error occurred with message
     Error(String),
+    /// Responses to a batch of requests
+    Batch(Vec<Self>),
 }
 
 /// Protocol respones sent by ansilo in regards to a specific query

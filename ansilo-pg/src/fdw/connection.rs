@@ -98,16 +98,7 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         loop {
             let res = chan.recv(|request| {
                 let response = self.handle_message(request);
-
-                let response = match response {
-                    Ok(response) => response,
-                    Err(err) if err.downcast_ref::<UnknownEntityError>().is_some() => {
-                        Some(ServerMessage::UnknownEntity(
-                            err.downcast_ref::<UnknownEntityError>().unwrap().0.clone(),
-                        ))
-                    }
-                    Err(err) => Some(ServerMessage::Error(format!("{:?}", err))),
-                };
+                let response = self.convert_response(response);
 
                 Ok(response)
             })?;
@@ -145,6 +136,7 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             ClientMessage::BeginTransaction => self.begin_transaction()?,
             ClientMessage::RollbackTransaction => self.rollback_transaction()?,
             ClientMessage::CommitTransaction => self.commit_transaction()?,
+            ClientMessage::Batch(reqs) => self.execute_batch(reqs)?,
             ClientMessage::Close => return Ok(None),
             ClientMessage::Error(err) => bail!("Error received from client: {:?}", err),
             _ => {
@@ -196,6 +188,19 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
                 ServerQueryMessage::Discarded
             }
         })
+    }
+
+    fn convert_response(&self, response: Result<Option<ServerMessage>>) -> Option<ServerMessage> {
+        match response {
+            Ok(response) => response,
+            Err(err) if err.downcast_ref::<UnknownEntityError>().is_some() => {
+                Some(ServerMessage::UnknownEntity(
+                    err.downcast_ref::<UnknownEntityError>().unwrap().0.clone(),
+                ))
+            }
+
+            Err(err) => Some(ServerMessage::Error(format!("{:?}", err))),
+        }
     }
 
     fn connect(&mut self) -> Result<()> {
@@ -536,6 +541,23 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             tm.commit_transaction()?;
             Ok(ServerMessage::TransactionCommitted)
         })
+    }
+
+    fn execute_batch(&mut self, reqs: Vec<ClientMessage>) -> Result<ServerMessage> {
+        let mut results = Vec::with_capacity(reqs.len());
+
+        for msg in reqs.into_iter() {
+            match self.handle_message(msg) {
+                Ok(Some(res)) => results.push(res),
+                Ok(None) => break,
+                err @ Err(_) => {
+                    results.push(self.convert_response(err).unwrap());
+                    break;
+                }
+            }
+        }
+
+        Ok(ServerMessage::Batch(results))
     }
 
     fn entities<'b>(
@@ -1760,6 +1782,69 @@ mod tests {
         assert_eq!(
             log.get_from_memory().unwrap(),
             con.log.get_from_memory().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_fdw_connection_insert_with_batch_request() {
+        let (thread, mut client) = create_mock_connection("connection_insert_batch");
+
+        let res = client
+            .send(ClientMessage::Batch(vec![
+                ClientMessage::CreateQuery(
+                    sqlil::source("people", "people"),
+                    sqlil::QueryType::Insert,
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        InsertQueryOperation::AddColumn((
+                            "first_name".into(),
+                            sqlil::Expr::constant(DataValue::from("New")),
+                        ))
+                        .into(),
+                    ),
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        InsertQueryOperation::AddColumn((
+                            "last_name".into(),
+                            sqlil::Expr::constant(DataValue::from("Man")),
+                        ))
+                        .into(),
+                    ),
+                ),
+                ClientMessage::Query(0, ClientQueryMessage::Prepare),
+                ClientMessage::Query(0, ClientQueryMessage::Execute),
+            ]))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Batch(vec![
+                ServerMessage::QueryCreated(0, OperationCost::default()),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+                ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                    vec![]
+                ))),
+                ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![]))),
+            ])
+        );
+
+        client.close().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
+
+        // Assert row was actually inserted
+        let rows = entities.get_data("people").unwrap();
+        assert_eq!(
+            rows.iter().last().unwrap().clone(),
+            vec![DataValue::from("New"), DataValue::from("Man")]
         );
     }
 }

@@ -248,7 +248,10 @@ unsafe fn plan_foreign_update(
     query
 }
 
-unsafe fn filtered_table_columns(table: &PgTable, cols: *mut pg_sys::Bitmapset) -> Vec<&pg_sys::FormData_pg_attribute> {
+unsafe fn filtered_table_columns(
+    table: &PgTable,
+    cols: *mut pg_sys::Bitmapset,
+) -> Vec<&pg_sys::FormData_pg_attribute> {
     table
         .attrs()
         .filter(|col| {
@@ -367,7 +370,7 @@ pub unsafe extern "C" fn get_foreign_modify_batch_size(
     rinfo: *mut ResultRelInfo,
 ) -> ::std::os::raw::c_int {
     // TODO: Determine from data source
-    return 1;
+    return 100;
 }
 
 #[pg_guard]
@@ -396,9 +399,7 @@ pub unsafe extern "C" fn exec_foreign_insert(
         ));
     }
 
-    query.write_params_unordered(query_input).unwrap();
-    query.execute().unwrap();
-    query.restart_query().unwrap();
+    query.execute_batch(vec![query_input]).unwrap();
 
     slot
 }
@@ -416,8 +417,27 @@ pub unsafe extern "C" fn exec_foreign_batch_insert(
     plan_slots: *mut *mut TupleTableSlot,
     num_slots: *mut ::std::os::raw::c_int,
 ) -> *mut *mut TupleTableSlot {
-    // TODO:
-    unimplemented!()
+    let (ctx, mut query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let insert = query.as_insert().unwrap();
+    let mut query_input = vec![];
+
+    for i in 0..*num_slots {
+        let slot = *slots.add(i as _);
+        let mut row_input = vec![];
+
+        for (param, att_num, type_oid) in insert.params.iter() {
+            row_input.push((
+                param.id,
+                slot_datum_into_data_val(slot, (att_num - 1) as _, *type_oid, &param.r#type),
+            ));
+        }
+
+        query_input.push(row_input);
+    }
+
+    query.execute_batch(query_input).unwrap();
+
+    slots
 }
 
 #[pg_guard]
@@ -447,9 +467,7 @@ pub unsafe extern "C" fn exec_foreign_update(
         ));
     }
 
-    query.write_params_unordered(query_input).unwrap();
-    query.execute().unwrap();
-    query.restart_query().unwrap();
+    query.execute_batch(vec![query_input]).unwrap();
 
     slot
 }
@@ -473,9 +491,7 @@ pub unsafe extern "C" fn exec_foreign_delete(
         ));
     }
 
-    query.write_params_unordered(query_input).unwrap();
-    query.execute().unwrap();
-    query.restart_query().unwrap();
+    query.execute_batch(vec![query_input]).unwrap();
 
     slot
 }
