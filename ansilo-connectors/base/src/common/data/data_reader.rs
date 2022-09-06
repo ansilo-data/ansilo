@@ -1,4 +1,7 @@
-use std::{io::Read, str::FromStr};
+use std::{
+    io::{self, Read},
+    str::FromStr,
+};
 
 use ansilo_core::{
     data::{
@@ -19,7 +22,7 @@ where
 {
     /// The inner read
     inner: T,
-    /// The data structure, loaded on first read
+    /// The data types being read
     structure: Vec<DataType>,
     /// The current row index
     row_idx: u64,
@@ -89,7 +92,9 @@ where
                 DataType::JSON => DataValue::JSON(self.read_string()?),
                 DataType::Date => DataValue::Date(Self::read_date(self.read_exact()?)?),
                 DataType::Time => DataValue::Time(Self::read_time(self.read_exact()?)?),
-                DataType::DateTime => DataValue::DateTime(Self::read_date_time(self.read_exact()?)?),
+                DataType::DateTime => {
+                    DataValue::DateTime(Self::read_date_time(self.read_exact()?)?)
+                }
                 DataType::DateTimeWithTZ => {
                     let buff = self.read_stream()?;
                     let (dt, tz) = buff.split_at(13);
@@ -199,6 +204,18 @@ where
             self.row_idx += 1;
         } else {
             self.col_idx += 1;
+        }
+    }
+}
+
+impl DataReader<io::Cursor<Vec<u8>>> {
+    /// Parses the supplied vec as a DataValue
+    pub fn read_one(data: Vec<u8>, r#type: &DataType) -> Result<DataValue> {
+        let mut reader = Self::new(io::Cursor::new(data), vec![r#type.clone()]);
+
+        match reader.read_data_value()? {
+            Some(val) => Ok(val),
+            None => bail!("Unexpected eof while reading data value"),
         }
     }
 }
@@ -703,5 +720,52 @@ mod tests {
         );
 
         res.read_data_value().unwrap_err();
+    }
+
+    #[test]
+    fn test_data_reader_read_one_float() {
+        let val = DataReader::read_one(
+            [
+                vec![1u8],                          // not null
+                123.456_f32.to_be_bytes().to_vec(), // data
+            ]
+            .concat(),
+            &DataType::Float32,
+        )
+        .unwrap();
+
+        assert_eq!(val, DataValue::Float32(123.456));
+    }
+
+    #[test]
+    fn test_data_reader_read_one_utf8_string() {
+        let val = DataReader::read_one(
+            [
+                vec![1u8],       // not null
+                vec![3u8],       // chunk len
+                b"abc".to_vec(), // data
+                vec![0u8],       // eof
+            ]
+            .concat(),
+            &DataType::rust_string(),
+        )
+        .unwrap();
+
+        assert_eq!(val, DataValue::Utf8String("abc".into()));
+    }
+
+    #[test]
+    fn test_data_reader_read_one_partial_data_failes() {
+        DataReader::read_one(vec![], &DataType::rust_string()).unwrap_err();
+        DataReader::read_one(vec![1, 2], &DataType::UInt64).unwrap_err();
+        DataReader::read_one(
+            [
+                vec![1u8], // not null
+                vec![3u8], // chunk len
+            ]
+            .concat(),
+            &DataType::rust_string(),
+        )
+        .unwrap_err();
     }
 }
