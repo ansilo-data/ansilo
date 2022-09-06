@@ -347,7 +347,6 @@ pub unsafe extern "C" fn begin_foreign_modify(
     // We still want to do batch size calculations for EXPLAIN
     // but skip the actual preparation of the queries.
     if eflags & pg_sys::EXEC_FLAG_EXPLAIN_ONLY as i32 != 0 {
-        state.explain_only = true;
         (*rinfo).ri_FdwState = fdw_private as *mut _;
         return;
     }
@@ -437,26 +436,7 @@ pub unsafe extern "C" fn get_foreign_modify_batch_size(
     // Get the maximum batch size we support
     let batch_size = cmp::min(batch_size, MAX_BULK_INSERT_BATCH_SIZE as _);
 
-    // Try create a bulk insert with the desired batch size
-    match create_bulk_insert(&mut *ctx, singular_insert, batch_size) {
-        Ok(mut query) => {
-            // Prepare the query for execution (if we are not in an EXPLAIN query)
-            if !state.explain_only {
-                query.prepare().unwrap();
-            }
-
-            // Now update the fdw private state with the batched query
-            let query = pg_transaction_scoped(query);
-            (*rinfo).ri_FdwState = into_fdw_private_modify(ctx, query, state) as *mut _;
-
-            return batch_size as _;
-        }
-        Err(_) => {
-            // We failed set the batch size to our desired value,
-            // fallback to singular inserts
-            return SINGLE_INSERT_BATCH_SIZE as _;
-        }
-    }
+    batch_size as _
 }
 
 unsafe fn create_bulk_insert(
@@ -560,24 +540,46 @@ pub unsafe extern "C" fn exec_foreign_batch_insert(
     plan_slots: *mut *mut TupleTableSlot,
     num_slots: *mut ::std::os::raw::c_int,
 ) -> *mut *mut TupleTableSlot {
-    let (mut ctx, mut query, state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let (mut ctx, mut query, mut state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
     let mut query_input = vec![];
 
-    // The final batch could contain less rows than the bulk insert size
-    // When this is the case we reduce the batch size
-    if (*num_slots as u32) % query.as_bulk_insert().unwrap().batch_size != 0 {
+    // Try create a bulk insert with the desired batch size
+    // We could do this multiple times during a query execution.
+    // Such as the first batch and the last batch which could have
+    // different sizes.
+    if (query.as_bulk_insert().is_none()
+        || (*num_slots as u32) % query.as_bulk_insert().unwrap().batch_size != 0)
+        && state.bulk_insert_supported != Some(false)
+    {
         let singular_insert = state.singular_insert.as_ref().unwrap();
 
-        // First try set the batch size to the remaining rows
-        query = match create_bulk_insert(&mut *ctx, singular_insert, *num_slots as _) {
-            Ok(query) => pg_transaction_scoped(query),
-            Err(_) => {
-                // If that fails we use the singular insert query for the remaining rows
-                pg_transaction_scoped(singular_insert.duplicate().unwrap())
+        query = if *num_slots == 1 {
+            pg_transaction_scoped(singular_insert.duplicate().unwrap())
+        } else {
+            match create_bulk_insert(&mut *ctx, singular_insert, *num_slots as _) {
+                Ok(mut query) => {
+                    // We were able to create the bulk insert so we use this.
+                    let query = pg_transaction_scoped(query);
+                    state.bulk_insert_supported = Some(true);
+                    query
+                }
+                Err(_) => {
+                    // We failed to create the bulk insert for this connector,
+                    // so we use a singular insert query.
+                    // Mark it as unsupported so we dont attempt it again on the next batch
+                    let query = pg_transaction_scoped(singular_insert.duplicate().unwrap());
+                    state.bulk_insert_supported = Some(false);
+                    query
+                }
             }
         };
 
+        // Prepare the query for execution
         query.prepare().unwrap();
+
+        // Now update the fdw private state with the batched query
+        (*rinfo).ri_FdwState = into_fdw_private_modify(ctx, query, state) as *mut _;
+        (ctx, query, state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
     }
 
     let batch_size = match &query.q {

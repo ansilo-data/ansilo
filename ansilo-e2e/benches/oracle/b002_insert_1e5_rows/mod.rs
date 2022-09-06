@@ -12,17 +12,17 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let (_instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let mut g = c.benchmark_group("oracle/b002_insert_1e4_rows");
+    let mut g = c.benchmark_group("oracle/b002_insert_1e5_rows");
     g.sample_size(10);
     g.measurement_time(Duration::from_secs(15));
-    g.throughput(criterion::Throughput::Elements(10_000));
+    g.throughput(criterion::Throughput::Elements(100_000));
     g.bench_function("bench", |b| b.iter(|| bench(&mut client)));
     g.finish();
 }
 
 fn bench(client: &mut Client) {
     let _rows = client
-        .query("INSERT INTO \"B002__TEST_TAB\" SELECT generate_series(1, 10000)", &[])
+        .query("INSERT INTO \"B002__TEST_TAB\" SELECT generate_series(1, 100000)", &[])
         .unwrap();
 
     // TODO: Return inserted rows

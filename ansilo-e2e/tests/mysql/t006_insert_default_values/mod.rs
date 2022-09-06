@@ -61,32 +61,21 @@ fn test_auto_increment() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![
-            (
-                "mysql".to_string(),
-                LoggedQuery::new(
-                    [
-                        r#"INSERT INTO `db`.`t006__auto_increment` "#,
-                        r#"(`data`) VALUES (?)"#
-                    ]
-                    .join(""),
-                    vec!["LoggedParam [index=1, method=setString, value=value]".into()],
-                    None
-                )
-            ),
-            (
-                "mysql".to_string(),
-                LoggedQuery::new(
-                    [
-                        r#"INSERT INTO `db`.`t006__auto_increment` "#,
-                        r#"(`data`) VALUES (?)"#
-                    ]
-                    .join(""),
-                    vec!["LoggedParam [index=1, method=setString, value=another]".into()],
-                    None
-                )
+        vec![(
+            "mysql".to_string(),
+            LoggedQuery::new(
+                [
+                    r#"INSERT INTO `db`.`t006__auto_increment` "#,
+                    r#"(`data`) VALUES (?), (?)"#
+                ]
+                .join(""),
+                vec![
+                    "LoggedParam [index=1, method=setString, value=value]".into(),
+                    "LoggedParam [index=2, method=setString, value=another]".into()
+                ],
+                None
             )
-        ]
+        )]
     );
 }
 

@@ -241,6 +241,47 @@ mod tests {
     }
 
     #[pg_test]
+    fn test_fdw_insert_multiple_batches() {
+        setup_test("insert_multi_batch");
+
+        let results = execute_query(
+            r#"
+            INSERT INTO "people" (id, first_name, last_name) 
+            SELECT 100 + x, 'first_name_' || x::text, 'last_name_' || x::text
+            FROM generate_series(1, 55) AS x;
+
+            SELECT * FROM "people";
+            "#,
+            |i| {
+                (
+                    i["id"].value::<i64>().unwrap(),
+                    i["first_name"].value::<String>().unwrap(),
+                    i["last_name"].value::<String>().unwrap(),
+                )
+            },
+        );
+
+        assert_eq!(
+            results,
+            [
+                vec![
+                    (1, "Mary".into(), "Jane".into()),
+                    (2, "John".into(), "Smith".into()),
+                    (3, "Gary".into(), "Gregson".into()),
+                    (4, "Mary".into(), "Bennet".into()),
+                ],
+                (1..=55)
+                    .into_iter()
+                    .map(|x| (100 + x, format!("first_name_{x}"), format!("last_name_{x}")))
+                    .collect()
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+        );
+    }
+
+    #[pg_test]
     fn test_fdw_insert_select() {
         setup_test("insert_select");
 

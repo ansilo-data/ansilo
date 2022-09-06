@@ -599,33 +599,6 @@ pub struct FdwBulkInsertQuery {
     pub batch_size: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct FdwBulkInsertQueryExplainSummary {
-    pub cols: Vec<(String, sqlil::Expr)>,
-    pub batch_size: u32,
-}
-
-impl FdwBulkInsertQuery {
-    pub fn summary(&self) -> FdwBulkInsertQueryExplainSummary {
-        let cols = self
-            .remote_ops
-            .iter()
-            .find_map(|op| op.as_set_bulk_rows().clone())
-            .map(|(cols, params)| {
-                cols.iter()
-                    .cloned()
-                    .zip(params.iter().cloned())
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-
-        FdwBulkInsertQueryExplainSummary {
-            cols,
-            batch_size: self.batch_size,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct FdwUpdateQuery {
     /// The operations applied to the update query
@@ -672,8 +645,8 @@ pub struct FdwModifyContext {
     pub scan: FdwScanContext,
     /// Base insert query context used for resizing bulk inserts
     pub singular_insert: Option<FdwQueryContext>,
-    /// Whether this is an EXPLAIN only query
-    pub explain_only: bool,
+    /// Whether bulk inserts are supported by the connector
+    pub bulk_insert_supported: Option<bool>,
 }
 
 impl FdwModifyContext {
@@ -681,7 +654,7 @@ impl FdwModifyContext {
         Self {
             scan: FdwScanContext::new(),
             singular_insert: None,
-            explain_only: false,
+            bulk_insert_supported: None,
         }
     }
 }
