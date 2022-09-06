@@ -37,6 +37,7 @@ mod tests {
     };
     use ansilo_pg::fdw::{proto::OperationCost, server::FdwServer};
     use assert_json_diff::*;
+    use pretty_assertions::assert_eq;
     use serde::{de::DeserializeOwned, Serialize};
     use serde_json::json;
 

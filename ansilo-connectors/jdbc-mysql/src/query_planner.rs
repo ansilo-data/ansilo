@@ -1,21 +1,24 @@
 use ansilo_core::{
     data::{DataType, DataValue, StringOptions},
-    err::{bail, Context, Result},
+    err::{bail, ensure, Context, Result},
     sqlil as sql,
 };
 
 use ansilo_connectors_base::{
     common::entity::EntitySource,
     interface::{
-        Connection, DeleteQueryOperation, InsertQueryOperation, OperationCost, QueryCompiler,
-        QueryHandle, QueryOperationResult, QueryPlanner, ResultSet, SelectQueryOperation,
-        UpdateQueryOperation,
+        BulkInsertQueryOperation, Connection, DeleteQueryOperation, InsertQueryOperation,
+        OperationCost, QueryCompiler, QueryHandle, QueryOperationResult, QueryPlanner, ResultSet,
+        SelectQueryOperation, UpdateQueryOperation,
     },
 };
 
 use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
 
 use super::{MysqlJdbcConnectorEntityConfig, MysqlJdbcEntitySourceConfig, MysqlJdbcQueryCompiler};
+
+/// Maximum query params supported in a single query
+const MAX_PARAMS: u16 = u16::MAX;
 
 /// Query planner for Mysql JDBC driver
 pub struct MysqlJdbcQueryPlanner {}
@@ -143,6 +146,18 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
         Ok((OperationCost::default(), sql::Insert::new(source.clone())))
     }
 
+    fn create_base_bulk_insert(
+        _connection: &mut Self::TConnection,
+        _conf: &MysqlJdbcConnectorEntityConfig,
+        _entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::BulkInsert)> {
+        Ok((
+            OperationCost::default(),
+            sql::BulkInsert::new(source.clone()),
+        ))
+    }
+
     fn create_base_update(
         _connection: &mut Self::TConnection,
         _conf: &MysqlJdbcConnectorEntityConfig,
@@ -161,6 +176,25 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
         Ok((OperationCost::default(), sql::Delete::new(source.clone())))
     }
 
+    fn get_insert_max_batch_size(
+        _connection: &mut Self::TConnection,
+        _conf: &MysqlJdbcConnectorEntityConfig,
+        insert: &sql::Insert,
+    ) -> Result<u32> {
+        // @see https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html#packet-COM_STMT_PREPARE_OK
+        let params: usize = insert
+            .cols
+            .iter()
+            .map(|row| row.1.walk_count(|e| e.as_parameter().is_some()))
+            .sum();
+
+        if params == 0 {
+            return Ok(u32::MAX);
+        }
+
+        Ok((MAX_PARAMS as f32 / params as f32).floor() as _)
+    }
+
     fn apply_insert_operation(
         _connection: &mut Self::TConnection,
         _conf: &MysqlJdbcConnectorEntityConfig,
@@ -169,6 +203,19 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
     ) -> Result<QueryOperationResult> {
         match op {
             InsertQueryOperation::AddColumn((col, expr)) => Self::insert_add_col(insert, col, expr),
+        }
+    }
+
+    fn apply_bulk_insert_operation(
+        _connection: &mut Self::TConnection,
+        _conf: &MysqlJdbcConnectorEntityConfig,
+        bulk_insert: &mut sql::BulkInsert,
+        op: BulkInsertQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        match op {
+            BulkInsertQueryOperation::SetBulkRows((cols, values)) => {
+                Self::bulk_insert_add_rows(bulk_insert, cols, values)
+            }
         }
     }
 
@@ -305,6 +352,31 @@ impl MysqlJdbcQueryPlanner {
         }
 
         insert.cols.push((col, expr));
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
+    }
+
+    fn bulk_insert_add_rows(
+        bulk_insert: &mut sql::BulkInsert,
+        cols: Vec<String>,
+        values: Vec<sql::Expr>,
+    ) -> Result<QueryOperationResult> {
+        if !Self::exprs_supported(&values) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
+        let params = values
+            .iter()
+            .map(|e| e.walk_count(|e| e.as_parameter().is_some()))
+            .sum::<usize>();
+
+        if params > MAX_PARAMS as _ {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
+        ensure!(values.len() % cols.len() == 0);
+
+        bulk_insert.cols = cols;
+        bulk_insert.values = values;
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 

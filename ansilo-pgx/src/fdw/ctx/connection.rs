@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::{
-    FdwDeleteQuery, FdwInsertQuery, FdwQueryContext, FdwQueryType, FdwSelectQuery, FdwUpdateQuery,
+    FdwDeleteQuery, FdwInsertQuery, FdwQueryContext, FdwQueryType, FdwSelectQuery, FdwUpdateQuery, FdwBulkInsertQuery,
 };
 
 /// Context data for query planning
@@ -113,6 +113,7 @@ impl FdwContext {
         let query = match r#type {
             sqlil::QueryType::Select => FdwQueryType::Select(FdwSelectQuery::default()),
             sqlil::QueryType::Insert => FdwQueryType::Insert(FdwInsertQuery::default()),
+            sqlil::QueryType::BulkInsert => FdwQueryType::BulkInsert(FdwBulkInsertQuery::default()),
             sqlil::QueryType::Update => FdwQueryType::Update(FdwUpdateQuery::default()),
             sqlil::QueryType::Delete => FdwQueryType::Delete(FdwDeleteQuery::default()),
         };

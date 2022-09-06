@@ -8,13 +8,14 @@ use ansilo_core::{
 use ansilo_pg::fdw::{
     data::{DataWriter, LoggedQuery, QueryHandle, QueryHandleWriter, ResultSet, ResultSetReader},
     proto::{
-        ClientMessage, ClientQueryMessage, DeleteQueryOperation, InsertQueryOperation,
-        OperationCost, QueryId, QueryInputStructure, QueryOperation, QueryOperationResult,
-        RowStructure, SelectQueryOperation, ServerMessage, ServerQueryMessage,
-        UpdateQueryOperation,
+        BulkInsertQueryOperation, ClientMessage, ClientQueryMessage, DeleteQueryOperation,
+        InsertQueryOperation, OperationCost, QueryId, QueryInputStructure, QueryOperation,
+        QueryOperationResult, RowStructure, SelectQueryOperation, ServerMessage,
+        ServerQueryMessage, UpdateQueryOperation,
     },
 };
 
+use itertools::Itertools;
 use pgx::{
     pg_sys::{self, RestrictInfo},
     warning,
@@ -132,6 +133,20 @@ impl FdwQueryContext {
         }
     }
 
+    pub fn as_bulk_insert(&self) -> Option<&FdwBulkInsertQuery> {
+        match &self.q {
+            FdwQueryType::BulkInsert(q) => Some(q),
+            _ => None,
+        }
+    }
+
+    pub fn as_bulk_insert_mut(&mut self) -> Option<&mut FdwBulkInsertQuery> {
+        match &mut self.q {
+            FdwQueryType::BulkInsert(q) => Some(q),
+            _ => None,
+        }
+    }
+
     pub fn as_update(&self) -> Option<&FdwUpdateQuery> {
         match &self.q {
             FdwQueryType::Update(q) => Some(q),
@@ -222,13 +237,14 @@ impl FdwQueryContext {
     /// Writes the supplied query params
     /// This will ensure the correct ordering of the query parameters by sorting them
     /// using the parameter id's in the supplied vec.
+    #[allow(unused)]
     pub fn write_params_unordered(&mut self, data: Vec<(u32, DataValue)>) -> Result<()> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
         let mut ordered_params = vec![];
-        let mut data = data.into_iter().collect::<HashMap<_, _>>();
+        let mut data = data.into_iter().into_group_map();
 
         for (param_id, _) in writer.get_structure().params.iter() {
-            ordered_params.push(data.remove(param_id).unwrap());
+            ordered_params.push(data.get_mut(param_id).unwrap().remove(0));
         }
 
         self.write_params(ordered_params)
@@ -264,16 +280,20 @@ impl FdwQueryContext {
         Ok(())
     }
 
+    /// Performs multiple executions of the query in a single request.
+    /// This will not read any result data from the query.
     pub fn execute_batch(&mut self, data: Vec<Vec<(u32, DataValue)>>) -> Result<()> {
         let mut reqs = vec![];
         let structure = self.get_input_structure()?;
         let mut writer = DataWriter::new(std::io::Cursor::new(vec![]), Some(structure.types()));
 
         for row in data.into_iter() {
-            let mut row = row.into_iter().collect::<HashMap<_, _>>();
+            let mut row = row.into_iter().into_group_map();
 
             for (param_id, _) in structure.params.iter() {
-                writer.write_data_value(row.remove(param_id).unwrap())?;
+                writer
+                    .write_data_value(row.get_mut(param_id).unwrap().remove(0))
+                    .unwrap();
             }
 
             let data = std::mem::replace(writer.inner_mut(), std::io::Cursor::new(vec![]));
@@ -328,6 +348,21 @@ impl FdwQueryContext {
             .with_context(|| format!("Failed to parse JSON from explain result: {:?}", json))?;
 
         Ok(parsed)
+    }
+
+    /// Gets the maximum batch size for the current query.
+    /// This is only supported for insert queries.
+    pub fn get_max_batch_size(&mut self) -> Result<u32> {
+        let size: u32 = self
+            .connection
+            .send(ClientQueryMessage::GetMaxBatchSize)
+            .and_then(|res| match res {
+                ServerQueryMessage::MaxBatchSize(size) => Ok(size),
+                _ => Err(unexpected_response(res)),
+            })
+            .context("Max batch size")?;
+
+        Ok(size)
     }
 
     /// Creates a copy of the query that can be modified
@@ -488,6 +523,7 @@ impl QueryScopedConnection {
 pub enum FdwQueryType {
     Select(FdwSelectQuery),
     Insert(FdwInsertQuery),
+    BulkInsert(FdwBulkInsertQuery),
     Update(FdwUpdateQuery),
     Delete(FdwDeleteQuery),
 }
@@ -539,13 +575,55 @@ impl FdwSelectQuery {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct FdwInsertQuery {
     /// The operations applied to the insert query
     pub remote_ops: Vec<InsertQueryOperation>,
+    /// The relation id of the table being inserted to
+    pub relid: u32,
+    /// The columns being inserted
+    pub inserted_cols: Vec<u32>,
     /// The list of query parameters and their respective attnum's and type oid's
     /// which are used to supply the insert row data for the query
     pub params: Vec<(sqlil::Parameter, u32, pg_sys::Oid)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct FdwBulkInsertQuery {
+    /// The operations applied to the bulk insert query
+    pub remote_ops: Vec<BulkInsertQueryOperation>,
+    /// The list of query parameters and their respective attnum's and type oid's
+    /// which are used to supply the insert row data for the query
+    pub params: Vec<(sqlil::Parameter, u32, pg_sys::Oid)>,
+    /// The number of rows inserted in a single query
+    pub batch_size: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct FdwBulkInsertQueryExplainSummary {
+    pub cols: Vec<(String, sqlil::Expr)>,
+    pub batch_size: u32,
+}
+
+impl FdwBulkInsertQuery {
+    pub fn summary(&self) -> FdwBulkInsertQueryExplainSummary {
+        let cols = self
+            .remote_ops
+            .iter()
+            .find_map(|op| op.as_set_bulk_rows().clone())
+            .map(|(cols, params)| {
+                cols.iter()
+                    .cloned()
+                    .zip(params.iter().cloned())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        FdwBulkInsertQueryExplainSummary {
+            cols,
+            batch_size: self.batch_size,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -589,16 +667,21 @@ impl FdwScanContext {
 }
 
 /// Context storage for the FDW stored in the fdw_private field
-#[derive(Clone)]
 pub struct FdwModifyContext {
     /// The context for the inner scan
     pub scan: FdwScanContext,
+    /// Base insert query context used for resizing bulk inserts
+    pub singular_insert: Option<FdwQueryContext>,
+    /// Whether this is an EXPLAIN only query
+    pub explain_only: bool,
 }
 
 impl FdwModifyContext {
     pub fn new() -> Self {
         Self {
             scan: FdwScanContext::new(),
+            singular_insert: None,
+            explain_only: false,
         }
     }
 }

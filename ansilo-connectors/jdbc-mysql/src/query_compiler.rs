@@ -25,6 +25,7 @@ impl QueryCompiler for MysqlJdbcQueryCompiler {
         match &query {
             sql::Query::Select(select) => Self::compile_select_query(conf, &query, select),
             sql::Query::Insert(insert) => Self::compile_insert_query(conf, &query, insert),
+            sql::Query::BulkInsert(insert) => Self::compile_bulk_insert_query(conf, &query, insert),
             sql::Query::Update(update) => Self::compile_update_query(conf, &query, update),
             sql::Query::Delete(delete) => Self::compile_delete_query(conf, &query, delete),
         }
@@ -72,7 +73,7 @@ impl MysqlJdbcQueryCompiler {
             "INSERT INTO".to_string(),
             Self::compile_entity_source(conf, &insert.target, false)?,
             format!(
-                "({}) VALUES ({})",
+                "({})",
                 insert
                     .cols
                     .iter()
@@ -84,6 +85,10 @@ impl MysqlJdbcQueryCompiler {
                     ))
                     .collect::<Result<Vec<_>>>()?
                     .join(", "),
+            ),
+            "VALUES".to_string(),
+            format!(
+                "({})",
                 insert
                     .cols
                     .iter()
@@ -91,6 +96,52 @@ impl MysqlJdbcQueryCompiler {
                     .collect::<Result<Vec<_>>>()?
                     .join(", ")
             ),
+        ]
+        .into_iter()
+        .collect::<Vec<String>>()
+        .join(" ");
+
+        Ok(JdbcQuery::new(query, params))
+    }
+
+    fn compile_bulk_insert_query(
+        conf: &MysqlJdbcConnectorEntityConfig,
+        query: &sql::Query,
+        insert: &sql::BulkInsert,
+    ) -> Result<JdbcQuery> {
+        let mut params = Vec::<JdbcQueryParam>::new();
+
+        let query = [
+            "INSERT INTO".to_string(),
+            Self::compile_entity_source(conf, &insert.target, false)?,
+            format!(
+                "({})",
+                insert
+                    .cols
+                    .iter()
+                    .map(|col| Self::compile_attribute_identifier(
+                        conf,
+                        query,
+                        &sql::AttributeId::new(&insert.target.alias, col),
+                        false
+                    ))
+                    .collect::<Result<Vec<_>>>()?
+                    .join(", "),
+            ),
+            "VALUES".to_string(),
+            insert
+                .rows()
+                .into_iter()
+                .map(|row| {
+                    Ok(format!(
+                        "({})",
+                        row.map(|e| Self::compile_expr(conf, query, e, &mut params))
+                            .collect::<Result<Vec<_>>>()?
+                            .join(", ")
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?
+                .join(", "),
         ]
         .into_iter()
         .collect::<Vec<String>>()
@@ -611,6 +662,15 @@ mod tests {
             .unwrap()
     }
 
+    fn compile_bulk_insert(
+        bulk_insert: sql::BulkInsert,
+        conf: MysqlJdbcConnectorEntityConfig,
+    ) -> JdbcQuery {
+        let query = sql::Query::BulkInsert(bulk_insert);
+        MysqlJdbcQueryCompiler::compile_bulk_insert_query(&conf, &query, query.as_bulk_insert().unwrap())
+            .unwrap()
+    }
+
     fn compile_update(update: sql::Update, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
         let query = sql::Query::Update(update);
         MysqlJdbcQueryCompiler::compile_update_query(&conf, &query, query.as_update().unwrap())
@@ -952,6 +1012,31 @@ mod tests {
             JdbcQuery::new(
                 r#"INSERT INTO `table` (`col1`) VALUES (?)"#,
                 vec![JdbcQueryParam::Dynamic(1, DataType::Int8)]
+            )
+        );
+    }
+
+    #[test]
+    fn test_oracle_jdbc_compile_bulk_insert_query() {
+        let mut bulk_insert = sql::BulkInsert::new(sql::source("entity", "entity"));
+        bulk_insert.cols.push("attr1".into());
+        bulk_insert.values = vec![
+            sql::Expr::Parameter(sql::Parameter::new(DataType::Int8, 1)),
+            sql::Expr::Parameter(sql::Parameter::new(DataType::Int8, 2)),
+            sql::Expr::Parameter(sql::Parameter::new(DataType::Int8, 3)),
+        ];
+
+        let compiled = compile_bulk_insert(bulk_insert, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"INSERT INTO `table` (`col1`) VALUES (?), (?), (?)"#,
+                vec![
+                    JdbcQueryParam::Dynamic(1, DataType::Int8),
+                    JdbcQueryParam::Dynamic(2, DataType::Int8),
+                    JdbcQueryParam::Dynamic(3, DataType::Int8)
+                ]
             )
         );
     }

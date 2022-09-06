@@ -50,6 +50,7 @@ impl MemoryQueryExecutor {
         match &self.query {
             sqlil::Query::Select(select) => self.run_select(select),
             sqlil::Query::Insert(insert) => self.run_insert(insert),
+            sqlil::Query::BulkInsert(bulk_insert) => self.run_bulk_insert(bulk_insert),
             sqlil::Query::Update(update) => self.run_update(update),
             sqlil::Query::Delete(delete) => self.run_delete(delete),
         }
@@ -124,6 +125,39 @@ impl MemoryQueryExecutor {
             self.data
                 .append_row_ids(&insert.target.entity.entity_id, &mut [&mut row]);
             rows.push(row);
+
+            Ok(())
+        })?;
+
+        Ok(MemoryResultSet::empty())
+    }
+
+    fn run_bulk_insert(&self, bulk_insert: &sqlil::BulkInsert) -> Result<MemoryResultSet> {
+        self.update_entity_data(&bulk_insert.target, |rows| {
+            let attrs = self.get_attrs(&bulk_insert.target.entity)?;
+            let ctx = DataContext::Cell(DataValue::Null);
+
+            for values in bulk_insert.rows().into_iter() {
+                let values = values.collect_vec();
+
+                let mut row = attrs
+                    .iter()
+                    .map(|a| {
+                        (
+                            &a.r#type,
+                            bulk_insert.cols.iter().position(|attr| attr == &a.id),
+                        )
+                    })
+                    .map(|(t, a)| (t, a.map(|idx| self.evaluate(&ctx, values[idx]))))
+                    .map(|(t, a)| (t, a.unwrap_or(Ok(DataContext::Cell(DataValue::Null)))))
+                    .map(|(t, a)| (t, a.and_then(|a| a.as_cell())))
+                    .map(|(t, a)| a.and_then(|a| a.try_coerce_into(t)))
+                    .collect::<Result<Vec<_>>>()?;
+
+                self.data
+                    .append_row_ids(&bulk_insert.target.entity.entity_id, &mut [&mut row]);
+                rows.push(row);
+            }
 
             Ok(())
         })?;
@@ -2412,6 +2446,76 @@ mod tests {
                         DataValue::from("New"),
                         DataValue::from("Man"),
                         DataValue::UInt64(3)
+                    ]
+                );
+            })
+            .unwrap();
+    }
+
+    #[test]
+    fn test_memory_connector_executor_bulk_insert_rows() {
+        let mut insert = sqlil::BulkInsert::new(sqlil::source("people", "people"));
+        insert.cols = vec!["id".into(), "first_name".into(), "last_name".into()];
+
+        insert.values = vec![
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::UInt32, 1)),
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::rust_string(), 2)),
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::rust_string(), 3)),
+            //
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::UInt32, 4)),
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::rust_string(), 5)),
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::rust_string(), 6)),
+            //
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::UInt32, 7)),
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::rust_string(), 8)),
+            sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::rust_string(), 9)),
+        ];
+
+        let executor = create_executor(
+            insert,
+            [
+                (1, DataValue::UInt32(1)),
+                (2, DataValue::from("First")),
+                (3, DataValue::from("Row")),
+                (4, DataValue::UInt32(2)),
+                (5, DataValue::from("Second")),
+                (6, DataValue::from("Record")),
+                (7, DataValue::UInt32(3)),
+                (8, DataValue::from("Third")),
+                (9, DataValue::from("Entity")),
+            ]
+            .into_iter()
+            .collect(),
+        );
+
+        let results = executor.run().unwrap();
+
+        assert_eq!(results, MemoryResultSet::empty());
+
+        executor
+            .data
+            .with_data("people", |data| {
+                assert_eq!(
+                    data[data.len() - 3..],
+                    [
+                        vec![
+                            DataValue::UInt32(1),
+                            DataValue::from("First"),
+                            DataValue::from("Row"),
+                            DataValue::UInt64(3)
+                        ],
+                        vec![
+                            DataValue::UInt32(2),
+                            DataValue::from("Second"),
+                            DataValue::from("Record"),
+                            DataValue::UInt64(4)
+                        ],
+                        vec![
+                            DataValue::UInt32(3),
+                            DataValue::from("Third"),
+                            DataValue::from("Entity"),
+                            DataValue::UInt64(5)
+                        ]
                     ]
                 );
             })

@@ -166,7 +166,8 @@ impl Connection for JdbcConnection {
 
     fn prepare(&mut self, query: JdbcQuery) -> Result<JdbcPreparedQuery> {
         let state = &*self.0;
-        let jdbc_prepared_query = state.jvm.with_local_frame(32, |env| {
+        let capacity = query.params.len() * 2 + 5;
+        let jdbc_prepared_query = state.jvm.with_local_frame(capacity as _, |env| {
             let param_types = env
                 .new_object("java/util/ArrayList", "()V", &[])
                 .context("Failed to create ArrayList")?;

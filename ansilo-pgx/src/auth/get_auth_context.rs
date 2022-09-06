@@ -13,8 +13,6 @@ fn auth_context() -> Option<JsonB> {
 #[cfg(any(test, feature = "pg_test"))]
 #[pg_schema]
 mod tests {
-    use std::panic::catch_unwind;
-
     use super::*;
 
     #[pg_test]

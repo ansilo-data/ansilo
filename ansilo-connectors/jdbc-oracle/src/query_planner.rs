@@ -1,15 +1,15 @@
 use ansilo_core::{
     data::{rust_decimal::prelude::ToPrimitive, DataType, DataValue, StringOptions},
-    err::{bail, Context, Result},
+    err::{bail, ensure, Context, Result},
     sqlil as sql,
 };
 
 use ansilo_connectors_base::{
     common::entity::EntitySource,
     interface::{
-        Connection, DeleteQueryOperation, InsertQueryOperation, OperationCost, QueryCompiler,
-        QueryHandle, QueryOperationResult, QueryPlanner, ResultSet, SelectQueryOperation,
-        UpdateQueryOperation,
+        BulkInsertQueryOperation, Connection, DeleteQueryOperation, InsertQueryOperation,
+        OperationCost, QueryCompiler, QueryHandle, QueryOperationResult, QueryPlanner, ResultSet,
+        SelectQueryOperation, UpdateQueryOperation,
     },
 };
 
@@ -18,6 +18,9 @@ use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 use super::{
     OracleJdbcConnectorEntityConfig, OracleJdbcEntitySourceConfig, OracleJdbcQueryCompiler,
 };
+
+// Maximum query params supported by oracle in a single query
+const MAX_PARAMS: u32 = 32767;
 
 /// Query planner for Oracle JDBC driver
 pub struct OracleJdbcQueryPlanner {}
@@ -122,6 +125,23 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         Ok((OperationCost::default(), sql::Insert::new(source.clone())))
     }
 
+    fn create_base_bulk_insert(
+        _connection: &mut Self::TConnection,
+        _conf: &OracleJdbcConnectorEntityConfig,
+        entity: &EntitySource<OracleJdbcEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::BulkInsert)> {
+        match &entity.source {
+            OracleJdbcEntitySourceConfig::Table(_) => {}
+            _ => bail!("Cannot perform bulk insert on entity without source table"),
+        }
+
+        Ok((
+            OperationCost::default(),
+            sql::BulkInsert::new(source.clone()),
+        ))
+    }
+
     fn create_base_update(
         _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
@@ -156,6 +176,25 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         Ok((OperationCost::default(), sql::Delete::new(source.clone())))
     }
 
+    fn get_insert_max_batch_size(
+        _connection: &mut Self::TConnection,
+        _conf: &OracleJdbcConnectorEntityConfig,
+        insert: &sql::Insert,
+    ) -> Result<u32> {
+        // @see https://docs.oracle.com/cd/B10501_01/appdev.920/a96624/e_limits.htm#LNPLS018
+        let params: usize = insert
+            .cols
+            .iter()
+            .map(|row| row.1.walk_count(|e| e.as_parameter().is_some()))
+            .sum();
+
+        if params == 0 {
+            return Ok(u32::MAX);
+        }
+
+        Ok((MAX_PARAMS as f32 / params as f32).floor() as _)
+    }
+
     fn apply_insert_operation(
         _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
@@ -164,6 +203,19 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     ) -> Result<QueryOperationResult> {
         match op {
             InsertQueryOperation::AddColumn((col, expr)) => Self::insert_add_col(insert, col, expr),
+        }
+    }
+
+    fn apply_bulk_insert_operation(
+        _connection: &mut Self::TConnection,
+        _conf: &OracleJdbcConnectorEntityConfig,
+        bulk_insert: &mut sql::BulkInsert,
+        op: BulkInsertQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        match op {
+            BulkInsertQueryOperation::SetBulkRows((cols, values)) => {
+                Self::bulk_insert_add_rows(bulk_insert, cols, values)
+            }
         }
     }
 
@@ -296,6 +348,31 @@ impl OracleJdbcQueryPlanner {
         }
 
         insert.cols.push((col, expr));
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
+    }
+
+    fn bulk_insert_add_rows(
+        bulk_insert: &mut sql::BulkInsert,
+        cols: Vec<String>,
+        values: Vec<sql::Expr>,
+    ) -> Result<QueryOperationResult> {
+        if !Self::exprs_supported(&values) {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
+        let params = values
+            .iter()
+            .map(|e| e.walk_count(|e| e.as_parameter().is_some()))
+            .sum::<usize>();
+
+        if params > MAX_PARAMS as _ {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
+        ensure!(values.len() % cols.len() == 0);
+
+        bulk_insert.cols = cols;
+        bulk_insert.values = values;
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 

@@ -1,10 +1,11 @@
 use bincode::{Decode, Encode};
+use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 use crate::data::{DataType, DataValue};
 
 /// A SQLIL expression node
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 #[serde(tag = "@type")]
 pub enum Expr {
     Attribute(AttributeId),
@@ -100,7 +101,7 @@ impl UnaryOp {
 }
 
 /// Supported unary operators
-#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum UnaryOpType {
     LogicalNot,
     Negate,
@@ -131,7 +132,7 @@ impl BinaryOp {
 }
 
 /// Supported binary operators
-#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum BinaryOpType {
     Add,
     Subtract,
@@ -173,7 +174,7 @@ impl Cast {
 }
 
 /// Supported function calls
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum FunctionCall {
     // Math functions
     Abs(SubExpr),
@@ -228,7 +229,7 @@ impl SubstringCall {
 }
 
 /// Aggregate function calls
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum AggregateCall {
     // Math functions
     Sum(SubExpr),
@@ -330,6 +331,18 @@ impl Expr {
         });
 
         flag
+    }
+
+    /// Returns the number of the expressions in the tree that pass the supplied
+    /// filter callback
+    pub fn walk_count<T: Fn(&Expr) -> bool>(&self, cb: T) -> usize {
+        let mut count = 0;
+
+        self.walk(&mut |e| {
+            count += if cb(e) { 1 } else { 0 };
+        });
+
+        count
     }
 }
 

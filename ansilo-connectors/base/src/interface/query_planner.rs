@@ -1,8 +1,10 @@
 use ansilo_core::{
+    data::DataType,
     err::Result,
-    sqlil::{self as sql}, data::DataType,
+    sqlil::{self as sql},
 };
 use bincode::{Decode, Encode};
+use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 use crate::common::entity::{ConnectorEntityConfig, EntitySource};
@@ -43,6 +45,10 @@ pub trait QueryPlanner {
                 .map(|(op, q)| (op, q.into())),
             sql::QueryType::Insert => Self::create_base_insert(connection, conf, entity, source)
                 .map(|(op, q)| (op, q.into())),
+            sql::QueryType::BulkInsert => {
+                Self::create_base_bulk_insert(connection, conf, entity, source)
+                    .map(|(op, q)| (op, q.into()))
+            }
             sql::QueryType::Update => Self::create_base_update(connection, conf, entity, source)
                 .map(|(op, q)| (op, q.into())),
             sql::QueryType::Delete => Self::create_base_delete(connection, conf, entity, source)
@@ -58,7 +64,7 @@ pub trait QueryPlanner {
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)>;
 
-    /// Creates a base update query to update all rows of the entity
+    /// Creates a base update query to insert a row
     fn create_base_insert(
         connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
@@ -66,7 +72,15 @@ pub trait QueryPlanner {
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Insert)>;
 
-    /// Creates a base update query to update all rows of the entity
+    /// Creates a base bulk insert query to insert multiple rows
+    fn create_base_bulk_insert(
+        connection: &mut Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::BulkInsert)>;
+
+    /// Creates a base update query to update rows
     fn create_base_update(
         connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
@@ -74,7 +88,7 @@ pub trait QueryPlanner {
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Update)>;
 
-    /// Creates a base delete query to delete all rows of the entity
+    /// Creates a base delete query to delete rows
     fn create_base_delete(
         connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
@@ -90,12 +104,28 @@ pub trait QueryPlanner {
         op: SelectQueryOperation,
     ) -> Result<QueryOperationResult>;
 
-    /// Adds the supplied operation to the select query
+    /// Gets the maximum number of rows that can be inserted in a single
+    /// insert query.
+    fn get_insert_max_batch_size(
+        connection: &mut Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        insert: &sql::Insert,
+    ) -> Result<u32>;
+
+    /// Adds the supplied operation to the insert query
     fn apply_insert_operation(
         connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         insert: &mut sql::Insert,
         op: InsertQueryOperation,
+    ) -> Result<QueryOperationResult>;
+
+    /// Adds the supplied operation to the bulk insert query
+    fn apply_bulk_insert_operation(
+        connection: &mut Self::TConnection,
+        conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        insert: &mut sql::BulkInsert,
+        op: BulkInsertQueryOperation,
     ) -> Result<QueryOperationResult>;
 
     /// Adds the supplied operation to the update query
@@ -128,6 +158,7 @@ pub trait QueryPlanner {
 pub enum QueryOperation {
     Select(SelectQueryOperation),
     Insert(InsertQueryOperation),
+    BulkInsert(BulkInsertQueryOperation),
     Update(UpdateQueryOperation),
     Delete(DeleteQueryOperation),
 }
@@ -141,6 +172,12 @@ impl From<SelectQueryOperation> for QueryOperation {
 impl From<InsertQueryOperation> for QueryOperation {
     fn from(op: InsertQueryOperation) -> Self {
         Self::Insert(op)
+    }
+}
+
+impl From<BulkInsertQueryOperation> for QueryOperation {
+    fn from(op: BulkInsertQueryOperation) -> Self {
+        Self::BulkInsert(op)
     }
 }
 
@@ -164,7 +201,7 @@ pub enum QueryOperationResult {
 }
 
 /// Select planning operations
-#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum SelectQueryOperation {
     AddColumn((String, sql::Expr)),
     AddWhere(sql::Expr),
@@ -243,7 +280,7 @@ impl SelectQueryOperation {
 }
 
 /// Insert planning operations
-#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum InsertQueryOperation {
     AddColumn((String, sql::Expr)),
 }
@@ -258,8 +295,24 @@ impl InsertQueryOperation {
     }
 }
 
+/// Bulk insert planning operations
+#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
+pub enum BulkInsertQueryOperation {
+    SetBulkRows((Vec<String>, Vec<sql::Expr>)),
+}
+
+impl BulkInsertQueryOperation {
+    /// Returns `true` if the bulk insert query operation is [`AddBulkRows`].
+    ///
+    /// [`AddBulkRows`]: BulkInsertQueryOperation::AddBulkRows
+    #[must_use]
+    pub fn is_set_bulk_rows(&self) -> bool {
+        matches!(self, Self::SetBulkRows(..))
+    }
+}
+
 /// Update planning operations
-#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum UpdateQueryOperation {
     AddSet((String, sql::Expr)),
     AddWhere(sql::Expr),
@@ -284,7 +337,7 @@ impl UpdateQueryOperation {
 }
 
 /// Delete planning operations
-#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum DeleteQueryOperation {
     AddWhere(sql::Expr),
 }

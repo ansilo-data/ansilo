@@ -1,14 +1,15 @@
 use ansilo_core::{
     data::DataType,
-    err::{Error, Result},
+    err::{ensure, Error, Result},
     sqlil as sql,
 };
 
 use ansilo_connectors_base::{
     common::entity::{ConnectorEntityConfig, EntitySource},
     interface::{
-        DeleteQueryOperation, InsertQueryOperation, OperationCost, QueryCompiler,
-        QueryOperationResult, QueryPlanner, SelectQueryOperation, UpdateQueryOperation,
+        BulkInsertQueryOperation, DeleteQueryOperation, InsertQueryOperation, OperationCost,
+        QueryCompiler, QueryOperationResult, QueryPlanner, SelectQueryOperation,
+        UpdateQueryOperation,
     },
 };
 
@@ -75,6 +76,18 @@ impl QueryPlanner for MemoryQueryPlanner {
         Ok((OperationCost::default(), sql::Insert::new(source.clone())))
     }
 
+    fn create_base_bulk_insert(
+        _connection: &mut Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
+    ) -> Result<(OperationCost, sql::BulkInsert)> {
+        Ok((
+            OperationCost::default(),
+            sql::BulkInsert::new(source.clone()),
+        ))
+    }
+
     fn create_base_update(
         _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
@@ -119,6 +132,14 @@ impl QueryPlanner for MemoryQueryPlanner {
         }
     }
 
+    fn get_insert_max_batch_size(
+        _connection: &mut Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        _insert: &sql::Insert,
+    ) -> Result<u32> {
+        Ok(10)
+    }
+
     fn apply_insert_operation(
         _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
@@ -127,6 +148,19 @@ impl QueryPlanner for MemoryQueryPlanner {
     ) -> Result<QueryOperationResult> {
         match op {
             InsertQueryOperation::AddColumn((col, expr)) => Self::insert_add_col(insert, col, expr),
+        }
+    }
+
+    fn apply_bulk_insert_operation(
+        _connection: &mut Self::TConnection,
+        _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
+        bulk_insert: &mut sql::BulkInsert,
+        op: BulkInsertQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        match op {
+            BulkInsertQueryOperation::SetBulkRows((cols, values)) => {
+                Self::bulk_insert_add_rows(bulk_insert, cols, values)
+            }
         }
     }
 
@@ -240,6 +274,22 @@ impl MemoryQueryPlanner {
         expr: sql::Expr,
     ) -> Result<QueryOperationResult> {
         insert.cols.push((col, expr));
+        Ok(QueryOperationResult::Ok(OperationCost::default()))
+    }
+
+    fn bulk_insert_add_rows(
+        bulk_insert: &mut sql::BulkInsert,
+        cols: Vec<String>,
+        values: Vec<sql::Expr>,
+    ) -> Result<QueryOperationResult> {
+        ensure!(values.len() % cols.len() == 0);
+
+        if values.len() / cols.len() > 10 {
+            return Ok(QueryOperationResult::Unsupported);
+        }
+
+        bulk_insert.cols = cols;
+        bulk_insert.values = values;
         Ok(QueryOperationResult::Ok(OperationCost::default()))
     }
 

@@ -158,6 +158,9 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             ClientQueryMessage::Explain(verbose) => {
                 ServerQueryMessage::Explained(self.explain_query(query_id, verbose)?)
             }
+            ClientQueryMessage::GetMaxBatchSize => {
+                ServerQueryMessage::MaxBatchSize(self.get_max_batch_size(query_id)?)
+            }
             ClientQueryMessage::Prepare => {
                 let structure = self.prepare(query_id)?;
                 ServerQueryMessage::Prepared(structure)
@@ -305,6 +308,7 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         match op {
             QueryOperation::Select(op) => self.apply_select_operation(query_id, op),
             QueryOperation::Insert(op) => self.apply_insert_operation(query_id, op),
+            QueryOperation::BulkInsert(op) => self.apply_bulk_insert_operation(query_id, op),
             QueryOperation::Update(op) => self.apply_update_operation(query_id, op),
             QueryOperation::Delete(op) => self.apply_delete_operation(query_id, op),
         }
@@ -350,6 +354,26 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             self.connection.get()?,
             &*Self::entities(self.entities)?,
             insert,
+            op,
+        )?;
+
+        Ok(res)
+    }
+
+    fn apply_bulk_insert_operation(
+        &mut self,
+        query_id: QueryId,
+        op: BulkInsertQueryOperation,
+    ) -> Result<QueryOperationResult> {
+        let bulk_insert = Self::query(&mut self.queries, query_id)?
+            .current()?
+            .as_bulk_insert_mut()
+            .context("Current query is not BULK INSERT")?;
+
+        let res = TConnector::TQueryPlanner::apply_bulk_insert_operation(
+            self.connection.get()?,
+            &*Self::entities(self.entities)?,
+            bulk_insert,
             op,
         )?;
 
@@ -493,6 +517,23 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         let json = serde_json::to_string(&res).context("Failed to encode explain state to JSON")?;
 
         Ok(json)
+    }
+
+    fn get_max_batch_size(&mut self, query_id: QueryId) -> Result<u32> {
+        let query = Self::query(&mut self.queries, query_id)?.current()?;
+
+        let insert = match query.as_insert() {
+            Some(q) => q,
+            None => bail!("Batch sizes are is only supported for insert queries"),
+        };
+
+        let res = TConnector::TQueryPlanner::get_insert_max_batch_size(
+            self.connection.get()?,
+            &*Self::entities(self.entities)?,
+            insert,
+        )?;
+
+        Ok(res)
     }
 
     fn duplicate_query(&mut self, query_id: u32) -> Result<QueryId> {
@@ -1845,6 +1886,122 @@ mod tests {
         assert_eq!(
             rows.iter().last().unwrap().clone(),
             vec![DataValue::from("New"), DataValue::from("Man")]
+        );
+    }
+
+    #[test]
+    fn test_fdw_connection_insert_max_batch_size() {
+        let (_thread, mut client) = create_mock_connection("connection_insert_max_batch_size");
+
+        let res = client
+            .send(ClientMessage::Batch(vec![
+                ClientMessage::CreateQuery(
+                    sqlil::source("people", "people"),
+                    sqlil::QueryType::Insert,
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        InsertQueryOperation::AddColumn((
+                            "first_name".into(),
+                            sqlil::Expr::constant(DataValue::from("New")),
+                        ))
+                        .into(),
+                    ),
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        InsertQueryOperation::AddColumn((
+                            "last_name".into(),
+                            sqlil::Expr::constant(DataValue::from("Man")),
+                        ))
+                        .into(),
+                    ),
+                ),
+            ]))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Batch(vec![
+                ServerMessage::QueryCreated(0, OperationCost::default()),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+            ])
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::GetMaxBatchSize))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::MaxBatchSize(10)),
+        );
+
+        client.close().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_bulk_insert() {
+        let (thread, mut client) = create_mock_connection("connection_insert_batch");
+
+        let res = client
+            .send(ClientMessage::Batch(vec![
+                ClientMessage::CreateQuery(
+                    sqlil::source("people", "people"),
+                    sqlil::QueryType::BulkInsert,
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        BulkInsertQueryOperation::SetBulkRows((
+                            vec!["first_name".into(), "last_name".into()],
+                            vec![
+                                sqlil::Expr::constant(DataValue::from("New")),
+                                sqlil::Expr::constant(DataValue::from("Man")),
+                                sqlil::Expr::constant(DataValue::from("Another")),
+                                sqlil::Expr::constant(DataValue::from("Person")),
+                            ],
+                        ))
+                        .into(),
+                    ),
+                ),
+                ClientMessage::Query(0, ClientQueryMessage::Prepare),
+                ClientMessage::Query(0, ClientQueryMessage::Execute),
+            ]))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Batch(vec![
+                ServerMessage::QueryCreated(0, OperationCost::default()),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+                ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                    vec![]
+                ))),
+                ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![]))),
+            ])
+        );
+
+        client.close().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
+
+        // Assert rows were actually inserted
+        let rows = entities.get_data("people").unwrap();
+        assert_eq!(
+            rows[rows.len() - 2..],
+            [
+                vec![DataValue::from("New"), DataValue::from("Man")],
+                vec![DataValue::from("Another"), DataValue::from("Person")]
+            ]
         );
     }
 }

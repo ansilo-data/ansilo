@@ -52,7 +52,7 @@ ansilo-util-debug = { path = "../ansilo-util/debug" }
 assert-json-diff = { version = "2.0" }
 pgx-tests = { version = "=0.5.0-beta.0" }
 postgres = { version = "0.19.3" }
-pretty_assertions = { version = "1.2" }
+pretty_assertions = "*"
 
 # [profile.dev]
 # panic = "unwind"

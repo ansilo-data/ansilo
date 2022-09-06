@@ -23,6 +23,7 @@ pub(crate) unsafe fn into_fdw_private_rel(
     list.into_pg()
 }
 
+#[track_caller]
 pub(crate) unsafe fn from_fdw_private_rel(
     list: *mut List,
 ) -> (
@@ -52,6 +53,7 @@ pub(crate) unsafe fn into_fdw_private_path(
     list.into_pg()
 }
 
+#[track_caller]
 pub(crate) unsafe fn from_fdw_private_path(
     list: *mut List,
 ) -> (
@@ -81,6 +83,7 @@ pub(crate) unsafe fn into_fdw_private_scan(
     list.into_pg()
 }
 
+#[track_caller]
 pub(crate) unsafe fn from_fdw_private_scan(
     list: *mut List,
 ) -> (
@@ -112,6 +115,7 @@ pub(crate) unsafe fn into_fdw_private_modify(
     list.into_pg()
 }
 
+#[track_caller]
 pub(crate) unsafe fn from_fdw_private_modify(
     list: *mut List,
 ) -> (

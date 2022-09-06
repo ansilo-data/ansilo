@@ -1,7 +1,7 @@
 pub use ansilo_connectors_base::interface::{
-    DeleteQueryOperation, EntityDiscoverOptions, InsertQueryOperation, OperationCost,
-    QueryInputStructure, QueryOperation, QueryOperationResult, RowStructure, SelectQueryOperation,
-    UpdateQueryOperation,
+    BulkInsertQueryOperation, DeleteQueryOperation, EntityDiscoverOptions, InsertQueryOperation,
+    OperationCost, QueryInputStructure, QueryOperation, QueryOperationResult, RowStructure,
+    SelectQueryOperation, UpdateQueryOperation,
 };
 
 use ansilo_core::{
@@ -56,6 +56,9 @@ pub enum ClientQueryMessage {
     Explain(bool),
     /// Prepares the current query
     Prepare,
+    /// Gets the maximum batch size for the current query.
+    /// Currently only inserts are supported.
+    GetMaxBatchSize,
     /// Write params to query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
     WriteParams(Vec<u8>),
@@ -129,6 +132,9 @@ pub enum ServerQueryMessage {
     OperationResult(QueryOperationResult),
     /// The result of the query explaination as a JSON encoded string
     Explained(String),
+    /// Returns the maximum batch size for this query
+    /// (Currently only inserts are supported)
+    MaxBatchSize(u32),
     /// The query was prepared
     Prepared(QueryInputStructure),
     /// Query params written

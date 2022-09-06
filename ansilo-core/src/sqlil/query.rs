@@ -1,17 +1,19 @@
 use anyhow::{Context, Result};
 use bincode::{Decode, Encode};
+use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 use super::{
     expr::{EntityId, Expr},
-    Delete, Insert, Select, Update,
+    BulkInsert, Delete, Insert, Select, Update,
 };
 
 /// A query to be executed against a data source
-#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Encode, Decode, Serialize, Deserialize, EnumAsInner)]
 pub enum Query {
     Select(Select),
     Insert(Insert),
+    BulkInsert(BulkInsert),
     Update(Update),
     Delete(Delete),
 }
@@ -21,6 +23,7 @@ pub enum Query {
 pub enum QueryType {
     Select,
     Insert,
+    BulkInsert,
     Update,
     Delete,
 }
@@ -31,6 +34,7 @@ impl Query {
         match self {
             Query::Select(_) => QueryType::Select,
             Query::Insert(_) => QueryType::Insert,
+            Query::BulkInsert(_) => QueryType::BulkInsert,
             Query::Update(_) => QueryType::Update,
             Query::Delete(_) => QueryType::Delete,
         }
@@ -41,6 +45,7 @@ impl Query {
         match self {
             Query::Select(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
             Query::Insert(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
+            Query::BulkInsert(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
             Query::Update(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
             Query::Delete(q) => q.get_entity_sources().collect::<Vec<_>>().into_iter(),
         }
@@ -63,6 +68,7 @@ impl Query {
         match self {
             Query::Select(q) => q.exprs().collect::<Vec<_>>().into_iter(),
             Query::Insert(q) => q.exprs().collect::<Vec<_>>().into_iter(),
+            Query::BulkInsert(q) => q.exprs().collect::<Vec<_>>().into_iter(),
             Query::Update(q) => q.exprs().collect::<Vec<_>>().into_iter(),
             Query::Delete(q) => q.exprs().collect::<Vec<_>>().into_iter(),
         }
@@ -75,70 +81,7 @@ impl Query {
             Query::Update(q) => &q.r#where,
             Query::Delete(q) => &q.r#where,
             Query::Insert(_) => unimplemented!(),
-        }
-    }
-
-    pub fn as_select(&self) -> Option<&Select> {
-        if let Self::Select(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_insert(&self) -> Option<&Insert> {
-        if let Self::Insert(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_update(&self) -> Option<&Update> {
-        if let Self::Update(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_delete(&self) -> Option<&Delete> {
-        if let Self::Delete(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_select_mut(&mut self) -> Option<&mut Select> {
-        if let Self::Select(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_insert_mut(&mut self) -> Option<&mut Insert> {
-        if let Self::Insert(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_update_mut(&mut self) -> Option<&mut Update> {
-        if let Self::Update(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_delete_mut(&mut self) -> Option<&mut Delete> {
-        if let Self::Delete(v) = self {
-            Some(v)
-        } else {
-            None
+            Query::BulkInsert(_) => unimplemented!(),
         }
     }
 }
@@ -152,6 +95,12 @@ impl From<Select> for Query {
 impl From<Insert> for Query {
     fn from(v: Insert) -> Self {
         Self::Insert(v)
+    }
+}
+
+impl From<BulkInsert> for Query {
+    fn from(v: BulkInsert) -> Self {
+        Self::BulkInsert(v)
     }
 }
 

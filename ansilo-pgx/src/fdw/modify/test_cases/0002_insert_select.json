@@ -7,42 +7,245 @@
             "Relation Name": "people",
             "Remote Ops": [
                 {
-                    "AddColumn": {
-                        "0": "id",
-                        "1": {
-                            "@type": "Parameter",
-                            "id": 1,
-                            "type": "Int64"
-                        }
-                    }
-                },
-                {
-                    "AddColumn": {
-                        "0": "first_name",
-                        "1": {
-                            "@type": "Parameter",
-                            "id": 2,
-                            "type": {
-                                "Utf8String": {
-                                    "length": "null"
+                    "SetBulkRows": [
+                        {
+                            "0": "id",
+                            "1": "first_name",
+                            "2": "last_name"
+                        },
+                        [
+                            {
+                                "@type": "Parameter",
+                                "id": 1,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 2,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 3,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 4,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 5,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 6,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 7,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 8,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 9,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 10,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 11,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 12,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 13,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 14,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 15,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 16,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 17,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 18,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 19,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 20,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 21,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 22,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 23,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 24,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 25,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 26,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 27,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 28,
+                                "type": "Int64"
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 29,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
+                                }
+                            },
+                            {
+                                "@type": "Parameter",
+                                "id": 30,
+                                "type": {
+                                    "Utf8String": {
+                                        "length": "null"
+                                    }
                                 }
                             }
-                        }
-                    }
-                },
-                {
-                    "AddColumn": {
-                        "0": "last_name",
-                        "1": {
-                            "@type": "Parameter",
-                            "id": 3,
-                            "type": {
-                                "Utf8String": {
-                                    "length": "null"
-                                }
-                            }
-                        }
-                    }
+                        ]
+                    ]
                 }
             ],
             "Plans": [

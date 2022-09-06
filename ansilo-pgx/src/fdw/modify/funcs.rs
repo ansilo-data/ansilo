@@ -1,7 +1,8 @@
-use std::{os::raw::c_int, ptr};
+use std::{cmp, os::raw::c_int, ptr};
 
 use ansilo_core::{
     data::{DataType, DataValue},
+    err::{bail, Result},
     sqlil,
 };
 use ansilo_pg::fdw::proto::*;
@@ -19,13 +20,22 @@ use crate::{
         common::{self, begin_remote_transaction, prepare_query_params, send_query_params},
         ctx::{
             from_fdw_private_modify, from_fdw_private_rel, into_fdw_private_modify,
-            mem::pg_transaction_scoped, FdwContext, FdwModifyContext, FdwQueryContext,
-            FdwQueryType, FdwScanContext, FdwSelectQuery, PlannerContext,
+            into_fdw_private_rel, mem::pg_transaction_scoped, FdwContext, FdwModifyContext,
+            FdwQueryContext, FdwQueryType, FdwScanContext, FdwSelectQuery, PlannerContext,
         },
     },
     sqlil::{convert, from_datum, from_pg_type, into_pg_type},
     util::{string::to_pg_cstr, table::PgTable, tuple::slot_get_attr},
 };
+
+/// Number of executions of a single-row insert query we should "batch" together
+/// This reduces the overhead of communicating with the FDW server over the unix socket.
+const SINGLE_INSERT_BATCH_SIZE: usize = 100;
+
+/// The data source could support batching of very high volume inserts but we dont
+/// necessarily want to batch everything together due to memory constraints.
+/// This is the upper limit we apply to batch inserts mapped to a single bulk query.
+const MAX_BULK_INSERT_BATCH_SIZE: usize = 100;
 
 #[pg_guard]
 pub unsafe extern "C" fn add_foreign_update_targets(
@@ -165,7 +175,11 @@ unsafe fn plan_foreign_insert(
         let insert = query.as_insert_mut().unwrap();
         insert.remote_ops.push(op);
         insert.params.push((param, att.attnum as _, att_type));
+        insert.inserted_cols.push(att.attnum as _);
     }
+
+    let insert = query.as_insert_mut().unwrap();
+    insert.relid = (*rte).relid;
 
     query
 }
@@ -322,12 +336,21 @@ pub unsafe extern "C" fn begin_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     eflags: ::std::os::raw::c_int,
 ) {
-    // Skip if EXPLAIN query
-    if eflags & pg_sys::EXEC_FLAG_EXPLAIN_ONLY as i32 != 0 {
-        return;
+    let (ctx, mut query, mut state) = from_fdw_private_modify(fdw_private);
+
+    if query.as_insert().is_some() {
+        // Save the singular insert query for later in case the batch size
+        // needs to be changed
+        state.singular_insert = Some(query.duplicate().unwrap());
     }
 
-    let (ctx, mut query, _state) = from_fdw_private_modify(fdw_private);
+    // We still want to do batch size calculations for EXPLAIN
+    // but skip the actual preparation of the queries.
+    if eflags & pg_sys::EXEC_FLAG_EXPLAIN_ONLY as i32 != 0 {
+        state.explain_only = true;
+        (*rinfo).ri_FdwState = fdw_private as *mut _;
+        return;
+    }
 
     // Upon the first modification query we begin a remote transaction
     begin_remote_transaction(&ctx.connection);
@@ -365,12 +388,124 @@ pub unsafe extern "C" fn begin_foreign_modify(
     (*rinfo).ri_FdwState = fdw_private as *mut _;
 }
 
+/// We support 2 types of "batching":
+///  1. A bulk insert query which inserts rows in single query, this is the preferred option
+///     as it reduces network roundtrips to the data source but must be supported by the connector.
+///  2. Performing multiple executions of insert query, each inserting a single row. This reduces
+///     the overhead of communicating with the FDW server over the unix socket but can be supported
+///     by connectors which dont support bulk inserts.
 #[pg_guard]
 pub unsafe extern "C" fn get_foreign_modify_batch_size(
     rinfo: *mut ResultRelInfo,
 ) -> ::std::os::raw::c_int {
-    // TODO: Determine from data source
-    return 100;
+    let (mut ctx, query, mut state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+
+    // Batching is only supported for inserts
+    if query.as_insert().is_none() {
+        return 1;
+    }
+
+    // Disabling batching if the query semantics cannot support it.
+    // Disable batching when we have to use RETURNING, there are any
+    // BEFORE/AFTER ROW INSERT triggers on the foreign table, or there are any
+    // WITH CHECK OPTION constraints from parent views.
+    //
+    // When there are any BEFORE ROW INSERT triggers on the table, we can't
+    // support it, because such triggers might query the table we're inserting
+    // into and act differently if the tuples that have already been processed
+    // and prepared for insertion are not there.
+    if !(*rinfo).ri_projectReturning.is_null()
+        || !(*rinfo).ri_WithCheckOptions.is_null()
+        || (!(*rinfo).ri_TrigDesc.is_null()
+            && ((*(*rinfo).ri_TrigDesc).trig_insert_before_row
+                || (*(*rinfo).ri_TrigDesc).trig_insert_after_row))
+    {
+        return 1;
+    }
+
+    // Get the unprepared insert query
+    let singular_insert = state.singular_insert.as_mut().unwrap();
+
+    // First get the max batch size for the current insert query
+    let batch_size = singular_insert.get_max_batch_size().unwrap();
+
+    // If the batch size is 1, the connector does not support bulk inserts
+    if batch_size == 1 {
+        return SINGLE_INSERT_BATCH_SIZE as _;
+    }
+
+    // Get the maximum batch size we support
+    let batch_size = cmp::min(batch_size, MAX_BULK_INSERT_BATCH_SIZE as _);
+
+    // Try create a bulk insert with the desired batch size
+    match create_bulk_insert(&mut *ctx, singular_insert, batch_size) {
+        Ok(mut query) => {
+            // Prepare the query for execution (if we are not in an EXPLAIN query)
+            if !state.explain_only {
+                query.prepare().unwrap();
+            }
+
+            // Now update the fdw private state with the batched query
+            let query = pg_transaction_scoped(query);
+            (*rinfo).ri_FdwState = into_fdw_private_modify(ctx, query, state) as *mut _;
+
+            return batch_size as _;
+        }
+        Err(_) => {
+            // We failed set the batch size to our desired value,
+            // fallback to singular inserts
+            return SINGLE_INSERT_BATCH_SIZE as _;
+        }
+    }
+}
+
+unsafe fn create_bulk_insert(
+    ctx: &mut FdwContext,
+    singular_insert: &FdwQueryContext,
+    batch_size: u32,
+) -> Result<FdwQueryContext> {
+    let mut query = ctx.create_query(singular_insert.base_varno, sqlil::QueryType::BulkInsert)?;
+
+    let insert = singular_insert.as_insert().unwrap();
+
+    let table = PgTable::open(insert.relid as _, pg_sys::NoLock as _).unwrap();
+
+    // Determine columns specified in the insert
+    let inserted_cols = table
+        .attrs()
+        .filter(|i| insert.inserted_cols.contains(&(i.attnum as _)))
+        .collect::<Vec<_>>();
+
+    let cols = inserted_cols.iter().map(|c| c.name().to_string()).collect();
+    let mut values = vec![];
+
+    // Create a parameter for each column in each
+    for _ in 0..batch_size {
+        for att in inserted_cols.iter() {
+            let (col_name, att_type, param) = create_param_for_col(att, &mut query);
+
+            let bulk_insert = query.as_bulk_insert_mut().unwrap();
+            bulk_insert
+                .params
+                .push((param.clone(), att.attnum as _, att_type));
+            values.push(sqlil::Expr::Parameter(param));
+        }
+    }
+
+    // Pass the expressions to the connector
+    let op = BulkInsertQueryOperation::SetBulkRows((cols, values));
+    let res = query.apply(op.clone().into())?;
+
+    let bulk_insert = query.as_bulk_insert_mut().unwrap();
+    bulk_insert.remote_ops.push(op);
+    bulk_insert.batch_size = batch_size;
+
+    match res {
+        QueryOperationResult::Ok(_) => Ok(query),
+        QueryOperationResult::Unsupported => {
+            bail!("Failed to create bulk insert query: connector returned unsupported")
+        }
+    }
 }
 
 #[pg_guard]
@@ -388,7 +523,15 @@ pub unsafe extern "C" fn exec_foreign_insert(
     slot: *mut TupleTableSlot,
     plan_slot: *mut TupleTableSlot,
 ) -> *mut TupleTableSlot {
-    let (ctx, mut query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let (ctx, mut query, state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+
+    // In case we started the query with a bulk insert but somehow
+    // ended up here, we reset the query batch size to one
+    if query.as_bulk_insert().is_some() {
+        query = pg_transaction_scoped(state.singular_insert.as_ref().unwrap().duplicate().unwrap());
+        query.prepare().unwrap();
+    }
+
     let insert = query.as_insert().unwrap();
     let mut query_input = vec![];
 
@@ -417,22 +560,69 @@ pub unsafe extern "C" fn exec_foreign_batch_insert(
     plan_slots: *mut *mut TupleTableSlot,
     num_slots: *mut ::std::os::raw::c_int,
 ) -> *mut *mut TupleTableSlot {
-    let (ctx, mut query, _state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
-    let insert = query.as_insert().unwrap();
+    let (mut ctx, mut query, state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
     let mut query_input = vec![];
 
-    for i in 0..*num_slots {
-        let slot = *slots.add(i as _);
-        let mut row_input = vec![];
+    // The final batch could contain less rows than the bulk insert size
+    // When this is the case we reduce the batch size
+    if (*num_slots as u32) % query.as_bulk_insert().unwrap().batch_size != 0 {
+        let singular_insert = state.singular_insert.as_ref().unwrap();
 
-        for (param, att_num, type_oid) in insert.params.iter() {
-            row_input.push((
+        // First try set the batch size to the remaining rows
+        query = match create_bulk_insert(&mut *ctx, singular_insert, *num_slots as _) {
+            Ok(query) => pg_transaction_scoped(query),
+            Err(_) => {
+                // If that fails we use the singular insert query for the remaining rows
+                pg_transaction_scoped(singular_insert.duplicate().unwrap())
+            }
+        };
+
+        query.prepare().unwrap();
+    }
+
+    let batch_size = match &query.q {
+        FdwQueryType::Insert(_) => 1,
+        FdwQueryType::BulkInsert(i) => i.batch_size,
+        _ => unreachable!(),
+    };
+
+    let params = match &query.q {
+        FdwQueryType::Insert(i) => &i.params,
+        FdwQueryType::BulkInsert(i) => &i.params,
+        _ => unreachable!(),
+    };
+
+    let cols_per_row = state
+        .singular_insert
+        .as_ref()
+        .unwrap()
+        .as_insert()
+        .unwrap()
+        .inserted_cols
+        .len();
+
+    // At this point the number of slots will be divisible by the insert batch size
+    // So we divide up the slots into executions of the query according to the batch size.
+    let batches = (*num_slots) as u32 / batch_size;
+    let mut slot_num = 0;
+
+    for i in 0..batches {
+        let mut batch_input = vec![];
+
+        for (j, (param, att_num, type_oid)) in params.iter().enumerate() {
+            let slot = *slots.add(slot_num);
+
+            batch_input.push((
                 param.id,
                 slot_datum_into_data_val(slot, (att_num - 1) as _, *type_oid, &param.r#type),
             ));
+
+            if (j + 1) % cols_per_row == 0 {
+                slot_num += 1;
+            }
         }
 
-        query_input.push(row_input);
+        query_input.push(batch_input);
     }
 
     query.execute_batch(query_input).unwrap();

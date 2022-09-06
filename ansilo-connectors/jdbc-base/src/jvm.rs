@@ -1,7 +1,7 @@
 use std::{env, fs, path::PathBuf};
 
 use ansilo_core::err::{bail, Context, Error, Result};
-use ansilo_logging::{debug, info, warn};
+use ansilo_logging::{debug, warn};
 use jni::{
     objects::{JObject, JString},
     InitArgsBuilder, JNIEnv, JNIVersion, JavaVM,
@@ -26,7 +26,7 @@ lazy_static::lazy_static! {
                 .unwrap()
                 .subsec_millis();
 
-            info!("JVM Debug port: {}", port);
+            ansilo_logging::info!("JVM Debug port: {}", port);
 
             jvm_args
                 .option(&format!("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address={}", port))

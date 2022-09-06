@@ -29,6 +29,3 @@ jsonwebtoken = "*"
 [[bench]]
 name = "benches"
 harness = false
-
-[profile.bench]
-debug = true

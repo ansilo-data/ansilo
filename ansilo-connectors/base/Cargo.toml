@@ -13,6 +13,7 @@ test = []
 ansilo-core = { path = "../../ansilo-core" }
 ansilo-logging = { path = "../../ansilo-logging" }
 bincode = "2.0.0-rc.1"
+enum-as-inner = "0.5"
 itertools = "0.10.3"
 jni = { git = "https://github.com/TimeToogo/jni-rs", features = ["invocation"] }
 lazy_static = "1.4.0"

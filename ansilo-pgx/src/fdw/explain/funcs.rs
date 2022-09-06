@@ -53,7 +53,7 @@ pub unsafe extern "C" fn explain_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     es: *mut ExplainState,
 ) {
-    let (ctx, mut query, _) = from_fdw_private_modify(fdw_private);
+    let (ctx, mut query, _) = from_fdw_private_rel((*rinfo).ri_FdwState as *mut _);
 
     explain_modify((*mtstate).ps.plan, es, &mut query);
 }
@@ -77,6 +77,7 @@ unsafe fn explain_modify(plan: *mut Plan, es: *mut ExplainState, query: &mut Fdw
     if (*es).verbose {
         let remote_ops = match &query.q {
             FdwQueryType::Insert(q) => serde_json::to_value(q.remote_ops.clone()),
+            FdwQueryType::BulkInsert(q) => serde_json::to_value(q.remote_ops.clone()),
             FdwQueryType::Update(q) => serde_json::to_value(q.remote_ops.clone()),
             FdwQueryType::Delete(q) => serde_json::to_value(q.remote_ops.clone()),
             _ => panic!(

@@ -17,3 +17,6 @@ members = [
     "ansilo-util/*",
     "ansilo-e2e",
 ]
+
+[profile.bench]
+debug = true

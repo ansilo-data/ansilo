@@ -127,8 +127,8 @@ impl QueryHandle for JdbcPreparedQuery {
                     .new_direct_byte_buffer_raw(buff.as_ptr() as *mut _, buff.len())
                     .context("Failed to create direct byte buffer")?;
 
-                let byte_buff = env
-                    .call_method_unchecked(
+                let byte_buff = env.auto_local(
+                    env.call_method_unchecked(
                         *byte_buff,
                         JMethodID::from(self.as_read_only_buffer_method_id.unwrap()),
                         JavaType::Object("java/nio/ByteBuffer".to_owned()),
@@ -136,7 +136,8 @@ impl QueryHandle for JdbcPreparedQuery {
                     )
                     .context("Failed to call ByteBuffer::asReadOnlyBuffer")?
                     .l()
-                    .context("Failed to convert ByteBuffer to object")?;
+                    .context("Failed to convert ByteBuffer to object")?,
+                );
 
                 self.jvm.check_exceptions(env)?;
 
@@ -148,7 +149,7 @@ impl QueryHandle for JdbcPreparedQuery {
                     self.jdbc_prepared_statement.as_obj(),
                     JMethodID::from(self.write_method_id.unwrap()),
                     JavaType::Primitive(Primitive::Int),
-                    &[JValue::Object(byte_buff)],
+                    &[JValue::Object(byte_buff.as_obj())],
                 )
                 .context("Failed to invoke JdbcPreparedQuery::execute")?
                 .i()
@@ -199,8 +200,8 @@ impl QueryHandle for JdbcPreparedQuery {
 
     fn logged(&self) -> Result<LoggedQuery> {
         let params = self.jvm.with_local_frame(32, |env| {
-            let logged_params = env
-                .call_method(
+            let logged_params = env.auto_local(
+                env.call_method(
                     self.jdbc_prepared_statement.as_obj(),
                     "getLoggedParams",
                     "()Ljava/util/List;",
@@ -208,17 +209,19 @@ impl QueryHandle for JdbcPreparedQuery {
                 )
                 .context("Failed to invoke JdbcPreparedQuery::getLoggedParams")?
                 .l()
-                .context("Failed to convert List into object")?;
+                .context("Failed to convert List into object")?,
+            );
 
             self.jvm.check_exceptions(env)?;
 
             let logged_params =
-                JList::from_env(env, logged_params).context("Failed to read list")?;
+                JList::from_env(env, logged_params.as_obj()).context("Failed to read list")?;
             let mut params = vec![];
 
             for param in logged_params.iter().context("Failed to iterate list")? {
-                let param = env.auto_local(
-                    env.call_method(param, "toString", "()Ljava/lang/String;", &[])
+                let param = env.auto_local(param);
+                let param_string = env.auto_local(
+                    env.call_method(param.as_obj(), "toString", "()Ljava/lang/String;", &[])
                         .context("Failed to call LoggedParam::toString")?
                         .l()
                         .context("Failed to convert to object")?,
@@ -227,7 +230,7 @@ impl QueryHandle for JdbcPreparedQuery {
                 self.jvm.check_exceptions(env)?;
 
                 let param = env
-                    .get_string(JString::from(param.as_obj()))
+                    .get_string(JString::from(param_string.as_obj()))
                     .context("Failed to convert LoggedParam to java string")
                     .map(|i| {
                         cesu8::from_java_cesu8(i.to_bytes())
