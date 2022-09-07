@@ -1,3 +1,5 @@
+use std::{marker::PhantomData, ops::DerefMut};
+
 use ansilo_core::{
     data::{DataType, DataValue, StringOptions},
     err::{bail, ensure, Context, Result},
@@ -13,44 +15,36 @@ use ansilo_connectors_base::{
     },
 };
 
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
+use tokio_postgres::Client;
 
-use super::{MysqlJdbcConnectorEntityConfig, MysqlJdbcEntitySourceConfig, MysqlJdbcQueryCompiler};
+use crate::{
+    PostgresConnection, PostgresConnectorEntityConfig, PostgresEntitySourceConfig, PostgresQuery,
+    PostgresQueryCompiler,
+};
 
 /// Maximum query params supported in a single query
 const MAX_PARAMS: u16 = u16::MAX;
 
-/// Query planner for Mysql JDBC driver
-pub struct MysqlJdbcQueryPlanner {}
+/// Query planner for Postgres JDBC driver
+pub struct PostgresQueryPlanner<T> {
+    _t: PhantomData<T>,
+}
 
-impl QueryPlanner for MysqlJdbcQueryPlanner {
-    type TConnection = JdbcConnection;
-    type TQuery = JdbcQuery;
-    type TEntitySourceConfig = MysqlJdbcEntitySourceConfig;
+impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
+    type TConnection = PostgresConnection<T>;
+    type TQuery = PostgresQuery;
+    type TEntitySourceConfig = PostgresEntitySourceConfig;
 
     fn estimate_size(
         connection: &mut Self::TConnection,
-        entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
+        entity: &EntitySource<PostgresEntitySourceConfig>,
     ) -> Result<OperationCost> {
-        // TODO: multiple sample options
-
-        let tab = match &entity.source {
-            MysqlJdbcEntitySourceConfig::Table(tab) => tab,
-        };
-
-        let mut query = connection.prepare(JdbcQuery::new(
-            r#"
-            SELECT TABLE_ROWS FROM INFORMATION_SCHEMA.TABLES 
-            WHERE TABLE_SCHEMA = COALESCE(?, DATABASE())
-            AND TABLE_NAME = ?
-            "#,
-            vec![
-                JdbcQueryParam::Constant(match &tab.database_name {
-                    Some(db) => DataValue::Utf8String(db.clone()),
-                    None => DataValue::Null,
-                }),
-                JdbcQueryParam::Constant(DataValue::Utf8String(tab.table_name.clone())),
-            ],
+        let mut query = connection.prepare(PostgresQuery::new(
+            format!(
+                r#"EXPLAIN (FORMAT JSON) SELECT * FROM {}"#,
+                PostgresQueryCompiler::<T>::compile_source_identifier(&entity.source)?
+            ),
+            vec![],
         ))?;
 
         let mut result_set = query.execute()?.reader()?;
@@ -58,69 +52,72 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
             .read_data_value()?
             .context("Unexpected empty result set")?;
 
-        let num_rows = match value.clone().try_coerce_into(&DataType::UInt64) {
-            Ok(DataValue::UInt64(num)) => Some(num),
-            _ if value.is_null() => None,
+        let plan = match value.clone() {
+            DataValue::Utf8String(plan) => plan,
             _ => bail!("Unexpected data value returned: {:?}", value),
         };
 
-        let num_rows = if num_rows.is_none() {
-            // If could not determine from information schema, fallback to COUNT(*)
-            let table = MysqlJdbcQueryCompiler::compile_source_identifier(&entity.source)?;
+        let plan: serde_json::Value = serde_json::from_str(&plan)?;
+        let plan = plan
+            .as_array()
+            .context("Expected array")?
+            .get(0)
+            .context("Expected not empty")?
+            .as_object()
+            .context("Expected object")?
+            .get("Plan")
+            .context("Expected Plan key")?
+            .as_object()
+            .context("Expected object")?;
 
-            let mut query = connection.prepare(JdbcQuery::new(
-                format!(r#"SELECT COUNT(*) FROM {}"#, table),
-                vec![],
-            ))?;
+        let num_rows = plan
+            .get("Plan Rows")
+            .context("Expected Plan Rows key")?
+            .as_u64()
+            .context("Expected row count integer")?;
 
-            let mut result_set = query.execute()?.reader()?;
-            let value = result_set
-                .read_data_value()?
-                .context("Unexpected empty result set")?;
+        let width = plan
+            .get("Plan Width")
+            .context("Expected Plan Width key")?
+            .as_u64()
+            .context("Expected width integer")?;
 
-            match value.clone().try_coerce_into(&DataType::UInt64) {
-                Ok(DataValue::UInt64(num)) => num,
-                _ => bail!("Unexpected data value returned: {:?}", value),
-            }
-        } else {
-            num_rows.unwrap()
-        };
+        let startup_cost = plan
+            .get("Startup Cost")
+            .context("Expected Startup Cost key")?
+            .as_f64()
+            .context("Expected startup cost float64")?;
 
-        Ok(OperationCost::new(Some(num_rows as _), None, None, None))
+        let total_cost = plan
+            .get("Total Cost")
+            .context("Expected Total Cost key")?
+            .as_f64()
+            .context("Expected total cost float64")?;
+
+        Ok(OperationCost::new(
+            Some(num_rows as _),
+            Some(width as _),
+            Some(startup_cost),
+            Some(total_cost),
+        ))
     }
 
     fn get_row_id_exprs(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
-        entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
+        _conf: &PostgresConnectorEntityConfig,
+        _entity: &EntitySource<PostgresEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<Vec<(sql::Expr, DataType)>> {
-        let primary_keys = entity
-            .conf
-            .attributes
-            .iter()
-            .filter(|a| a.primary_key)
-            .collect::<Vec<_>>();
-
-        if primary_keys.is_empty() {
-            bail!("Cannot perform operation on table without primary keys");
-        }
-
-        Ok(primary_keys
-            .into_iter()
-            .map(|a| {
-                (
-                    sql::Expr::attr(source.alias.clone(), &a.id),
-                    a.r#type.clone(),
-                )
-            })
-            .collect())
+        Ok(vec![(
+            sql::Expr::attr(source.alias.clone(), "ctid"),
+            DataType::Utf8String(StringOptions::default()),
+        )])
     }
 
     fn create_base_select(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
-        _entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
+        _conf: &PostgresConnectorEntityConfig,
+        _entity: &EntitySource<PostgresEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)> {
         let select = sql::Select::new(source.clone());
@@ -129,7 +126,7 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn apply_select_operation(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
+        _conf: &PostgresConnectorEntityConfig,
         select: &mut sql::Select,
         op: SelectQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -155,8 +152,8 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn create_base_insert(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
-        _entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
+        _conf: &PostgresConnectorEntityConfig,
+        _entity: &EntitySource<PostgresEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Insert)> {
         Ok((OperationCost::default(), sql::Insert::new(source.clone())))
@@ -164,8 +161,8 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn create_base_bulk_insert(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
-        _entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
+        _conf: &PostgresConnectorEntityConfig,
+        _entity: &EntitySource<PostgresEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::BulkInsert)> {
         Ok((
@@ -176,8 +173,8 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn create_base_update(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
-        _entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
+        _conf: &PostgresConnectorEntityConfig,
+        _entity: &EntitySource<PostgresEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Update)> {
         Ok((OperationCost::default(), sql::Update::new(source.clone())))
@@ -185,8 +182,8 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn create_base_delete(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
-        _entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
+        _conf: &PostgresConnectorEntityConfig,
+        _entity: &EntitySource<PostgresEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Delete)> {
         Ok((OperationCost::default(), sql::Delete::new(source.clone())))
@@ -194,10 +191,10 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn get_insert_max_batch_size(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
+        _conf: &PostgresConnectorEntityConfig,
         insert: &sql::Insert,
     ) -> Result<u32> {
-        // @see https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html#packet-COM_STMT_PREPARE_OK
+        // @see https://doxygen.postgresql.org/libpq-fe_8h.html#afcd90c8ad3fd816d18282eb622678c25
         let params: usize = insert
             .cols
             .iter()
@@ -213,7 +210,7 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn apply_insert_operation(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
+        _conf: &PostgresConnectorEntityConfig,
         insert: &mut sql::Insert,
         op: InsertQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -224,7 +221,7 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn apply_bulk_insert_operation(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
+        _conf: &PostgresConnectorEntityConfig,
         bulk_insert: &mut sql::BulkInsert,
         op: BulkInsertQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -237,7 +234,7 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn apply_update_operation(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
+        _conf: &PostgresConnectorEntityConfig,
         update: &mut sql::Update,
         op: UpdateQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -249,7 +246,7 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn apply_delete_operation(
         _connection: &mut Self::TConnection,
-        _conf: &MysqlJdbcConnectorEntityConfig,
+        _conf: &PostgresConnectorEntityConfig,
         delete: &mut sql::Delete,
         op: DeleteQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -260,21 +257,21 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
 
     fn explain_query(
         connection: &mut Self::TConnection,
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         verbose: bool,
     ) -> Result<serde_json::Value> {
-        let compiled = MysqlJdbcQueryCompiler::compile_query(connection, conf, query.clone())?;
+        let compiled = PostgresQueryCompiler::<T>::compile_query(connection, conf, query.clone())?;
 
         Ok(if verbose {
             serde_json::to_value(compiled)
         } else {
-            serde_json::to_value(compiled.query)
+            serde_json::to_value(compiled.sql)
         }?)
     }
 }
 
-impl MysqlJdbcQueryPlanner {
+impl<T: DerefMut<Target = Client>> PostgresQueryPlanner<T> {
     fn select_add_col(
         select: &mut sql::Select,
         expr: sql::Expr,
@@ -429,11 +426,6 @@ impl MysqlJdbcQueryPlanner {
 
     fn expr_supported(expr: &sql::Expr) -> bool {
         expr.walk_all(|e| match e {
-            sql::Expr::Cast(cast) => match cast.r#type {
-                DataType::DateTimeWithTZ => false,
-                DataType::Uuid => false,
-                _ => true,
-            },
             _ => true,
         })
     }

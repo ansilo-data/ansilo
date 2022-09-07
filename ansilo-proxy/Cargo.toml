@@ -11,7 +11,7 @@ ansilo-logging = { path = "../ansilo-logging" }
 socket2 = "0.4"
 tokio-native-tls = "0.3"
 rustls-pemfile = "1.0"
-tokio = { version = "1.20", features = ["socket2", "net", "rt", "rt-multi-thread", "io-util", "macros", "sync"] }
+tokio = { version = "^1.20", features = ["socket2", "net", "rt", "rt-multi-thread", "io-util", "macros", "sync"] }
 async-trait = "0.1"
 futures = "0.3"
 

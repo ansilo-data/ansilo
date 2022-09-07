@@ -1,3 +1,5 @@
+use std::{marker::PhantomData, ops::DerefMut};
+
 use ansilo_core::{
     data::{DataType, DataValue},
     err::{bail, Context, Result},
@@ -5,23 +7,28 @@ use ansilo_core::{
 };
 
 use ansilo_connectors_base::interface::QueryCompiler;
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
+use ansilo_util_pg::query::pg_quote_identifier;
+use tokio_postgres::Client;
 
-use super::{MysqlJdbcConnectorEntityConfig, MysqlJdbcEntitySourceConfig, MysqlJdbcTableOptions};
+use crate::{PostgresConnection, PostgresQuery, QueryParam};
 
-/// Query compiler for Mysql JDBC driver
-pub struct MysqlJdbcQueryCompiler;
+use super::{PostgresConnectorEntityConfig, PostgresEntitySourceConfig, PostgresTableOptions};
 
-impl QueryCompiler for MysqlJdbcQueryCompiler {
-    type TConnection = JdbcConnection;
-    type TQuery = JdbcQuery;
-    type TEntitySourceConfig = MysqlJdbcEntitySourceConfig;
+/// Query compiler for Postgres driver
+pub struct PostgresQueryCompiler<T> {
+    _data: PhantomData<T>,
+}
+
+impl<T: DerefMut<Target = Client>> QueryCompiler for PostgresQueryCompiler<T> {
+    type TConnection = PostgresConnection<T>;
+    type TQuery = PostgresQuery;
+    type TEntitySourceConfig = PostgresEntitySourceConfig;
 
     fn compile_query(
         _con: &mut Self::TConnection,
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: sql::Query,
-    ) -> Result<JdbcQuery> {
+    ) -> Result<PostgresQuery> {
         match &query {
             sql::Query::Select(select) => Self::compile_select_query(conf, &query, select),
             sql::Query::Insert(insert) => Self::compile_insert_query(conf, &query, insert),
@@ -32,13 +39,13 @@ impl QueryCompiler for MysqlJdbcQueryCompiler {
     }
 }
 
-impl MysqlJdbcQueryCompiler {
+impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     fn compile_select_query(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         select: &sql::Select,
-    ) -> Result<JdbcQuery> {
-        let mut params = Vec::<JdbcQueryParam>::new();
+    ) -> Result<PostgresQuery> {
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "SELECT".to_string(),
@@ -59,15 +66,15 @@ impl MysqlJdbcQueryCompiler {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(JdbcQuery::new(query, params))
+        Ok(PostgresQuery::new(query, params))
     }
 
     fn compile_insert_query(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         insert: &sql::Insert,
-    ) -> Result<JdbcQuery> {
-        let mut params = Vec::<JdbcQueryParam>::new();
+    ) -> Result<PostgresQuery> {
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "INSERT INTO".to_string(),
@@ -101,15 +108,15 @@ impl MysqlJdbcQueryCompiler {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(JdbcQuery::new(query, params))
+        Ok(PostgresQuery::new(query, params))
     }
 
     fn compile_bulk_insert_query(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         insert: &sql::BulkInsert,
-    ) -> Result<JdbcQuery> {
-        let mut params = Vec::<JdbcQueryParam>::new();
+    ) -> Result<PostgresQuery> {
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "INSERT INTO".to_string(),
@@ -147,15 +154,15 @@ impl MysqlJdbcQueryCompiler {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(JdbcQuery::new(query, params))
+        Ok(PostgresQuery::new(query, params))
     }
 
     fn compile_update_query(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         update: &sql::Update,
-    ) -> Result<JdbcQuery> {
-        let mut params = Vec::<JdbcQueryParam>::new();
+    ) -> Result<PostgresQuery> {
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "UPDATE".to_string(),
@@ -185,15 +192,15 @@ impl MysqlJdbcQueryCompiler {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(JdbcQuery::new(query, params))
+        Ok(PostgresQuery::new(query, params))
     }
 
     fn compile_delete_query(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         delete: &sql::Delete,
-    ) -> Result<JdbcQuery> {
-        let mut params = Vec::<JdbcQueryParam>::new();
+    ) -> Result<PostgresQuery> {
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "DELETE FROM".to_string(),
@@ -205,14 +212,14 @@ impl MysqlJdbcQueryCompiler {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(JdbcQuery::new(query, params))
+        Ok(PostgresQuery::new(query, params))
     }
 
     fn compile_select_cols(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         cols: &Vec<(String, sql::Expr)>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         Ok(cols
             .into_iter()
@@ -228,10 +235,10 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_select_joins(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         joins: &Vec<sql::Join>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         Ok(joins
             .into_iter()
@@ -241,10 +248,10 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_select_join(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         join: &sql::Join,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let target = Self::compile_entity_source(conf, &join.target, true)?;
         let cond = if join.conds.is_empty() {
@@ -264,15 +271,15 @@ impl MysqlJdbcQueryCompiler {
             sql::JoinType::Inner => format!("INNER JOIN {} ON {}", target, cond),
             sql::JoinType::Left => format!("LEFT JOIN {} ON {}", target, cond),
             sql::JoinType::Right => format!("RIGHT JOIN {} ON {}", target, cond),
-            sql::JoinType::Full => panic!("MySql does not support FULL OUTER JOIN"),
+            sql::JoinType::Full => panic!("postgres does not support FULL OUTER JOIN"),
         })
     }
 
     fn compile_where(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         r#where: &Vec<sql::Expr>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         if r#where.is_empty() {
             return Ok("".to_string());
@@ -288,10 +295,10 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_select_group_by(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         group_bys: &Vec<sql::Expr>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         if group_bys.is_empty() {
             return Ok("".to_string());
@@ -307,10 +314,10 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_order_by(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         order_bys: &Vec<sql::Ordering>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         if order_bys.is_empty() {
             return Ok("".to_string());
@@ -357,10 +364,10 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_expr(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         expr: &sql::Expr,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let sql = match expr {
             sql::Expr::Attribute(eva) => {
@@ -379,16 +386,16 @@ impl MysqlJdbcQueryCompiler {
     }
 
     pub fn compile_identifier(id: String) -> Result<String> {
-        // @see https://dev.mysql.com/doc/refman/8.0/en/identifiers.html#:~:text=An%20identifier%20may%20be%20quoted,it%20need%20not%20be%20quoted.)
+        // @see https://dev.postgres.com/doc/refman/8.0/en/identifiers.html#:~:text=An%20identifier%20may%20be%20quoted,it%20need%20not%20be%20quoted.)
         if id.contains("\0") {
             bail!("Invalid identifier: \"{id}\", cannot contain '\\0' chars");
         }
 
-        Ok(format!("`{}`", id.replace("`", "``")))
+        Ok(pg_quote_identifier(&id))
     }
 
     pub fn compile_entity_source(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         source: &sql::EntitySource,
         include_alias: bool,
     ) -> Result<String> {
@@ -407,19 +414,19 @@ impl MysqlJdbcQueryCompiler {
         })
     }
 
-    pub fn compile_source_identifier(source: &MysqlJdbcEntitySourceConfig) -> Result<String> {
+    pub fn compile_source_identifier(source: &PostgresEntitySourceConfig) -> Result<String> {
         Ok(match &source {
-            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions {
-                database_name: Some(db),
+            PostgresEntitySourceConfig::Table(PostgresTableOptions {
+                schema_name: Some(schema),
                 table_name: table,
                 ..
             }) => format!(
                 "{}.{}",
-                Self::compile_identifier(db.clone())?,
+                Self::compile_identifier(schema.clone())?,
                 Self::compile_identifier(table.clone())?
             ),
-            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions {
-                database_name: None,
+            PostgresEntitySourceConfig::Table(PostgresTableOptions {
+                schema_name: None,
                 table_name: table,
                 ..
             }) => Self::compile_identifier(table.clone())?,
@@ -427,7 +434,7 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_attribute_identifier(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         eva: &sql::AttributeId,
         include_table: bool,
@@ -438,7 +445,7 @@ impl MysqlJdbcQueryCompiler {
             .with_context(|| format!("Failed to find entity {:?}", source.entity.clone()))?;
 
         let table = match &entity.source {
-            MysqlJdbcEntitySourceConfig::Table(table) => table,
+            PostgresEntitySourceConfig::Table(table) => table,
         };
 
         let column = table
@@ -463,21 +470,21 @@ impl MysqlJdbcQueryCompiler {
         })
     }
 
-    fn compile_constant(c: &sql::Constant, params: &mut Vec<JdbcQueryParam>) -> Result<String> {
-        params.push(JdbcQueryParam::Constant(c.value.clone()));
-        Ok("?".to_string())
+    fn compile_constant(c: &sql::Constant, params: &mut Vec<QueryParam>) -> Result<String> {
+        params.push(QueryParam::Constant(c.value.clone()));
+        Ok(format!("${}", params.len()))
     }
 
-    fn compile_param(p: &sql::Parameter, params: &mut Vec<JdbcQueryParam>) -> Result<String> {
-        params.push(JdbcQueryParam::Dynamic(p.id, p.r#type.clone()));
-        Ok("?".to_string())
+    fn compile_param(p: &sql::Parameter, params: &mut Vec<QueryParam>) -> Result<String> {
+        params.push(QueryParam::Dynamic(p.clone()));
+        Ok(format!("${}", params.len()))
     }
 
     fn compile_unary_op(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         op: &sql::UnaryOp,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let inner = Self::compile_expr(conf, query, &*op.expr, params)?;
 
@@ -491,10 +498,10 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_binary_op(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         op: &sql::BinaryOp,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let l = Self::compile_expr(conf, query, &*op.left, params)?;
         let r = Self::compile_expr(conf, query, &*op.right, params)?;
@@ -526,10 +533,10 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_cast(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         cast: &sql::Cast,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let arg = Self::compile_expr(conf, query, &cast.expr, params)?;
 
@@ -554,18 +561,18 @@ impl MysqlJdbcQueryCompiler {
             DataType::JSON => format!("CAST({} AS JSON)", arg),
             DataType::Date => format!("CAST({} AS DATE)", arg),
             DataType::DateTime => format!("CAST({} AS DATETIME)", arg),
-            DataType::DateTimeWithTZ => panic!("MySQL does not support Date Time TZ types"),
+            DataType::DateTimeWithTZ => panic!("postgres does not support Date Time TZ types"),
             DataType::Null => format!("CASE WHEN ({}) THEN NULL ELSE NULL END", arg),
-            DataType::Uuid => panic!("MySQL does not support UUID types"),
+            DataType::Uuid => panic!("postgres does not support UUID types"),
             DataType::Time => format!("CAST({} AS TIME)", arg),
         })
     }
 
     fn compile_function_call(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         func: &sql::FunctionCall,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         Ok(match func {
             sql::FunctionCall::Length(arg) => {
@@ -601,10 +608,10 @@ impl MysqlJdbcQueryCompiler {
     }
 
     fn compile_aggregate_call(
-        conf: &MysqlJdbcConnectorEntityConfig,
+        conf: &PostgresConnectorEntityConfig,
         query: &sql::Query,
         agg: &sql::AggregateCall,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         Ok(match agg {
             sql::AggregateCall::Sum(arg) => {
@@ -625,7 +632,7 @@ impl MysqlJdbcQueryCompiler {
                 format!("AVG({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::AggregateCall::StringAgg(call) => {
-                params.push(JdbcQueryParam::Constant(DataValue::Utf8String(
+                params.push(QueryParam::Constant(DataValue::Utf8String(
                     call.separator.clone(),
                 )));
                 format!(
@@ -647,58 +654,81 @@ mod tests {
     };
 
     use ansilo_connectors_base::common::entity::EntitySource;
+    use pretty_assertions::assert_eq;
+
+    use crate::{PooledClient, QueryParam};
 
     use super::*;
 
-    fn compile_select(select: sql::Select, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
+    fn compile_select(select: sql::Select, conf: PostgresConnectorEntityConfig) -> PostgresQuery {
         let query = sql::Query::Select(select);
-        MysqlJdbcQueryCompiler::compile_select_query(&conf, &query, query.as_select().unwrap())
-            .unwrap()
+        PostgresQueryCompiler::<PooledClient>::compile_select_query(
+            &conf,
+            &query,
+            query.as_select().unwrap(),
+        )
+        .unwrap()
     }
 
-    fn compile_insert(insert: sql::Insert, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
+    fn compile_insert(insert: sql::Insert, conf: PostgresConnectorEntityConfig) -> PostgresQuery {
         let query = sql::Query::Insert(insert);
-        MysqlJdbcQueryCompiler::compile_insert_query(&conf, &query, query.as_insert().unwrap())
-            .unwrap()
+        PostgresQueryCompiler::<PooledClient>::compile_insert_query(
+            &conf,
+            &query,
+            query.as_insert().unwrap(),
+        )
+        .unwrap()
     }
 
     fn compile_bulk_insert(
         bulk_insert: sql::BulkInsert,
-        conf: MysqlJdbcConnectorEntityConfig,
-    ) -> JdbcQuery {
+        conf: PostgresConnectorEntityConfig,
+    ) -> PostgresQuery {
         let query = sql::Query::BulkInsert(bulk_insert);
-        MysqlJdbcQueryCompiler::compile_bulk_insert_query(&conf, &query, query.as_bulk_insert().unwrap())
-            .unwrap()
+        PostgresQueryCompiler::<PooledClient>::compile_bulk_insert_query(
+            &conf,
+            &query,
+            query.as_bulk_insert().unwrap(),
+        )
+        .unwrap()
     }
 
-    fn compile_update(update: sql::Update, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
+    fn compile_update(update: sql::Update, conf: PostgresConnectorEntityConfig) -> PostgresQuery {
         let query = sql::Query::Update(update);
-        MysqlJdbcQueryCompiler::compile_update_query(&conf, &query, query.as_update().unwrap())
-            .unwrap()
+        PostgresQueryCompiler::<PooledClient>::compile_update_query(
+            &conf,
+            &query,
+            query.as_update().unwrap(),
+        )
+        .unwrap()
     }
 
-    fn compile_delete(delete: sql::Delete, conf: MysqlJdbcConnectorEntityConfig) -> JdbcQuery {
+    fn compile_delete(delete: sql::Delete, conf: PostgresConnectorEntityConfig) -> PostgresQuery {
         let query = sql::Query::Delete(delete);
-        MysqlJdbcQueryCompiler::compile_delete_query(&conf, &query, query.as_delete().unwrap())
-            .unwrap()
+        PostgresQueryCompiler::<PooledClient>::compile_delete_query(
+            &conf,
+            &query,
+            query.as_delete().unwrap(),
+        )
+        .unwrap()
     }
 
     fn create_entity_config(
         id: &str,
-        source: MysqlJdbcEntitySourceConfig,
-    ) -> EntitySource<MysqlJdbcEntitySourceConfig> {
+        source: PostgresEntitySourceConfig,
+    ) -> EntitySource<PostgresEntitySourceConfig> {
         EntitySource::new(
             EntityConfig::minimal(id, vec![], EntitySourceConfig::minimal("")),
             source,
         )
     }
 
-    fn mock_entity_table() -> MysqlJdbcConnectorEntityConfig {
-        let mut conf = MysqlJdbcConnectorEntityConfig::new();
+    fn mock_entity_table() -> PostgresConnectorEntityConfig {
+        let mut conf = PostgresConnectorEntityConfig::new();
 
         conf.add(create_entity_config(
             "entity",
-            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions::new(
+            PostgresEntitySourceConfig::Table(PostgresTableOptions::new(
                 None,
                 "table".to_string(),
                 HashMap::from([("attr1".to_string(), "col1".to_string())]),
@@ -706,7 +736,7 @@ mod tests {
         ));
         conf.add(create_entity_config(
             "other",
-            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions::new(
+            PostgresEntitySourceConfig::Table(PostgresTableOptions::new(
                 None,
                 "other".to_string(),
                 HashMap::from([("otherattr1".to_string(), "othercol1".to_string())]),
@@ -717,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select() {
+    fn test_postgres_compile_select() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -726,15 +756,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity`"#,
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity""#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_where() {
+    fn test_postgres_compile_select_where() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -748,15 +778,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` WHERE ((`entity`.`col1`) = (?))"#,
-                vec![JdbcQueryParam::Dynamic(1, DataType::Int32)]
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" WHERE (("entity"."col1") = ($1))"#,
+                vec![QueryParam::Dynamic(sql::Parameter::new(DataType::Int32, 1))]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_inner_join() {
+    fn test_postgres_compile_select_inner_join() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -774,15 +804,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` INNER JOIN `other` AS `other` ON ((`entity`.`col1`) = (`other`.`othercol1`))"#,
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" INNER JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_left_join() {
+    fn test_postgres_compile_select_left_join() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -800,15 +830,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` LEFT JOIN `other` AS `other` ON ((`entity`.`col1`) = (`other`.`othercol1`))"#,
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" LEFT JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_right_join() {
+    fn test_postgres_compile_select_right_join() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -826,15 +856,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` RIGHT JOIN `other` AS `other` ON ((`entity`.`col1`) = (`other`.`othercol1`))"#,
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" RIGHT JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_group_by() {
+    fn test_postgres_compile_select_group_by() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -847,15 +877,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` GROUP BY `entity`.`col1`, ?"#,
-                vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" GROUP BY "entity"."col1", $1"#,
+                vec![QueryParam::Constant(DataValue::Int32(1))]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_order_by() {
+    fn test_postgres_compile_select_order_by() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -872,15 +902,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` ORDER BY `entity`.`col1` ASC, ? DESC"#,
-                vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" ORDER BY "entity"."col1" ASC, $1 DESC"#,
+                vec![QueryParam::Constant(DataValue::Int32(1))]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_row_skip_and_limit() {
+    fn test_postgres_compile_select_row_skip_and_limit() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -891,15 +921,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` LIMIT 20 OFFSET 10"#,
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" LIMIT 20 OFFSET 10"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_row_skip() {
+    fn test_postgres_compile_select_row_skip() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -909,15 +939,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` OFFSET 10"#,
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_row_limit() {
+    fn test_postgres_compile_select_row_limit() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -927,15 +957,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT `entity`.`col1` AS `COL` FROM `table` AS `entity` LIMIT 20"#,
+            PostgresQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" LIMIT 20"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_function_call() {
+    fn test_postgres_compile_select_function_call() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select.cols.push((
             "COL".to_string(),
@@ -948,15 +978,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT LENGTH(`entity`.`col1`) AS `COL` FROM `table` AS `entity` OFFSET 10"#,
+            PostgresQuery::new(
+                r#"SELECT LENGTH("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_aggregate_call() {
+    fn test_postgres_compile_select_aggregate_call() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select.cols.push((
             "COL".to_string(),
@@ -969,15 +999,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT SUM(`entity`.`col1`) AS `COL` FROM `table` AS `entity` OFFSET 10"#,
+            PostgresQuery::new(
+                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_select_for_update() {
+    fn test_postgres_compile_select_for_update() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select.cols.push((
             "COL".to_string(),
@@ -990,15 +1020,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"SELECT SUM(`entity`.`col1`) AS `COL` FROM `table` AS `entity` FOR UPDATE"#,
+            PostgresQuery::new(
+                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" FOR UPDATE"#,
                 vec![]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_insert_query() {
+    fn test_postgres_compile_insert_query() {
         let mut insert = sql::Insert::new(sql::source("entity", "entity"));
         insert.cols.push((
             "attr1".to_string(),
@@ -1009,15 +1039,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"INSERT INTO `table` (`col1`) VALUES (?)"#,
-                vec![JdbcQueryParam::Dynamic(1, DataType::Int8)]
+            PostgresQuery::new(
+                r#"INSERT INTO "table" ("col1") VALUES ($1)"#,
+                vec![QueryParam::Dynamic(sql::Parameter::new(DataType::Int8, 1))]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_bulk_insert_query() {
+    fn test_postgres_compile_bulk_insert_query() {
         let mut bulk_insert = sql::BulkInsert::new(sql::source("entity", "entity"));
         bulk_insert.cols.push("attr1".into());
         bulk_insert.values = vec![
@@ -1030,19 +1060,19 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"INSERT INTO `table` (`col1`) VALUES (?), (?), (?)"#,
+            PostgresQuery::new(
+                r#"INSERT INTO "table" ("col1") VALUES ($1), ($2), ($3)"#,
                 vec![
-                    JdbcQueryParam::Dynamic(1, DataType::Int8),
-                    JdbcQueryParam::Dynamic(2, DataType::Int8),
-                    JdbcQueryParam::Dynamic(3, DataType::Int8)
+                    QueryParam::Dynamic(sql::Parameter::new(DataType::Int8, 1)),
+                    QueryParam::Dynamic(sql::Parameter::new(DataType::Int8, 2)),
+                    QueryParam::Dynamic(sql::Parameter::new(DataType::Int8, 3))
                 ]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_update_query() {
+    fn test_postgres_compile_update_query() {
         let mut update = sql::Update::new(sql::source("entity", "entity"));
         update
             .cols
@@ -1052,15 +1082,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"UPDATE `table` SET `col1` = ?"#,
-                vec![JdbcQueryParam::Constant(DataValue::Int8(1))]
+            PostgresQuery::new(
+                r#"UPDATE "table" SET "col1" = $1"#,
+                vec![QueryParam::Constant(DataValue::Int8(1))]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_update_where_query() {
+    fn test_postgres_compile_update_where_query() {
         let mut update = sql::Update::new(sql::source("entity", "entity"));
         update
             .cols
@@ -1076,26 +1106,29 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"UPDATE `table` SET `col1` = ? WHERE ((`table`.`col1`) = (?))"#,
+            PostgresQuery::new(
+                r#"UPDATE "table" SET "col1" = $1 WHERE (("table"."col1") = ($2))"#,
                 vec![
-                    JdbcQueryParam::Constant(DataValue::Int8(1)),
-                    JdbcQueryParam::Dynamic(1, DataType::Int32)
+                    QueryParam::Constant(DataValue::Int8(1)),
+                    QueryParam::Dynamic(sql::Parameter::new(DataType::Int32, 1))
                 ]
             )
         );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_delete_query() {
+    fn test_postgres_compile_delete_query() {
         let delete = sql::Delete::new(sql::source("entity", "entity"));
         let compiled = compile_delete(delete, mock_entity_table());
 
-        assert_eq!(compiled, JdbcQuery::new(r#"DELETE FROM `table`"#, vec![]));
+        assert_eq!(
+            compiled,
+            PostgresQuery::new(r#"DELETE FROM "table""#, vec![])
+        );
     }
 
     #[test]
-    fn test_mysql_jdbc_compile_delete_where_query() {
+    fn test_postgres_compile_delete_where_query() {
         let mut delete = sql::Delete::new(sql::source("entity", "entity"));
 
         delete.r#where.push(sql::Expr::BinaryOp(sql::BinaryOp::new(
@@ -1108,9 +1141,9 @@ mod tests {
 
         assert_eq!(
             compiled,
-            JdbcQuery::new(
-                r#"DELETE FROM `table` WHERE ((`table`.`col1`) = (?))"#,
-                vec![JdbcQueryParam::Dynamic(1, DataType::Int32)]
+            PostgresQuery::new(
+                r#"DELETE FROM "table" WHERE (("table"."col1") = ($1))"#,
+                vec![QueryParam::Dynamic(sql::Parameter::new(DataType::Int32, 1))]
             )
         );
     }

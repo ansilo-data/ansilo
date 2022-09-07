@@ -2,7 +2,7 @@ use std::ptr;
 
 use ansilo_core::sqlil::EntityId;
 use ansilo_pg::fdw::proto::EntityDiscoverOptions;
-use ansilo_pg::query::pg_str_literal;
+use ansilo_util_pg::query::pg_str_literal;
 use itertools::Itertools;
 use pgx::pg_sys::{GetForeignServer, ImportForeignSchemaStmt, List, Oid};
 use pgx::*;

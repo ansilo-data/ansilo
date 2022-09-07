@@ -1,0 +1,32 @@
+[package]
+name = "ansilo-connectors-native-postgres"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansilo-core = { path = "../../ansilo-core" }
+ansilo-logging = { path = "../../ansilo-logging" }
+ansilo-connectors-base = { path = "../base" }
+ansilo-util-pg = { path = "../../ansilo-util/pg" }
+itertools = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"] }
+deadpool-postgres = "0.10"
+postgres-native-tls = "0.5"
+native-tls = "0.2"
+tokio = { version = "^1.20", features = ["io-util", "rt", "rt-multi-thread"] }
+lazy_static = "1.4"
+futures-util = "0.3.24"
+rust_decimal = { version = "1.26", features = ["tokio-pg"] }
+enum-as-inner = "0.5"
+
+[build-dependencies]
+ansilo-connectors-base = { path = "../base", features = ["build"] }
+
+[dev-dependencies]
+ansilo-connectors-base = { path = "../base", features = ["test"] }
+pretty_assertions = "*"
+serial_test = "*"

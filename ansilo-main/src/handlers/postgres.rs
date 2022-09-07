@@ -12,10 +12,10 @@ use ansilo_pg::{
         be::PostgresBackendMessage,
         fe::{PostgresFrontendMessage, PostgresFrontendStartupMessage},
     },
-    query::{pg_quote_identifier, pg_str_literal},
     PostgresConnectionPools,
 };
 use ansilo_proxy::{handler::ConnectionHandler, stream::IOStream};
+use ansilo_util_pg::query::{pg_str_literal, pg_quote_identifier};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use rand::distributions::{Alphanumeric, DistString};

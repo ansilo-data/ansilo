@@ -6,12 +6,9 @@ use std::{
 use ansilo_config::loader::ConfigLoader;
 use ansilo_core::{config::NodeConfig, err::Context};
 use ansilo_logging::info;
-use ansilo_pg::{
-    conf::PostgresConf,
-    query::{pg_quote_identifier, pg_str_literal},
-    PG_ADMIN_USER,
-};
+use ansilo_pg::{conf::PostgresConf, PG_ADMIN_USER};
 use ansilo_proxy::conf::{HandlerConf, ProxyConf, TlsConf};
+use ansilo_util_pg::query::{pg_quote_identifier, pg_str_literal};
 
 /// Container for the application config
 pub struct AppConf {

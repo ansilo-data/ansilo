@@ -9,7 +9,7 @@ use super::DataReader;
 
 /// A writable sink that parses the incoming byte stream as a sequence
 /// of `DataValue`
-/// 
+///
 /// We use this to write query input data then read out the DataValue's
 /// and convert them to the data source format.
 #[derive(Clone)]
@@ -124,12 +124,22 @@ impl DataSink {
         &self.structure[self.col_idx]
     }
 
-    fn num_cols(&self) -> usize {
+    pub fn num_cols(&self) -> usize {
         self.structure.len()
     }
 
-    fn is_last_col(&self) -> bool {
+    pub fn is_last_col(&self) -> bool {
         self.col_idx == self.num_cols() - 1
+    }
+
+    pub fn col_idx(&self) -> usize {
+        self.col_idx
+    }
+
+    pub fn restart(&mut self) {
+        self.row_idx = 0;
+        self.col_idx = 0;
+        self.buf.clear();
     }
 
     fn advance(&mut self) {
@@ -448,5 +458,41 @@ mod tests {
             Some(DataValue::Int16(-456))
         );
         assert_eq!(sink.read_data_value().unwrap(), None);
+    }
+
+    #[test]
+    fn test_data_sink_partial_write_then_restart() {
+        let mut sink = DataSink::new(vec![DataType::rust_string()]);
+
+        sink.write_all(
+            &[
+                vec![1u8],                 // not null
+                vec![5u8],                 // chunk len
+                "hel".as_bytes().to_vec(), // data
+            ]
+            .concat(),
+        )
+        .unwrap();
+
+        assert_eq!(sink.read_data_value().unwrap(), None,);
+
+        sink.restart();
+
+        sink.write_all(
+            &[
+                vec![1u8],                   // not null
+                vec![5u8],                   // chunk len
+                "hello".as_bytes().to_vec(), // data
+                vec![0u8],                   // eof
+            ]
+            .concat(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            sink.read_data_value().unwrap(),
+            Some(DataValue::Utf8String("hello".into()))
+        );
+        assert_eq!(sink.read_data_value().unwrap(), None,);
     }
 }

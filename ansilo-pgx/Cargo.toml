@@ -24,6 +24,7 @@ pg_test = [
 ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-pg = { path = "../ansilo-pg" }
+ansilo-util-pg = { path = "../ansilo-util/pg" }
 cstr = "0.2.10"
 serde = "1.0"
 serde_json = "1.0"

@@ -13,6 +13,7 @@ ansilo-logging = { path = "../ansilo-logging" }
 ansilo-pg = { path = "../ansilo-pg" }
 ansilo-proxy = { path = "../ansilo-proxy" }
 ansilo-auth = { path = "../ansilo-auth" }
+ansilo-util-pg = { path = "../ansilo-util/pg" }
 chrono = "0.4"
 clap = { version = "3.2", features = ["derive"] }
 glob = "0.3"
@@ -23,7 +24,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 signal-hook = "0.3"
 nix = { version = "0.25", features = ["process"] }
-tokio = { version = "1.20", features = ["io-util"] }
+tokio = { version = "^1.20", features = ["io-util"] }
 async-trait = "0.1"
 rand = "0.8"
 
