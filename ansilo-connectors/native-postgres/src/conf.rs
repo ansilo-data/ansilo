@@ -39,6 +39,13 @@ pub struct PostgresConnectionPoolConfig {
     pub connection_timeout: Option<Duration>,
 }
 
+impl PostgresConnectionConfig {
+    pub fn parse(options: config::Value) -> Result<Self> {
+        config::from_value::<Self>(options)
+            .context("Failed to parse connection configuration options")
+    }
+}
+
 impl TryInto<Config> for PostgresConnectionConfig {
     type Error = Error;
 

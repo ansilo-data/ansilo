@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::DerefMut};
 
 use ansilo_core::{
-    data::{DataType, DataValue},
+    data::DataValue,
     err::{bail, Context, Result},
     sqlil as sql,
 };
