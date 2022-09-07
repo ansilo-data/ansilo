@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use ansilo_core::{
-    data::{DataType, DataValue},
+    data::DataValue,
     err::{bail, Error, Result},
 };
 
@@ -26,13 +26,7 @@ pub struct QueryParamSink {
 
 impl QueryParamSink {
     pub fn new(params: Vec<QueryParam>) -> Self {
-        let input = QueryInputStructure::new(
-            params
-                .iter()
-                .filter_map(|p| p.as_dynamic().map(|p| p))
-                .map(|p| (p.id, p.r#type.clone()))
-                .collect(),
-        );
+        let input = QueryInputStructure::from(&params); 
 
         let sink = DataSink::new(input.types());
 
@@ -133,7 +127,7 @@ impl Write for QueryParamSink {
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::sqlil;
+    use ansilo_core::{data::DataType, sqlil};
 
     use super::*;
 

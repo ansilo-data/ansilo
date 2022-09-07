@@ -4,8 +4,8 @@ use ansilo_core::{
     sqlil as sql,
 };
 
-use ansilo_connectors_base::interface::QueryCompiler;
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
+use ansilo_connectors_base::{common::query::QueryParam, interface::QueryCompiler};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 
 use super::{
     OracleJdbcConnectorEntityConfig, OracleJdbcEntitySourceConfig, OracleJdbcTableOptions,
@@ -40,7 +40,7 @@ impl OracleJdbcQueryCompiler {
         query: &sql::Query,
         select: &sql::Select,
     ) -> Result<JdbcQuery> {
-        let mut params = Vec::<JdbcQueryParam>::new();
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "SELECT".to_string(),
@@ -70,7 +70,7 @@ impl OracleJdbcQueryCompiler {
         insert: &sql::Insert,
     ) -> Result<JdbcQuery> {
         // TODO: custom query support
-        let mut params = Vec::<JdbcQueryParam>::new();
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "INSERT INTO".to_string(),
@@ -112,7 +112,7 @@ impl OracleJdbcQueryCompiler {
         query: &sql::Query,
         insert: &sql::BulkInsert,
     ) -> Result<JdbcQuery> {
-        let mut params = Vec::<JdbcQueryParam>::new();
+        let mut params = Vec::<QueryParam>::new();
 
         let table = Self::compile_entity_source(conf, &insert.target, false)?;
 
@@ -162,7 +162,7 @@ impl OracleJdbcQueryCompiler {
         update: &sql::Update,
     ) -> Result<JdbcQuery> {
         // TODO: custom query support
-        let mut params = Vec::<JdbcQueryParam>::new();
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "UPDATE".to_string(),
@@ -201,7 +201,7 @@ impl OracleJdbcQueryCompiler {
         delete: &sql::Delete,
     ) -> Result<JdbcQuery> {
         // TODO: custom query support
-        let mut params = Vec::<JdbcQueryParam>::new();
+        let mut params = Vec::<QueryParam>::new();
 
         let query = [
             "DELETE FROM".to_string(),
@@ -220,7 +220,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         cols: &Vec<(String, sql::Expr)>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         Ok(cols
             .into_iter()
@@ -239,7 +239,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         joins: &Vec<sql::Join>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         Ok(joins
             .into_iter()
@@ -252,7 +252,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         join: &sql::Join,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let target = Self::compile_entity_source(conf, &join.target, true)?;
         let cond = if join.conds.is_empty() {
@@ -280,7 +280,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         r#where: &Vec<sql::Expr>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         if r#where.is_empty() {
             return Ok("".to_string());
@@ -299,7 +299,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         group_bys: &Vec<sql::Expr>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         if group_bys.is_empty() {
             return Ok("".to_string());
@@ -318,7 +318,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         order_bys: &Vec<sql::Ordering>,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         if order_bys.is_empty() {
             return Ok("".to_string());
@@ -368,7 +368,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         expr: &sql::Expr,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let sql = match expr {
             sql::Expr::Attribute(eva) => {
@@ -475,13 +475,13 @@ impl OracleJdbcQueryCompiler {
         })
     }
 
-    fn compile_constant(c: &sql::Constant, params: &mut Vec<JdbcQueryParam>) -> Result<String> {
-        params.push(JdbcQueryParam::Constant(c.value.clone()));
+    fn compile_constant(c: &sql::Constant, params: &mut Vec<QueryParam>) -> Result<String> {
+        params.push(QueryParam::constant(c.value.clone()));
         Ok("?".to_string())
     }
 
-    fn compile_param(p: &sql::Parameter, params: &mut Vec<JdbcQueryParam>) -> Result<String> {
-        params.push(JdbcQueryParam::Dynamic(p.id, p.r#type.clone()));
+    fn compile_param(p: &sql::Parameter, params: &mut Vec<QueryParam>) -> Result<String> {
+        params.push(QueryParam::dynamic(p.clone()));
         Ok("?".to_string())
     }
 
@@ -489,7 +489,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         op: &sql::UnaryOp,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let inner = Self::compile_expr(conf, query, &*op.expr, params)?;
 
@@ -506,7 +506,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         op: &sql::BinaryOp,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let l = Self::compile_expr(conf, query, &*op.left, params)?;
         let r = Self::compile_expr(conf, query, &*op.right, params)?;
@@ -543,7 +543,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         cast: &sql::Cast,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let arg = Self::compile_expr(conf, query, &cast.expr, params)?;
 
@@ -576,7 +576,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         func: &sql::FunctionCall,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         Ok(match func {
             sql::FunctionCall::Length(arg) => {
@@ -615,7 +615,7 @@ impl OracleJdbcQueryCompiler {
         conf: &OracleJdbcConnectorEntityConfig,
         query: &sql::Query,
         agg: &sql::AggregateCall,
-        params: &mut Vec<JdbcQueryParam>,
+        params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         Ok(match agg {
             sql::AggregateCall::Sum(arg) => {
@@ -636,7 +636,7 @@ impl OracleJdbcQueryCompiler {
                 format!("AVG({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::AggregateCall::StringAgg(call) => {
-                params.push(JdbcQueryParam::Constant(DataValue::Utf8String(
+                params.push(QueryParam::Constant(DataValue::Utf8String(
                     call.separator.clone(),
                 )));
                 format!(
@@ -765,7 +765,7 @@ mod tests {
             compiled,
             JdbcQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" WHERE (("entity"."col1") = (?))"#,
-                vec![JdbcQueryParam::Dynamic(1, DataType::Int32)]
+                vec![QueryParam::dynamic2(1, DataType::Int32)]
             )
         );
     }
@@ -890,7 +890,7 @@ mod tests {
             compiled,
             JdbcQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" GROUP BY "entity"."col1", ?"#,
-                vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
+                vec![QueryParam::Constant(DataValue::Int32(1))]
             )
         );
     }
@@ -915,7 +915,7 @@ mod tests {
             compiled,
             JdbcQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" "entity" ORDER BY "entity"."col1" ASC, ? DESC"#,
-                vec![JdbcQueryParam::Constant(DataValue::Int32(1))]
+                vec![QueryParam::Constant(DataValue::Int32(1))]
             )
         );
     }
@@ -1052,7 +1052,7 @@ mod tests {
             compiled,
             JdbcQuery::new(
                 r#"INSERT INTO "table" ("col1") VALUES (?)"#,
-                vec![JdbcQueryParam::Dynamic(1, DataType::Int8)]
+                vec![QueryParam::dynamic2(1, DataType::Int8)]
             )
         );
     }
@@ -1078,9 +1078,9 @@ INTO "table" ("col1") VALUES (?)
 INTO "table" ("col1") VALUES (?)
 SELECT 1 FROM DUAL"#,
                 vec![
-                    JdbcQueryParam::Dynamic(1, DataType::Int8),
-                    JdbcQueryParam::Dynamic(2, DataType::Int8),
-                    JdbcQueryParam::Dynamic(3, DataType::Int8)
+                    QueryParam::dynamic2(1, DataType::Int8),
+                    QueryParam::dynamic2(2, DataType::Int8),
+                    QueryParam::dynamic2(3, DataType::Int8)
                 ]
             )
         );
@@ -1099,7 +1099,7 @@ SELECT 1 FROM DUAL"#,
             compiled,
             JdbcQuery::new(
                 r#"UPDATE "table" SET "col1" = ?"#,
-                vec![JdbcQueryParam::Constant(DataValue::Int8(1))]
+                vec![QueryParam::Constant(DataValue::Int8(1))]
             )
         );
     }
@@ -1124,8 +1124,8 @@ SELECT 1 FROM DUAL"#,
             JdbcQuery::new(
                 r#"UPDATE "table" SET "col1" = ? WHERE (("table"."col1") = (?))"#,
                 vec![
-                    JdbcQueryParam::Constant(DataValue::Int8(1)),
-                    JdbcQueryParam::Dynamic(1, DataType::Int32)
+                    QueryParam::Constant(DataValue::Int8(1)),
+                    QueryParam::dynamic2(1, DataType::Int32)
                 ]
             )
         );
@@ -1155,7 +1155,7 @@ SELECT 1 FROM DUAL"#,
             compiled,
             JdbcQuery::new(
                 r#"DELETE FROM "table" WHERE (("table"."col1") = (?))"#,
-                vec![JdbcQueryParam::Dynamic(1, DataType::Int32)]
+                vec![QueryParam::dynamic2(1, DataType::Int32)]
             )
         );
     }

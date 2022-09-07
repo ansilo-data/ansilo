@@ -6,14 +6,14 @@ use ansilo_core::{
     err::{Context, Result},
 };
 
-use ansilo_connectors_base::interface::{
+use ansilo_connectors_base::{interface::{
     Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet,
-};
+}, common::query::QueryParam};
 use ansilo_logging::warn;
 use itertools::Itertools;
 use tokio_postgres::Client;
 
-use crate::{PostgresConnection, PostgresQuery, PostgresTableOptions, QueryParam};
+use crate::{PostgresConnection, PostgresQuery, PostgresTableOptions};
 
 use super::PostgresEntitySourceConfig;
 

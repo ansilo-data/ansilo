@@ -1,11 +1,11 @@
 use ansilo_core::{
-    data::{DataType, DataValue, StringOptions},
+    data::{DataType, DataValue},
     err::{bail, ensure, Context, Result},
     sqlil as sql,
 };
 
 use ansilo_connectors_base::{
-    common::entity::EntitySource,
+    common::{entity::EntitySource, query::QueryParam},
     interface::{
         BulkInsertQueryOperation, Connection, DeleteQueryOperation, InsertQueryOperation,
         OperationCost, QueryCompiler, QueryHandle, QueryOperationResult, QueryPlanner, ResultSet,
@@ -13,7 +13,7 @@ use ansilo_connectors_base::{
     },
 };
 
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 
 use super::{MysqlJdbcConnectorEntityConfig, MysqlJdbcEntitySourceConfig, MysqlJdbcQueryCompiler};
 
@@ -45,11 +45,11 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
             AND TABLE_NAME = ?
             "#,
             vec![
-                JdbcQueryParam::Constant(match &tab.database_name {
+                QueryParam::constant(match &tab.database_name {
                     Some(db) => DataValue::Utf8String(db.clone()),
                     None => DataValue::Null,
                 }),
-                JdbcQueryParam::Constant(DataValue::Utf8String(tab.table_name.clone())),
+                QueryParam::constant(DataValue::Utf8String(tab.table_name.clone())),
             ],
         ))?;
 

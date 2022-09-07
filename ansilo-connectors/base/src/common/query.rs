@@ -5,6 +5,8 @@ use ansilo_core::{
 use enum_as_inner::EnumAsInner;
 use serde::Serialize;
 
+use crate::interface::QueryInputStructure;
+
 /// A query parameter
 #[derive(Debug, Clone, PartialEq, Serialize, EnumAsInner)]
 pub enum QueryParam {
@@ -35,5 +37,21 @@ impl QueryParam {
             QueryParam::Dynamic(p) => p.r#type.clone(),
             QueryParam::Constant(v) => v.r#type(),
         }
+    }
+}
+
+/// Conversion of array of query parameters in the equivalent
+/// query input structure that filters to dynamic parameters.
+/// (Constant parameters are not written to queries).
+impl<T: AsRef<[QueryParam]>> From<T> for QueryInputStructure {
+    fn from(params: T) -> Self {
+        Self::new(
+            params
+                .as_ref()
+                .iter()
+                .filter_map(|p| p.as_dynamic().map(|p| p))
+                .map(|p| (p.id, p.r#type.clone()))
+                .collect(),
+        )
     }
 }

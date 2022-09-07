@@ -11,11 +11,11 @@ use jni::objects::{GlobalRef, JValue};
 use r2d2::PooledConnection;
 
 use ansilo_connectors_base::{
-    common::data::QueryHandleWriter,
+    common::query::QueryParam,
     interface::{Connection, ConnectionPool, QueryHandle, TransactionManager},
 };
 
-use crate::{JdbcQueryParam, JdbcResultSet};
+use crate::{to_java_jdbc_parameter, JdbcResultSet};
 
 use super::{JdbcConnectionConfig, JdbcPreparedQuery, JdbcQuery, Jvm};
 
@@ -177,7 +177,7 @@ impl Connection for JdbcConnection {
             // TODO[minor]: use method id and unchecked call
             for (idx, param) in query.params.iter().enumerate() {
                 let data_type_id = env.auto_local(
-                    param.to_java_jdbc_parameter(idx + 1, &state.jvm)?
+                    to_java_jdbc_parameter(param, idx + 1, &state.jvm)?
                 );
 
                 env.call_method(
@@ -230,17 +230,12 @@ impl JdbcConnection {
     ) -> Result<JdbcResultSet> {
         let jdbc_params = params
             .iter()
-            .enumerate()
-            .map(|(idx, p)| JdbcQueryParam::Dynamic(idx as _, p.r#type()))
+            .map(|p| QueryParam::constant(p.clone()))
             .collect::<Vec<_>>();
 
-        let prepared = self.prepare(JdbcQuery::new(query, jdbc_params))?;
-        let mut writer = QueryHandleWriter::new(prepared)?;
+        let mut prepared = self.prepare(JdbcQuery::new(query, jdbc_params))?;
 
-        writer.write_all(params.into_iter())?;
-        writer.flush()?;
-
-        writer.inner()?.execute()
+        prepared.execute()
     }
 }
 
@@ -353,7 +348,7 @@ mod tests {
 
     use ansilo_core::data::{DataType, DataValue};
 
-    use crate::{JdbcConnectionPoolConfig, JdbcQueryParam};
+    use crate::JdbcConnectionPoolConfig;
     use ansilo_connectors_base::{
         common::data::ResultSetReader,
         interface::{QueryHandle, QueryInputStructure, ResultSet},
@@ -427,9 +422,7 @@ mod tests {
         let mut con = init_sqlite_connection();
 
         let mut query = JdbcQuery::new("SELECT ? as num", vec![]);
-        query
-            .params
-            .push(JdbcQueryParam::Dynamic(1, DataType::Int32));
+        query.params.push(QueryParam::dynamic2(1, DataType::Int32));
         let statement = con.prepare(query).unwrap();
 
         assert_eq!(

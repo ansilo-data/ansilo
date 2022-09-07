@@ -43,7 +43,7 @@ impl<T: DerefMut<Target = Client>> Connection for PostgresConnection<T> {
             statement,
             query.sql,
             query.params,
-        ))
+        )?)
     }
 
     fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager> {

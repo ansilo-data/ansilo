@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use ansilo_core::{
-    data::{DataType, DataValue},
-    err::{bail, Context, Result},
-};
+use ansilo_core::err::{bail, Context, Result};
 use jni::{
     objects::{GlobalRef, JList, JMethodID, JObject, JString, JValue},
     signature::{JavaType, Primitive},
@@ -12,7 +9,7 @@ use jni::{
 use serde::Serialize;
 
 use ansilo_connectors_base::{
-    common::data::DataWriter,
+    common::{data::DataWriter, query::QueryParam},
     interface::{LoggedQuery, QueryHandle, QueryInputStructure},
 };
 
@@ -26,21 +23,11 @@ pub struct JdbcQuery {
     /// The query (likely SQL) as a string
     pub query: String,
     /// Types of query parameters expected by the query
-    pub params: Vec<JdbcQueryParam>,
-}
-
-/// JDBC query param
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub enum JdbcQueryParam {
-    /// A dynamic query parameter that can modified for every query execution
-    /// (param_id, data_type)
-    Dynamic(u32, DataType),
-    /// A constant query parameter that is immutable across executions
-    Constant(DataValue),
+    pub params: Vec<QueryParam>,
 }
 
 impl JdbcQuery {
-    pub fn new(query: impl Into<String>, params: Vec<JdbcQueryParam>) -> Self {
+    pub fn new(query: impl Into<String>, params: Vec<QueryParam>) -> Self {
         Self {
             query: query.into(),
             params,
@@ -103,16 +90,7 @@ impl QueryHandle for JdbcPreparedQuery {
     type TResultSet = JdbcResultSet;
 
     fn get_structure(&self) -> Result<QueryInputStructure> {
-        Ok(QueryInputStructure::new(
-            self.query
-                .params
-                .iter()
-                .filter_map(|i| match i {
-                    JdbcQueryParam::Dynamic(id, data_type) => Some((*id, data_type.clone())),
-                    JdbcQueryParam::Constant(_) => None,
-                })
-                .collect(),
-        ))
+        Ok(QueryInputStructure::from(&self.query.params))
     }
 
     fn write(&mut self, buff: &[u8]) -> Result<usize> {
@@ -248,59 +226,57 @@ impl QueryHandle for JdbcPreparedQuery {
     }
 }
 
-impl JdbcQueryParam {
-    /// Initialises a new instance of the JdbcParameter class which
-    /// copies the current query parameter
-    /// @see ansilo-connectors/src/jdbc/java/src/main/java/com/ansilo/connectors/query/JdbcParameter.java
-    pub(crate) fn to_java_jdbc_parameter<'a>(
-        &self,
-        index: usize,
-        jvm: &'a Jvm,
-    ) -> Result<JObject<'a>> {
-        let env = jvm.env()?;
+/// Initialises a new instance of the JdbcParameter class which
+/// copies the current query parameter
+/// @see ansilo-connectors/src/jdbc/java/src/main/java/com/ansilo/connectors/query/JdbcParameter.java
+pub(crate) fn to_java_jdbc_parameter<'a>(
+    param: &QueryParam,
+    index: usize,
+    jvm: &'a Jvm,
+) -> Result<JObject<'a>> {
+    let env = jvm.env()?;
 
-        let result = match self {
-            JdbcQueryParam::Dynamic(_, data_type) => env.call_static_method(
+    let result = match param {
+        QueryParam::Dynamic(p) => env.call_static_method(
+            "com/ansilo/connectors/query/JdbcParameter",
+            "createDynamic",
+            "(II)Lcom/ansilo/connectors/query/JdbcParameter;",
+            &[
+                JValue::Int(index as i32),
+                JValue::Int(JavaDataType::from(&p.r#type) as i32),
+            ],
+        ),
+        QueryParam::Constant(data_value) => {
+            let mut buff = DataWriter::to_vec_one(data_value.clone())?;
+
+            let byte_buff = env
+                .new_direct_byte_buffer(buff.as_mut_slice())
+                .context("Failed to init ByteBuffer")?;
+
+            env.call_static_method(
                 "com/ansilo/connectors/query/JdbcParameter",
-                "createDynamic",
-                "(II)Lcom/ansilo/connectors/query/JdbcParameter;",
+                "createConstantCopied",
+                "(IILjava/nio/ByteBuffer;)Lcom/ansilo/connectors/query/JdbcParameter;",
                 &[
                     JValue::Int(index as i32),
-                    JValue::Int(JavaDataType::from(data_type) as i32),
+                    JValue::Int(JavaDataType::from(&data_value.r#type()) as i32),
+                    JValue::Object(*byte_buff),
                 ],
-            ),
-            JdbcQueryParam::Constant(data_value) => {
-                let mut buff = DataWriter::to_vec_one(data_value.clone())?;
+            )
+        }
+    };
 
-                let byte_buff = env
-                    .new_direct_byte_buffer(buff.as_mut_slice())
-                    .context("Failed to init ByteBuffer")?;
+    jvm.check_exceptions(&env)?;
 
-                env.call_static_method(
-                    "com/ansilo/connectors/query/JdbcParameter",
-                    "createConstantCopied",
-                    "(IILjava/nio/ByteBuffer;)Lcom/ansilo/connectors/query/JdbcParameter;",
-                    &[
-                        JValue::Int(index as i32),
-                        JValue::Int(JavaDataType::from(&data_value.r#type()) as i32),
-                        JValue::Object(*byte_buff),
-                    ],
-                )
-            }
-        };
-
-        jvm.check_exceptions(&env)?;
-
-        Ok(result
-            .context("Failed to create JdbcParameter instance")?
-            .l()
-            .context("Failed to convert return of JdbcParameter factory to object")?)
-    }
+    Ok(result
+        .context("Failed to create JdbcParameter instance")?
+        .l()
+        .context("Failed to convert return of JdbcParameter factory to object")?)
 }
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::data::{DataValue, StringOptions};
+    use ansilo_core::data::{DataValue, StringOptions, DataType};
     use jni::objects::{JObject, JString};
 
     use crate::tests::create_sqlite_memory_connection;
@@ -312,7 +288,7 @@ mod tests {
         jvm: &Arc<Jvm>,
         jdbc_con: JObject,
         query: &str,
-        params: Vec<JdbcQueryParam>,
+        params: Vec<QueryParam>,
     ) -> JdbcPreparedQuery {
         let query = JdbcQuery::new(query, params);
         let env = &jvm.env().unwrap();
@@ -329,7 +305,7 @@ mod tests {
         let param_types = env.new_object("java/util/ArrayList", "()V", &[]).unwrap();
 
         for (idx, param) in query.params.iter().enumerate() {
-            let data_type = param.to_java_jdbc_parameter(idx + 1, jvm).unwrap();
+            let data_type = to_java_jdbc_parameter(param, idx + 1, jvm).unwrap();
 
             env.call_method(
                 param_types,
@@ -384,7 +360,7 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as num",
-            vec![JdbcQueryParam::Dynamic(1, DataType::Int32)],
+            vec![QueryParam::dynamic2(1, DataType::Int32)],
         );
 
         let wrote = prepared_query
@@ -416,7 +392,7 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as str",
-            vec![JdbcQueryParam::Dynamic(
+            vec![QueryParam::dynamic2(
                 1,
                 DataType::Utf8String(StringOptions::default()),
             )],
@@ -456,7 +432,7 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as num",
-            vec![JdbcQueryParam::Dynamic(1, DataType::Int32)],
+            vec![QueryParam::dynamic2(1, DataType::Int32)],
         );
 
         assert!(prepared_query.execute().is_err());
@@ -471,7 +447,7 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as num",
-            vec![JdbcQueryParam::Dynamic(1, DataType::Int32)],
+            vec![QueryParam::dynamic2(1, DataType::Int32)],
         );
 
         for i in [123_i32, 456, 789, 999] {
@@ -507,7 +483,7 @@ mod tests {
             &jvm,
             jdbc_con,
             "SELECT ? as num",
-            vec![JdbcQueryParam::Constant(DataValue::Int32(123))],
+            vec![QueryParam::Constant(DataValue::Int32(123))],
         );
 
         let rs = prepared_query.execute().unwrap();
@@ -527,8 +503,8 @@ mod tests {
             jdbc_con,
             "SELECT ? as num, ? as str",
             vec![
-                JdbcQueryParam::Dynamic(1, DataType::Int32),
-                JdbcQueryParam::Dynamic(2, DataType::rust_string()),
+                QueryParam::dynamic2(1, DataType::Int32),
+                QueryParam::dynamic2(2, DataType::rust_string()),
             ],
         );
 
@@ -573,9 +549,9 @@ mod tests {
     #[test]
     fn test_jdbc_query_param_into_java_dynamic() {
         let jvm = Arc::new(Jvm::boot().unwrap());
-        let param = JdbcQueryParam::Dynamic(1, DataType::Int32);
+        let param = QueryParam::dynamic2(1, DataType::Int32);
 
-        let java_obj = param.to_java_jdbc_parameter(1, &jvm).unwrap();
+        let java_obj = to_java_jdbc_parameter(&param, 1, &jvm).unwrap();
         let class = jvm.env().unwrap().get_object_class(java_obj).unwrap();
 
         assert_eq!(
@@ -608,9 +584,9 @@ mod tests {
     #[test]
     fn test_jdbc_query_param_into_java_constant() {
         let jvm = Jvm::boot().unwrap();
-        let param = JdbcQueryParam::Constant(DataValue::Int32(1123));
+        let param = QueryParam::Constant(DataValue::Int32(1123));
 
-        let java_obj = param.to_java_jdbc_parameter(1, &jvm).unwrap();
+        let java_obj = to_java_jdbc_parameter(&param, 1, &jvm).unwrap();
         let class = jvm.env().unwrap().get_object_class(java_obj).unwrap();
 
         assert_eq!(

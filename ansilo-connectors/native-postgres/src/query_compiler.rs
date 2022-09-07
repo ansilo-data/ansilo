@@ -6,11 +6,11 @@ use ansilo_core::{
     sqlil as sql,
 };
 
-use ansilo_connectors_base::interface::QueryCompiler;
+use ansilo_connectors_base::{common::query::QueryParam, interface::QueryCompiler};
 use ansilo_util_pg::query::pg_quote_identifier;
 use tokio_postgres::Client;
 
-use crate::{to_pg_type, PostgresConnection, PostgresQuery, QueryParam};
+use crate::{to_pg_type, PostgresConnection, PostgresQuery};
 
 use super::{PostgresConnectorEntityConfig, PostgresEntitySourceConfig, PostgresTableOptions};
 
@@ -632,7 +632,7 @@ mod tests {
     use ansilo_connectors_base::common::entity::EntitySource;
     use pretty_assertions::assert_eq;
 
-    use crate::{PooledClient, QueryParam};
+    use crate::PooledClient;
 
     use super::*;
 

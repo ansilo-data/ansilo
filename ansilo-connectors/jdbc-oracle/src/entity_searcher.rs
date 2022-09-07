@@ -6,10 +6,10 @@ use ansilo_core::{
     err::{Context, Result},
 };
 
-use ansilo_connectors_base::interface::{
+use ansilo_connectors_base::{interface::{
     Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet,
-};
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcQueryParam};
+}, common::query::QueryParam};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 use ansilo_logging::warn;
 use itertools::Itertools;
 
@@ -62,7 +62,7 @@ impl EntitySearcher for OracleJdbcEntitySearcher {
                 WHERE (T.OWNER || '.' || T.TABLE_NAME) LIKE ?
                 ORDER BY T.OWNER, T.TABLE_NAME, C.COLUMN_ID
             "#,
-                vec![JdbcQueryParam::Constant(DataValue::Utf8String(
+                vec![QueryParam::constant(DataValue::Utf8String(
                     opts.remote_schema
                         .as_ref()
                         .map(|i| i.as_str())
