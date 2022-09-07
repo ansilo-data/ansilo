@@ -37,7 +37,7 @@ impl DataSink {
         }
     }
 
-    /// Gets the data type structure of the rows returned in the result set
+    /// Gets the data type structure expected by the data sink
     pub fn get_structure(&self) -> &Vec<DataType> {
         &self.structure
     }
@@ -136,10 +136,15 @@ impl DataSink {
         self.col_idx
     }
 
-    pub fn restart(&mut self) {
+    /// Clears the sink
+    pub fn clear(&mut self) {
         self.row_idx = 0;
         self.col_idx = 0;
         self.buf.clear();
+    }
+
+    pub(crate) fn buf_len(&self) -> usize {
+        self.buf.len()
     }
 
     fn advance(&mut self) {
@@ -476,7 +481,7 @@ mod tests {
 
         assert_eq!(sink.read_data_value().unwrap(), None,);
 
-        sink.restart();
+        sink.clear();
 
         sink.write_all(
             &[

@@ -141,7 +141,7 @@ impl<T: DerefMut<Target = Client>> QueryHandle for PostgresPreparedQuery<T> {
     }
 
     fn restart(&mut self) -> Result<()> {
-        self.sink.restart();
+        self.sink.clear();
         self.values.clear();
         self.logged_params.clear();
         Ok(())
