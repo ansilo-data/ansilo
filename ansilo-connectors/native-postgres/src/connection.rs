@@ -1,10 +1,10 @@
 use std::{ops::DerefMut, sync::Arc};
 
-use ansilo_connectors_base::interface::{Connection, TransactionManager};
-use ansilo_core::err::Result;
+use ansilo_connectors_base::{interface::{Connection, QueryHandle, TransactionManager}, common::query::QueryParam};
+use ansilo_core::{data::DataValue, err::Result};
 use tokio_postgres::Client;
 
-use crate::{runtime, to_pg_type, PostgresPreparedQuery, PostgresQuery};
+use crate::{runtime, to_pg_type, PostgresPreparedQuery, PostgresQuery, PostgresResultSet};
 
 /// Connection to a postgres database
 pub struct PostgresConnection<T> {
@@ -48,6 +48,24 @@ impl<T: DerefMut<Target = Client>> Connection for PostgresConnection<T> {
 
     fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager> {
         Some(self)
+    }
+}
+
+impl<T: DerefMut<Target = Client>> PostgresConnection<T> {
+    /// Executes the supplied sql on the connection
+    pub fn execute(
+        &mut self,
+        query: impl Into<String>,
+        params: Vec<DataValue>,
+    ) -> Result<PostgresResultSet> {
+        let jdbc_params = params
+            .iter()
+            .map(|p| QueryParam::constant(p.clone()))
+            .collect::<Vec<_>>();
+
+        let mut prepared = self.prepare(PostgresQuery::new(query, jdbc_params))?;
+
+        prepared.execute()
     }
 }
 

@@ -6,9 +6,10 @@ use ansilo_core::{
     err::{Context, Result},
 };
 
-use ansilo_connectors_base::{interface::{
-    Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet,
-}, common::query::QueryParam};
+use ansilo_connectors_base::{
+    common::query::QueryParam,
+    interface::{Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet},
+};
 use ansilo_logging::warn;
 use itertools::Itertools;
 use tokio_postgres::Client;
@@ -42,7 +43,6 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
                 SELECT
                     t.table_schema,
                     t.table_name,
-                    t.is_updatable,
                     c.column_name,
                     c.is_identity,
                     c.data_type,
@@ -54,7 +54,7 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
                 FROM information_schema.tables t
                 INNER JOIN information_schema.columns C ON t.table_schema = c.table_schema AND t.table_name = c.table_name
                 WHERE 1=1
-                AND concat(t.table_schema, '.', t.table_name) LIKE ?
+                AND concat(t.table_schema, '.', t.table_name) LIKE $1
                 AND t.table_type != 'LOCAL TEMPORARY'
                 ORDER BY t.table_schema, t.table_name, c.ordinal_position
             "#,
@@ -126,9 +126,9 @@ pub(crate) fn parse_entity_config(
 }
 
 pub(crate) fn from_postgres_type(col: &HashMap<String, DataValue>) -> Result<DataType> {
-    let data_type = &col["DATA_TYPE"]
+    let data_type = &col["data_type"]
         .as_utf8_string()
-        .context("DATA_TYPE")?
+        .context("data_type")?
         .to_uppercase();
 
     Ok(match data_type.as_str() {
@@ -164,7 +164,7 @@ pub(crate) fn from_postgres_type(col: &HashMap<String, DataValue>) -> Result<Dat
         }
 
         "FLOAT4" | "REAL" => DataType::Float32,
-        "FLOAT8" | "DOUBLE" => DataType::Float64,
+        "FLOAT8" | "DOUBLE" | "DOUBLE PRECISION" => DataType::Float64,
         "BYTEA" | "VARBINARY" | "TINYBLOB" | "MEDIUMBLOB" | "BLOB" => DataType::Binary,
         "JSON" | "JSONB" => DataType::JSON,
         "DATE" => DataType::Date,

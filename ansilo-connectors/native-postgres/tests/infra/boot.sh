@@ -5,27 +5,27 @@
 set -e
 
 TIMEOUT_DURATION=1800
-LISTEN_PORT=3307
+LISTEN_PORT=5433
 
 function cleanup {
-    if [[ ! -z "$MYSQL_PID" ]];
+    if [[ ! -z "$POSTGRES_PID" ]];
     then
         set +e
-        echo "Terminating mysql..."
-        kill -INT $MYSQL_PID
+        echo "Terminating postgres..."
+        kill -INT $POSTGRES_PID
     fi
 }
 
 trap cleanup EXIT INT TERM
 
-echo "Starting mysql..."
-docker-entrypoint.sh mysqld &
-MYSQL_PID=$$
-echo "Mysql started as pid $MYSQL_PID"
+echo "Starting postgres..."
+docker-entrypoint.sh postgres &
+POSTGRES_PID=$$
+echo "postgres started as pid $POSTGRES_PID"
 
 echo "Running lazyprox..."
 lazyprox \
     --listen 0.0.0.0:$LISTEN_PORT \
-    --dest localhost:3306 \
+    --dest localhost:5432 \
     --idle-timeout-secs $TIMEOUT_DURATION
 

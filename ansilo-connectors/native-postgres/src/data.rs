@@ -2,6 +2,7 @@ use ansilo_core::{
     data::{chrono_tz::Tz, DataType, DataValue, DateTimeWithTZ},
     err::{bail, Result},
 };
+use rust_decimal::{prelude::FromPrimitive, Decimal};
 use tokio_postgres::{
     types::{ToSql, Type},
     Row,
@@ -37,7 +38,7 @@ pub fn to_pg_type(r#type: &DataType) -> Type {
 /// Mapping from pg type to DataType
 pub fn from_pg_type(r#type: &Type) -> Result<DataType> {
     Ok(match *r#type {
-        Type::TEXT | Type::VARCHAR => DataType::Utf8String(Default::default()),
+        Type::TEXT | Type::VARCHAR | Type::NAME => DataType::Utf8String(Default::default()),
         Type::BYTEA | Type::VARBIT => DataType::Binary,
         Type::BOOL | Type::BIT => DataType::Boolean,
         Type::INT2 => DataType::Int16,
@@ -52,7 +53,7 @@ pub fn from_pg_type(r#type: &Type) -> Result<DataType> {
         Type::TIMESTAMP => DataType::DateTime,
         Type::TIMESTAMPTZ => DataType::DateTimeWithTZ,
         Type::UUID => DataType::Uuid,
-        _ => bail!("Postgres type {} is not supported", r#type),
+        _ => bail!("Postgres type '{:?}' is not supported", r#type),
     })
 }
 
@@ -64,53 +65,85 @@ pub fn to_pg(val: DataValue, r#type: &Type) -> Result<Box<dyn ToSql>> {
     Ok(match val {
         DataValue::Null => Box::new(Option::<bool>::None),
         DataValue::Utf8String(d) => Box::new(d),
-        DataValue::Binary(_) => todo!(),
-        DataValue::Boolean(_) => todo!(),
-        DataValue::Int8(_) => todo!(),
-        DataValue::UInt8(_) => todo!(),
-        DataValue::Int16(_) => todo!(),
-        DataValue::UInt16(_) => todo!(),
-        DataValue::Int32(_) => todo!(),
-        DataValue::UInt32(_) => todo!(),
-        DataValue::Int64(_) => todo!(),
-        DataValue::UInt64(_) => todo!(),
-        DataValue::Float32(_) => todo!(),
-        DataValue::Float64(_) => todo!(),
-        DataValue::Decimal(_) => todo!(),
-        DataValue::JSON(_) => todo!(),
-        DataValue::Date(_) => todo!(),
-        DataValue::Time(_) => todo!(),
-        DataValue::DateTime(_) => todo!(),
-        DataValue::DateTimeWithTZ(_) => todo!(),
-        DataValue::Uuid(_) => todo!(),
+        DataValue::Binary(d) => Box::new(d),
+        DataValue::Boolean(d) => Box::new(d),
+        DataValue::Int8(d) => Box::new(d),
+        DataValue::UInt8(d) => Box::new(d as i16),
+        DataValue::Int16(d) => Box::new(d),
+        DataValue::UInt16(d) => Box::new(d as i32),
+        DataValue::Int32(d) => Box::new(d),
+        DataValue::UInt32(d) => Box::new(d as i64),
+        DataValue::Int64(d) => Box::new(d),
+        DataValue::UInt64(d) => Box::new(Decimal::from_u64(d).unwrap()),
+        DataValue::Float32(d) => Box::new(d),
+        DataValue::Float64(d) => Box::new(d),
+        DataValue::Decimal(d) => Box::new(d),
+        DataValue::JSON(d) => Box::new(d),
+        DataValue::Date(d) => Box::new(d),
+        DataValue::Time(d) => Box::new(d),
+        DataValue::DateTime(d) => Box::new(d),
+        DataValue::DateTimeWithTZ(d) => Box::new(d.utc().unwrap()),
+        DataValue::Uuid(d) => Box::new(d),
     })
 }
 
 /// Converts a DataValue into the supplied postgres type
 pub fn from_pg(row: &Row, idx: usize, r#type: &Type) -> Result<DataValue> {
-    Ok(match from_pg_type(r#type)? {
-        DataType::Utf8String(_) => DataValue::Utf8String(row.try_get(idx)?),
-        DataType::Binary => DataValue::Binary(row.try_get(idx)?),
-        DataType::Boolean => DataValue::Boolean(row.try_get(idx)?),
-        DataType::Int8 => DataValue::Int8(row.try_get(idx)?),
-        DataType::Int16 => DataValue::Int16(row.try_get(idx)?),
-        DataType::Int32 => DataValue::Int32(row.try_get(idx)?),
-        DataType::Int64 => DataValue::Int64(row.try_get(idx)?),
-        DataType::Float32 => DataValue::Float32(row.try_get(idx)?),
-        DataType::Float64 => DataValue::Float64(row.try_get(idx)?),
-        DataType::Decimal(_) => DataValue::Decimal(row.try_get(idx)?),
-        DataType::JSON => DataValue::JSON(row.try_get(idx)?),
-        DataType::Date => DataValue::Date(row.try_get(idx)?),
-        DataType::Time => DataValue::Time(row.try_get(idx)?),
-        DataType::DateTime => DataValue::DateTime(row.try_get(idx)?),
-        DataType::DateTimeWithTZ => {
-            DataValue::DateTimeWithTZ(DateTimeWithTZ::new(row.try_get(idx)?, Tz::UTC))
-        }
-        DataType::Uuid => DataValue::Uuid(row.try_get(idx)?),
-        DataType::Null => DataValue::Null,
+    let val = match from_pg_type(r#type)? {
+        DataType::Utf8String(_) => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Utf8String(d)),
+        DataType::Binary => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Binary(d)),
+        DataType::Boolean => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Boolean(d)),
+        DataType::Int8 => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Int8(d)),
+        DataType::Int16 => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Int16(d)),
+        DataType::Int32 => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Int32(d)),
+        DataType::Int64 => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Int64(d)),
+        DataType::Float32 => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Float32(d)),
+        DataType::Float64 => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Float64(d)),
+        DataType::Decimal(_) => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Decimal(d)),
+        DataType::JSON => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::JSON(d)),
+        DataType::Date => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Date(d)),
+        DataType::Time => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Time(d)),
+        DataType::DateTime => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::DateTime(d)),
+        DataType::DateTimeWithTZ => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::DateTimeWithTZ(DateTimeWithTZ::new(d, Tz::UTC))),
+        DataType::Uuid => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::Uuid(d)),
+        DataType::Null => Some(DataValue::Null),
         DataType::UInt8 => unreachable!(),
         DataType::UInt16 => unreachable!(),
         DataType::UInt32 => unreachable!(),
         DataType::UInt64 => unreachable!(),
-    })
+    };
+
+    Ok(val.unwrap_or_else(|| DataValue::Null))
 }

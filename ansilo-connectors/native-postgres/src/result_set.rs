@@ -18,6 +18,8 @@ pub struct PostgresResultSet {
     cols: Vec<(String, DataType)>,
     /// Output buffer
     buf: Vec<u8>,
+    /// Finished reading rows
+    done: bool,
 }
 
 impl PostgresResultSet {
@@ -26,6 +28,7 @@ impl PostgresResultSet {
             stream: Box::pin(stream),
             cols,
             buf: vec![],
+            done: false,
         }
     }
 }
@@ -36,21 +39,25 @@ impl ResultSet for PostgresResultSet {
     }
 
     fn read(&mut self, buff: &mut [u8]) -> Result<usize> {
+        if self.done {
+            return Ok(0);
+        }
+
         let mut read = 0;
+        let rt = runtime();
 
         loop {
             if !self.buf.is_empty() {
-                read = cmp::min(buff.len(), self.buf.len());
+                let new = cmp::min(buff.len() - read, self.buf.len());
 
-                buff[..read].copy_from_slice(&self.buf[..read]);
-                self.buf.drain(..read);
+                buff[read..(read + new)].copy_from_slice(&self.buf[..new]);
+                self.buf.drain(..new);
+                read += new;
             }
 
             if buff.len() == read {
                 return Ok(read);
             }
-
-            let rt = runtime();
 
             if let Some(row) = rt.block_on(self.stream.try_next())? {
                 let vals = row
@@ -63,6 +70,7 @@ impl ResultSet for PostgresResultSet {
                 self.buf
                     .extend_from_slice(DataWriter::to_vec(vals)?.as_slice());
             } else {
+                self.done = true;
                 return Ok(read);
             }
         }

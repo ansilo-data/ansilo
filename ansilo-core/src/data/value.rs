@@ -68,6 +68,10 @@ impl DateTimeWithTZ {
             ),
         }
     }
+
+    pub fn utc(&self) -> Result<DateTime<chrono::Utc>> {
+        Ok(self.zoned()?.with_timezone(&chrono::Utc))
+    }
 }
 
 impl PartialOrd for DateTimeWithTZ {
