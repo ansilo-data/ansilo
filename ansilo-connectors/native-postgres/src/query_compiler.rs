@@ -10,7 +10,7 @@ use ansilo_connectors_base::interface::QueryCompiler;
 use ansilo_util_pg::query::pg_quote_identifier;
 use tokio_postgres::Client;
 
-use crate::{PostgresConnection, PostgresQuery, QueryParam};
+use crate::{to_pg_type, PostgresConnection, PostgresQuery, QueryParam};
 
 use super::{PostgresConnectorEntityConfig, PostgresEntitySourceConfig, PostgresTableOptions};
 
@@ -271,7 +271,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
             sql::JoinType::Inner => format!("INNER JOIN {} ON {}", target, cond),
             sql::JoinType::Left => format!("LEFT JOIN {} ON {}", target, cond),
             sql::JoinType::Right => format!("RIGHT JOIN {} ON {}", target, cond),
-            sql::JoinType::Full => panic!("postgres does not support FULL OUTER JOIN"),
+            sql::JoinType::Full => format!("FULL JOIN {} ON {}", target, cond),
         })
     }
 
@@ -514,16 +514,16 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
             sql::BinaryOpType::LogicalAnd => format!("({}) AND ({})", l, r),
             sql::BinaryOpType::LogicalOr => format!("({}) OR ({})", l, r),
             sql::BinaryOpType::Modulo => format!("({}) % ({})", l, r),
-            sql::BinaryOpType::Exponent => format!("POW({}, {})", l, r),
+            sql::BinaryOpType::Exponent => format!("pow({}, {})", l, r),
             sql::BinaryOpType::BitwiseAnd => format!("({}) & ({})", l, r),
             sql::BinaryOpType::BitwiseOr => format!("({}) | ({})", l, r),
             sql::BinaryOpType::BitwiseXor => format!("({}) ^ ({})", l, r),
             sql::BinaryOpType::BitwiseShiftLeft => format!("({}) << ({})", l, r),
             sql::BinaryOpType::BitwiseShiftRight => format!("({}) >> ({})", l, r),
-            sql::BinaryOpType::Concat => format!("CONCAT({}, {})", l, r),
-            sql::BinaryOpType::Regexp => format!("REGEXP_LIKE({}, {})", l, r),
+            sql::BinaryOpType::Concat => format!("({}) || ({})", l, r),
+            sql::BinaryOpType::Regexp => format!("({}) ~ ({})", l, r),
             sql::BinaryOpType::Equal => format!("({}) = ({})", l, r),
-            sql::BinaryOpType::NullSafeEqual => format!("({}) <=> ({})", l, r),
+            sql::BinaryOpType::NullSafeEqual => format!("({}) IS DISTINCT FROM ({})", l, r),
             sql::BinaryOpType::NotEqual => format!("({}) != ({})", l, r),
             sql::BinaryOpType::GreaterThan => format!("({}) > ({})", l, r),
             sql::BinaryOpType::GreaterThanOrEqual => format!("({}) >= ({})", l, r),
@@ -540,32 +540,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     ) -> Result<String> {
         let arg = Self::compile_expr(conf, query, &cast.expr, params)?;
 
-        Ok(match &cast.r#type {
-            DataType::Utf8String(_) => format!("CAST({} AS NCHAR)", arg),
-            DataType::Binary => format!("CAST({} AS BINARY)", arg),
-            DataType::Boolean => format!("CASE WHEN ({}) THEN TRUE ELSE FALSE END", arg),
-            DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64 => {
-                format!("CAST({} AS SIGNED)", arg)
-            }
-            DataType::UInt8 | DataType::UInt16 | DataType::UInt32 | DataType::UInt64 => {
-                format!("CAST({} AS UNSIGNED)", arg)
-            }
-            DataType::Decimal(opts) => format!(
-                "CAST({} AS DECIMAL({}, {}))",
-                arg,
-                opts.precision.unwrap_or(65),
-                opts.scale.unwrap_or(30)
-            ),
-            DataType::Float32 => format!("CAST({} AS FLOAT)", arg),
-            DataType::Float64 => format!("CAST({} AS DOUBLE)", arg),
-            DataType::JSON => format!("CAST({} AS JSON)", arg),
-            DataType::Date => format!("CAST({} AS DATE)", arg),
-            DataType::DateTime => format!("CAST({} AS DATETIME)", arg),
-            DataType::DateTimeWithTZ => panic!("postgres does not support Date Time TZ types"),
-            DataType::Null => format!("CASE WHEN ({}) THEN NULL ELSE NULL END", arg),
-            DataType::Uuid => panic!("postgres does not support UUID types"),
-            DataType::Time => format!("CAST({} AS TIME)", arg),
-        })
+        Ok(format!("({})::{}", arg, to_pg_type(&cast.r#type).name()))
     }
 
     fn compile_function_call(
@@ -577,28 +552,28 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
         Ok(match func {
             sql::FunctionCall::Length(arg) => {
                 format!(
-                    "LENGTH({})",
+                    "length({})",
                     Self::compile_expr(conf, query, &*arg, params)?
                 )
             }
             sql::FunctionCall::Abs(arg) => {
-                format!("ABS({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("abs({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::FunctionCall::Uppercase(arg) => {
-                format!("UPPER({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("upper({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::FunctionCall::Lowercase(arg) => {
-                format!("LOWER({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("lower({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::FunctionCall::Substring(call) => format!(
-                "SUBSTR({}, {}, {})",
+                "substring({} FROM {} FOR {})",
                 Self::compile_expr(conf, query, &*call.string, params)?,
                 Self::compile_expr(conf, query, &*call.start, params)?,
                 Self::compile_expr(conf, query, &*call.len, params)?
             ),
-            sql::FunctionCall::Uuid => "UUID()".into(),
+            sql::FunctionCall::Uuid => "gen_random_uuid()".into(),
             sql::FunctionCall::Coalesce(args) => format!(
-                "COALECSE({})",
+                "coalecse({})",
                 args.iter()
                     .map(|arg| Self::compile_expr(conf, query, &**arg, params))
                     .collect::<Result<Vec<_>>>()?
@@ -615,29 +590,30 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     ) -> Result<String> {
         Ok(match agg {
             sql::AggregateCall::Sum(arg) => {
-                format!("SUM({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("sum({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
-            sql::AggregateCall::Count => "COUNT(*)".into(),
+            sql::AggregateCall::Count => "count(*)".into(),
             sql::AggregateCall::CountDistinct(arg) => format!(
-                "COUNT(DISTINCT {})",
+                "count(distinct {})",
                 Self::compile_expr(conf, query, &*arg, params)?
             ),
             sql::AggregateCall::Max(arg) => {
-                format!("MAX({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("max({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::AggregateCall::Min(arg) => {
-                format!("MIN({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("min({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::AggregateCall::Average(arg) => {
-                format!("AVG({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("avg({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::AggregateCall::StringAgg(call) => {
                 params.push(QueryParam::Constant(DataValue::Utf8String(
                     call.separator.clone(),
                 )));
                 format!(
-                    "GROUP_CONCAT({} SEPARATOR ?)",
+                    "string_agg({}, {})",
                     Self::compile_expr(conf, query, &call.expr, params)?,
+                    params.len()
                 )
             }
         })
@@ -979,7 +955,7 @@ mod tests {
         assert_eq!(
             compiled,
             PostgresQuery::new(
-                r#"SELECT LENGTH("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
+                r#"SELECT length("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
         );
@@ -1000,7 +976,7 @@ mod tests {
         assert_eq!(
             compiled,
             PostgresQuery::new(
-                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
+                r#"SELECT sum("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
         );
@@ -1021,7 +997,7 @@ mod tests {
         assert_eq!(
             compiled,
             PostgresQuery::new(
-                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" FOR UPDATE"#,
+                r#"SELECT sum("entity"."col1") AS "COL" FROM "table" AS "entity" FOR UPDATE"#,
                 vec![]
             )
         );
