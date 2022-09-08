@@ -3,7 +3,7 @@ use std::{collections::HashMap, marker::PhantomData, ops::DerefMut};
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
     data::{DataType, DataValue, DecimalOptions, StringOptions},
-    err::{Context, Result},
+    err::{bail, Context, Result},
 };
 
 use ansilo_connectors_base::{
@@ -132,7 +132,8 @@ pub(crate) fn from_postgres_type(col: &HashMap<String, DataValue>) -> Result<Dat
         .to_uppercase();
 
     Ok(match data_type.as_str() {
-        "CHAR" | "TEXT" | "VARCHAR" | "CITEXT" | "NAME" | "UNKNOWN" | "CHARACTER VARYING" => {
+        "CHAR" | "CHARACTER" | "TEXT" | "VARCHAR" | "CITEXT" | "NAME" | "UNKNOWN"
+        | "CHARACTER VARYING" => {
             let length = col["character_maximum_length"]
                 .clone()
                 .try_coerce_into(&DataType::UInt32)
@@ -144,7 +145,6 @@ pub(crate) fn from_postgres_type(col: &HashMap<String, DataValue>) -> Result<Dat
         }
         "BOOLEAN" | "BIT" => DataType::Boolean,
         "\"CHAR\"" => DataType::Int8,
-        "TINYINT" => DataType::Int8,
         "SMALLINT" => DataType::Int16,
         "INTEGER" => DataType::Int32,
         "BIGINT" => DataType::Int64,
@@ -168,13 +168,13 @@ pub(crate) fn from_postgres_type(col: &HashMap<String, DataValue>) -> Result<Dat
         "BYTEA" | "VARBINARY" | "TINYBLOB" | "MEDIUMBLOB" | "BLOB" => DataType::Binary,
         "JSON" | "JSONB" => DataType::JSON,
         "DATE" => DataType::Date,
-        "TIME" => DataType::Time,
-        "TIMESTAMP" => DataType::DateTime,
+        "TIME" | "TIME WITHOUT TIME ZONE" => DataType::Time,
+        "TIMESTAMP" | "TIMESTAMP WITHOUT TIME ZONE" => DataType::DateTime,
         "TIMESTAMP WITH TIME ZONE" => DataType::DateTimeWithTZ,
+        "UUID" => DataType::Uuid,
         // Default unknown data types to json
         _ => {
-            warn!("Encountered unknown data type '{data_type}', defaulting to JSON seralisation");
-            DataType::JSON
+            bail!("Encountered unsupported data type '{data_type}'");
         }
     })
 }

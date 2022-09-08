@@ -13,6 +13,8 @@ use pgx::{
     IntoDatum, PgBox,
 };
 
+use crate::util::string::parse_to_owned_utf8_string;
+
 use super::from_pg_type;
 
 /// Attempt to convert an ansilo DataValue into a postgres Datum type
@@ -107,7 +109,7 @@ pub unsafe fn into_datum(
         (type_oid, r#type, data) => {
             // If we fail on the strict conversion path we try to coerce the type before giving up
             if let Ok(_) = from_pg_type(type_oid)
-                .and_then(|r#type| Ok((data.try_coerce_into(&r#type)?, r#type)))
+                .and_then(|r#type| Ok((data.clone().try_coerce_into(&r#type)?, r#type)))
                 .and_then(|(coerced, r#type)| {
                     into_datum(type_oid, &r#type, coerced, is_null, datum)
                 })
@@ -116,9 +118,10 @@ pub unsafe fn into_datum(
             }
 
             bail!(
-                "Type mismatch between underlying {:?} type and postgres type {:?}",
+                "Failed to convert {:?} to datum: type mismatch between underlying {:?} type and postgres type {:?}",
+                data,
                 r#type,
-                type_oid
+                parse_to_owned_utf8_string(pg_sys::format_type_be(type_oid)).unwrap_or_else(|_| type_oid.to_string())
             )
         }
     };

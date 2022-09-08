@@ -1,5 +1,9 @@
 use ansilo_core::{
-    data::{chrono_tz::Tz, DataType, DataValue, DateTimeWithTZ},
+    data::{
+        chrono::{DateTime, Utc},
+        chrono_tz::Tz,
+        DataType, DataValue, DateTimeWithTZ,
+    },
     err::{bail, Result},
 };
 use rust_decimal::{prelude::FromPrimitive, Decimal};
@@ -38,7 +42,9 @@ pub fn to_pg_type(r#type: &DataType) -> Type {
 /// Mapping from pg type to DataType
 pub fn from_pg_type(r#type: &Type) -> Result<DataType> {
     Ok(match *r#type {
-        Type::TEXT | Type::VARCHAR | Type::NAME => DataType::Utf8String(Default::default()),
+        Type::TEXT | Type::VARCHAR | Type::NAME | Type::BPCHAR | Type::CHAR => {
+            DataType::Utf8String(Default::default())
+        }
         Type::BYTEA | Type::VARBIT => DataType::Binary,
         Type::BOOL | Type::BIT => DataType::Boolean,
         Type::INT2 => DataType::Int16,
@@ -120,9 +126,14 @@ pub fn from_pg(row: &Row, idx: usize, r#type: &Type) -> Result<DataValue> {
         DataType::Decimal(_) => row
             .try_get::<_, Option<_>>(idx)?
             .map(|d| DataValue::Decimal(d)),
-        DataType::JSON => row
-            .try_get::<_, Option<_>>(idx)?
-            .map(|d| DataValue::JSON(d)),
+        DataType::JSON => {
+            let d = row.try_get::<_, Option<serde_json::Value>>(idx)?;
+            if let Some(d) = d {
+                Some(DataValue::JSON(serde_json::to_string(&d)?))
+            } else {
+                None
+            }
+        }
         DataType::Date => row
             .try_get::<_, Option<_>>(idx)?
             .map(|d| DataValue::Date(d)),
@@ -133,8 +144,8 @@ pub fn from_pg(row: &Row, idx: usize, r#type: &Type) -> Result<DataValue> {
             .try_get::<_, Option<_>>(idx)?
             .map(|d| DataValue::DateTime(d)),
         DataType::DateTimeWithTZ => row
-            .try_get::<_, Option<_>>(idx)?
-            .map(|d| DataValue::DateTimeWithTZ(DateTimeWithTZ::new(d, Tz::UTC))),
+            .try_get::<_, Option<DateTime<Utc>>>(idx)?
+            .map(|d| DataValue::DateTimeWithTZ(DateTimeWithTZ::new(d.naive_utc(), Tz::UTC))),
         DataType::Uuid => row
             .try_get::<_, Option<_>>(idx)?
             .map(|d| DataValue::Uuid(d)),

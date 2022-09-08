@@ -53,7 +53,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
             .context("Unexpected empty result set")?;
 
         let plan = match value.clone() {
-            DataValue::Utf8String(plan) => plan,
+            DataValue::JSON(plan) => plan,
             _ => bail!("Unexpected data value returned: {:?}", value),
         };
 
