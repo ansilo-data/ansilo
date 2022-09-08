@@ -41,7 +41,7 @@ pub fn start_postgres() -> ContainerInstances {
         Duration::from_secs(60),
     );
 
-    thread::sleep(Duration::from_secs(15));
+    thread::sleep(Duration::from_secs(5));
 
     cache.save(&services);
 

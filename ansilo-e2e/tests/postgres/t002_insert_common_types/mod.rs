@@ -156,8 +156,8 @@ fn test() {
                     r#"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)"#
                 ].join(""),
                 vec![
-                    "value=Utf8String(\"🔥\") type=text".into(),
-                    "value=Utf8String(\"foobar\") type=text".into(),
+                    "value=Utf8String(\"🔥\") type=bpchar".into(),
+                    "value=Utf8String(\"foobar\") type=varchar".into(),
                     "value=Utf8String(\"🥑🚀\") type=text".into(),
                     "value=Decimal(123.456) type=numeric".into(),
                     "value=Boolean(true) type=bool".into(),
@@ -168,13 +168,13 @@ fn test() {
                     "value=Float64(33.44) type=float8".into(),
                     "value=Binary([66, 76, 79, 66]) type=bytea".into(),
                     "value=JSON(\"{\\\"foo\\\": \\\"bar\\\"}\") type=json".into(),
-                    "value=JSON(\"{\\\"hello\\\": \\\"world\\\"}\") type=json".into(),
+                    "value=JSON(\"{\\\"hello\\\": \\\"world\\\"}\") type=jsonb".into(),
                     "value=Date(2020-12-23) type=date".into(),
                     "value=Time(01:02:03) type=time".into(),
                     "value=DateTime(2018-02-01T01:02:03) type=timestamp".into(),
                     "value=DateTimeWithTZ(DateTimeWithTZ { dt: 1999-01-15T03:00:00, tz: UTC }) type=timestamptz".into(),
                     "value=Uuid(b4c52a77-44c5-4f5e-a1a3-95b6dac1b9d0) type=uuid".into(),
-                    "value=Null type=text".into(),
+                    "value=Null type=bpchar".into(),
                 ],
                 Some([("affected".into(), "Some(1)".into())]
                 .into_iter()
@@ -297,8 +297,8 @@ fn test_insert_nulls() {
                     r#"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)"#
                 ].join(""),
                 vec![
-                    "value=Null type=text".into(),
-                    "value=Null type=text".into(),
+                    "value=Null type=bpchar".into(),
+                    "value=Null type=varchar".into(),
                     "value=Null type=text".into(),
                     "value=Null type=numeric".into(),
                     "value=Null type=bool".into(),
@@ -309,13 +309,13 @@ fn test_insert_nulls() {
                     "value=Null type=float8".into(),
                     "value=Null type=bytea".into(),
                     "value=Null type=json".into(),
-                    "value=Null type=json".into(),
+                    "value=Null type=jsonb".into(),
                     "value=Null type=date".into(),
                     "value=Null type=time".into(),
                     "value=Null type=timestamp".into(),
                     "value=Null type=timestamptz".into(),
                     "value=Null type=uuid".into(),
-                    "value=Null type=text".into(),
+                    "value=Null type=bpchar".into(),
                 ],
                 Some([("affected".into(), "Some(1)".into())]
                 .into_iter()

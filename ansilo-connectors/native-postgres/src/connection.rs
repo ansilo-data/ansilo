@@ -7,7 +7,7 @@ use ansilo_connectors_base::{
 use ansilo_core::{data::DataValue, err::Result};
 use tokio_postgres::Client;
 
-use crate::{runtime, to_pg_type, PostgresPreparedQuery, PostgresQuery, PostgresResultSet};
+use crate::{runtime, PostgresPreparedQuery, PostgresQuery, PostgresResultSet};
 
 /// Connection to a postgres database
 pub struct PostgresConnection<T> {
@@ -32,14 +32,7 @@ impl<T: DerefMut<Target = Client>> Connection for PostgresConnection<T> {
     type TTransactionManager = Self;
 
     fn prepare(&mut self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
-        let types = query
-            .params
-            .iter()
-            .map(|p| to_pg_type(&p.r#type()))
-            .collect::<Vec<_>>();
-
-        let statement =
-            runtime().block_on(self.client.prepare_typed(&query.sql, types.as_slice()))?;
+        let statement = runtime().block_on(self.client.prepare(&query.sql))?;
 
         Ok(PostgresPreparedQuery::new(
             Arc::clone(&self.client),
