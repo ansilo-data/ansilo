@@ -28,7 +28,6 @@ pub mod manager;
 pub mod proc;
 pub mod proto;
 pub mod server;
-pub mod query;
 
 mod configure;
 #[cfg(test)]
