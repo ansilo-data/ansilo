@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,7 +22,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.ansilo.connectors.data.Int32DataType;
-import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.data.Utf8StringDataType;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 import com.ansilo.connectors.result.JdbcResultSet;
@@ -259,7 +259,7 @@ public class JdbcPreparedQueryTest {
     @Test
     void executeWithoutParams() throws Exception {
         this.initPreparedQuery();
-        var resultSet = this.preparedQuery.execute();
+        var resultSet = this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).execute();
         verify(this.innerStatement, times(1)).getResultSet();
         assertInstanceOf(JdbcResultSet.class, resultSet);
@@ -271,7 +271,7 @@ public class JdbcPreparedQueryTest {
         this.initPreparedQuery();
 
         assertThrows(SQLException.class, () -> {
-            this.preparedQuery.execute();
+            this.preparedQuery.executeQuery();
         });
         verify(this.innerStatement, times(0)).execute();
         verify(this.innerStatement, times(0)).getResultSet();
@@ -294,7 +294,7 @@ public class JdbcPreparedQueryTest {
         verify(this.innerStatement, times(1)).setInt(1, 123);
 
         assertThrows(SQLException.class, () -> {
-            this.preparedQuery.execute();
+            this.preparedQuery.executeQuery();
         });
         verify(this.innerStatement, times(0)).execute();
         verify(this.innerStatement, times(0)).getResultSet();
@@ -315,7 +315,7 @@ public class JdbcPreparedQueryTest {
         assertEquals(5, wrote);
         verify(this.innerStatement, times(1)).setInt(1, 123);
 
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).execute();
         verify(this.innerStatement, times(1)).getResultSet();
     }
@@ -335,7 +335,7 @@ public class JdbcPreparedQueryTest {
 
             assertEquals(5, wrote);
 
-            this.preparedQuery.execute();
+            this.preparedQuery.executeQuery();
             this.preparedQuery.restart();
         }
 
@@ -356,11 +356,11 @@ public class JdbcPreparedQueryTest {
         // should only bind after execute
         verify(this.innerStatement, times(0)).setInt(1, 123);
 
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).setInt(1, 123);
 
         // should only bind constants once
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).setInt(1, 123);
     }
 
@@ -368,9 +368,9 @@ public class JdbcPreparedQueryTest {
     void writeConstantParamString() throws Exception {
         var buff = this.newByteBuffer(8);
         buff.put((byte) 1); // not null
-        buff.put((byte)5); // chunk length
+        buff.put((byte) 5); // chunk length
         buff.put(StandardCharsets.UTF_8.encode("hello")); // data
-        buff.put((byte)0); // EOF
+        buff.put((byte) 0); // EOF
         buff.rewind();
 
         this.innerParams.add(JdbcParameter.createConstant(1, new Utf8StringDataType(), buff));
@@ -379,11 +379,11 @@ public class JdbcPreparedQueryTest {
         // should only bind after execute
         verify(this.innerStatement, times(0)).setNString(1, "hello");
 
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).setNString(1, "hello");
 
         // should only bind constants once
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).setNString(1, "hello");
     }
 
@@ -399,11 +399,11 @@ public class JdbcPreparedQueryTest {
         // should only bind after execute
         verify(this.innerStatement, times(0)).setNull(1, Types.NVARCHAR);
 
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).setNull(1, Types.NVARCHAR);
 
         // should only bind constants once
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).setNull(1, Types.NVARCHAR);
     }
 
@@ -436,7 +436,7 @@ public class JdbcPreparedQueryTest {
         verify(this.innerStatement, times(0)).setInt(1, 123);
         verify(this.innerStatement, times(0)).setInt(3, 789);
 
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).setInt(1, 123);
         verify(this.innerStatement, times(1)).setInt(2, 456);
         verify(this.innerStatement, times(1)).setInt(3, 789);
@@ -449,7 +449,7 @@ public class JdbcPreparedQueryTest {
         this.preparedQuery.restart();
         wrote = this.preparedQuery.write(buff2);
         assertEquals(5, wrote);
-        this.preparedQuery.execute();
+        this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).setInt(1, 123);
         verify(this.innerStatement, times(1)).setInt(2, 888);
         verify(this.innerStatement, times(1)).setInt(3, 789);
@@ -524,17 +524,65 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
-    void executeNoResultSet() throws Exception {
+    void executeQueryNoResultSet() throws Exception {
         this.innerStatement = mock(PreparedStatement.class);
         when(this.innerStatement.execute()).thenReturn(false);
 
         this.preparedQuery =
                 new JdbcPreparedQuery(this.mapping, this.innerStatement, this.innerParams);
 
-        var resultSet = this.preparedQuery.execute();
+        var resultSet = this.preparedQuery.executeQuery();
         verify(this.innerStatement, times(1)).execute();
         verify(this.innerStatement, times(0)).getResultSet();
         assertInstanceOf(JdbcResultSet.class, resultSet);
+    }
+
+    @Test
+    void executeModifyReturnsLargeUpdateCount() throws Exception {
+        this.innerStatement = mock(PreparedStatement.class);
+        when(this.innerStatement.execute()).thenReturn(false);
+        when(this.innerStatement.getLargeUpdateCount()).thenReturn(123L);
+
+        this.preparedQuery =
+                new JdbcPreparedQuery(this.mapping, this.innerStatement, this.innerParams);
+
+        var count = this.preparedQuery.executeModify();
+        verify(this.innerStatement, times(1)).execute();
+        verify(this.innerStatement, times(0)).getResultSet();
+        verify(this.innerStatement, times(1)).getLargeUpdateCount();
+        assertEquals(123, count);
+    }
+
+    @Test
+    void executeModifyReturnsUpdateCountIfLargeUpdateCountThrows() throws Exception {
+        this.innerStatement = mock(PreparedStatement.class);
+        when(this.innerStatement.execute()).thenReturn(false);
+        when(this.innerStatement.getLargeUpdateCount()).thenCallRealMethod();
+        when(this.innerStatement.getUpdateCount()).thenReturn(123);
+
+        this.preparedQuery =
+                new JdbcPreparedQuery(this.mapping, this.innerStatement, this.innerParams);
+
+        var count = this.preparedQuery.executeModify();
+        verify(this.innerStatement, times(1)).execute();
+        verify(this.innerStatement, times(0)).getResultSet();
+        verify(this.innerStatement, times(1)).getUpdateCount();
+        assertEquals(123, count);
+    }
+
+    @Test
+    void executeModifyReturnsNullForResultSet() throws Exception {
+        this.innerStatement = mock(PreparedStatement.class);
+        when(this.innerStatement.execute()).thenReturn(true);
+
+        this.preparedQuery =
+                new JdbcPreparedQuery(this.mapping, this.innerStatement, this.innerParams);
+
+        var count = this.preparedQuery.executeModify();
+        verify(this.innerStatement, times(1)).execute();
+        verify(this.innerStatement, times(0)).getResultSet();
+        verify(this.innerStatement, times(0)).getLargeUpdateCount();
+        assertEquals(null, count);
     }
 
     private ByteBuffer newByteBuffer(int capacity) {

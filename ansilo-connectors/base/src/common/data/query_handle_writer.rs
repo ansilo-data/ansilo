@@ -144,7 +144,11 @@ mod tests {
             unimplemented!()
         }
 
-        fn execute(&mut self) -> Result<MockResultSet> {
+        fn execute_query(&mut self) -> Result<MockResultSet> {
+            unimplemented!()
+        }
+
+        fn execute_modify(&mut self) -> Result<Option<u64>> {
             unimplemented!()
         }
 

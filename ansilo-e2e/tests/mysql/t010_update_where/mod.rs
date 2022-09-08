@@ -18,7 +18,7 @@ fn test_update_where_remote() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             UPDATE t010__test_tab
@@ -29,8 +29,7 @@ fn test_update_where_remote() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on mysql end
     let results = mysql
@@ -71,7 +70,11 @@ fn test_update_where_remote() {
                     "LoggedParam [index=1, method=setString, value=Jannet]".into(),
                     "LoggedParam [index=2, method=setInt, value=2]".into(),
                 ],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -88,7 +91,7 @@ fn test_update_where_local() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             UPDATE t010__test_tab
@@ -99,8 +102,7 @@ fn test_update_where_local() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on mysql end
     let results = mysql
@@ -158,7 +160,11 @@ fn test_update_where_local() {
                         "LoggedParam [index=1, method=setString, value=Johnny]".into(),
                         "LoggedParam [index=2, method=setInt, value=1]".into()
                     ],
-                    None
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             )
         ]
@@ -176,7 +182,7 @@ fn test_update_where_remote_with_no_pk() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             UPDATE t010__test_tab_no_pk
@@ -187,8 +193,7 @@ fn test_update_where_remote_with_no_pk() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on mysql end
     let results = mysql
@@ -229,7 +234,11 @@ fn test_update_where_remote_with_no_pk() {
                     "LoggedParam [index=1, method=setString, value=Jannet]".into(),
                     "LoggedParam [index=2, method=setInt, value=2]".into(),
                 ],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );

@@ -292,10 +292,17 @@ impl QueryHandle for QueryHandles {
         }
     }
 
-    fn execute(&mut self) -> Result<Self::TResultSet> {
+    fn execute_query(&mut self) -> Result<Self::TResultSet> {
         Ok(match self {
-            QueryHandles::Jdbc(h) => ResultSets::Jdbc(h.execute()?),
-            QueryHandles::Memory(h) => ResultSets::Memory(h.execute()?),
+            QueryHandles::Jdbc(h) => ResultSets::Jdbc(h.execute_query()?),
+            QueryHandles::Memory(h) => ResultSets::Memory(h.execute_query()?),
+        })
+    }
+
+    fn execute_modify(&mut self) -> Result<Option<u64>> {
+        Ok(match self {
+            QueryHandles::Jdbc(h) => h.execute_modify()?,
+            QueryHandles::Memory(h) => h.execute_modify()?,
         })
     }
 

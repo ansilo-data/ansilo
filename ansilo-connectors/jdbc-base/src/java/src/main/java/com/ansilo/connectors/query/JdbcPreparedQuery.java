@@ -202,12 +202,43 @@ public class JdbcPreparedQuery {
     }
 
     /**
-     * Executes the query and resets the paraemter index to zero.
+     * Executes the query and returns the result set.
      * 
      * @return
      * @throws SQLException
      */
-    public JdbcResultSet execute() throws Exception {
+    public JdbcResultSet executeQuery() throws Exception {
+        this.beforeExecute();
+        var hasResultSet = this.preparedStatement.execute();
+
+        var resultSet =
+                this.newResultSet(hasResultSet ? this.preparedStatement.getResultSet() : null);
+
+        return resultSet;
+    }
+
+    /**
+     * Executes the query and returns the number of affected rows.
+     * 
+     * @return
+     * @throws SQLException
+     */
+    public Long executeModify() throws Exception {
+        this.beforeExecute();
+        var hasResultSet = this.preparedStatement.execute();
+
+        if (hasResultSet) {
+            return null;
+        }
+
+        try {
+            return this.getPreparedStatement().getLargeUpdateCount();
+        } catch (UnsupportedOperationException _e) {
+            return (long) this.preparedStatement.getUpdateCount();
+        }
+    }
+
+    protected void beforeExecute() throws Exception {
         if (this.paramIndex != this.dynamicParameters.size()) {
             throw new SQLException(
                     "Cannot execute query until all parameter data has been written");
@@ -216,13 +247,6 @@ public class JdbcPreparedQuery {
         if (!this.boundConstantParams) {
             this.bindConstantParameters();
         }
-
-        var hasResultSet = this.preparedStatement.execute();
-
-        var resultSet =
-                this.newResultSet(hasResultSet ? this.preparedStatement.getResultSet() : null);
-
-        return resultSet;
     }
 
     protected JdbcResultSet newResultSet(ResultSet innerResultSet) throws Exception {

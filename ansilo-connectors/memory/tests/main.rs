@@ -74,7 +74,7 @@ fn test_memory_select_query_execution() {
         .prepare(MemoryQuery::new(select.into(), vec![]))
         .unwrap();
 
-    let res = query.execute().unwrap();
+    let res = query.execute_query().unwrap();
 
     assert_eq!(
         res,

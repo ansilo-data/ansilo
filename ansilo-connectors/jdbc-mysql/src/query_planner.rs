@@ -53,7 +53,7 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
             ],
         ))?;
 
-        let mut result_set = query.execute()?.reader()?;
+        let mut result_set = query.execute_query()?.reader()?;
         let value = result_set
             .read_data_value()?
             .context("Unexpected empty result set")?;
@@ -73,7 +73,7 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
                 vec![],
             ))?;
 
-            let mut result_set = query.execute()?.reader()?;
+            let mut result_set = query.execute_query()?.reader()?;
             let value = result_set
                 .read_data_value()?
                 .context("Unexpected empty result set")?;

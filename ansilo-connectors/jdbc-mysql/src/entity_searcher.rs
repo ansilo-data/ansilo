@@ -64,7 +64,7 @@ impl EntitySearcher for MysqlJdbcEntitySearcher {
                         .into(),
                 ))],
             ))?
-            .execute()?;
+            .execute_query()?;
 
         let cols = cols.reader()?.iter_rows().collect::<Result<Vec<_>>>()?;
         let tables = cols.into_iter().group_by(|row| {

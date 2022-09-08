@@ -82,7 +82,7 @@ pub fn init_oracle_sql(containers: &ContainerInstances, path: PathBuf) -> JdbcCo
             connection
                 .prepare(JdbcQuery::new(stmt, vec![]))
                 .unwrap()
-                .execute()
+                .execute_query()
                 .unwrap();
         }
     }

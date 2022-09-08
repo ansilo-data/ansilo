@@ -250,18 +250,29 @@ impl FdwQueryContext {
         self.write_params(ordered_params)
     }
 
-    /// Executes the current query.
+    /// Executes the current query and returns the result set.
     /// All query parameters are expected to have been written.
-    pub fn execute(&mut self) -> Result<RowStructure> {
+    pub fn execute_query(&mut self) -> Result<RowStructure> {
         let writer = self.query_writer.as_mut().context("Query not prepared")?;
 
         writer.flush()?;
-        let result_set = writer.inner_mut().execute()?;
+        let result_set = writer.inner_mut().execute_query()?;
         let row_structure = result_set.row_structure.clone();
 
         self.result_set = Some(ResultSetReader::new(result_set)?);
 
         Ok(row_structure)
+    }
+
+    /// Executes the current query and returns the number of affected rows if known.
+    /// All query parameters are expected to have been written.
+    pub fn execute_modify(&mut self) -> Result<Option<u64>> {
+        let writer = self.query_writer.as_mut().context("Query not prepared")?;
+
+        writer.flush()?;
+        let affected_rows = writer.inner_mut().execute_modify()?;
+
+        Ok(affected_rows)
     }
 
     /// Reads the next data value from the result set of this query
@@ -281,8 +292,8 @@ impl FdwQueryContext {
     }
 
     /// Performs multiple executions of the query in a single request.
-    /// This will not read any result data from the query.
-    pub fn execute_batch(&mut self, data: Vec<Vec<(u32, DataValue)>>) -> Result<()> {
+    /// Returning the number of affected rows if known.
+    pub fn execute_batch(&mut self, data: Vec<Vec<(u32, DataValue)>>) -> Result<Option<u64>> {
         let mut reqs = vec![];
         let structure = self.get_input_structure()?;
         let mut writer = DataWriter::new(std::io::Cursor::new(vec![]), Some(structure.types()));
@@ -303,7 +314,7 @@ impl FdwQueryContext {
             ));
             reqs.push(ClientMessage::Query(
                 self.connection.query_id,
-                ClientQueryMessage::Execute,
+                ClientQueryMessage::ExecuteModify,
             ));
             reqs.push(ClientMessage::Query(
                 self.connection.query_id,
@@ -323,13 +334,19 @@ impl FdwQueryContext {
             _ => return Err(unexpected_outer_response(res).context("batch execute")),
         };
 
+        let mut affected_rows = Some(0);
+
         for res in results {
             if let ServerMessage::Error(_) = res {
                 return Err(unexpected_outer_response(res).context("batch execute"));
             }
+
+            if let ServerMessage::Query(ServerQueryMessage::AffectedRows(rows)) = res {
+                affected_rows = affected_rows.zip(rows).map(|(a, b)| a + b);
+            }
         }
 
-        Ok(())
+        Ok(affected_rows)
     }
 
     /// Retrieves any useful debugging information on the execution plan
@@ -459,17 +476,27 @@ impl QueryHandle for FdwQueryHandle {
             .context("Failed to restart query")
     }
 
-    fn execute(&mut self) -> Result<Self::TResultSet> {
+    fn execute_query(&mut self) -> Result<Self::TResultSet> {
         self.connection
-            .send(ClientQueryMessage::Execute)
+            .send(ClientQueryMessage::ExecuteQuery)
             .and_then(|res| match res {
-                ServerQueryMessage::Executed(row_structure) => Ok(FdwResultSet {
+                ServerQueryMessage::ResultSet(row_structure) => Ok(FdwResultSet {
                     connection: self.connection.clone(),
                     row_structure,
                 }),
                 _ => return Err(unexpected_response(res)),
             })
             .context("Failed to execute query")
+    }
+
+    fn execute_modify(&mut self) -> Result<Option<u64>> {
+        self.connection
+            .send(ClientQueryMessage::ExecuteModify)
+            .and_then(|res| match res {
+                ServerQueryMessage::AffectedRows(rows) => Ok(rows),
+                _ => return Err(unexpected_response(res)),
+            })
+            .context("Failed to execute modify query")
     }
 
     fn logged(&self) -> Result<LoggedQuery> {
@@ -486,7 +513,7 @@ impl ResultSet for FdwResultSet {
         self.connection
             .send(ClientQueryMessage::Read(buff.len() as _))
             .and_then(|res| match res {
-                ServerQueryMessage::ResultData(data) => {
+                ServerQueryMessage::ReadData(data) => {
                     let read = cmp::min(buff.len(), data.len());
                     buff[..read].copy_from_slice(&data[..read]);
                     Ok(read)

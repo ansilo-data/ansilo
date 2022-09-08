@@ -47,13 +47,42 @@ impl MemoryQueryExecutor {
     }
 
     pub(crate) fn run(&self) -> Result<MemoryResultSet> {
-        match &self.query {
-            sqlil::Query::Select(select) => self.run_select(select),
-            sqlil::Query::Insert(insert) => self.run_insert(insert),
-            sqlil::Query::BulkInsert(bulk_insert) => self.run_bulk_insert(bulk_insert),
-            sqlil::Query::Update(update) => self.run_update(update),
-            sqlil::Query::Delete(delete) => self.run_delete(delete),
-        }
+        let results = match &self.query {
+            sqlil::Query::Select(select) => self.run_select(select)?,
+            sqlil::Query::Insert(insert) => {
+                self.run_insert(insert)?;
+                MemoryResultSet::empty()
+            }
+            sqlil::Query::BulkInsert(bulk_insert) => {
+                self.run_bulk_insert(bulk_insert)?;
+                MemoryResultSet::empty()
+            }
+            sqlil::Query::Update(update) => {
+                self.run_update(update)?;
+                MemoryResultSet::empty()
+            }
+            sqlil::Query::Delete(delete) => {
+                self.run_delete(delete)?;
+                MemoryResultSet::empty()
+            }
+        };
+
+        Ok(results)
+    }
+
+    pub(crate) fn run_modify(&self) -> Result<Option<u64>> {
+        let affected = match &self.query {
+            sqlil::Query::Select(select) => {
+                self.run_select(select)?;
+                None
+            }
+            sqlil::Query::Insert(insert) => Some(self.run_insert(insert)?),
+            sqlil::Query::BulkInsert(bulk_insert) => Some(self.run_bulk_insert(bulk_insert)?),
+            sqlil::Query::Update(update) => Some(self.run_update(update)?),
+            sqlil::Query::Delete(delete) => Some(self.run_delete(delete)?),
+        };
+
+        Ok(affected)
     }
 
     fn run_select(&self, select: &sqlil::Select) -> Result<MemoryResultSet> {
@@ -103,7 +132,7 @@ impl MemoryQueryExecutor {
         MemoryResultSet::new(self.cols()?, results)
     }
 
-    fn run_insert(&self, insert: &sqlil::Insert) -> Result<MemoryResultSet> {
+    fn run_insert(&self, insert: &sqlil::Insert) -> Result<u64> {
         self.update_entity_data(&insert.target, |rows| {
             let attrs = self.get_attrs(&insert.target.entity)?;
             let ctx = DataContext::Cell(DataValue::Null);
@@ -129,10 +158,10 @@ impl MemoryQueryExecutor {
             Ok(())
         })?;
 
-        Ok(MemoryResultSet::empty())
+        Ok(1)
     }
 
-    fn run_bulk_insert(&self, bulk_insert: &sqlil::BulkInsert) -> Result<MemoryResultSet> {
+    fn run_bulk_insert(&self, bulk_insert: &sqlil::BulkInsert) -> Result<u64> {
         self.update_entity_data(&bulk_insert.target, |rows| {
             let attrs = self.get_attrs(&bulk_insert.target.entity)?;
             let ctx = DataContext::Cell(DataValue::Null);
@@ -162,10 +191,12 @@ impl MemoryQueryExecutor {
             Ok(())
         })?;
 
-        Ok(MemoryResultSet::empty())
+        Ok(bulk_insert.rows().into_iter().count() as _)
     }
 
-    fn run_update(&self, update: &sqlil::Update) -> Result<MemoryResultSet> {
+    fn run_update(&self, update: &sqlil::Update) -> Result<u64> {
+        let mut affected = 0;
+
         self.update_entity_data(&update.target, |rows| {
             let attrs = self.get_attrs(&update.target.entity)?;
 
@@ -187,22 +218,29 @@ impl MemoryQueryExecutor {
                         .as_cell()?
                         .try_coerce_into(&attrs[pos].r#type)?;
                 }
+
+                affected += 1;
             }
 
             Ok(())
         })?;
 
-        Ok(MemoryResultSet::empty())
+        Ok(affected)
     }
 
-    fn run_delete(&self, delete: &sqlil::Delete) -> Result<MemoryResultSet> {
+    fn run_delete(&self, delete: &sqlil::Delete) -> Result<u64> {
+        let mut affected = 0;
+
         self.update_entity_data(&delete.target, |rows| {
             let mut retained = vec![];
 
             for row in rows.iter() {
                 if !self.satisfies_where(row)? {
                     retained.push(row.clone());
+                    continue;
                 }
+
+                affected += 1;
             }
 
             *rows = retained;
@@ -210,7 +248,7 @@ impl MemoryQueryExecutor {
             Ok(())
         })?;
 
-        Ok(MemoryResultSet::empty())
+        Ok(affected)
     }
 
     fn get_entity_data(&self, s: &sqlil::EntitySource) -> Result<Vec<Vec<DataValue>>> {

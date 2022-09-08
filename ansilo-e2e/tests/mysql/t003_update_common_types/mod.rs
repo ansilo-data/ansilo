@@ -22,7 +22,7 @@ fn test() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             UPDATE "t003__test_tab"
@@ -54,8 +54,7 @@ fn test() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on mysql end
     let results = mysql
@@ -178,7 +177,9 @@ fn test() {
                     "LoggedParam [index=21, method=setTimestamp, value=1999-01-15 16:00:00.0]".into(),
                     "LoggedParam [index=22, method=setNull, value=null]".into(),
                 ],
-                None
+                Some([("affected".into(), "Some(1)".into())]
+                .into_iter()
+                .collect())
             )
         )]
     );

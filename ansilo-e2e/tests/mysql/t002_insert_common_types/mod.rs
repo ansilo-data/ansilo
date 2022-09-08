@@ -181,7 +181,9 @@ fn test() {
                     "LoggedParam [index=21, method=setTimestamp, value=1999-01-15 11:00:00.0]".into(),
                     "LoggedParam [index=22, method=setNull, value=null]".into(),
                 ],
-                None
+                Some([("affected".into(), "Some(1)".into())]
+                .into_iter()
+                .collect())
             )
         )]
     );

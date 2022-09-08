@@ -9,7 +9,7 @@ use ansilo_core::{
     err::{ensure, Context, Result},
 };
 use serde::Serialize;
-use tokio_postgres::{types::Type, Client, Statement};
+use tokio_postgres::{types::{Type, ToSql}, Client, Statement};
 
 use crate::{
     data::{from_pg_type, to_pg},
@@ -68,6 +68,18 @@ impl<T> PostgresPreparedQuery<T> {
             logged_params: vec![],
         })
     }
+
+    fn get_params(&mut self) -> Result<Vec<Box<dyn ToSql>>> {
+        let vals = self.sink.get_all()?;
+        let mut params = vec![];
+
+        for (val, pg_t) in vals.into_iter().zip(self.statement.params().iter()) {
+            params.push(to_pg(val.clone(), pg_t)?);
+            self.logged_params.push((val.clone(), pg_t.clone()));
+        }
+
+        Ok(params)
+    }
 }
 
 impl<T: DerefMut<Target = Client>> QueryHandle for PostgresPreparedQuery<T> {
@@ -87,14 +99,8 @@ impl<T: DerefMut<Target = Client>> QueryHandle for PostgresPreparedQuery<T> {
         Ok(())
     }
 
-    fn execute(&mut self) -> Result<Self::TResultSet> {
-        let vals = self.sink.get_all()?;
-        let mut params = vec![];
-
-        for (val, pg_t) in vals.into_iter().zip(self.statement.params().iter()) {
-            params.push(to_pg(val.clone(), pg_t)?);
-            self.logged_params.push((val.clone(), pg_t.clone()));
-        }
+    fn execute_query(&mut self) -> Result<Self::TResultSet> {
+        let params = self.get_params()?;
 
         let stream = runtime()
             .block_on(
@@ -111,6 +117,19 @@ impl<T: DerefMut<Target = Client>> QueryHandle for PostgresPreparedQuery<T> {
             .collect::<Result<_>>()?;
 
         Ok(PostgresResultSet::new(stream, cols))
+    }
+
+    fn execute_modify(&mut self) -> Result<Option<u64>> {
+        let params = self.get_params()?;
+
+        let affected = runtime()
+            .block_on(
+                self.client
+                    .execute_raw(&self.statement, params.iter().map(|p| &**p)),
+            )
+            .context("Failed to execute query")?;
+
+        Ok(Some(affected))
     }
 
     fn logged(&self) -> Result<LoggedQuery> {

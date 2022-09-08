@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, collections::HashMap};
 
 use ansilo_connectors_base::interface::{LoggedQuery, ResultSet};
 use ansilo_core::err::Result;
@@ -16,9 +16,10 @@ fn test_update_where_remote() {
     let mut oracle =
         ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             UPDATE "T007__TEST_TAB"
@@ -29,8 +30,7 @@ fn test_update_where_remote() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on oracle end
     let results = oracle
@@ -71,7 +71,11 @@ fn test_update_where_remote() {
                     "LoggedParam [index=1, method=setNString, value=Jannet]".into(),
                     "LoggedParam [index=2, method=setBigDecimal, value=2]".into(),
                 ],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -85,9 +89,10 @@ fn test_update_where_local() {
     let mut oracle =
         ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             UPDATE "T007__TEST_TAB"
@@ -98,8 +103,7 @@ fn test_update_where_local() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on oracle end
     let results = oracle
@@ -161,5 +165,11 @@ fn test_update_where_local() {
     );
     assert!(query_log[1].1.params()[1]
         .as_str()
-        .starts_with("LoggedParam [index=2, method=setNString, value="))
+        .starts_with("LoggedParam [index=2, method=setNString, value="));
+    assert_eq!(
+        query_log[1].1.other(),
+        &[("affected".into(), "Some(1)".into())]
+            .into_iter()
+            .collect::<HashMap<String, String>>()
+    );
 }

@@ -15,12 +15,11 @@ fn test() {
 
     let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(r#"DELETE FROM "T005__TEST_TAB""#, &[])
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 2);
 
     // Check data received on oracle end
     let count = oracle
@@ -41,7 +40,11 @@ fn test() {
             LoggedQuery::new(
                 r#"DELETE FROM "ANSILO_ADMIN"."T005__TEST_TAB""#,
                 vec![],
-                None
+                Some(
+                    [("affected".into(), "Some(2)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );

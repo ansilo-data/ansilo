@@ -16,7 +16,7 @@ fn test_oracle_jdbc_open_connection_and_execute_query() {
     let mut query = con
         .prepare(JdbcQuery::new("SELECT * FROM DUAL", vec![]))
         .unwrap();
-    let res = query.execute().unwrap();
+    let res = query.execute_query().unwrap();
 
     let mut res = ResultSetReader::new(res).unwrap();
 

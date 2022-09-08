@@ -237,7 +237,7 @@ mod tests {
                                 ClientQueryMessage::WriteParams(param_buff.to_vec())
                             )
                         );
-                        Ok(Some(ServerMessage::Query(ServerQueryMessage::ResultData(
+                        Ok(Some(ServerMessage::Query(ServerQueryMessage::ReadData(
                             result_buff.to_vec(),
                         ))))
                     })
@@ -254,7 +254,7 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 res,
-                ServerMessage::Query(ServerQueryMessage::ResultData(result_buff.to_vec()))
+                ServerMessage::Query(ServerQueryMessage::ReadData(result_buff.to_vec()))
             );
         }
 

@@ -18,7 +18,7 @@ fn test_delete_where_remote() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             DELETE FROM t011__test_tab
@@ -28,8 +28,7 @@ fn test_delete_where_remote() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on mysql end
     let results = mysql
@@ -63,7 +62,11 @@ fn test_delete_where_remote() {
                 ]
                 .join(""),
                 vec!["LoggedParam [index=1, method=setInt, value=2]".into(),],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -80,7 +83,7 @@ fn test_delete_where_remote_with_no_pk() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             DELETE FROM t011__test_tab_no_pk
@@ -90,8 +93,7 @@ fn test_delete_where_remote_with_no_pk() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on mysql end
     let results = mysql
@@ -125,7 +127,11 @@ fn test_delete_where_remote_with_no_pk() {
                 ]
                 .join(""),
                 vec!["LoggedParam [index=1, method=setInt, value=2]".into(),],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -142,7 +148,7 @@ fn test_delete_where_local() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             DELETE FROM t011__test_tab
@@ -152,8 +158,7 @@ fn test_delete_where_local() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on mysql end
     let results = mysql
@@ -204,7 +209,11 @@ fn test_delete_where_local() {
                     ]
                     .join(""),
                     vec!["LoggedParam [index=1, method=setInt, value=1]".into()],
-                    None
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             )
         ]
@@ -233,5 +242,7 @@ fn test_delete_where_local_with_no_pk_fails() {
         .unwrap_err();
 
     dbg!(err.to_string());
-    assert!(err.to_string().contains("Cannot perform operation on table without primary keys"));
+    assert!(err
+        .to_string()
+        .contains("Cannot perform operation on table without primary keys"));
 }

@@ -16,12 +16,11 @@ fn test() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(r#"DELETE FROM "t004__test_tab""#, &[])
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 2);
 
     // Check data received on mysql end
     let count = mysql
@@ -33,13 +32,21 @@ fn test() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(count, DataValue::Int64(0.into()));
+    assert_eq!(count, DataValue::Int64(0));
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![(
             "mysql".to_string(),
-            LoggedQuery::new(r#"DELETE FROM `db`.`t004__test_tab`"#, vec![], None)
+            LoggedQuery::new(
+                r#"DELETE FROM `db`.`t004__test_tab`"#,
+                vec![],
+                Some(
+                    [("affected".into(), "Some(2)".into())]
+                        .into_iter()
+                        .collect()
+                )
+            )
         )]
     );
 }

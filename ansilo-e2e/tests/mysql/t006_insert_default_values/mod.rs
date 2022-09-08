@@ -73,7 +73,11 @@ fn test_auto_increment() {
                     "LoggedParam [index=1, method=setString, value=value]".into(),
                     "LoggedParam [index=2, method=setString, value=another]".into()
                 ],
-                None
+                Some(
+                    [("affected".into(), "Some(2)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -142,7 +146,11 @@ fn test_default() {
                     ]
                     .join(""),
                     vec!["LoggedParam [index=1, method=setString, value=first]".into()],
-                    None
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             ),
             (
@@ -157,7 +165,11 @@ fn test_default() {
                         "LoggedParam [index=1, method=setInt, value=123]".into(),
                         "LoggedParam [index=2, method=setString, value=second]".into()
                     ],
-                    None
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             )
         ]

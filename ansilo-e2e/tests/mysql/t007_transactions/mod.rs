@@ -16,7 +16,8 @@ fn test_transaction_commit() {
     let mut mysql =
         ansilo_e2e::mysql::init_mysql_sql(&containers, current_dir!().join("mysql-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     client
         .batch_execute(
@@ -58,7 +59,11 @@ fn test_transaction_commit() {
                 ]
                 .join(""),
                 vec!["LoggedParam [index=1, method=setString, value=value]".into()],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -72,7 +77,8 @@ fn test_transaction_rollback() {
     let mut mysql =
         ansilo_e2e::mysql::init_mysql_sql(&containers, current_dir!().join("mysql-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     client
         .batch_execute(
@@ -107,7 +113,11 @@ fn test_transaction_rollback() {
                 ]
                 .join(""),
                 vec!["LoggedParam [index=1, method=setString, value=value]".into()],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -121,7 +131,8 @@ fn test_transaction_rollback_due_to_error() {
     let mut mysql =
         ansilo_e2e::mysql::init_mysql_sql(&containers, current_dir!().join("mysql-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     client
         .batch_execute(
@@ -160,7 +171,11 @@ fn test_transaction_rollback_due_to_error() {
                 ]
                 .join(""),
                 vec!["LoggedParam [index=1, method=setString, value=value]".into()],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );

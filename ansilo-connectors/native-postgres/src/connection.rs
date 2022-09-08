@@ -65,7 +65,7 @@ impl<T: DerefMut<Target = Client>> PostgresConnection<T> {
 
         let mut prepared = self.prepare(PostgresQuery::new(query, jdbc_params))?;
 
-        prepared.execute()
+        prepared.execute_query()
     }
 }
 

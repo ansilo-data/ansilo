@@ -47,7 +47,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
             vec![],
         ))?;
 
-        let mut result_set = query.execute()?.reader()?;
+        let mut result_set = query.execute_query()?.reader()?;
         let value = result_set
             .read_data_value()?
             .context("Unexpected empty result set")?;

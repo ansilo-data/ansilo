@@ -129,14 +129,14 @@ impl QueryHandle for JdbcPreparedQuery {
                     JavaType::Primitive(Primitive::Int),
                     &[JValue::Object(byte_buff.as_obj())],
                 )
-                .context("Failed to invoke JdbcPreparedQuery::execute")?
+                .context("Failed to invoke JdbcPreparedQuery::write")?
                 .i()
-                .context("Failed to convert JdbcPreparedQuery::execute return value into int")?;
+                .context("Failed to convert JdbcPreparedQuery::write return value into int")?;
 
             self.jvm.check_exceptions(env)?;
 
             if written < 0 {
-                bail!("JdbcPreparedQuery::execute returned value less than 0");
+                bail!("JdbcPreparedQuery::write returned value less than 0");
             }
 
             Ok(written.try_into().unwrap())
@@ -155,16 +155,16 @@ impl QueryHandle for JdbcPreparedQuery {
         })
     }
 
-    fn execute(&mut self) -> Result<JdbcResultSet> {
+    fn execute_query(&mut self) -> Result<JdbcResultSet> {
         self.jvm.with_local_frame(32, |env| {
             let jdbc_result_set = env
                 .call_method(
                     self.jdbc_prepared_statement.as_obj(),
-                    "execute",
+                    "executeQuery",
                     "()Lcom/ansilo/connectors/result/JdbcResultSet;",
                     &[],
                 )
-                .context("Failed to invoke JdbcPreparedQuery::execute")?
+                .context("Failed to invoke JdbcPreparedQuery::executeQuery")?
                 .l()
                 .context("Failed to convert JdbcResultSet into object")?;
 
@@ -173,6 +173,39 @@ impl QueryHandle for JdbcPreparedQuery {
             let jdbc_result_set = env.new_global_ref(jdbc_result_set)?;
 
             Ok(JdbcResultSet::new(Arc::clone(&self.jvm), jdbc_result_set))
+        })
+    }
+
+    fn execute_modify(&mut self) -> Result<Option<u64>> {
+        self.jvm.with_local_frame(32, |env| {
+            let long = env
+                .call_method(
+                    self.jdbc_prepared_statement.as_obj(),
+                    "executeModify",
+                    "()Ljava/lang/Long;",
+                    &[],
+                )
+                .context("Failed to invoke JdbcPreparedQuery::executeModify")?
+                .l()
+                .context("Failed to convert Long into object")?;
+
+            self.jvm.check_exceptions(env)?;
+
+            // Null means the number is unknown
+            if env
+                .is_same_object(long, JObject::null())
+                .context("Failed to null-check")?
+            {
+                return Ok(None);
+            }
+
+            let long = env
+                .call_method(long, "longValue", "()J", &[])
+                .context("Failed to invoke Long::longValue")?
+                .j()
+                .context("Failed to convert long into i64")?;
+
+            Ok(Some(long as _))
         })
     }
 
@@ -276,7 +309,7 @@ pub(crate) fn to_java_jdbc_parameter<'a>(
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::data::{DataValue, StringOptions, DataType};
+    use ansilo_core::data::{DataType, DataValue, StringOptions};
     use jni::objects::{JObject, JString};
 
     use crate::tests::create_sqlite_memory_connection;
@@ -344,7 +377,7 @@ mod tests {
 
         let mut prepared_query = create_prepared_query(&jvm, jdbc_con, "SELECT 1 as num", vec![]);
 
-        let rs = prepared_query.execute().unwrap();
+        let rs = prepared_query.execute_query().unwrap();
         let mut rs = ResultSetReader::new(rs).unwrap();
 
         assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(1)));
@@ -376,7 +409,7 @@ mod tests {
 
         assert_eq!(wrote, 5);
 
-        let rs = prepared_query.execute().unwrap();
+        let rs = prepared_query.execute_query().unwrap();
         let mut rs = ResultSetReader::new(rs).unwrap();
 
         assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(123)));
@@ -413,7 +446,7 @@ mod tests {
 
         assert_eq!(wrote, 6);
 
-        let rs = prepared_query.execute().unwrap();
+        let rs = prepared_query.execute_query().unwrap();
         let mut rs = ResultSetReader::new(rs).unwrap();
 
         assert_eq!(
@@ -435,7 +468,7 @@ mod tests {
             vec![QueryParam::dynamic2(1, DataType::Int32)],
         );
 
-        assert!(prepared_query.execute().is_err());
+        assert!(prepared_query.execute_query().is_err());
     }
 
     #[test]
@@ -464,7 +497,7 @@ mod tests {
 
             assert_eq!(wrote, 5);
 
-            let rs = prepared_query.execute().unwrap();
+            let rs = prepared_query.execute_query().unwrap();
             let mut rs = ResultSetReader::new(rs).unwrap();
 
             assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(i)));
@@ -486,7 +519,7 @@ mod tests {
             vec![QueryParam::Constant(DataValue::Int32(123))],
         );
 
-        let rs = prepared_query.execute().unwrap();
+        let rs = prepared_query.execute_query().unwrap();
         let mut rs = ResultSetReader::new(rs).unwrap();
 
         assert_eq!(rs.read_data_value().unwrap(), Some(DataValue::Int32(123)));

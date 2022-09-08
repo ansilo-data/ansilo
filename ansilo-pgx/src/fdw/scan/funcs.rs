@@ -1360,7 +1360,7 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         // Send query params, if any
         send_query_params(&mut query, &scan, node);
 
-        let row_structure = query.execute().unwrap();
+        let row_structure = query.execute_query().unwrap();
         scan.row_structure = Some(row_structure);
         scan.row_structure.as_ref().unwrap()
     };

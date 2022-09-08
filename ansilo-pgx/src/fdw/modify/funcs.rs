@@ -52,7 +52,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
             // Even if we fail to get row id expressions at this point
             // the query may still be possible to push down to the source
             // so dont trigger an error until we have to execute it locally
-            return
+            return;
         }
     };
 
@@ -527,7 +527,12 @@ pub unsafe extern "C" fn exec_foreign_insert(
         ));
     }
 
-    query.execute_batch(vec![query_input]).unwrap();
+    let affected_rows = query.execute_batch(vec![query_input]).unwrap();
+
+    // Bail out if we did not insert the expected number of rows
+    if affected_rows.is_some() && affected_rows.unwrap() != 1 {
+        panic!("Error while performing insert: unexpected number of rows inserted, expected 1 row but {} were reported", affected_rows.unwrap());
+    }
 
     slot
 }
@@ -632,7 +637,12 @@ pub unsafe extern "C" fn exec_foreign_batch_insert(
         query_input.push(batch_input);
     }
 
-    query.execute_batch(query_input).unwrap();
+    let affected_rows = query.execute_batch(query_input).unwrap();
+
+    // Bail out if we did not bulk insert the expected number of rows
+    if affected_rows.is_some() && affected_rows.unwrap() != (*num_slots) as u64 {
+        panic!("Error while performing bulk insert: unexpected number of rows inserted, expected {} row but {} were reported", (*num_slots), affected_rows.unwrap());
+    }
 
     slots
 }
@@ -664,7 +674,12 @@ pub unsafe extern "C" fn exec_foreign_update(
         ));
     }
 
-    query.execute_batch(vec![query_input]).unwrap();
+    let affected_rows = query.execute_batch(vec![query_input.clone()]).unwrap();
+
+    // Bail out if we did not update the expected number of rows
+    if affected_rows.is_some() && affected_rows.unwrap() != 1 {
+        panic!("Error while performing update: unexpected number of rows updated when updating record with keys '{:?}', expected 1 row but {} were reported", query_input, affected_rows.unwrap());
+    }
 
     slot
 }
@@ -688,7 +703,12 @@ pub unsafe extern "C" fn exec_foreign_delete(
         ));
     }
 
-    query.execute_batch(vec![query_input]).unwrap();
+    let affected_rows = query.execute_batch(vec![query_input.clone()]).unwrap();
+
+    // Bail out if we did not delete the expected number of rows
+    if affected_rows.is_some() && affected_rows.unwrap() != 1 {
+        panic!("Error while performing delete: unexpected number of rows deleted when deleting record with keys '{:?}', expected 1 row but {} were reported", query_input, affected_rows.unwrap());
+    }
 
     slot
 }
@@ -960,7 +980,16 @@ pub unsafe extern "C" fn iterate_direct_modify(node: *mut ForeignScanState) -> *
     send_query_params(&mut query, &state.scan, node);
 
     // Execute the direct modification
-    query.execute().unwrap();
+    let affected_rows = query.execute_modify().unwrap();
+
+    // Set the number of processed rows if we know it
+    if let Some(rows) = affected_rows {
+        (*(*node).ss.ps.state).es_processed += rows;
+        let mut instr = (*node).ss.ps.instrument;
+        if !instr.is_null() {
+            (*instr).tuplecount += rows as f64;
+        }
+    }
 
     // Currently, we do not support RETURNING data from direct modifications
     // So we just clear the tuple and return.

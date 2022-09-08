@@ -69,7 +69,7 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
                 )],
             ))?;
 
-        let cols = query.execute()?;
+        let cols = query.execute_query()?;
 
         let cols = cols.reader()?.iter_rows().collect::<Result<Vec<_>>>()?;
         let tables = cols.into_iter().group_by(|row| {

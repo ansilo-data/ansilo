@@ -22,10 +22,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
 fn bench(client: &mut Client) {
     // Use a non-deterministic function so the entire UPDATE cannot be pushed down
-    let _rows = client
-        .query("UPDATE \"B003__TEST_TAB\" SET \"X\" = floor(random() * 100)", &[])
+    let rows = client
+        .execute("UPDATE \"B003__TEST_TAB\" SET \"X\" = floor(random() * 100)", &[])
         .unwrap();
 
-    // TODO: Return affected rows
-    // assert_eq!(rows.len(), 10_000);
+    assert_eq!(rows, 10_000);
 }

@@ -19,8 +19,11 @@ pub trait QueryHandle {
     /// Restarts the query, so new query parameters can be written
     fn restart(&mut self) -> Result<()>;
 
-    /// Executes the supplied query
-    fn execute(&mut self) -> Result<Self::TResultSet>;
+    /// Executes the query, returning the generated result set
+    fn execute_query(&mut self) -> Result<Self::TResultSet>;
+
+    /// Executes the query, returning the number of affected rows, if known
+    fn execute_modify(&mut self) -> Result<Option<u64>>;
 
     /// Returns a loggable representation of the query
     fn logged(&self) -> Result<LoggedQuery>;
@@ -85,5 +88,9 @@ impl LoggedQuery {
 
     pub fn other(&self) -> &HashMap<String, String> {
         &self.other
+    }
+
+    pub fn other_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.other
     }
 }

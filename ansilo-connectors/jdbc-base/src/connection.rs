@@ -235,7 +235,7 @@ impl JdbcConnection {
 
         let mut prepared = self.prepare(JdbcQuery::new(query, jdbc_params))?;
 
-        prepared.execute()
+        prepared.execute_query()
     }
 }
 
@@ -445,7 +445,7 @@ mod tests {
         let mut con = init_sqlite_connection();
 
         let query = JdbcQuery::new("CREATE TABLE dummy (x INT);", vec![]);
-        con.prepare(query).unwrap().execute().unwrap();
+        con.prepare(query).unwrap().execute_query().unwrap();
 
         {
             let tm = con.transaction_manager().unwrap();
@@ -455,7 +455,7 @@ mod tests {
         }
 
         let query = JdbcQuery::new("INSERT INTO dummy VALUES (1);", vec![]);
-        con.prepare(query).unwrap().execute().unwrap();
+        con.prepare(query).unwrap().execute_query().unwrap();
 
         con.transaction_manager()
             .unwrap()
@@ -463,7 +463,7 @@ mod tests {
             .unwrap();
 
         let query = JdbcQuery::new("SELECT COUNT(*) FROM dummy", vec![]);
-        let res = con.prepare(query).unwrap().execute().unwrap();
+        let res = con.prepare(query).unwrap().execute_query().unwrap();
         let mut res = ResultSetReader::new(res).unwrap();
         assert_eq!(res.read_data_value().unwrap().unwrap(), DataValue::Int32(0));
 
@@ -473,7 +473,7 @@ mod tests {
             .unwrap();
 
         let query = JdbcQuery::new("INSERT INTO dummy VALUES (1);", vec![]);
-        con.prepare(query).unwrap().execute().unwrap();
+        con.prepare(query).unwrap().execute_query().unwrap();
 
         con.transaction_manager()
             .unwrap()
@@ -481,7 +481,7 @@ mod tests {
             .unwrap();
 
         let query = JdbcQuery::new("SELECT COUNT(*) FROM dummy", vec![]);
-        let res = con.prepare(query).unwrap().execute().unwrap();
+        let res = con.prepare(query).unwrap().execute_query().unwrap();
         let mut res = ResultSetReader::new(res).unwrap();
         assert_eq!(res.read_data_value().unwrap().unwrap(), DataValue::Int32(1));
     }

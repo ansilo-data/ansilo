@@ -74,7 +74,7 @@ impl QueryHandle for MemoryQueryHandle {
         Ok(())
     }
 
-    fn execute(&mut self) -> Result<MemoryResultSet> {
+    fn execute_query(&mut self) -> Result<MemoryResultSet> {
         let params = self.parse_params()?;
 
         let executor = MemoryQueryExecutor::new(
@@ -85,6 +85,19 @@ impl QueryHandle for MemoryQueryHandle {
         );
 
         executor.run()
+    }
+
+    fn execute_modify(&mut self) -> Result<Option<u64>> {
+        let params = self.parse_params()?;
+
+        let executor = MemoryQueryExecutor::new(
+            Arc::clone(&self.data),
+            self.entities.clone(),
+            self.query.query.clone(),
+            params,
+        );
+
+        executor.run_modify()
     }
 
     fn logged(&self) -> Result<LoggedQuery> {

@@ -77,7 +77,7 @@ pub fn init_mysql_sql(containers: &ContainerInstances, path: PathBuf) -> JdbcCon
             connection
                 .prepare(JdbcQuery::new(stmt, vec![]))
                 .unwrap()
-                .execute()
+                .execute_query()
                 .unwrap();
         }
     }

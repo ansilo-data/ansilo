@@ -22,7 +22,7 @@ fn test() {
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-    let _rows = client
+    let rows = client
         .execute(
             r#"
             UPDATE "T004__TEST_TAB"
@@ -55,8 +55,7 @@ fn test() {
         )
         .unwrap();
 
-    // TODO: implement row count reporting for update / delete
-    // assert_eq!(rows, 1);
+    assert_eq!(rows, 1);
 
     // Check data received on oracle end
     let results = oracle
@@ -203,7 +202,11 @@ fn test() {
                     "LoggedParam [index=22, method=setTimestamp, value=1997-01-31 07:26:56.888]".into(),
                     "LoggedParam [index=23, method=setNull, value=null]".into(),
                 ],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );

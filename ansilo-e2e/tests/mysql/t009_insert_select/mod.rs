@@ -106,7 +106,11 @@ fn test_insert_select_local_values() {
                     "LoggedParam [index=8, method=setTimestamp, value=2000-01-15 16:00:00.0]"
                         .into(),
                 ],
-                None
+                Some(
+                    [("affected".into(), "Some(2)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -237,7 +241,11 @@ fn test_insert_select_from_remote_table() {
                         "LoggedParam [index=12, method=setTimestamp, value=1999-01-15 11:00:00.0]"
                             .into(),
                     ],
-                    None
+                    Some(
+                        [("affected".into(), "Some(3)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             )
         ]

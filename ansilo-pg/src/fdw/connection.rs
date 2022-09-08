@@ -61,10 +61,11 @@ enum FdwQueryState<TConnector: Connector> {
     New,
     Planning(sqlil::Query),
     Prepared(QueryHandleWrite<TConnector::TQueryHandle>),
-    Executed(
+    ExecutedQuery(
         QueryHandleWrite<TConnector::TQueryHandle>,
         ResultSetRead<TConnector::TResultSet>,
     ),
+    ExecutedModify(QueryHandleWrite<TConnector::TQueryHandle>),
 }
 
 impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
@@ -169,12 +170,17 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
                 self.write_params(query_id, data)?;
                 ServerQueryMessage::ParamsWritten
             }
-            ClientQueryMessage::Execute => ServerQueryMessage::Executed(self.execute(query_id)?),
+            ClientQueryMessage::ExecuteQuery => {
+                ServerQueryMessage::ResultSet(self.execute_query(query_id)?)
+            }
+            ClientQueryMessage::ExecuteModify => {
+                ServerQueryMessage::AffectedRows(self.execute_modify(query_id)?)
+            }
             ClientQueryMessage::Read(len) => {
                 // TODO[low]: remove copy
                 let mut buff = vec![0u8; len as usize];
                 let read = self.read(query_id, &mut buff[..])?;
-                ServerQueryMessage::ResultData(buff[..read].to_vec())
+                ServerQueryMessage::ReadData(buff[..read].to_vec())
             }
             ClientQueryMessage::Restart => {
                 self.restart_query(query_id)?;
@@ -448,7 +454,41 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         Ok(())
     }
 
-    fn execute(&mut self, query_id: QueryId) -> Result<RowStructure> {
+    fn execute_query(&mut self, query_id: QueryId) -> Result<RowStructure> {
+        let mut handle = self.get_prepared_query(query_id)?;
+
+        let result_set = handle.0.execute_query()?;
+        let row_structure = result_set.get_structure()?;
+
+        let query = handle.0.logged()?;
+        self.log.record(&self.data_source_id, query)?;
+
+        *Self::query(&mut self.queries, query_id)? =
+            FdwQueryState::ExecutedQuery(handle, ResultSetRead(result_set));
+
+        Ok(row_structure)
+    }
+
+    fn execute_modify(&mut self, query_id: QueryId) -> Result<Option<u64>> {
+        let mut handle = self.get_prepared_query(query_id)?;
+
+        let affected_rows = handle.0.execute_modify()?;
+
+        let mut query = handle.0.logged()?;
+        query
+            .other_mut()
+            .insert("affected".into(), format!("{:?}", affected_rows));
+        self.log.record(&self.data_source_id, query)?;
+
+        *Self::query(&mut self.queries, query_id)? = FdwQueryState::ExecutedModify(handle);
+
+        Ok(affected_rows)
+    }
+
+    fn get_prepared_query(
+        &mut self,
+        query_id: u32,
+    ) -> Result<QueryHandleWrite<TConnector::TQueryHandle>> {
         let query = mem::replace(
             Self::query(&mut self.queries, query_id)?,
             FdwQueryState::New,
@@ -464,16 +504,8 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         handle
             .flush()
             .context("Failed to flush query parameter buffer")?;
-        let result_set = handle.0.execute()?;
-        let row_structure = result_set.get_structure()?;
 
-        let query = handle.0.logged()?;
-        self.log.record(&self.data_source_id, query)?;
-
-        *Self::query(&mut self.queries, query_id)? =
-            FdwQueryState::Executed(handle, ResultSetRead(result_set));
-
-        Ok(row_structure)
+        Ok(handle)
     }
 
     fn read(&mut self, query_id: QueryId, buff: &mut [u8]) -> Result<usize> {
@@ -493,7 +525,8 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         );
 
         *Self::query(&mut self.queries, query_id)? = match query {
-            FdwQueryState::Executed(mut handle, _) => {
+            FdwQueryState::ExecutedQuery(mut handle, _)
+            | FdwQueryState::ExecutedModify(mut handle) => {
                 handle.0.restart()?;
                 FdwQueryState::Prepared(handle)
             }
@@ -640,7 +673,7 @@ impl<TConnector: Connector> FdwQueryState<TConnector> {
 
     fn result_set(&mut self) -> Result<&mut ResultSetRead<TConnector::TResultSet>> {
         Ok(match self {
-            FdwQueryState::Executed(_, result_set) => result_set,
+            FdwQueryState::ExecutedQuery(_, result_set) => result_set,
             _ => bail!("Expecting query state to be 'executed' found {}", self),
         })
     }
@@ -652,7 +685,8 @@ impl<TConnector: Connector> Display for FdwQueryState<TConnector> {
             FdwQueryState::New => "new",
             FdwQueryState::Planning(_) => "planning",
             FdwQueryState::Prepared(_) => "prepared",
-            FdwQueryState::Executed(_, _) => "executed",
+            FdwQueryState::ExecutedQuery(_, _) => "executed-query",
+            FdwQueryState::ExecutedModify(_) => "executed-modify",
         })
     }
 }
@@ -935,19 +969,19 @@ mod tests {
         );
 
         let res = client
-            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
             .unwrap();
         let row_structure = RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
         assert_eq!(
             res,
-            ServerMessage::Query(ServerQueryMessage::Executed(row_structure.clone()))
+            ServerMessage::Query(ServerQueryMessage::ResultSet(row_structure.clone()))
         );
 
         let res = client
             .send(ClientMessage::Query(0, ClientQueryMessage::Read(1024)))
             .unwrap();
         let data = match res {
-            ServerMessage::Query(ServerQueryMessage::ResultData(data)) => data,
+            ServerMessage::Query(ServerQueryMessage::ReadData(data)) => data,
             _ => unreachable!("Unexpected response {:?}", res),
         };
 
@@ -976,7 +1010,7 @@ mod tests {
         let (thread, mut client) = create_mock_connection("connection_execute_without_auth");
 
         let res = client
-            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
             .unwrap();
 
         assert!(matches!(res, ServerMessage::Error(_)));
@@ -1050,20 +1084,20 @@ mod tests {
 
         for _ in 1..3 {
             let res = client
-                .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+                .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
                 .unwrap();
             let row_structure =
                 RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
             assert_eq!(
                 res,
-                ServerMessage::Query(ServerQueryMessage::Executed(row_structure.clone()))
+                ServerMessage::Query(ServerQueryMessage::ResultSet(row_structure.clone()))
             );
 
             let res = client
                 .send(ClientMessage::Query(0, ClientQueryMessage::Read(1024)))
                 .unwrap();
             let data = match res {
-                ServerMessage::Query(ServerQueryMessage::ResultData(data)) => data,
+                ServerMessage::Query(ServerQueryMessage::ReadData(data)) => data,
                 _ => unreachable!("Unexpected response {:?}", res),
             };
 
@@ -1211,11 +1245,11 @@ mod tests {
         );
 
         let res = client
-            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
             .unwrap();
         assert_eq!(
             res,
-            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+            ServerMessage::Query(ServerQueryMessage::ResultSet(RowStructure::new(vec![])))
         );
 
         client.close().unwrap();
@@ -1276,11 +1310,80 @@ mod tests {
         );
 
         let res = client
-            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
             .unwrap();
         assert_eq!(
             res,
-            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+            ServerMessage::Query(ServerQueryMessage::ResultSet(RowStructure::new(vec![])))
+        );
+
+        client.close().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
+
+        // Assert rows were all updated
+        let rows = entities.get_data("people").unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                vec![DataValue::from("Updated"), DataValue::from("Jane")],
+                vec![DataValue::from("Updated"), DataValue::from("Smith")],
+                vec![DataValue::from("Updated"), DataValue::from("Gregson")],
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fdw_connection_update_execute_modify() {
+        let (thread, mut client) = create_mock_connection("connection_update_execute_modify");
+
+        let res = client
+            .send(ClientMessage::CreateQuery(
+                sqlil::source("people", "people"),
+                sqlil::QueryType::Update,
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::QueryCreated(0, OperationCost::default())
+        );
+
+        let res = client
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::Apply(
+                    UpdateQueryOperation::AddSet((
+                        "first_name".into(),
+                        sqlil::Expr::constant(DataValue::from("Updated")),
+                    ))
+                    .into(),
+                ),
+            ))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::OperationResult(
+                QueryOperationResult::Ok(OperationCost::default())
+            ))
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::Prepare))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                vec![]
+            )))
+        );
+
+        let res = client
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteModify))
+            .unwrap();
+        assert_eq!(
+            res,
+            ServerMessage::Query(ServerQueryMessage::AffectedRows(Some(3)))
         );
 
         client.close().unwrap();
@@ -1346,11 +1449,11 @@ mod tests {
         );
 
         let res = client
-            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
             .unwrap();
         assert_eq!(
             res,
-            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+            ServerMessage::Query(ServerQueryMessage::ResultSet(RowStructure::new(vec![])))
         );
 
         client.close().unwrap();
@@ -1447,13 +1550,16 @@ mod tests {
         for query_id in queries.iter().cloned() {
             for _ in 1..3 {
                 let res = client
-                    .send(ClientMessage::Query(query_id, ClientQueryMessage::Execute))
+                    .send(ClientMessage::Query(
+                        query_id,
+                        ClientQueryMessage::ExecuteQuery,
+                    ))
                     .unwrap();
                 let row_structure =
                     RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
                 assert_eq!(
                     res,
-                    ServerMessage::Query(ServerQueryMessage::Executed(row_structure.clone()))
+                    ServerMessage::Query(ServerQueryMessage::ResultSet(row_structure.clone()))
                 );
 
                 let res = client
@@ -1463,7 +1569,7 @@ mod tests {
                     ))
                     .unwrap();
                 let data = match res {
-                    ServerMessage::Query(ServerQueryMessage::ResultData(data)) => data,
+                    ServerMessage::Query(ServerQueryMessage::ReadData(data)) => data,
                     _ => unreachable!("Unexpected response {:?}", res),
                 };
 
@@ -1590,19 +1696,19 @@ mod tests {
         );
 
         let res = client
-            .send(ClientMessage::Query(1, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(1, ClientQueryMessage::ExecuteQuery))
             .unwrap();
         let row_structure = RowStructure::new(vec![("first_name".into(), DataType::rust_string())]);
         assert_eq!(
             res,
-            ServerMessage::Query(ServerQueryMessage::Executed(row_structure.clone()))
+            ServerMessage::Query(ServerQueryMessage::ResultSet(row_structure.clone()))
         );
 
         let res = client
             .send(ClientMessage::Query(1, ClientQueryMessage::Read(1024)))
             .unwrap();
         let data = match res {
-            ServerMessage::Query(ServerQueryMessage::ResultData(data)) => data,
+            ServerMessage::Query(ServerQueryMessage::ReadData(data)) => data,
             _ => unreachable!("Unexpected response {:?}", res),
         };
 
@@ -1677,11 +1783,11 @@ mod tests {
         );
 
         let res = client
-            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
             .unwrap();
         assert_eq!(
             res,
-            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+            ServerMessage::Query(ServerQueryMessage::ResultSet(RowStructure::new(vec![])))
         );
 
         // Perform rollback
@@ -1736,11 +1842,11 @@ mod tests {
         );
 
         let res = client
-            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
             .unwrap();
         assert_eq!(
             res,
-            ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![])))
+            ServerMessage::Query(ServerQueryMessage::ResultSet(RowStructure::new(vec![])))
         );
 
         // Perform commit
@@ -1809,7 +1915,7 @@ mod tests {
         assert_eq!(log.get_from_memory().unwrap(), vec![]);
 
         client
-            .send(ClientMessage::Query(0, ClientQueryMessage::Execute))
+            .send(ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery))
             .unwrap();
 
         assert_eq!(
@@ -1857,7 +1963,7 @@ mod tests {
                     ),
                 ),
                 ClientMessage::Query(0, ClientQueryMessage::Prepare),
-                ClientMessage::Query(0, ClientQueryMessage::Execute),
+                ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery),
             ]))
             .unwrap();
 
@@ -1874,7 +1980,7 @@ mod tests {
                 ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
                     vec![]
                 ))),
-                ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![]))),
+                ServerMessage::Query(ServerQueryMessage::ResultSet(RowStructure::new(vec![]))),
             ])
         );
 
@@ -1949,7 +2055,7 @@ mod tests {
 
     #[test]
     fn test_fdw_connection_bulk_insert() {
-        let (thread, mut client) = create_mock_connection("connection_insert_batch");
+        let (thread, mut client) = create_mock_connection("connection_bulk_insert");
 
         let res = client
             .send(ClientMessage::Batch(vec![
@@ -1973,7 +2079,7 @@ mod tests {
                     ),
                 ),
                 ClientMessage::Query(0, ClientQueryMessage::Prepare),
-                ClientMessage::Query(0, ClientQueryMessage::Execute),
+                ClientMessage::Query(0, ClientQueryMessage::ExecuteQuery),
             ]))
             .unwrap();
 
@@ -1987,7 +2093,7 @@ mod tests {
                 ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
                     vec![]
                 ))),
-                ServerMessage::Query(ServerQueryMessage::Executed(RowStructure::new(vec![]))),
+                ServerMessage::Query(ServerQueryMessage::ResultSet(RowStructure::new(vec![]))),
             ])
         );
 
@@ -2001,6 +2107,83 @@ mod tests {
             [
                 vec![DataValue::from("New"), DataValue::from("Man")],
                 vec![DataValue::from("Another"), DataValue::from("Person")]
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fdw_connection_batch_singular_insert() {
+        let (thread, mut client) = create_mock_connection("connection_batch_singular_insert");
+
+        let res = client
+            .send(ClientMessage::Batch(vec![
+                ClientMessage::CreateQuery(
+                    sqlil::source("people", "people"),
+                    sqlil::QueryType::Insert,
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        InsertQueryOperation::AddColumn((
+                            "first_name".into(),
+                            sqlil::Expr::constant(DataValue::from("New")),
+                        ))
+                        .into(),
+                    ),
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        InsertQueryOperation::AddColumn((
+                            "last_name".into(),
+                            sqlil::Expr::constant(DataValue::from("Person")),
+                        ))
+                        .into(),
+                    ),
+                ),
+                ClientMessage::Query(0, ClientQueryMessage::Prepare),
+                ClientMessage::Query(0, ClientQueryMessage::ExecuteModify),
+                ClientMessage::Query(0, ClientQueryMessage::Restart),
+                ClientMessage::Query(0, ClientQueryMessage::ExecuteModify),
+                ClientMessage::Query(0, ClientQueryMessage::Restart),
+                ClientMessage::Query(0, ClientQueryMessage::ExecuteModify),
+                ClientMessage::Query(0, ClientQueryMessage::Restart),
+            ]))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Batch(vec![
+                ServerMessage::QueryCreated(0, OperationCost::default()),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+                ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                    vec![]
+                ))),
+                ServerMessage::Query(ServerQueryMessage::AffectedRows(Some(1))),
+                ServerMessage::Query(ServerQueryMessage::Restarted),
+                ServerMessage::Query(ServerQueryMessage::AffectedRows(Some(1))),
+                ServerMessage::Query(ServerQueryMessage::Restarted),
+                ServerMessage::Query(ServerQueryMessage::AffectedRows(Some(1))),
+                ServerMessage::Query(ServerQueryMessage::Restarted),
+            ])
+        );
+
+        client.close().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
+
+        // Assert rows were actually inserted
+        let rows = entities.get_data("people").unwrap();
+        assert_eq!(
+            rows[rows.len() - 3..],
+            [
+                vec![DataValue::from("New"), DataValue::from("Person")],
+                vec![DataValue::from("New"), DataValue::from("Person")],
+                vec![DataValue::from("New"), DataValue::from("Person")],
             ]
         );
     }

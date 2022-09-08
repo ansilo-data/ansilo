@@ -62,9 +62,11 @@ pub enum ClientQueryMessage {
     /// Write params to query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
     WriteParams(Vec<u8>),
-    /// Execute the current query with the supplied params
-    Execute,
-    /// Read up to the supplied number of bytes from the query
+    /// Execute the current query and start reading the result set
+    ExecuteQuery,
+    /// Execute the current query and return the number of affected rows
+    ExecuteModify,
+    /// Read up to the supplied number of bytes from result set 
     Read(u32),
     /// Discard the current result set and ready the query for new params and execution
     Restart,
@@ -139,11 +141,13 @@ pub enum ServerQueryMessage {
     Prepared(QueryInputStructure),
     /// Query params written
     ParamsWritten,
-    /// The query was executed
-    Executed(RowStructure),
+    /// The query was executed and the follow result set was produced
+    ResultSet(RowStructure),
+    /// The query was executed and with the following number of rows affected
+    AffectedRows(Option<u64>),
     /// Rows returned by the query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
-    ResultData(Vec<u8>),
+    ReadData(Vec<u8>),
     /// Query restarted
     Restarted,
     /// Query duplicated

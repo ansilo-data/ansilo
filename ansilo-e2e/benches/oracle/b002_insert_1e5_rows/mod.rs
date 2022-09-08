@@ -21,10 +21,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 }
 
 fn bench(client: &mut Client) {
-    let _rows = client
-        .query("INSERT INTO \"B002__TEST_TAB\" SELECT generate_series(1, 100000)", &[])
+    let rows = client
+        .execute("INSERT INTO \"B002__TEST_TAB\" SELECT generate_series(1, 100000)", &[])
         .unwrap();
 
-    // TODO: Return inserted rows
-    // assert_eq!(rows.len(), 100_000);
+    assert_eq!(rows, 100_000);
 }

@@ -16,7 +16,8 @@ fn test_generated_always() {
     let mut oracle =
         ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let rows = client
         .execute(
@@ -64,7 +65,11 @@ fn test_generated_always() {
                 ]
                 .join(""),
                 vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
-                None
+                Some(
+                    [("affected".into(), "Some(1)".into())]
+                        .into_iter()
+                        .collect()
+                )
             )
         )]
     );
@@ -78,7 +83,8 @@ fn test_generated_default() {
     let mut oracle =
         ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     client
         .batch_execute(
@@ -132,7 +138,11 @@ fn test_generated_default() {
                     ]
                     .join(""),
                     vec!["LoggedParam [index=1, method=setNString, value=first]".into()],
-                    None
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             ),
             (
@@ -147,7 +157,11 @@ fn test_generated_default() {
                         "LoggedParam [index=1, method=setBigDecimal, value=123]".into(),
                         "LoggedParam [index=2, method=setNString, value=second]".into()
                     ],
-                    None
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             )
         ]
@@ -162,7 +176,8 @@ fn test_default() {
     let mut oracle =
         ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     client
         .batch_execute(
@@ -216,7 +231,11 @@ fn test_default() {
                     ]
                     .join(""),
                     vec!["LoggedParam [index=1, method=setNString, value=first]".into()],
-                    None
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             ),
             (
@@ -231,7 +250,11 @@ fn test_default() {
                         "LoggedParam [index=1, method=setBigDecimal, value=123]".into(),
                         "LoggedParam [index=2, method=setNString, value=second]".into()
                     ],
-                    None
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
             )
         ]
