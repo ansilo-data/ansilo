@@ -32,6 +32,7 @@ mod tests {
         sqlil,
     };
     use ansilo_pg::fdw::proto::OperationCost;
+    use pretty_assertions::assert_eq;
 
     fn create_memory_connection_pool(
         confs: Vec<EntityConfig>,
@@ -323,6 +324,34 @@ OPTIONS (
             vec![
                 "CREATE FOREIGN TABLE \"some:name\" (
     \"foo:bar\" SMALLINT NOT NULL
+)
+SERVER test_srv
+OPTIONS (
+    __config E'null\n'
+)"
+            ]
+        )
+    }
+
+    #[pg_test]
+    fn test_fdw_import_table_with_primary_key() {
+        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+            "tab",
+            vec![EntityAttributeConfig::new(
+                "id".into(),
+                None,
+                DataType::Int32,
+                true,
+                false,
+            )],
+            EntitySourceConfig::minimal(""),
+        )]);
+
+        assert_eq!(
+            stmts,
+            vec![
+                "CREATE FOREIGN TABLE tab (
+    id INTEGER OPTIONS (primary_key 'true') NOT NULL
 )
 SERVER test_srv
 OPTIONS (

@@ -534,6 +534,8 @@ pub struct FdwSelectQuery {
     pub remote_ops: Vec<SelectQueryOperation>,
     /// The current column alias counter
     pub col_num: u32,
+    /// The row id alias counter
+    pub row_id_num: u32,
     /// Mapping of each row's vars to thier resno's in the output
     /// The structure is HashMap<varno, HashMap<varattnum, resno>>
     res_cols: HashMap<u32, HashMap<u32, u32>>,
@@ -547,6 +549,12 @@ impl FdwSelectQuery {
         let num = self.col_num;
         self.col_num += 1;
         format!("c{num}")
+    }
+
+    pub(crate) fn row_id_alias(&mut self) -> String {
+        let num = self.row_id_num;
+        self.row_id_num += 1;
+        format!("i{num}")
     }
 
     pub(crate) fn new_column(&mut self, expr: sqlil::Expr) -> SelectQueryOperation {

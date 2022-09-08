@@ -7,3 +7,5 @@ pub mod t006_insert_default_values;
 pub mod t007_transactions;
 pub mod t008_select_view;
 pub mod t009_insert_select;
+pub mod t010_update_where;
+pub mod t011_delete_where;

@@ -61,6 +61,7 @@ fn test_cannot_insert() {
         .err()
         .unwrap();
 
+    dbg!(err.to_string());
     assert!(err
         .to_string()
         .contains("The target table t008__test_view of the INSERT is not insertable-into"));
@@ -81,6 +82,7 @@ fn test_cannot_update() {
         .err()
         .unwrap();
 
+    dbg!(err.to_string());
     assert!(err
         .to_string()
         .contains("The target table t008__test_view of the UPDATE is not updatable"));
@@ -101,6 +103,7 @@ fn test_cannot_delete() {
         .err()
         .unwrap();
 
+    dbg!(err.to_string());
     assert!(err
         .to_string()
         .contains("The target table t008__test_view of the DELETE is not updatable"));

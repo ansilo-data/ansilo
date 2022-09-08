@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
+use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 /// Authentication options for the node
@@ -80,7 +81,7 @@ pub struct UserConfig {
 }
 
 /// Type-specific authentication options for this user
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, EnumAsInner)]
 #[serde(untagged)]
 pub enum UserTypeOptions {
     #[serde(rename = "password")]

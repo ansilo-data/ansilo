@@ -135,7 +135,7 @@ fn test_update_where_local() {
             "oracle".to_string(),
             LoggedQuery::new(
                 [
-                    r#"SELECT "t1"."ROWID" AS "c0", "t1"."ID" AS "c1", "t1"."NAME" AS "c2" "#,
+                    r#"SELECT "t1"."ROWID" AS "i0", "t1"."ID" AS "c0", "t1"."NAME" AS "c1" "#,
                     r#"FROM "ANSILO_ADMIN"."T007__TEST_TAB" "t1" "#,
                     r#"FOR UPDATE"#,
                 ]

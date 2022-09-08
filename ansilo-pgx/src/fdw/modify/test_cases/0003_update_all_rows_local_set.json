@@ -52,7 +52,7 @@
                     "Remote Ops": [
                         {
                             "AddColumn": {
-                                "0": "c0",
+                                "0": "i0",
                                 "1": {
                                     "@type": "Attribute",
                                     "attribute_id": "ROWIDX",
@@ -62,7 +62,7 @@
                         },
                         {
                             "AddColumn": {
-                                "0": "c1",
+                                "0": "c0",
                                 "1": {
                                     "@type": "Attribute",
                                     "attribute_id": "first_name",
@@ -72,7 +72,7 @@
                         },
                         {
                             "AddColumn": {
-                                "0": "c2",
+                                "0": "c1",
                                 "1": {
                                     "@type": "Attribute",
                                     "attribute_id": "id",
@@ -82,7 +82,7 @@
                         },
                         {
                             "AddColumn": {
-                                "0": "c3",
+                                "0": "c2",
                                 "1": {
                                     "@type": "Attribute",
                                     "attribute_id": "last_name",

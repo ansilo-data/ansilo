@@ -95,12 +95,7 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
         entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<Vec<(sql::Expr, DataType)>> {
-        let primary_keys = entity
-            .conf
-            .attributes
-            .iter()
-            .filter(|a| a.primary_key)
-            .collect::<Vec<_>>();
+        let primary_keys = entity.conf.primary_keys();
 
         if primary_keys.is_empty() {
             bail!("Cannot perform operation on table without primary keys");

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +64,13 @@ impl EntityConfig {
             constraints: vec![],
             source,
         }
+    }
+
+    pub fn primary_keys(&self) -> Vec<&EntityAttributeConfig> {
+        self.attributes
+            .iter()
+            .filter(|a| a.primary_key)
+            .collect::<Vec<_>>()
     }
 }
 

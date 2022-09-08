@@ -1050,8 +1050,6 @@ pub unsafe extern "C" fn get_foreign_plan(
     let mut result_tlist = PgList::<pg_sys::TargetEntry>::from_pg(tlist);
     let mut resno = 1;
 
-    // restore_query_state(&mut ctx, &query);
-
     // These checks are used the validate that tuple state is still expected when operating under
     // READ COMMITTED isolation level (EPQ = EvalPlanQual)
     let fdw_recheck_quals = if scan_relid > 0 {
@@ -1093,7 +1091,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         assert_eq!(row_ids.len(), vars.len());
 
         for (idx, (expr, r#type)) in row_ids.into_iter().enumerate() {
-            let col_alias = query.as_select_mut().unwrap().new_column_alias();
+            let col_alias = query.as_select_mut().unwrap().row_id_alias();
             let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
 
             if apply_query_operation(&mut query, query_op).is_none() {
@@ -1338,7 +1336,6 @@ pub unsafe extern "C" fn begin_foreign_scan(
     let mut scan = pg_scan_scoped(&mut (*node).ss, FdwScanContext::new());
 
     // Prepare the query for the chosen path
-    // restore_query_state(&mut ctx, &query);
     query.prepare().unwrap();
 
     // Prepare the query parameter expr's for evaluation

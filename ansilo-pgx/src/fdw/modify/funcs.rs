@@ -48,7 +48,12 @@ pub unsafe extern "C" fn add_foreign_update_targets(
 
     let row_ids = match ctx.get_row_id_exprs("unused") {
         Ok(r) => r,
-        Err(err) => panic!("Failed to get row ID's for table: {err}"),
+        Err(err) => {
+            // Even if we fail to get row id expressions at this point
+            // the query may still be possible to push down to the source
+            // so dont trigger an error until we have to execute it locally
+            return
+        }
     };
 
     for (idx, (expr, r#type)) in row_ids.into_iter().enumerate() {

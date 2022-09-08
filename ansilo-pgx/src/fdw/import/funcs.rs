@@ -50,6 +50,10 @@ pub unsafe extern "C" fn import_foreign_schema(
                     col.push(' ');
                     col.push_str(&to_pg_type_name(&a.r#type).unwrap());
 
+                    if a.primary_key {
+                        col.push_str(" OPTIONS (primary_key 'true')");
+                    }
+
                     if !a.nullable {
                         col.push_str(" NOT NULL");
                     }
