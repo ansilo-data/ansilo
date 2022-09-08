@@ -1,26 +1,26 @@
 use tokio_postgres::types::{private::BytesMut, to_sql_checked, FromSql, IsNull, ToSql, Type};
 
-/// Conversion of strings which also includes the 'tid' type for 'ctid' row id's
+/// Conversion of binary types which also includes the 'tid' type for 'ctid' row id's
 #[derive(Debug)]
-pub struct CustomString(pub String);
+pub struct Binary(pub Vec<u8>);
 
-impl<'a> FromSql<'a> for CustomString {
+impl<'a> FromSql<'a> for Binary {
     fn from_sql(
         ty: &Type,
         raw: &'a [u8],
     ) -> Result<Self, Box<dyn std::error::Error + Sync + Send>> {
-        Ok(Self(String::from_sql(ty, raw)?))
+        Ok(Self(Vec::<u8>::from_sql(ty, raw)?))
     }
 
     fn accepts(ty: &Type) -> bool {
         match *ty {
             Type::TID => true,
-            _ => <String as FromSql>::accepts(ty),
+            _ => <Vec<u8> as FromSql>::accepts(ty),
         }
     }
 }
 
-impl ToSql for CustomString {
+impl ToSql for Binary {
     fn to_sql(
         &self,
         ty: &Type,
@@ -29,7 +29,7 @@ impl ToSql for CustomString {
     where
         Self: Sized,
     {
-        Ok(String::to_sql(&self.0, ty, out)?)
+        Ok(Vec::<u8>::to_sql(&self.0, ty, out)?)
     }
 
     fn accepts(ty: &Type) -> bool
@@ -38,7 +38,7 @@ impl ToSql for CustomString {
     {
         match *ty {
             Type::TID => true,
-            _ => <String as ToSql>::accepts(ty),
+            _ => <Vec<u8> as ToSql>::accepts(ty),
         }
     }
 

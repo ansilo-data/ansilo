@@ -168,7 +168,7 @@ fn test_update_where_local() {
     );
     assert!(query_log[1].1.params()[1]
         .as_str()
-        .starts_with("value=Utf8String("));
+        .starts_with("value=Binary("));
     assert_eq!(
         query_log[1].1.other(),
         &[("affected".into(), "Some(1)".into())]

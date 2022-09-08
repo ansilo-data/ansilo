@@ -147,7 +147,7 @@ fn test_delete_where_local() {
     );
     assert!(query_log[1].1.params()[0]
         .as_str()
-        .starts_with("value=Utf8String("));
+        .starts_with("value=Binary("));
     assert_eq!(
         query_log[1].1.other(),
         &[("affected".into(), "Some(1)".into())]

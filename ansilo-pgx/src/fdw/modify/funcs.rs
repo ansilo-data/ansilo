@@ -35,7 +35,7 @@ const SINGLE_INSERT_BATCH_SIZE: usize = 100;
 /// The data source could support batching of very high volume inserts but we dont
 /// necessarily want to batch everything together due to memory constraints.
 /// This is the upper limit we apply to batch inserts mapped to a single bulk query.
-const MAX_BULK_INSERT_BATCH_SIZE: usize = 100;
+const MAX_BULK_INSERT_BATCH_SIZE: usize = 1000;
 
 #[pg_guard]
 pub unsafe extern "C" fn add_foreign_update_targets(

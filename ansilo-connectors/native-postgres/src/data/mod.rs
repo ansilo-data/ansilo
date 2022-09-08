@@ -44,10 +44,10 @@ pub fn to_pg_type(r#type: &DataType) -> Type {
 /// Mapping from pg type to DataType
 pub fn from_pg_type(r#type: &Type) -> Result<DataType> {
     Ok(match *r#type {
-        Type::TEXT | Type::VARCHAR | Type::NAME | Type::BPCHAR | Type::CHAR | Type::TID => {
+        Type::TEXT | Type::VARCHAR | Type::NAME | Type::BPCHAR | Type::CHAR => {
             DataType::Utf8String(Default::default())
         }
-        Type::BYTEA | Type::VARBIT => DataType::Binary,
+        Type::BYTEA | Type::VARBIT | Type::TID => DataType::Binary,
         Type::BOOL | Type::BIT => DataType::Boolean,
         Type::INT2 => DataType::Int16,
         Type::INT4 => DataType::Int32,
@@ -71,8 +71,8 @@ pub fn to_pg(val: DataValue, r#type: &Type) -> Result<Box<dyn ToSql>> {
     let val = val.try_coerce_into(&from_pg_type(r#type)?)?;
 
     Ok(match val {
-        DataValue::Utf8String(d) => Box::new(types::CustomString(d)),
-        DataValue::Binary(d) => Box::new(d),
+        DataValue::Utf8String(d) => Box::new(d),
+        DataValue::Binary(d) => Box::new(types::Binary(d)),
         DataValue::Boolean(d) => Box::new(d),
         DataValue::Int8(d) => Box::new(d),
         DataValue::UInt8(d) => Box::new(d as i16),
@@ -99,11 +99,11 @@ pub fn to_pg(val: DataValue, r#type: &Type) -> Result<Box<dyn ToSql>> {
 pub fn from_pg(row: &Row, idx: usize, r#type: &Type) -> Result<DataValue> {
     let val = match from_pg_type(r#type)? {
         DataType::Utf8String(_) => row
-            .try_get::<_, Option<types::CustomString>>(idx)?
-            .map(|d| DataValue::Utf8String(d.0)),
-        DataType::Binary => row
             .try_get::<_, Option<_>>(idx)?
-            .map(|d| DataValue::Binary(d)),
+            .map(|d| DataValue::Utf8String(d)),
+        DataType::Binary => row
+            .try_get::<_, Option<types::Binary>>(idx)?
+            .map(|d| DataValue::Binary(d.0)),
         DataType::Boolean => row
             .try_get::<_, Option<_>>(idx)?
             .map(|d| DataValue::Boolean(d)),

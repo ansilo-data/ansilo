@@ -64,7 +64,7 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
                         t.relname as table_name,
                         a.attname as column_name,
                         'NO' AS is_identity,
-                        pg_catalog.format_type(a.atttypid, a.atttypmod) as data_type,
+                        pg_catalog.format_type(a.atttypid, NULL) as data_type,
                         CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END as is_nullable,
                         information_schema._pg_char_max_length(a.atttypid, a.atttypmod) as character_maximum_length,
                         information_schema._pg_numeric_precision(a.atttypid, a.atttypmod) as numeric_precision,

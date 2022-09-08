@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::DerefMut};
 
 use ansilo_core::{
-    data::{DataType, DataValue, StringOptions},
+    data::{DataType, DataValue},
     err::{bail, ensure, Context, Result},
     sqlil as sql,
 };
@@ -110,7 +110,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
     ) -> Result<Vec<(sql::Expr, DataType)>> {
         Ok(vec![(
             sql::Expr::attr(source.alias.clone(), "ctid"),
-            DataType::Utf8String(StringOptions::default()),
+            DataType::Binary
         )])
     }
 
