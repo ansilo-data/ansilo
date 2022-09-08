@@ -1,7 +1,8 @@
 use ansilo_core::{
     data::{
-        chrono::{DateTime, Utc},
+        chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc},
         chrono_tz::Tz,
+        uuid::Uuid,
         DataType, DataValue, DateTimeWithTZ,
     },
     err::{bail, Result},
@@ -69,7 +70,6 @@ pub fn to_pg(val: DataValue, r#type: &Type) -> Result<Box<dyn ToSql>> {
     let val = val.try_coerce_into(&from_pg_type(r#type)?)?;
 
     Ok(match val {
-        DataValue::Null => Box::new(Option::<bool>::None),
         DataValue::Utf8String(d) => Box::new(d),
         DataValue::Binary(d) => Box::new(d),
         DataValue::Boolean(d) => Box::new(d),
@@ -84,12 +84,31 @@ pub fn to_pg(val: DataValue, r#type: &Type) -> Result<Box<dyn ToSql>> {
         DataValue::Float32(d) => Box::new(d),
         DataValue::Float64(d) => Box::new(d),
         DataValue::Decimal(d) => Box::new(d),
-        DataValue::JSON(d) => Box::new(d),
+        DataValue::JSON(d) => Box::new(serde_json::from_str::<serde_json::Value>(&d)?),
         DataValue::Date(d) => Box::new(d),
         DataValue::Time(d) => Box::new(d),
         DataValue::DateTime(d) => Box::new(d),
         DataValue::DateTimeWithTZ(d) => Box::new(d.utc().unwrap()),
         DataValue::Uuid(d) => Box::new(d),
+        DataValue::Null => match from_pg_type(r#type)? {
+            DataType::Utf8String(_) => Box::new(Option::<String>::None),
+            DataType::Binary => Box::new(Option::<Vec<u8>>::None),
+            DataType::Boolean => Box::new(Option::<bool>::None),
+            DataType::Int8 => Box::new(Option::<i8>::None),
+            DataType::Int16 => Box::new(Option::<i16>::None),
+            DataType::Int32 => Box::new(Option::<i32>::None),
+            DataType::Int64 => Box::new(Option::<i64>::None),
+            DataType::Float32 => Box::new(Option::<f32>::None),
+            DataType::Float64 => Box::new(Option::<f64>::None),
+            DataType::Decimal(_) => Box::new(Option::<Decimal>::None),
+            DataType::JSON => Box::new(Option::<serde_json::Value>::None),
+            DataType::Date => Box::new(Option::<NaiveDate>::None),
+            DataType::Time => Box::new(Option::<NaiveTime>::None),
+            DataType::DateTime => Box::new(Option::<NaiveDateTime>::None),
+            DataType::DateTimeWithTZ => Box::new(Option::<DateTime<Utc>>::None),
+            DataType::Uuid => Box::new(Option::<Uuid>::None),
+            typ => bail!("Unexpected data type for null pg val: {:?}", typ),
+        },
     })
 }
 
