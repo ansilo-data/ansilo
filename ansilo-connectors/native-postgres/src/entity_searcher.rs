@@ -40,23 +40,46 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
         let mut query = connection
             .prepare(PostgresQuery::new(
                 r#"
-                SELECT
-                    t.table_schema,
-                    t.table_name,
-                    c.column_name,
-                    c.is_identity,
-                    c.data_type,
-                    c.is_nullable,
-                    c.character_maximum_length,
-                    c.numeric_precision,
-                    c.numeric_scale,
-                    c.ordinal_position
-                FROM information_schema.tables t
-                INNER JOIN information_schema.columns C ON t.table_schema = c.table_schema AND t.table_name = c.table_name
-                WHERE 1=1
-                AND concat(t.table_schema, '.', t.table_name) LIKE $1
-                AND t.table_type != 'LOCAL TEMPORARY'
-                ORDER BY t.table_schema, t.table_name, c.ordinal_position
+                SELECT * FROM (
+                    SELECT
+                        t.table_schema,
+                        t.table_name,
+                        c.column_name,
+                        c.is_identity,
+                        c.data_type,
+                        c.is_nullable,
+                        c.character_maximum_length,
+                        c.numeric_precision,
+                        c.numeric_scale,
+                        c.ordinal_position
+                    FROM information_schema.tables t
+                    INNER JOIN information_schema.columns C ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+                    WHERE 1=1
+                    AND concat(t.table_schema, '.', t.table_name) LIKE $1
+                    AND t.table_type != 'LOCAL TEMPORARY'
+                    UNION ALL
+                    -- Include materialised views
+                    SELECT 
+                        s.nspname as table_schema, 
+                        t.relname as table_name,
+                        a.attname as column_name,
+                        'NO' AS is_identity,
+                        pg_catalog.format_type(a.atttypid, a.atttypmod) as data_type,
+                        CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END as is_nullable,
+                        information_schema._pg_char_max_length(a.atttypid, a.atttypmod) as character_maximum_length,
+                        information_schema._pg_numeric_precision(a.atttypid, a.atttypmod) as numeric_precision,
+                        information_schema._pg_numeric_scale(a.atttypid, a.atttypmod) as numeric_scale,
+                        CAST(a.attnum AS information_schema.cardinal_number) AS ordinal_position
+                    FROM pg_attribute a
+                    INNER JOIN pg_class t on a.attrelid = t.oid
+                    INNER JOIN pg_namespace s on t.relnamespace = s.oid
+                    WHERE 1=1
+                    AND t.relkind = 'm'
+                    AND a.attnum > 0 
+                    AND NOT a.attisdropped
+                    AND concat(s.nspname, '.', t.relname) LIKE $1
+                ) AS a
+                ORDER BY a.table_schema, a.table_name, a.ordinal_position
             "#,
                 vec![QueryParam::Constant(
                     DataValue::Utf8String(
@@ -114,7 +137,7 @@ pub(crate) fn parse_entity_config(
                     .clone(),
                 None,
                 from_postgres_type(&c)?,
-                c["is_identity"].as_utf8_string().context("is_identity")? == "PRI",
+                c["is_identity"].as_utf8_string().context("is_identity")? == "YES",
                 c["is_nullable"].as_utf8_string().context("is_nullable")? == "YES",
             ))
         })

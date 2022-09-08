@@ -1,0 +1,6 @@
+DROP MATERIALIZED VIEW IF EXISTS t012__test_mview
+$$
+
+CREATE MATERIALIZED VIEW t012__test_mview
+AS
+SELECT 'data' AS col
