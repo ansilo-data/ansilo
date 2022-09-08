@@ -205,6 +205,10 @@ impl FdwListener {
                 (ConnectionPools::Jdbc(pool), RwLockEntityConfigs::MysqlJdbc(entities)) => {
                     Self::process::<MysqlJdbcConnector>(auth, nc, chan, pool, entities, log)
                 }
+                (
+                    ConnectionPools::NativePostgres(pool),
+                    RwLockEntityConfigs::NativePostgres(entities),
+                ) => Self::process::<PostgresConnector>(auth, nc, chan, pool, entities, log),
                 (ConnectionPools::Memory(pool), RwLockEntityConfigs::Memory(entities)) => {
                     Self::process::<MemoryConnector>(auth, nc, chan, pool, entities, log)
                 }
@@ -286,6 +290,9 @@ pub enum RwLockEntityConfigs {
     MysqlJdbc(
         RwLock<ConnectorEntityConfig<<MysqlJdbcConnector as Connector>::TEntitySourceConfig>>,
     ),
+    NativePostgres(
+        RwLock<ConnectorEntityConfig<<PostgresConnector as Connector>::TEntitySourceConfig>>,
+    ),
     Memory(RwLock<ConnectorEntityConfig<<MemoryConnector as Connector>::TEntitySourceConfig>>),
 }
 
@@ -294,6 +301,7 @@ impl From<ConnectorEntityConfigs> for RwLockEntityConfigs {
         match conf {
             ConnectorEntityConfigs::OracleJdbc(e) => Self::OracleJdbc(RwLock::new(e)),
             ConnectorEntityConfigs::MysqlJdbc(e) => Self::MysqlJdbc(RwLock::new(e)),
+            ConnectorEntityConfigs::NativePostgres(e) => Self::NativePostgres(RwLock::new(e)),
             ConnectorEntityConfigs::Memory(e) => Self::Memory(RwLock::new(e)),
         }
     }
