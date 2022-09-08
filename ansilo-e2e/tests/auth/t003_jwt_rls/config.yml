@@ -1,7 +1,7 @@
 name: Auth
 
 networking:
-  port: ${env:ANSILO_PORT}
+  port: 0 # use kernel-allocated port
 
 auth:
   providers:

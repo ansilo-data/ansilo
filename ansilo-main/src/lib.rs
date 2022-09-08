@@ -44,7 +44,7 @@ pub struct Ansilo {
     log: RemoteQueryLog,
 }
 
-struct Subsystems {
+pub struct Subsystems {
     /// The tokio runtime
     runtime: Runtime,
     /// The postgres instance
@@ -156,6 +156,11 @@ impl Ansilo {
         &self.conf
     }
 
+    /// Gets the running subsystems
+    pub fn subsystems(&self) -> Option<&Subsystems> {
+        self.subsystems.as_ref()
+    }
+
     /// Gets the remote query log
     pub fn log(&self) -> &RemoteQueryLog {
         &self.log
@@ -264,5 +269,27 @@ impl Drop for Ansilo {
         if let Err(err) = self.terminate_mut(None) {
             warn!("Error occurred while shutting down: {:?}", err);
         }
+    }
+}
+
+impl Subsystems {
+    pub fn runtime(&self) -> &Runtime {
+        &self.runtime
+    }
+
+    pub fn postgres(&self) -> &PostgresInstance {
+        &self.postgres
+    }
+
+    pub fn fdw(&self) -> &FdwServer {
+        &self.fdw
+    }
+
+    pub fn proxy(&self) -> &ProxyServer {
+        &self.proxy
+    }
+
+    pub fn authenticator(&self) -> &Authenticator {
+        &self.authenticator
     }
 }

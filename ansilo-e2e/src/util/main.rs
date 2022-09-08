@@ -1,12 +1,4 @@
-use std::{
-    env,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicU16, Ordering},
-        Mutex,
-    },
-    time::Duration,
-};
+use std::{path::PathBuf, thread, time::Duration};
 
 use ansilo_core::err::Result;
 use ansilo_logging::info;
@@ -15,10 +7,6 @@ use ansilo_main::{
     Ansilo, RemoteQueryLog,
 };
 use postgres::{Client, Config, NoTls};
-
-static PORT: AtomicU16 = AtomicU16::new(60000);
-
-static LOCK: Mutex<()> = Mutex::new(());
 
 /// Runs an instance of ansilo using the supplied config
 pub fn run_instance(config_path: PathBuf) -> (Ansilo, Client) {
@@ -31,17 +19,22 @@ pub fn run_instance(config_path: PathBuf) -> (Ansilo, Client) {
 
 /// Runs an instance of ansilo using the supplied config
 pub fn run_instance_without_connect(config_path: PathBuf) -> (Ansilo, u16) {
-    let _ = LOCK.lock().unwrap();
-    let port = PORT.fetch_add(1, Ordering::SeqCst);
-
-    // Allow port to be referenced in config file
-    env::set_var("ANSILO_PORT", port.to_string());
-
     let instance = Ansilo::start(
         Command::Run(Args::testing(config_path)),
         Some(RemoteQueryLog::store_in_memory()),
     )
     .unwrap();
+
+    let port = loop {
+        let addrs = instance.subsystems().unwrap().proxy().addrs().unwrap();
+
+        if addrs.is_empty() {
+            thread::sleep(Duration::from_millis(10));
+            continue;
+        }
+
+        break addrs[0].port();
+    };
 
     (instance, port)
 }

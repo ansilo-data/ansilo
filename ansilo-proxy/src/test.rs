@@ -59,6 +59,10 @@ impl ConnectionHandler for MockConnectionHandler {
 pub fn mock_config_no_tls() -> &'static ProxyConf {
     let port = PORT.fetch_add(1, Ordering::Relaxed);
 
+    mock_config_no_tls_with_port(port)
+}
+
+pub fn mock_config_no_tls_with_port(port: u16) -> &'static ProxyConf {
     let conf = ProxyConf {
         addrs: vec![SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))],
         tls: None,

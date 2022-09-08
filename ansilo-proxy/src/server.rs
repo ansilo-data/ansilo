@@ -1,6 +1,10 @@
-use std::{net::SocketAddr, time::Duration};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
-use ansilo_core::err::{Context, Result};
+use ansilo_core::err::{Context, Error, Result};
 use ansilo_logging::{debug, error, info, warn};
 use socket2::{Domain, Socket};
 use tokio::{
@@ -13,6 +17,7 @@ use crate::{conf::ProxyConf, connection::Connection};
 /// The multi-protocol proxy server
 pub struct ProxyServer {
     conf: &'static ProxyConf,
+    addrs: Arc<Mutex<Vec<SocketAddr>>>,
     terminator: Option<(Sender<()>, Receiver<()>)>,
 }
 
@@ -20,6 +25,7 @@ impl ProxyServer {
     pub fn new(conf: &'static ProxyConf) -> Self {
         Self {
             conf,
+            addrs: Arc::new(Mutex::new(vec![])),
             terminator: Some(broadcast::channel(1)),
         }
     }
@@ -34,6 +40,7 @@ impl ProxyServer {
             .map(|addr| {
                 ProxyListener::start(
                     self.conf,
+                    Arc::clone(&self.addrs),
                     addr,
                     self.terminator.as_ref().unwrap().0.subscribe(),
                 )
@@ -51,6 +58,15 @@ impl ProxyServer {
         }
 
         Ok(())
+    }
+
+    /// Gets the socket addresses the server is listening on
+    pub fn addrs(&self) -> Result<Vec<SocketAddr>> {
+        Ok(self
+            .addrs
+            .lock()
+            .map_err(|_| Error::msg("Failed to lock addrs"))?
+            .clone())
     }
 
     /// Terminates the proxy server
@@ -74,6 +90,7 @@ impl ProxyServer {
 /// Binds to a socket and accepts new connections
 struct ProxyListener {
     conf: &'static ProxyConf,
+    addrs: Arc<Mutex<Vec<SocketAddr>>>,
     listener: Option<TcpListener>,
     terminator: Receiver<()>,
 }
@@ -81,6 +98,7 @@ struct ProxyListener {
 impl ProxyListener {
     async fn start(
         conf: &'static ProxyConf,
+        addrs: Arc<Mutex<Vec<SocketAddr>>>,
         addr: SocketAddr,
         terminator: Receiver<()>,
     ) -> Result<Self> {
@@ -112,6 +130,7 @@ impl ProxyListener {
 
         let listener = Self {
             conf,
+            addrs,
             listener: Some(TcpListener::from_std(socket.into())?),
             terminator,
         };
@@ -121,10 +140,16 @@ impl ProxyListener {
 
     /// Accepts new connections
     async fn accept(&mut self) -> Result<()> {
-        info!(
-            "Listening on {}",
-            self.listener.as_ref().unwrap().local_addr()?
-        );
+        let listen_addr = self.listener.as_ref().unwrap().local_addr()?;
+        info!("Listening on {}", listen_addr);
+
+        {
+            let mut addrs = self
+                .addrs
+                .lock()
+                .map_err(|_| Error::msg("Failed to lock addrs"))?;
+            addrs.push(listen_addr)
+        }
 
         loop {
             let (con, _) = tokio::select! {
@@ -160,7 +185,7 @@ mod tests {
 
     use tokio::task::yield_now;
 
-    use crate::test::mock_config_no_tls;
+    use crate::test::{mock_config_no_tls, mock_config_no_tls_with_port};
 
     use super::*;
 
@@ -216,5 +241,35 @@ mod tests {
 
         // Connection should now fail
         con.write_all(&[1]).and_then(|_| con.flush()).unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn test_server_start_and_get_listening_addrs() {
+        ansilo_logging::init_for_tests();
+        let mut server = create_server(mock_config_no_tls_with_port(12345));
+
+        server.start().await.unwrap();
+        yield_now().await;
+
+        assert_eq!(
+            server.addrs().unwrap(),
+            vec!["127.0.0.1:12345".parse().unwrap()]
+        )
+    }
+
+    #[tokio::test]
+    async fn test_server_start_and_get_listening_with_port_0() {
+        ansilo_logging::init_for_tests();
+        let mut server = create_server(mock_config_no_tls_with_port(0));
+
+        server.start().await.unwrap();
+        yield_now().await;
+
+        assert_eq!(server.addrs().unwrap().len(), 1);
+        // Should return kernel allocated port
+        assert_ne!(
+            server.addrs().unwrap(),
+            vec!["127.0.0.1:0".parse().unwrap()]
+        )
     }
 }
