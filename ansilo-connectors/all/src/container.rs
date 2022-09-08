@@ -168,6 +168,14 @@ impl Connectors {
                     ConnectorEntityConfigs::MysqlJdbc(entities),
                 )
             }
+            (Connectors::NativePostgres, ConnectionConfigs::NativePostgres(options)) => {
+                let (pool, entities) =
+                    Self::create_pool::<PostgresConnector>(options, nc, data_source_id)?;
+                (
+                    ConnectionPools::NativePostgres(pool),
+                    ConnectorEntityConfigs::NativePostgres(entities),
+                )
+            }
             (Connectors::Memory, ConnectionConfigs::Memory(options)) => {
                 let (pool, entities) =
                     Self::create_pool::<MemoryConnector>(options, nc, data_source_id)?;

@@ -1,6 +1,9 @@
 use std::{ops::DerefMut, sync::Arc};
 
-use ansilo_connectors_base::{interface::{Connection, QueryHandle, TransactionManager}, common::query::QueryParam};
+use ansilo_connectors_base::{
+    common::query::QueryParam,
+    interface::{Connection, QueryHandle, TransactionManager},
+};
 use ansilo_core::{data::DataValue, err::Result};
 use tokio_postgres::Client;
 
@@ -66,6 +69,22 @@ impl<T: DerefMut<Target = Client>> PostgresConnection<T> {
         let mut prepared = self.prepare(PostgresQuery::new(query, jdbc_params))?;
 
         prepared.execute_query()
+    }
+
+    /// Executes the supplied sql on the connection
+    pub fn execute_modify(
+        &mut self,
+        query: impl Into<String>,
+        params: Vec<DataValue>,
+    ) -> Result<Option<u64>> {
+        let jdbc_params = params
+            .iter()
+            .map(|p| QueryParam::constant(p.clone()))
+            .collect::<Vec<_>>();
+
+        let mut prepared = self.prepare(PostgresQuery::new(query, jdbc_params))?;
+
+        prepared.execute_modify()
     }
 }
 
