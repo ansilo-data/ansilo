@@ -59,7 +59,7 @@ pub fn init_postgres_sql(
     path: PathBuf,
 ) -> PostgresConnection<PooledClient> {
     let mut config = PostgresConnectionConfig::default();
-    config.opts = Some(format!(
+    config.url = Some(format!(
         "host={} port=5433 user=ansilo_admin password=ansilo_testing dbname=postgres",
         containers.get("postgres").unwrap().ip
     ));

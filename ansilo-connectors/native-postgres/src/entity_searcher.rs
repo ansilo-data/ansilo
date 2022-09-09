@@ -2,19 +2,16 @@ use std::{collections::HashMap, marker::PhantomData, ops::DerefMut};
 
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
-    data::{DataType, DataValue, DecimalOptions, StringOptions},
+    data::{DataType, DecimalOptions, StringOptions},
     err::{bail, Context, Result},
 };
 
-use ansilo_connectors_base::{
-    common::query::QueryParam,
-    interface::{Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet},
-};
+use ansilo_connectors_base::interface::{EntityDiscoverOptions, EntitySearcher};
 use ansilo_logging::warn;
 use itertools::Itertools;
-use tokio_postgres::Client;
+use tokio_postgres::{Client, Row};
 
-use crate::{PostgresConnection, PostgresQuery, PostgresTableOptions};
+use crate::{runtime, PostgresConnection, PostgresTableOptions};
 
 use super::PostgresEntitySourceConfig;
 
@@ -32,13 +29,22 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
         _nc: &NodeConfig,
         opts: EntityDiscoverOptions,
     ) -> Result<Vec<EntityConfig>> {
+        runtime().block_on(Self::discover_async(connection.client(), opts))
+    }
+}
+
+impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
+    pub async fn discover_async(
+        connection: &Client,
+        opts: EntityDiscoverOptions,
+    ) -> Result<Vec<EntityConfig>> {
         // Query postgres's information schema tables to retrieve all column definitions
         // Importantly we order the results by table and then by column position
         // when lets us efficiently group the result by table using `group_by` below.
         // Additionally, we the results to be deterministic and return the columns
         // the user-defined order on the oracle side.
-        let mut query = connection
-            .prepare(PostgresQuery::new(
+        let rows = connection
+            .query(
                 r#"
                 SELECT * FROM (
                     SELECT
@@ -81,24 +87,18 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
                 ) AS a
                 ORDER BY a.table_schema, a.table_name, a.ordinal_position
             "#,
-                vec![QueryParam::Constant(
-                    DataValue::Utf8String(
-                        opts.remote_schema
-                            .as_ref()
-                            .map(|i| i.as_str())
-                            .unwrap_or("%")
-                            .into(),
-                    )
-                )],
-            ))?;
+            &[
+               & opts.remote_schema
+                    .as_ref()
+                    .map(|i| i.as_str())
+                    .unwrap_or("%")
+                ],
+            ).await?;
 
-        let cols = query.execute_query()?;
-
-        let cols = cols.reader()?.iter_rows().collect::<Result<Vec<_>>>()?;
-        let tables = cols.into_iter().group_by(|row| {
+        let tables = rows.into_iter().group_by(|row| {
             (
-                row["table_schema"].as_utf8_string().unwrap().clone(),
-                row["table_name"].as_utf8_string().unwrap().clone(),
+                row.get::<_, String>("table_schema"),
+                row.get::<_, String>("table_name"),
             )
         });
 
@@ -125,20 +125,21 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
 pub(crate) fn parse_entity_config(
     db: &String,
     table: &String,
-    cols: impl Iterator<Item = HashMap<String, DataValue>>,
+    cols: impl Iterator<Item = Row>,
 ) -> Result<EntityConfig> {
     Ok(EntityConfig::minimal(
         table.clone(),
         cols.map(|c| {
             Ok(EntityAttributeConfig::new(
-                c["column_name"]
-                    .as_utf8_string()
-                    .context("column_name")?
-                    .clone(),
+                c.try_get("column_name").context("column_name")?,
                 None,
                 from_postgres_type(&c)?,
-                c["is_identity"].as_utf8_string().context("is_identity")? == "YES",
-                c["is_nullable"].as_utf8_string().context("is_nullable")? == "YES",
+                c.try_get::<_, String>("is_identity")
+                    .context("is_identity")?
+                    == "YES",
+                c.try_get::<_, String>("is_nullable")
+                    .context("is_nullable")?
+                    == "YES",
             ))
         })
         .collect::<Result<Vec<_>>>()?,
@@ -148,23 +149,21 @@ pub(crate) fn parse_entity_config(
     ))
 }
 
-pub(crate) fn from_postgres_type(col: &HashMap<String, DataValue>) -> Result<DataType> {
-    let data_type = &col["data_type"]
-        .as_utf8_string()
+pub(crate) fn from_postgres_type(col: &Row) -> Result<DataType> {
+    let data_type = &col
+        .try_get::<_, String>("data_type")
         .context("data_type")?
         .to_uppercase();
 
     Ok(match data_type.as_str() {
         "CHAR" | "CHARACTER" | "TEXT" | "VARCHAR" | "CITEXT" | "NAME" | "UNKNOWN"
         | "CHARACTER VARYING" => {
-            let length = col["character_maximum_length"]
-                .clone()
-                .try_coerce_into(&DataType::UInt32)
-                .ok()
-                .and_then(|i| i.as_u_int32().cloned())
+            let length = col
+                .try_get::<_, Option<i32>>("character_maximum_length")
+                .context("character_maximum_length")?
                 .and_then(|i| if i >= 1 { Some(i) } else { None });
 
-            DataType::Utf8String(StringOptions::new(length))
+            DataType::Utf8String(StringOptions::new(length.map(|i| i as _)))
         }
         "BOOLEAN" | "BIT" => DataType::Boolean,
         "\"CHAR\"" => DataType::Int8,
@@ -172,18 +171,17 @@ pub(crate) fn from_postgres_type(col: &HashMap<String, DataValue>) -> Result<Dat
         "INTEGER" => DataType::Int32,
         "BIGINT" => DataType::Int64,
         "NUMERIC" => {
-            let precision = col["numeric_precision"]
-                .clone()
-                .try_coerce_into(&DataType::UInt16)
-                .ok()
-                .and_then(|i| i.as_u_int16().cloned());
-            let scale = col["numeric_scale"]
-                .clone()
-                .try_coerce_into(&DataType::UInt16)
-                .ok()
-                .and_then(|i| i.as_u_int16().cloned());
+            let precision = col
+                .try_get::<_, Option<i32>>("numeric_precision")
+                .context("numeric_precision")?;
+            let scale = col
+                .try_get::<_, Option<i32>>("numeric_scale")
+                .context("numeric_scale")?;
 
-            DataType::Decimal(DecimalOptions::new(precision, scale))
+            DataType::Decimal(DecimalOptions::new(
+                precision.map(|i| i as _),
+                scale.map(|i| i as _),
+            ))
         }
 
         "FLOAT4" | "REAL" => DataType::Float32,

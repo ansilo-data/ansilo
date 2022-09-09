@@ -12,7 +12,7 @@ sources:
   - id: postgres
     type: native.postgres
     options:
-      opts: host=${env:POSTGRES_IP} port=5433 user=ansilo_admin password=ansilo_testing dbname=postgres
+      url: host=${env:POSTGRES_IP} port=5433 user=ansilo_admin password=ansilo_testing dbname=postgres
         
 postgres:
     install_dir: /usr/lib/postgresql/14/

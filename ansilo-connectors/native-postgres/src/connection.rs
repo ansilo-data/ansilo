@@ -24,6 +24,10 @@ impl<T> PostgresConnection<T> {
             transaction: false,
         }
     }
+
+    pub(crate) fn client<'a>(&'a self) -> &'a T {
+        &*self.client
+    }
 }
 
 impl<T: DerefMut<Target = Client>> Connection for PostgresConnection<T> {

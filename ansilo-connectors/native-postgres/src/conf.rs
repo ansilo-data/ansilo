@@ -25,7 +25,7 @@ pub struct PostgresConnectionConfig {
     /// host=localhost user=postgres connect_timeout=10 keepalives=0
     /// host=/var/run/postgresql,localhost port=1234 user=postgres password='password with spaces'
     /// @see https://docs.rs/postgres/latest/postgres/config/struct.Config.html#method.options
-    pub opts: Option<String>,
+    pub url: Option<String>,
     /// Connection pool config
     pub pool: Option<PostgresConnectionPoolConfig>,
 }
@@ -50,7 +50,7 @@ impl TryInto<Config> for PostgresConnectionConfig {
     type Error = Error;
 
     fn try_into(self) -> Result<Config, Self::Error> {
-        let mut conf = match self.opts {
+        let mut conf = match self.url {
             Some(opts) => Config::from_str(&opts).with_context(|| {
                 format!("Failed to parse postgres connections 'opts' field: \"{opts}\"")
             })?,
@@ -132,7 +132,7 @@ mod tests {
     fn test_config_with_opts_url() {
         let conf: Config = {
             let mut conf = PostgresConnectionConfig::default();
-            conf.opts = Some("host=localhost user=postgres password=123".into());
+            conf.url = Some("host=localhost user=postgres password=123".into());
             conf.try_into().unwrap()
         };
 

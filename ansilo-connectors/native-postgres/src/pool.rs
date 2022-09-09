@@ -30,7 +30,7 @@ impl PostgresConnectionPool {
         ))
         .runtime(deadpool_postgres::Runtime::Tokio1)
         .max_size(pool_conf.max_size.unwrap_or(20) as _)
-        .wait_timeout(Some(
+        .create_timeout(Some(
             pool_conf
                 .connection_timeout
                 .unwrap_or(Duration::from_secs(60)),
@@ -54,6 +54,7 @@ impl ConnectionPool for PostgresConnectionPool {
 /// Adaptor for the deadpool client wrapper type to
 /// deref into the underlying tokio_postgres::Client
 pub struct PooledClient(pub deadpool_postgres::Client);
+pub type UnpooledClient = tokio_postgres::Client;
 
 impl Deref for PooledClient {
     type Target = tokio_postgres::Client;

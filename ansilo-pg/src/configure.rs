@@ -75,6 +75,7 @@ async fn configure_extension(
                 CREATE EXTENSION ansilo_pgx;
                 
                 GRANT USAGE ON FOREIGN DATA WRAPPER ansilo_fdw to {PG_ADMIN_USER};
+                GRANT USAGE ON SCHEMA __ansilo_private to {PG_ADMIN_USER};
                 GRANT USAGE ON SCHEMA __ansilo_auth to {PG_ADMIN_USER};
             "#
             )
