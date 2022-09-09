@@ -1,0 +1,17 @@
+[package]
+name = "ansilo-web"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansilo-core = { path = "../ansilo-core" }
+ansilo-logging = { path = "../ansilo-logging" }
+ansilo-auth = { path = "../ansilo-auth" }
+ansilo-pg = { path = "../ansilo-pg" }
+ansilo-proxy = { path = "../ansilo-proxy" }
+axum = "^0.6.0-rc.1"
+hyper = { version = "^0.14", features = ["http1", "http2", "stream"] }
+tokio = "^1.20"
+tokio-stream = "^0.1"

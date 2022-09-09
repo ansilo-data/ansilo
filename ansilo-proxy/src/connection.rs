@@ -8,12 +8,12 @@ use crate::{
 };
 
 /// A connection made to the proxy server
-pub struct Connection<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> {
+pub struct Connection<S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static> {
     conf: &'static ProxyConf,
     inner: Peekable<S>,
 }
 
-impl<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> Connection<S> {
+impl<S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static> Connection<S> {
     pub fn new(conf: &'static ProxyConf, inner: S) -> Self {
         Self {
             conf,

@@ -1,23 +1,22 @@
 use ansilo_core::err::Result;
-use ansilo_pg::PostgresConnectionPools;
 use ansilo_proxy::{handler::ConnectionHandler, stream::IOStream};
+use ansilo_web::{HttpApiHandler, HttpMode};
 use async_trait::async_trait;
 
 /// Handler for HTTP/2 connections
 pub struct Http2ConnectionHandler {
-    #[allow(unused)]
-    pool: PostgresConnectionPools,
+    handler: HttpApiHandler,
 }
 
 impl Http2ConnectionHandler {
-    pub fn new(pool: PostgresConnectionPools) -> Self {
-        Self { pool }
+    pub fn new(handler: HttpApiHandler) -> Self {
+        Self { handler }
     }
 }
 
 #[async_trait]
 impl ConnectionHandler for Http2ConnectionHandler {
-    async fn handle(&self, _con: Box<dyn IOStream>) -> Result<()> {
-        todo!()
+    async fn handle(&self, con: Box<dyn IOStream>) -> Result<()> {
+        self.handler.serve(HttpMode::Http2, con).await
     }
 }

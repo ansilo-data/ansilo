@@ -9,7 +9,7 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 /// An IO stream
 pub struct Stream<S: AsyncRead + AsyncWrite + Unpin>(pub S);
 
-pub trait IOStream: AsyncRead + AsyncWrite + Send + Unpin {
+pub trait IOStream: AsyncRead + AsyncWrite + Send + Sync + Unpin {
     /// Returns a downcastable Any of the handler
     #[cfg(test)]
     fn as_any(&mut self) -> &mut dyn std::any::Any;
@@ -46,7 +46,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for Stream<S> {
     }
 }
 
-impl<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> IOStream for Stream<S> {
+impl<S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static> IOStream for Stream<S> {
     #[cfg(test)]
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self

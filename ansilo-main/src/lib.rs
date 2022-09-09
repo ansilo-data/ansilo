@@ -11,6 +11,7 @@ use ansilo_core::err::{Context, Result};
 use ansilo_logging::{info, warn};
 use ansilo_pg::{fdw::server::FdwServer, PostgresInstance};
 use ansilo_proxy::{conf::HandlerConf, server::ProxyServer};
+use ansilo_web::{HttpApi, HttpApiState};
 use clap::Parser;
 use nix::libc::SIGUSR1;
 use signal_hook::{
@@ -55,6 +56,8 @@ pub struct Subsystems {
     proxy: ProxyServer,
     /// The authentication system
     authenticator: Authenticator,
+    /// The http api
+    http: HttpApi,
 }
 
 impl Ansilo {
@@ -118,6 +121,11 @@ impl Ansilo {
         info!("Starting authenticator...");
         let authenticator = Authenticator::init(&conf.node.auth)?;
 
+        info!("Starting http api...");
+        let http = runtime.block_on(HttpApi::start(HttpApiState::new(
+            postgres.connections().clone(),
+        )))?;
+
         info!("Starting proxy server...");
         let proxy_conf = Box::leak(Box::new(init_proxy_conf(
             conf,
@@ -126,8 +134,8 @@ impl Ansilo {
                     authenticator.clone(),
                     postgres.connections().clone(),
                 ),
-                Http2ConnectionHandler::new(postgres.connections().clone()),
-                Http1ConnectionHandler::new(postgres.connections().clone()),
+                Http2ConnectionHandler::new(http.handler()),
+                Http1ConnectionHandler::new(http.handler()),
             ),
         )));
 
@@ -146,6 +154,7 @@ impl Ansilo {
                 fdw,
                 proxy,
                 authenticator,
+                http,
             }),
             log,
         })
@@ -209,6 +218,9 @@ impl Ansilo {
         };
 
         info!("Terminating...");
+        if let Err(err) = subsystems.http.terminate() {
+            warn!("Failed to terminate http api: {:?}", err);
+        }
         if let Err(err) = subsystems.authenticator.terminate() {
             warn!("Failed to terminate authenticator: {:?}", err);
         }

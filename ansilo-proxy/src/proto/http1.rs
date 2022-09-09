@@ -34,7 +34,7 @@ const PEEK_LENGTH: usize = "CONNECTION ".len();
 ///
 /// We are generic over the inner stream to support TLS and non-TLS transports
 #[async_trait]
-impl<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> Protocol<S> for Http1Protocol {
+impl<S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static> Protocol<S> for Http1Protocol {
     async fn matches(&self, con: &mut Peekable<S>) -> Result<bool> {
         let mut buf = [0u8; PEEK_LENGTH];
         if let Err(_) = con.peek(&mut buf[..]).await {

@@ -24,7 +24,7 @@ const HTTP_PRI: [u8; 24] = *b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 ///
 /// We are generic over the inner stream to support TLS and non-TLS transports
 #[async_trait]
-impl<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> Protocol<S> for Http2Protocol {
+impl<S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static> Protocol<S> for Http2Protocol {
     async fn matches(&self, con: &mut Peekable<S>) -> Result<bool> {
         let mut buf = [0u8; 24];
         if let Err(_) = con.peek(&mut buf[..]).await {

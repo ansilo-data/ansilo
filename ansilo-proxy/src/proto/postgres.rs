@@ -33,7 +33,7 @@ const PG_SSL_REQUIRED_ERROR: [u8; 19] = [
 ///
 /// For postgres, TLS is handled at the application layer
 #[async_trait]
-impl<S: AsyncRead + AsyncWrite + Unpin + Send + 'static> Protocol<S> for PostgresProtocol {
+impl<S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static> Protocol<S> for PostgresProtocol {
     async fn matches(&self, con: &mut Peekable<S>) -> Result<bool> {
         // First, check if this is a SSLRequest
         let mut buf = [0u8; 8];
