@@ -19,6 +19,15 @@ extension_sql!(
     name = "ansilo_fdw"
 );
 
+// Create a schema for private objects we dont want our
+// users to rely on.
+extension_sql!(
+    r#"
+        CREATE SCHEMA IF NOT EXISTS __ansilo_private;
+    "#,
+    name = "ansilo_private_schema"
+);
+
 #[allow(non_snake_case)]
 #[pg_guard]
 pub extern "C" fn _PG_init() {

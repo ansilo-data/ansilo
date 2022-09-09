@@ -1,3 +1,5 @@
+use std::ffi::c_void;
+
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig},
     err::{Context, Result},
@@ -15,11 +17,49 @@ use crate::{
     util::{
         def_elem::{def_get_owned_utf8_string, parse_def_elems_to_hash_map},
         string::parse_to_owned_utf8_string,
+        syscache::PgSysCacheItem,
         table::PgTable,
     },
 };
 
 use super::from_pg_type;
+
+extension_sql!(
+    r#"
+    CREATE FUNCTION __ansilo_private."get_entity_config"(
+        "foreign_table_oid" oid
+    ) RETURNS jsonb
+    VOLATILE PARALLEL UNSAFE STRICT
+    LANGUAGE c /* Rust */
+    AS 'MODULE_PATHNAME', 'get_entity_config_wrapper';
+    "#,
+    name = "get_entity_config",
+    requires = ["ansilo_private_schema"]
+);
+
+/// Retrieves the entity config as a JSON payload
+/// This is used in order to get a consistent view
+/// of the entity when exposing the data catalog.
+#[pg_extern(sql = "")]
+unsafe fn get_entity_config(foreign_table_oid: Oid) -> Option<JsonB> {
+    {
+        // First check if this oid is actually referencing a valid foreign table
+        // pg_sys does not have the appropriate type for Form_pg_foreign_table
+        // but no matter, we just need to check if the point is valid or not.
+        let table = PgSysCacheItem::<c_void>::search(
+            pg_sys::SysCacheIdentifier_FOREIGNTABLEREL,
+            [foreign_table_oid.into_datum().unwrap()],
+        );
+
+        if table.is_none() {
+            return None;
+        }
+    }
+
+    let config = entity_config_from_foreign_table(foreign_table_oid).unwrap();
+
+    Some(JsonB(serde_json::to_value(config).unwrap()))
+}
 
 pub(crate) unsafe fn get_entity_id_from_foreign_table(
     foreign_table_oid: Oid,
@@ -120,6 +160,8 @@ pub(crate) unsafe fn entity_config_from_foreign_table(
 #[pg_schema]
 mod tests {
     use super::*;
+
+    use pretty_assertions::assert_eq;
 
     use ansilo_core::data::*;
 
@@ -408,5 +450,118 @@ mod tests {
                 EntitySourceConfig::new("source".into(), serde_yaml::Value::Null),
             )
         );
+    }
+
+    #[pg_test]
+    fn test_fdw_common_get_entity_config_on_table() {
+        let entity: JsonB = Spi::connect(|mut client| {
+            client.update(
+                r#"
+                CREATE SERVER IF NOT EXISTS test_srv 
+                FOREIGN DATA WRAPPER ansilo_fdw 
+                OPTIONS (data_source 'source', socket 'unused')
+                "#,
+                None,
+                None,
+            );
+            client.update(
+                r#"
+                CREATE FOREIGN TABLE IF NOT EXISTS "example_entity" 
+                (
+                    col_a INTEGER
+                ) 
+                SERVER test_srv
+                OPTIONS (
+                    __config 'foo: bar'
+                )
+                "#,
+                None,
+                None,
+            );
+
+            Ok(client
+                .select(
+                    "SELECT __ansilo_private.get_entity_config('example_entity'::regclass)",
+                    Some(1),
+                    None,
+                )
+                .first()
+                .get_one::<JsonB>())
+        })
+        .unwrap();
+
+        let entity: EntityConfig = serde_json::from_value(entity.0).unwrap();
+
+        assert_eq!(
+            entity,
+            EntityConfig::new(
+                "example_entity".into(),
+                Some("example_entity".into()),
+                None,
+                vec![],
+                vec![EntityAttributeConfig::new(
+                    "col_a".into(),
+                    None,
+                    DataType::Int32,
+                    false,
+                    true
+                ),],
+                vec![],
+                EntitySourceConfig::new(
+                    "source".into(),
+                    serde_yaml::Value::Mapping(
+                        vec![(
+                            serde_yaml::Value::String("foo".into()),
+                            serde_yaml::Value::String("bar".into()),
+                        )]
+                        .into_iter()
+                        .collect()
+                    )
+                ),
+            )
+        );
+    }
+
+    #[pg_test]
+    fn test_fdw_common_get_entity_config_on_base_table_oid_returns_null() {
+        let entity = Spi::connect(|mut client| {
+            client.update(
+                r#"
+                CREATE TABLE IF NOT EXISTS "example_base_table" 
+                (
+                    col_a INTEGER
+                ) 
+                "#,
+                None,
+                None,
+            );
+
+            Ok(client
+                .select(
+                    "SELECT __ansilo_private.get_entity_config('example_base_table'::regclass)",
+                    Some(1),
+                    None,
+                )
+                .first()
+                .get_one::<JsonB>())
+        });
+
+        assert!(entity.is_none());
+    }
+
+    #[pg_test]
+    fn test_fdw_common_get_entity_config_invalid_oid_returns_null() {
+        let entity = Spi::connect(|client| {
+            Ok(client
+                .select(
+                    "SELECT __ansilo_private.get_entity_config(1234567)",
+                    Some(1),
+                    None,
+                )
+                .first()
+                .get_one::<JsonB>())
+        });
+
+        assert!(entity.is_none());
     }
 }
