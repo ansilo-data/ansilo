@@ -1,22 +1,19 @@
 use std::time::Duration;
 
 use ansilo_core::err::{Context, Result};
-use r2d2_postgres::{
-    postgres::NoTls,
-    r2d2::{Pool, PooledConnection},
-    PostgresConnectionManager,
-};
+use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
+use tokio_postgres::NoTls;
 
 use crate::{conf::PostgresConf, PG_PORT};
 
 /// A connection to the local postgres
-pub type PostgresConnection = PooledConnection<PostgresConnectionManager<NoTls>>;
+pub type PostgresConnection = deadpool_postgres::Client;
 
 /// Postgres connection pool
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct PostgresConnectionPool {
-    /// The inner r2d2 pool
-    pool: Pool<PostgresConnectionManager<NoTls>>,
+    /// The inner connection pool
+    pool: Pool,
 }
 
 impl PostgresConnectionPool {
@@ -25,34 +22,43 @@ impl PostgresConnectionPool {
         conf: &PostgresConf,
         user: &str,
         database: &str,
-        min_size: u32,
         max_size: u32,
         connect_timeout: Duration,
     ) -> Result<Self> {
-        let mut pg_conf = postgres::Config::new();
+        let mut pg_conf = tokio_postgres::Config::new();
         pg_conf.host_path(conf.socket_dir_path.as_path());
         pg_conf.port(PG_PORT);
         pg_conf.user(user);
-        pg_conf.ssl_mode(postgres::config::SslMode::Disable);
+        pg_conf.ssl_mode(tokio_postgres::config::SslMode::Disable);
         pg_conf.dbname(database);
         pg_conf.connect_timeout(connect_timeout);
 
         Ok(Self {
-            pool: Pool::builder()
-                .min_idle(Some(min_size))
-                .max_size(max_size)
-                .max_lifetime(Some(Duration::from_secs(60 * 60)))
-                .idle_timeout(Some(Duration::from_secs(30 * 60)))
-                .connection_timeout(connect_timeout)
-                .build(PostgresConnectionManager::new(pg_conf, NoTls))
-                .context("Failed to create postgres connection pool")?,
+            pool: Pool::builder(Manager::from_config(
+                pg_conf,
+                NoTls,
+                ManagerConfig {
+                    // We only use this connection pool for trusted clients,
+                    // eg our build scripts or ansilo-web, hence we can have
+                    // fast connection refreshes
+                    recycling_method: RecyclingMethod::Fast,
+                },
+            ))
+            .max_size(max_size as _)
+            .create_timeout(Some(connect_timeout))
+            .wait_timeout(Some(Duration::from_secs(60)))
+            .recycle_timeout(Some(Duration::from_secs(10)))
+            .runtime(deadpool::Runtime::Tokio1)
+            .build()
+            .context("Failed to create postgres connection pool")?,
         })
     }
 
     /// Aquires a connection from the pool
-    pub fn acquire(&self) -> Result<PostgresConnection> {
+    pub async fn acquire(&self) -> Result<PostgresConnection> {
         self.pool
             .get()
+            .await
             .context("Failed to acquire a connection from the connection pool")
     }
 }
@@ -84,59 +90,50 @@ mod tests {
         Box::leak(Box::new(conf))
     }
 
-    #[test]
-    fn test_postgres_connection_pool_new() {
+    #[tokio::test]
+    async fn test_postgres_connection_pool_new() {
         let conf = test_pg_config("new");
-        let pool = PostgresConnectionPool::new(
-            conf,
-            PG_SUPER_USER,
-            "postgres",
-            0,
-            5,
-            Duration::from_secs(1),
-        )
-        .unwrap();
+        let pool =
+            PostgresConnectionPool::new(conf, PG_SUPER_USER, "postgres", 5, Duration::from_secs(1))
+                .unwrap();
 
-        assert_eq!(pool.pool.min_idle(), Some(0));
-        assert_eq!(pool.pool.max_size(), 5);
-        assert_eq!(pool.pool.state().connections, 0);
+        assert_eq!(pool.pool.status().size, 0);
+        assert_eq!(pool.pool.status().max_size, 5);
     }
 
-    #[test]
-    fn test_postgres_connection_pool_without_server() {
+    #[tokio::test]
+    async fn test_postgres_connection_pool_without_server() {
         let conf = test_pg_config("down");
-        PostgresConnectionPool::new(
-            conf,
-            PG_SUPER_USER,
-            "postgres",
-            1,
-            5,
-            Duration::from_secs(1),
-        )
-        .unwrap_err();
+        let res =
+            PostgresConnectionPool::new(conf, PG_SUPER_USER, "postgres", 5, Duration::from_secs(1))
+                .unwrap()
+                .acquire()
+                .await;
+
+        assert!(res.is_err());
     }
 
-    #[test]
-    fn test_postgres_connection_pool_with_running_server() {
+    #[tokio::test]
+    async fn test_postgres_connection_pool_with_running_server() {
         ansilo_logging::init_for_tests();
         let conf = test_pg_config("up");
         PostgresInitDb::reset(conf).unwrap();
         PostgresInitDb::run(conf).unwrap().complete().unwrap();
-        let mut _server = PostgresServer::boot(conf).unwrap();
-        thread::spawn(move || _server.wait());
+        let server = PostgresServer::boot(conf).unwrap();
+        server.block_until_ready(Duration::from_secs(5)).unwrap();
+        thread::spawn(move || server.wait());
 
         let pool = PostgresConnectionPool::new(
             conf,
             PG_SUPER_USER,
             "postgres",
-            1,
             5,
-            Duration::from_secs(5),
+            Duration::from_secs(10),
         )
         .unwrap();
 
-        let mut con = pool.acquire().unwrap();
-        let res: i32 = con.query_one("SELECT 3 + 4", &[]).unwrap().get(0);
+        let con = pool.acquire().await.unwrap();
+        let res: i32 = con.query_one("SELECT 3 + 4", &[]).await.unwrap().get(0);
         assert_eq!(res, 7);
     }
 }

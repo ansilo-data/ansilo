@@ -1,9 +1,15 @@
 use std::{
     process::{Command, ExitStatus},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::Receiver,
+        Arc,
+    },
+    thread::{self, JoinHandle},
     time::Duration,
 };
 
-use ansilo_core::err::{Context, Result};
+use ansilo_core::err::{bail, Context, Error, Result};
 use ansilo_logging::info;
 use nix::sys::signal::Signal;
 
@@ -11,8 +17,12 @@ use crate::{conf::PostgresConf, proc::ChildProc, PG_PORT};
 
 /// An instance of postgres run as an ephemeral server
 pub(crate) struct PostgresServer {
-    /// The child postgres process
-    pub proc: ChildProc,
+    /// The pid of the postgres instance
+    pub pid: u32,
+    /// The thread waiting on the process
+    pub thread: JoinHandle<Result<ExitStatus>>,
+    /// Whether the db is ready to accept connections
+    pub ready: Arc<AtomicBool>,
 }
 
 impl PostgresServer {
@@ -40,21 +50,79 @@ impl PostgresServer {
             ))
             .env("ANSILO_PG_FDW_SOCKET_PATH", conf.fdw_socket_path.clone());
 
-        let proc = ChildProc::new("[postgres]", Signal::SIGINT, Duration::from_secs(3), cmd)
+        let mut proc = ChildProc::new("[postgres]", Signal::SIGINT, Duration::from_secs(3), cmd)
             .context("Failed to start postgres server process")?;
+        let output = proc.subscribe()?;
+        let ready = Arc::new(AtomicBool::new(false));
 
-        Ok(Self { proc })
+        let pid = proc.pid();
+        let thread = thread::spawn(move || proc.wait());
+
+        Self::wait_for_ready(output, Arc::clone(&ready));
+
+        Ok(Self { pid, thread, ready })
+    }
+
+    fn wait_for_ready(output: Receiver<String>, ready: Arc<AtomicBool>) {
+        thread::spawn(move || {
+            while let Ok(log) = output.recv() {
+                if log.contains("ready to accept connections") {
+                    ready.store(true, Ordering::SeqCst);
+                    break;
+                }
+            }
+        });
+    }
+
+    /// Waits until postgres is running and listening for connections
+    #[allow(unused)]
+    pub fn block_until_ready(&self, timeout: Duration) -> Result<()> {
+        self.block_until_ready_opts(timeout, || false)
+    }
+
+    /// Waits until postgres is running and listening for connections
+    pub fn block_until_ready_opts(
+        &self,
+        timeout: Duration,
+        terminate_cb: impl Fn() -> bool,
+    ) -> Result<()> {
+        let mut tries = timeout.as_millis() as u64 / 10;
+
+        loop {
+            if tries <= 0 {
+                bail!("Timedout while waiting for postgres to start up");
+            }
+
+            if terminate_cb() {
+                bail!("Termination requested")
+            }
+
+            if self.is_ready() {
+                info!("Postgres is listening for connections");
+                return Ok(());
+            }
+
+            thread::sleep(Duration::from_millis(10));
+            tries -= 1;
+        }
+    }
+
+    /// Checks whether the instance is ready
+    pub fn is_ready(&self) -> bool {
+        self.ready.load(Ordering::SeqCst)
     }
 
     /// Waits for the process to exit and streams any stdout/stderr to the logs
-    pub fn wait(&mut self) -> Result<ExitStatus> {
-        self.proc.wait()
+    pub fn wait(self) -> Result<ExitStatus> {
+        self.thread
+            .join()
+            .map_err(|_| Error::msg("Failed to join pg thread"))?
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, thread};
+    use std::path::PathBuf;
 
     use nix::{sys::signal::kill, unistd::Pid};
 
@@ -81,16 +149,17 @@ mod tests {
         let conf = test_pg_config();
         PostgresInitDb::reset(conf).unwrap();
         PostgresInitDb::run(conf).unwrap().complete().unwrap();
-        let mut server = PostgresServer::boot(conf).unwrap();
-        let pid = server.proc.pid();
+        let server = PostgresServer::boot(conf).unwrap();
+        let pid = server.pid;
 
-        let server_thread = thread::spawn(move || server.wait());
-        thread::sleep(Duration::from_secs(1));
+        assert_eq!(server.is_ready(), false);
+        server.block_until_ready(Duration::from_secs(5)).unwrap();
+        assert_eq!(server.is_ready(), true);
 
         // assert listening on expected socket path
         assert!(conf.pg_socket_path().exists());
 
         kill(Pid::from_raw(pid as _), Signal::SIGINT).unwrap();
-        assert!(server_thread.join().unwrap().unwrap().success())
+        assert!(server.wait().unwrap().success());
     }
 }

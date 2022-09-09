@@ -8,7 +8,6 @@ use std::{
 
 use ansilo_core::err::{bail, Context, Result};
 use ansilo_logging::trace;
-use postgres::Config;
 use tokio::{
     io::AsyncWriteExt,
     net::{
@@ -16,6 +15,7 @@ use tokio::{
         UnixStream,
     },
 };
+use tokio_postgres::Config;
 
 use crate::proto::{
     be::{PostgresBackendMessage, PostgresBackendMessageTag},
@@ -273,6 +273,8 @@ impl PgWriter {
 #[cfg(test)]
 mod tests {
     use std::{path::PathBuf, thread, time::Duration};
+
+    use tokio_postgres::Config;
 
     use crate::{
         conf::PostgresConf, initdb::PostgresInitDb, proto::common::PostgresMessage,

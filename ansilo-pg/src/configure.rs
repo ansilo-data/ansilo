@@ -1,24 +1,29 @@
 use ansilo_core::err::{Context, Result};
 
-use crate::{
-    conf::PostgresConf, connection::PostgresConnection, PG_ADMIN_USER, PG_DATABASE,
-};
+use crate::{conf::PostgresConf, connection::PostgresConnection, PG_ADMIN_USER, PG_DATABASE};
 
 /// Configures a new postgres database such that is ready for use
-pub(crate) fn configure(conf: &PostgresConf, mut superuser_con: PostgresConnection) -> Result<()> {
-    configure_roles(conf, &mut superuser_con)?;
-    configure_extension(conf, &mut superuser_con)?;
+pub(crate) async fn configure(
+    conf: &PostgresConf,
+    mut superuser_con: PostgresConnection,
+) -> Result<()> {
+    configure_roles(conf, &mut superuser_con).await?;
+    configure_extension(conf, &mut superuser_con).await?;
 
     for sql in conf.init_db_sql.iter() {
         superuser_con
             .batch_execute(sql)
+            .await
             .context("Failed run db initialisation sql")?;
     }
 
     Ok(())
 }
 
-fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) -> Result<()> {
+async fn configure_roles(
+    conf: &PostgresConf,
+    superuser_con: &mut PostgresConnection,
+) -> Result<()> {
     // Create standard users
     superuser_con
         .batch_execute(
@@ -35,14 +40,21 @@ fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) 
             )
             .as_str(),
         )
+        .await
         .context("Failed to initialise roles")?;
 
     // Configure user-provided users
     for user in conf.app_users.iter() {
         superuser_con
-            .batch_execute(format!(r#"
+            .batch_execute(
+                format!(
+                    r#"
             CREATE USER {user} PASSWORD NULL;
-            "#).as_str())
+            "#
+                )
+                .as_str(),
+            )
+            .await
             .context("Failed to initialise app user")?;
     }
 
@@ -52,7 +64,10 @@ fn configure_roles(conf: &PostgresConf, superuser_con: &mut PostgresConnection) 
 /// We cannot rely this extension being available when we build run tests
 /// for this crate
 #[cfg(not(test))]
-fn configure_extension(conf: &PostgresConf, superuser_con: &mut PostgresConnection) -> Result<()> {
+async fn configure_extension(
+    conf: &PostgresConf,
+    superuser_con: &mut PostgresConnection,
+) -> Result<()> {
     superuser_con
         .batch_execute(
             format!(
@@ -65,14 +80,21 @@ fn configure_extension(conf: &PostgresConf, superuser_con: &mut PostgresConnecti
             )
             .as_str(),
         )
+        .await
         .context("Failed to initialise ansilo extension")?;
 
     // Configure user-provided users
     for user in conf.app_users.iter() {
         superuser_con
-            .batch_execute(format!(r#"
+            .batch_execute(
+                format!(
+                    r#"
             GRANT USAGE ON SCHEMA __ansilo_auth to {user};
-            "#).as_str())
+            "#
+                )
+                .as_str(),
+            )
+            .await
             .context("Failed to initialise app user")?;
     }
 
@@ -80,7 +102,7 @@ fn configure_extension(conf: &PostgresConf, superuser_con: &mut PostgresConnecti
 }
 
 #[cfg(test)]
-fn configure_extension(
+async fn configure_extension(
     _conf: &PostgresConf,
     _superuser_con: &mut PostgresConnection,
 ) -> Result<()> {

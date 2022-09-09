@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use ansilo_core::err::{Context, Error, Result};
+use ansilo_core::err::{bail, Context, Error, Result};
 use ansilo_logging::{error, info};
 use nix::{sys::signal::Signal, unistd::Pid};
 
@@ -38,7 +38,10 @@ impl PostgresServerManager {
         });
         let thread = {
             let state = state.clone();
-            thread::spawn(move || Self::supervise(conf, state))
+            thread::Builder::new()
+                .name("postgres-supervisor".into())
+                .spawn(move || Self::supervise(conf, state))
+                .unwrap()
         };
 
         Self {
@@ -51,16 +54,27 @@ impl PostgresServerManager {
         loop {
             info!("Booting postgres instance...");
 
-            let mut server = PostgresServer::boot(conf)?;
-            state.pid.store(server.proc.pid(), Ordering::SeqCst);
+            let server = PostgresServer::boot(conf)?;
 
-            let result = server.wait().context("Failed to wait for postgres process");
+            if let Ok(_) =
+                server.block_until_ready_opts(Duration::from_secs(30), || state.terminated())
+            {
+                state.pid.store(server.pid, Ordering::SeqCst);
 
-            state.pid.store(0, Ordering::SeqCst);
+                if state.terminated() {
+                    break;
+                }
 
-            info!("Postgres terminated with status {}", result?);
+                let result = server.wait().context("Failed to wait for postgres process");
 
-            if state.terminate.load(Ordering::SeqCst) {
+                state.pid.store(0, Ordering::SeqCst);
+
+                info!("Postgres terminated with status {}", result?);
+            } else {
+                drop(server);
+            }
+
+            if state.terminated() {
                 break;
             }
 
@@ -68,6 +82,25 @@ impl PostgresServerManager {
         }
 
         Ok(())
+    }
+
+    /// Waits until the postgres server is ready for connections
+    pub fn block_until_ready(&self, timeout: Duration) -> Result<()> {
+        let mut tries = timeout.as_millis() as u64 / 100;
+
+        loop {
+            if tries <= 0 {
+                bail!("Timedout while waiting for postgres to start up");
+            }
+
+            if self.running() {
+                info!("Postgres is listening for connections");
+                return Ok(());
+            }
+
+            thread::sleep(Duration::from_millis(100));
+            tries -= 1;
+        }
     }
 
     /// Checks if postgres is currently running
@@ -114,6 +147,12 @@ impl PostgresServerManager {
     }
 }
 
+impl State {
+    fn terminated(&self) -> bool {
+        self.terminate.load(Ordering::SeqCst)
+    }
+}
+
 impl Drop for PostgresServerManager {
     fn drop(&mut self) {
         if self.thread.is_some() {
@@ -149,6 +188,7 @@ mod tests {
 
     #[test]
     fn test_postgres_manager_invalid_conf() {
+        ansilo_logging::init_for_tests();
         let conf = test_pg_config("invalid");
 
         let manager = PostgresServerManager::new(conf);
@@ -168,7 +208,7 @@ mod tests {
         PostgresInitDb::run(conf).unwrap().complete().unwrap();
 
         let manager = PostgresServerManager::new(conf);
-        thread::sleep(Duration::from_secs(1));
+        manager.block_until_ready(Duration::from_secs(1)).unwrap();
 
         let pid = manager.state.pid.load(Ordering::SeqCst);
         assert_eq!(manager.running(), true);
@@ -185,7 +225,7 @@ mod tests {
         PostgresInitDb::run(conf).unwrap().complete().unwrap();
 
         let manager = PostgresServerManager::new(conf);
-        thread::sleep(Duration::from_secs(1));
+        manager.block_until_ready(Duration::from_secs(1)).unwrap();
 
         let pid = manager.state.pid.load(Ordering::SeqCst);
         assert_eq!(manager.running(), true);
@@ -204,7 +244,7 @@ mod tests {
         PostgresInitDb::run(conf).unwrap().complete().unwrap();
 
         let manager = PostgresServerManager::new(conf);
-        thread::sleep(Duration::from_millis(500));
+        manager.block_until_ready(Duration::from_secs(1)).unwrap();
 
         let pid = manager.state.pid.load(Ordering::SeqCst);
         assert_eq!(manager.running(), true);
@@ -216,7 +256,7 @@ mod tests {
         // should not be running while manager sleeps
         assert_eq!(manager.running(), false);
 
-        thread::sleep(Duration::from_secs(3));
+        thread::sleep(Duration::from_secs(10));
 
         assert_eq!(manager.running(), true);
     }

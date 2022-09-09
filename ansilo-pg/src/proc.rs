@@ -1,11 +1,15 @@
 use std::{
-    io::{self, BufRead},
+    io::{self, BufRead, Read},
     process::{self, Command, ExitStatus, Stdio},
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc, Mutex,
+    },
     thread,
     time::Duration,
 };
 
-use ansilo_core::err::{Context, Result};
+use ansilo_core::err::{Context, Error, Result};
 use ansilo_logging::{debug, error, info, warn};
 use nix::{
     sys::signal::{kill, Signal},
@@ -23,6 +27,8 @@ pub(crate) struct ChildProc {
     term_timeout: Duration,
     /// The child postgres process
     pub proc: process::Child,
+    /// Broadcast channel for subscribers to listen for stdout/stderr from the process
+    pub log_txs: Arc<Mutex<Vec<Sender<String>>>>,
 }
 
 impl ChildProc {
@@ -37,6 +43,7 @@ impl ChildProc {
             log_prefix,
             term_signal,
             term_timeout,
+            log_txs: Arc::new(Mutex::new(vec![])),
             proc: cmd
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
@@ -50,20 +57,26 @@ impl ChildProc {
         let stdout = self.proc.stdout.take().context("Failed to take stdout")?;
         let stderr = self.proc.stderr.take().context("Failed to take stdout")?;
         let prefix = self.log_prefix;
+        let stdout_txs = Arc::clone(&self.log_txs);
+        let stderr_txs = Arc::clone(&self.log_txs);
 
-        thread::spawn(move || {
-            for i in io::BufReader::new(stdout).lines() {
-                let i = i.unwrap_or_else(|e| format!("{} failed to read: {:?}", prefix, e));
-                info!("{} {}", prefix, i)
-            }
-        });
+        let logger = |stream: Box<dyn Read + Send>, txs: Arc<Mutex<Vec<Sender<String>>>>| {
+            move || {
+                for i in io::BufReader::new(stream).lines() {
+                    let i = i.unwrap_or_else(|e| format!("{} failed to read: {:?}", prefix, e));
+                    info!("{} {}", prefix, i);
 
-        thread::spawn(move || {
-            for i in io::BufReader::new(stderr).lines() {
-                let i = i.unwrap_or_else(|e| format!("{} failed to read: {:?}", prefix, e));
-                warn!("{} {}", prefix, i)
+                    if let Ok(txs) = txs.lock() {
+                        for tx in txs.iter() {
+                            let _ = tx.send(i.clone());
+                        }
+                    }
+                }
             }
-        });
+        };
+
+        thread::spawn(logger(Box::new(stdout), stdout_txs));
+        thread::spawn(logger(Box::new(stderr), stderr_txs));
 
         self.proc
             .wait()
@@ -73,6 +86,19 @@ impl ChildProc {
     /// Gets the pid of the proc
     pub fn pid(&self) -> u32 {
         self.proc.id()
+    }
+
+    /// Subscribe to the stdout/stderr output of the process
+    pub fn subscribe(&mut self) -> Result<Receiver<String>> {
+        let mut txs = self
+            .log_txs
+            .lock()
+            .map_err(|_| Error::msg("Failed to lock txs"))?;
+
+        let (tx, rx) = channel();
+        txs.push(tx);
+
+        Ok(rx)
     }
 }
 
@@ -147,7 +173,7 @@ impl Drop for ChildProc {
 mod tests {
     use std::process::Command;
 
-    use crate::test::{assert_running, assert_not_running};
+    use crate::test::{assert_not_running, assert_running};
 
     use super::*;
 
@@ -215,5 +241,31 @@ mod tests {
 
         thread.join().unwrap();
         assert_not_running(pid);
+    }
+
+    #[test]
+    fn test_child_proc_subscribe_output() {
+        ansilo_logging::init_for_tests();
+        let mut cmd = Command::new("echo");
+        cmd.arg("hello\nworld");
+        let mut proc =
+            ChildProc::new("cmd", Signal::SIGINT, Duration::from_millis(100), cmd).unwrap();
+        let output_rx = proc.subscribe().unwrap();
+
+        let thread = thread::spawn(move || {
+            assert!(proc.wait().unwrap().success());
+        });
+
+        assert_eq!(
+            output_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            "hello"
+        );
+        assert_eq!(
+            output_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            "world"
+        );
+        output_rx.recv().unwrap_err();
+
+        thread.join().unwrap();
     }
 }

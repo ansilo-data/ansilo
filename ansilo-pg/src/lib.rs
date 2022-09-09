@@ -11,7 +11,6 @@ use low_level::{
     pool::AppPostgresConnection,
 };
 use manager::PostgresServerManager;
-use tokio::runtime::Handle;
 
 /// This module orchestrates our postgres instance and provides an api
 /// to execute queries against it. Postgres is run as a child process.
@@ -68,62 +67,60 @@ pub struct PostgresConnectionPools {
 impl PostgresInstance {
     /// Boots an already-initialised postgres instance based on the
     /// supplied configuration
-    pub fn start(conf: &'static PostgresConf, handle: Handle) -> Result<Self> {
+    pub async fn start(conf: &'static PostgresConf) -> Result<Self> {
         let server = PostgresServerManager::new(conf);
+        server.block_until_ready(Duration::from_secs(10))?;
 
-        Self::connect(conf, server, handle)
+        Self::connect(conf, server).await
     }
 
     /// Boots and initialises postgres instance based on the
     /// supplied configuration
-    pub fn configure(conf: &'static PostgresConf, handle: Handle) -> Result<Self> {
-        let connect_timeout = Duration::from_secs(5);
+    pub async fn configure(conf: &'static PostgresConf) -> Result<Self> {
+        let connect_timeout = Duration::from_secs(10);
 
         info!("Running initdb...");
         PostgresInitDb::reset(conf)?;
         PostgresInitDb::run(conf)?.complete()?;
         let server = PostgresServerManager::new(conf);
+        server.block_until_ready(connect_timeout)?;
 
         let superuser_con =
-            PostgresConnectionPool::new(conf, PG_SUPER_USER, PG_DATABASE, 1, 1, connect_timeout)?
-                .acquire()?;
+            PostgresConnectionPool::new(conf, PG_SUPER_USER, PG_DATABASE, 1, connect_timeout)?
+                .acquire()
+                .await?;
 
         info!("Configuring postgres...");
-        configure(conf, superuser_con)?;
+        configure(conf, superuser_con).await?;
 
-        Self::connect(conf, server, handle)
+        Self::connect(conf, server).await
     }
 
-    fn connect(
-        conf: &'static PostgresConf,
-        server: PostgresServerManager,
-        handle: Handle,
-    ) -> Result<Self> {
+    async fn connect(conf: &'static PostgresConf, server: PostgresServerManager) -> Result<Self> {
         let connect_timeout = Duration::from_secs(10);
 
         // TODO: configurable pool sizes
+        let admin_pool =
+            PostgresConnectionPool::new(conf, PG_ADMIN_USER, PG_DATABASE, 5, connect_timeout)?;
+
+        let app_pool =
+            MultiUserPostgresConnectionPool::new(MultiUserPostgresConnectionPoolConfig {
+                pg: conf,
+                users: conf.app_users.clone(),
+                database: PG_DATABASE.into(),
+                max_cons_per_user: 50,
+                connect_timeout,
+            })?;
+
+        // Ensure able to connect to postgres
+        let _ = admin_pool.acquire().await?;
+
         Ok(Self {
             conf,
             server,
             pools: PostgresConnectionPools {
-                admin: PostgresConnectionPool::new(
-                    conf,
-                    PG_ADMIN_USER,
-                    PG_DATABASE,
-                    1,
-                    5,
-                    connect_timeout,
-                )?,
-                app: MultiUserPostgresConnectionPool::new(
-                    handle,
-                    MultiUserPostgresConnectionPoolConfig {
-                        pg: conf,
-                        users: conf.app_users.clone(),
-                        database: PG_DATABASE.into(),
-                        max_cons_per_user: 50,
-                        connect_timeout,
-                    },
-                )?,
+                admin: admin_pool,
+                app: app_pool,
             },
         })
     }
@@ -148,8 +145,8 @@ impl PostgresConnectionPools {
     /// Gets a connection with admin privileges to the database
     /// IMPORTANT: Only use this connection for trusted queries
     /// and not queries supplied by the user
-    pub fn admin(&self) -> Result<PostgresConnection> {
-        self.admin.acquire()
+    pub async fn admin(&self) -> Result<PostgresConnection> {
+        self.admin.acquire().await
     }
 
     /// Gets a connection authenticated as the supplied app user
@@ -177,40 +174,34 @@ mod tests {
         Box::leak(Box::new(conf))
     }
 
-    #[test]
-    fn test_postgres_instance_configure() {
+    #[tokio::test]
+    async fn test_postgres_instance_configure() {
         ansilo_logging::init_for_tests();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let handle = runtime.handle().clone();
 
         let conf = test_pg_config("configure");
-        let instance = PostgresInstance::configure(&conf, handle).unwrap();
+        let instance = PostgresInstance::configure(&conf).await.unwrap();
 
         assert!(instance.server.running());
     }
 
-    #[test]
-    fn test_postgres_instance_start_without_configure() {
+    #[tokio::test]
+    async fn test_postgres_instance_start_without_configure() {
         ansilo_logging::init_for_tests();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let handle = runtime.handle().clone();
 
         let conf = test_pg_config("start_without_configure");
-        assert!(PostgresInstance::start(&conf, handle).is_err());
+        assert!(PostgresInstance::start(&conf).await.is_err());
     }
 
-    #[test]
-    fn test_postgres_instance_configure_then_init() {
+    #[tokio::test]
+    async fn test_postgres_instance_configure_then_start() {
         ansilo_logging::init_for_tests();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let handle = runtime.handle().clone();
 
         let conf = test_pg_config("configure_then_start");
-        let instance = PostgresInstance::configure(conf, handle.clone()).unwrap();
+        let instance = PostgresInstance::configure(conf).await.unwrap();
         assert!(instance.server.running());
         drop(instance);
 
-        let instance = PostgresInstance::start(conf, handle).unwrap();
+        let instance = PostgresInstance::start(conf).await.unwrap();
         assert!(instance.server.running());
     }
 }
