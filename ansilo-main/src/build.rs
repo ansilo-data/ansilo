@@ -9,22 +9,23 @@ use ansilo_logging::info;
 use ansilo_pg::PostgresInstance;
 use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
-use tokio::runtime::Handle;
 
 use crate::conf::*;
 
 /// Initialises the postgres database
-pub fn build(conf: &'static AppConf, handle: Handle) -> Result<PostgresInstance> {
+pub async fn build(conf: &'static AppConf) -> Result<PostgresInstance> {
     info!("Running build...");
 
     // Initialize postgres via initdb
-    let mut postgres =
-        PostgresInstance::configure(&conf.pg, handle).context("Failed to initialise postgres")?;
+    let mut postgres = PostgresInstance::configure(&conf.pg)
+        .await
+        .context("Failed to initialise postgres")?;
 
     // Connect to it
-    let mut con = postgres
+    let con = postgres
         .connections()
         .admin()
+        .await
         .context("Failed to connect to postgres")?;
 
     // Run sql init scripts
@@ -34,7 +35,7 @@ pub fn build(conf: &'static AppConf, handle: Handle) -> Result<PostgresInstance>
         .clone()
         .unwrap_or_default()
         .init_sql_path
-        .unwrap_or("/etc/ansilo/sql/*.sql".into());
+        .unwrap_or("/etc/ansilo/sql.d/*.sql".into());
 
     info!("Running scripts {}", init_sql_path.display());
 
@@ -47,6 +48,7 @@ pub fn build(conf: &'static AppConf, handle: Handle) -> Result<PostgresInstance>
         let sql = fs::read_to_string(&script)
             .with_context(|| format!("Failed to read sql file: {}", script.display()))?;
         con.batch_execute(&sql)
+            .await
             .with_context(|| format!("Failed to execute sql script: {}", script.display()))?;
     }
 

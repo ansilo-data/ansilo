@@ -100,9 +100,9 @@ impl Ansilo {
         {
             info!("Build occurred at {}", build_info.built_at().to_rfc3339());
             info!("Starting postgres...");
-            PostgresInstance::start(&conf.pg, runtime.handle().clone())?
+            runtime.block_on(PostgresInstance::start(&conf.pg))?
         } else {
-            build(conf, runtime.handle().clone())?
+            runtime.block_on(build(conf))?
         };
 
         if command.is_build() {

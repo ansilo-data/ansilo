@@ -15,7 +15,7 @@ use ansilo_pg::{
     PostgresConnectionPools,
 };
 use ansilo_proxy::{handler::ConnectionHandler, stream::IOStream};
-use ansilo_util_pg::query::{pg_str_literal, pg_quote_identifier};
+use ansilo_util_pg::query::{pg_quote_identifier, pg_str_literal};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use rand::distributions::{Alphanumeric, DistString};
@@ -267,7 +267,7 @@ mod tests {
     };
     use ansilo_pg::{conf::PostgresConf, PostgresInstance};
     use ansilo_proxy::stream::Stream;
-    use tokio::{net::UnixStream, runtime::Handle};
+    use tokio::net::UnixStream;
     use tokio_postgres::NoTls;
 
     use super::*;
@@ -299,7 +299,7 @@ mod tests {
         Authenticator::init(conf).unwrap()
     }
 
-    fn init_pg(test_name: &'static str, handle: Handle) -> PostgresInstance {
+    async fn init_pg(test_name: &'static str) -> PostgresInstance {
         // This runs blocking code and contains a runtime
         let conf = Box::leak(Box::new(PostgresConf {
             install_dir: PathBuf::from("/usr/lib/postgresql/14"),
@@ -314,7 +314,7 @@ mod tests {
             init_db_sql: vec![],
         }));
 
-        PostgresInstance::configure(conf, handle).unwrap()
+        PostgresInstance::configure(conf).await.unwrap()
     }
 
     fn init_client_stream() -> (UnixStream, Box<dyn IOStream>) {
@@ -323,209 +323,196 @@ mod tests {
         (a, Box::new(Stream(b)))
     }
 
-    fn init_handler(
+    async fn init_handler(
         test_name: &'static str,
-        handle: Handle,
         auth: Authenticator,
     ) -> (PostgresInstance, PostgresConnectionHandler) {
-        let mut pg = init_pg(test_name, handle);
+        let mut pg = init_pg(test_name).await;
 
         let handler = PostgresConnectionHandler::new(auth, pg.connections().clone());
 
         (pg, handler)
     }
 
-    #[test]
-    fn test_basic_query() {
+    #[tokio::test]
+    async fn test_basic_query() {
         ansilo_logging::init_for_tests();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
         let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("basic-query", runtime.handle().clone(), auth);
+        let (_pg, handler) = init_handler("basic-query", auth).await;
 
-        runtime.block_on(async move {
-            let (client, stream) = init_client_stream();
+        let (client, stream) = init_client_stream();
 
-            let fut_client = async move {
-                let (client, con) = tokio_postgres::Config::new()
-                    .user("test_user")
-                    .password("pass123")
-                    .connect_raw(client, NoTls)
-                    .await?;
-                tokio::spawn(con);
+        let fut_client = async move {
+            let (client, con) = tokio_postgres::Config::new()
+                .user("test_user")
+                .password("pass123")
+                .connect_raw(client, NoTls)
+                .await?;
+            tokio::spawn(con);
 
-                let res: String = client.query_one("SELECT 'Hello pg'", &[]).await?.get(0);
+            let res: String = client.query_one("SELECT 'Hello pg'", &[]).await?.get(0);
 
-                Result::<_, Error>::Ok(res)
-            };
-            let fut_handler = handler.handle(stream);
+            Result::<_, Error>::Ok(res)
+        };
+        let fut_handler = handler.handle(stream);
 
-            let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
+        let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
 
-            res_handler.unwrap();
-            let res_client = res_client.unwrap();
-            assert_eq!(res_client, "Hello pg");
-        });
+        res_handler.unwrap();
+        let res_client = res_client.unwrap();
+        assert_eq!(res_client, "Hello pg");
     }
 
-    #[test]
-    fn test_auth_incorrect_password() {
+    #[tokio::test]
+    async fn test_auth_incorrect_password() {
         ansilo_logging::init_for_tests();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
         let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("invalid-pass", runtime.handle().clone(), auth);
+        let (_pg, handler) = init_handler("invalid-pass", auth).await;
 
-        runtime.block_on(async move {
-            let (client, stream) = init_client_stream();
+        let (client, stream) = init_client_stream();
 
-            let fut_client = async move {
-                let res = tokio_postgres::Config::new()
-                    .user("test_user")
-                    .password("wrong")
-                    .connect_raw(client, NoTls)
-                    .await;
+        let fut_client = async move {
+            let res = tokio_postgres::Config::new()
+                .user("test_user")
+                .password("wrong")
+                .connect_raw(client, NoTls)
+                .await;
 
-                res
-            };
-            let fut_handler = handler.handle(stream);
+            res
+        };
+        let fut_handler = handler.handle(stream);
 
-            let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
+        let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
 
-            assert_eq!(
-                res_handler.err().unwrap().to_string(),
-                "Incorrect password".to_string()
-            );
-            assert_eq!(
-                res_client.err().unwrap().to_string(),
-                "db error: ERROR: Incorrect password".to_string()
-            );
-        })
+        assert_eq!(
+            res_handler.err().unwrap().to_string(),
+            "Incorrect password".to_string()
+        );
+        assert_eq!(
+            res_client.err().unwrap().to_string(),
+            "db error: ERROR: Incorrect password".to_string()
+        );
     }
 
-    #[test]
-    fn test_auth_context() {
+    #[tokio::test]
+    async fn test_auth_context() {
         ansilo_logging::init_for_tests();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
         let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("auth-context", runtime.handle().clone(), auth);
+        let (_pg, handler) = init_handler("auth-context", auth).await;
 
-        runtime.block_on(async move {
-            let (client, stream) = init_client_stream();
+        let (client, stream) = init_client_stream();
 
-            let fut_client = async move {
-                let (client, con) = tokio_postgres::Config::new()
-                    .user("test_user")
-                    .password("pass123")
-                    .connect_raw(client, NoTls)
-                    .await?;
-                tokio::spawn(con);
+        let fut_client = async move {
+            let (client, con) = tokio_postgres::Config::new()
+                .user("test_user")
+                .password("pass123")
+                .connect_raw(client, NoTls)
+                .await?;
+            tokio::spawn(con);
 
-                let json: serde_json::Value =
-                    client.query_one("SELECT auth_context()", &[]).await?.get(0);
-                let ctx: AuthContext = serde_json::from_value(json)?;
+            let json: serde_json::Value =
+                client.query_one("SELECT auth_context()", &[]).await?.get(0);
+            let ctx: AuthContext = serde_json::from_value(json)?;
 
-                Result::<_, Error>::Ok(ctx)
-            };
-            let fut_handler = handler.handle(stream);
+            Result::<_, Error>::Ok(ctx)
+        };
+        let fut_handler = handler.handle(stream);
 
-            let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
+        let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
 
-            res_handler.unwrap();
-            let res_client = res_client.unwrap();
-            assert_eq!(res_client.username, "test_user");
-            assert_eq!(
-                res_client.more,
-                ProviderAuthContext::Password(PasswordAuthContext {})
-            );
+        res_handler.unwrap();
+        let res_client = res_client.unwrap();
+        assert_eq!(res_client.username, "test_user");
+        assert_eq!(
+            res_client.more,
+            ProviderAuthContext::Password(PasswordAuthContext {})
+        );
 
-            // Test second connection to ensure, gets reset when using recycled connection
-            let (client, stream) = init_client_stream();
+        // Test second connection to ensure, gets reset when using recycled connection
+        let (client, stream) = init_client_stream();
 
-            let fut_client = async move {
-                let (client, con) = tokio_postgres::Config::new()
-                    .user("another_user")
-                    .password("luna456")
-                    .connect_raw(client, NoTls)
-                    .await?;
-                tokio::spawn(con);
+        let fut_client = async move {
+            let (client, con) = tokio_postgres::Config::new()
+                .user("another_user")
+                .password("luna456")
+                .connect_raw(client, NoTls)
+                .await?;
+            tokio::spawn(con);
 
-                let json: serde_json::Value =
-                    client.query_one("SELECT auth_context()", &[]).await?.get(0);
-                let ctx: AuthContext = serde_json::from_value(json)?;
+            let json: serde_json::Value =
+                client.query_one("SELECT auth_context()", &[]).await?.get(0);
+            let ctx: AuthContext = serde_json::from_value(json)?;
 
-                Result::<_, Error>::Ok(ctx)
-            };
-            let fut_handler = handler.handle(stream);
+            Result::<_, Error>::Ok(ctx)
+        };
+        let fut_handler = handler.handle(stream);
 
-            let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
+        let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
 
-            res_handler.unwrap();
-            let res_client = res_client.unwrap();
-            assert_eq!(res_client.username, "another_user");
-            assert_eq!(
-                res_client.more,
-                ProviderAuthContext::Password(PasswordAuthContext {})
-            );
-        });
+        res_handler.unwrap();
+        let res_client = res_client.unwrap();
+        assert_eq!(res_client.username, "another_user");
+        assert_eq!(
+            res_client.more,
+            ProviderAuthContext::Password(PasswordAuthContext {})
+        );
     }
 
-    #[test]
-    fn test_client_parameters() {
+    #[tokio::test]
+    async fn test_client_parameters() {
         ansilo_logging::init_for_tests();
-        let runtime = tokio::runtime::Runtime::new().unwrap();
         let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("client-params", runtime.handle().clone(), auth);
+        let (_pg, handler) = init_handler("client-params", auth).await;
 
-        runtime.block_on(async move {
-            let (client, stream) = init_client_stream();
+        let (client, stream) = init_client_stream();
 
-            let fut_client = async move {
-                let (client, con) = tokio_postgres::Config::new()
-                    .user("test_user")
-                    .password("pass123")
-                    .application_name("my_custom_app")
-                    .connect_raw(client, NoTls)
-                    .await?;
-                tokio::spawn(con);
+        let fut_client = async move {
+            let (client, con) = tokio_postgres::Config::new()
+                .user("test_user")
+                .password("pass123")
+                .application_name("my_custom_app")
+                .connect_raw(client, NoTls)
+                .await?;
+            tokio::spawn(con);
 
-                Result::<_, Error>::Ok(
-                    client
-                        .query_one("SHOW application_name", &[])
-                        .await?
-                        .get::<_, String>(0),
-                )
-            };
-            let fut_handler = handler.handle(stream);
+            Result::<_, Error>::Ok(
+                client
+                    .query_one("SHOW application_name", &[])
+                    .await?
+                    .get::<_, String>(0),
+            )
+        };
+        let fut_handler = handler.handle(stream);
 
-            let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
+        let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
 
-            res_handler.unwrap();
-            assert_eq!(res_client.unwrap(), "my_custom_app");
+        res_handler.unwrap();
+        assert_eq!(res_client.unwrap(), "my_custom_app");
 
-            // Test second connection to ensure, gets reset when using recycled connection
-            let (client, stream) = init_client_stream();
+        // Test second connection to ensure, gets reset when using recycled connection
+        let (client, stream) = init_client_stream();
 
-            let fut_client = async move {
-                let (client, con) = tokio_postgres::Config::new()
-                    .user("test_user")
-                    .password("pass123")
-                    .application_name("another_app")
-                    .connect_raw(client, NoTls)
-                    .await?;
-                tokio::spawn(con);
+        let fut_client = async move {
+            let (client, con) = tokio_postgres::Config::new()
+                .user("test_user")
+                .password("pass123")
+                .application_name("another_app")
+                .connect_raw(client, NoTls)
+                .await?;
+            tokio::spawn(con);
 
-                Result::<_, Error>::Ok(
-                    client
-                        .query_one("SHOW application_name", &[])
-                        .await?
-                        .get::<_, String>(0),
-                )
-            };
-            let fut_handler = handler.handle(stream);
+            Result::<_, Error>::Ok(
+                client
+                    .query_one("SHOW application_name", &[])
+                    .await?
+                    .get::<_, String>(0),
+            )
+        };
+        let fut_handler = handler.handle(stream);
 
-            let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
+        let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
 
-            res_handler.unwrap();
-            assert_eq!(res_client.unwrap(), "another_app");
-        })
+        res_handler.unwrap();
+        assert_eq!(res_client.unwrap(), "another_app");
     }
 }
