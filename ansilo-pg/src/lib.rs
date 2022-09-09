@@ -142,6 +142,10 @@ impl PostgresInstance {
 }
 
 impl PostgresConnectionPools {
+    pub fn new(admin: PostgresConnectionPool, app: MultiUserPostgresConnectionPool) -> Self {
+        Self { admin, app }
+    }
+
     /// Gets a connection with admin privileges to the database
     /// IMPORTANT: Only use this connection for trusted queries
     /// and not queries supplied by the user

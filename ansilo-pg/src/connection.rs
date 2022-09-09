@@ -11,7 +11,7 @@ pub type PostgresConnection = deadpool_postgres::Client;
 
 /// Postgres connection pool
 #[derive(Clone)]
-pub(crate) struct PostgresConnectionPool {
+pub struct PostgresConnectionPool {
     /// The inner connection pool
     pool: Pool,
 }

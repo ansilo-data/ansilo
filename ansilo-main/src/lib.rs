@@ -123,7 +123,9 @@ impl Ansilo {
 
         info!("Starting http api...");
         let http = runtime.block_on(HttpApi::start(HttpApiState::new(
+            &conf.node,
             postgres.connections().clone(),
+            authenticator.clone(),
         )))?;
 
         info!("Starting proxy server...");

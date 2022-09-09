@@ -13,10 +13,11 @@ use tokio::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 
+mod api;
 mod handler;
+mod healthcheck;
 mod proto;
 mod state;
-mod v1;
 
 pub use handler::*;
 pub use proto::*;
@@ -68,7 +69,8 @@ impl HttpApi {
 
     fn app(state: HttpApiState) -> Router {
         Router::new()
-            .nest("/v1", v1::router())
+            .nest("/api", api::router())
+            .nest("/health", healthcheck::router())
             .layer(Extension(state))
     }
 
@@ -107,11 +109,17 @@ impl HttpApi {
     }
 
     fn terminate_mut(&mut self) -> Result<()> {
+        if self.http1_srv.is_none() && self.http2_srv.is_none() {
+            return Ok(());
+        }
+
         self.shutdown_tx.send(())?;
+
         let (http1_srv, http2_srv) = (
             self.http1_srv.take().unwrap(),
             self.http2_srv.take().unwrap(),
         );
+
         let _ = self
             .rt_handle
             .block_on(async move { tokio::try_join!(http1_srv, http2_srv) })?;
@@ -125,5 +133,106 @@ impl Drop for HttpApi {
         if let Err(err) = self.terminate_mut() {
             warn!("Error while dropping http server: {:?}", err);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use ansilo_auth::Authenticator;
+    use ansilo_core::config::NodeConfig;
+    use ansilo_pg::{
+        conf::PostgresConf,
+        connection::PostgresConnectionPool,
+        low_level::multi_pool::{
+            MultiUserPostgresConnectionPool, MultiUserPostgresConnectionPoolConfig,
+        },
+        PostgresConnectionPools,
+    };
+    use hyper::{Body, Request, StatusCode};
+    use tower::ServiceExt;
+
+    use crate::{HttpApi, HttpApiState};
+
+    fn mock_state() -> HttpApiState {
+        let conf = Box::leak(Box::new(NodeConfig::default()));
+        let pg = Box::leak(Box::new(PostgresConf {
+            install_dir: "unused".into(),
+            postgres_conf_path: None,
+            data_dir: "unused".into(),
+            socket_dir_path: "unused".into(),
+            fdw_socket_path: "unused".into(),
+            app_users: vec![],
+            init_db_sql: vec![],
+        }));
+
+        HttpApiState::new(
+            conf,
+            PostgresConnectionPools::new(
+                PostgresConnectionPool::new(pg, "unused", "unused", 0, Duration::from_secs(1))
+                    .unwrap(),
+                MultiUserPostgresConnectionPool::new(MultiUserPostgresConnectionPoolConfig {
+                    pg,
+                    users: vec![],
+                    database: "unused".into(),
+                    max_cons_per_user: 10,
+                    connect_timeout: Duration::from_secs(1),
+                })
+                .unwrap(),
+            ),
+            Authenticator::init(&conf.auth).unwrap(),
+        )
+    }
+
+    #[test]
+    fn test_init_and_terminate() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let mut api = rt.block_on(HttpApi::start(mock_state())).unwrap();
+
+        assert_eq!(api.http1_srv.as_ref().unwrap().is_finished(), false);
+        assert_eq!(api.http2_srv.as_ref().unwrap().is_finished(), false);
+
+        api.terminate_mut().unwrap();
+
+        assert_eq!(api.http1_srv.is_none(), true);
+        assert_eq!(api.http2_srv.is_none(), true);
+    }
+
+    #[tokio::test]
+    async fn test_health_check() {
+        let router = HttpApi::app(mock_state());
+
+        let res = router
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
+        assert_eq!(&body[..], b"Ok");
+    }
+
+    #[tokio::test]
+    async fn test_non_existant_endpoint() {
+        let router = HttpApi::app(mock_state());
+
+        let res = router
+            .oneshot(
+                Request::builder()
+                    .uri("/non-existant")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
     }
 }
