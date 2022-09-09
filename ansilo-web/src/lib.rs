@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{error, warn};
 use ansilo_proxy::stream::IOStream;
-use axum::{routing::IntoMakeService, Extension, Router};
+use axum::{routing::IntoMakeService, Router};
 use hyper::server::accept::from_stream;
 use tokio::{
     runtime::Handle,
@@ -36,7 +38,7 @@ impl HttpApi {
     /// Starts the http api server
     pub async fn start(state: HttpApiState) -> Result<Self> {
         let rt_handle = tokio::runtime::Handle::current();
-        let service = Self::app(state).into_make_service();
+        let service = Self::router(state).into_make_service();
 
         let (http1_queue, http1_rx) = mpsc::channel(128);
         let (http2_queue, http2_rx) = mpsc::channel(128);
@@ -67,17 +69,18 @@ impl HttpApi {
         })
     }
 
-    fn app(state: HttpApiState) -> Router {
-        Router::new()
-            .nest("/api", api::router())
-            .nest("/health", healthcheck::router())
-            .layer(Extension(state))
+    fn router(state: HttpApiState) -> Router<HttpApiState> {
+        let state = Arc::new(state);
+
+        Router::with_state_arc(state.clone())
+            .nest("/api", api::router(state.clone()))
+            .nest("/health", healthcheck::router(state.clone()))
     }
 
     fn server(
         rx: mpsc::Receiver<Result<Box<dyn IOStream>>>,
         mode: HttpMode,
-        svc: IntoMakeService<Router>,
+        svc: IntoMakeService<Router<HttpApiState>>,
         mut shutdown_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<()>> {
         let server = axum::Server::builder(from_stream(ReceiverStream::new(rx)))
@@ -201,7 +204,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_check() {
-        let router = HttpApi::app(mock_state());
+        let router = HttpApi::router(mock_state());
 
         let res = router
             .oneshot(
@@ -221,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_non_existant_endpoint() {
-        let router = HttpApi::app(mock_state());
+        let router = HttpApi::router(mock_state());
 
         let res = router
             .oneshot(

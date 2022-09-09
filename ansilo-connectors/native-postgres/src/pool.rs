@@ -53,7 +53,7 @@ impl ConnectionPool for PostgresConnectionPool {
 
 /// Adaptor for the deadpool client wrapper type to
 /// deref into the underlying tokio_postgres::Client
-pub struct PooledClient(deadpool_postgres::Client);
+pub struct PooledClient(pub deadpool_postgres::Client);
 
 impl Deref for PooledClient {
     type Target = tokio_postgres::Client;
