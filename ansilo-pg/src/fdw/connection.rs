@@ -231,11 +231,16 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     fn discover_entities(&mut self, opts: EntityDiscoverOptions) -> Result<Vec<EntityConfig>> {
         self.connect()?;
 
-        Ok(TConnector::TEntitySearcher::discover(
-            self.connection.get()?,
-            self.nc,
-            opts,
-        )?)
+        let mut entities =
+            TConnector::TEntitySearcher::discover(self.connection.get()?, self.nc, opts)?;
+
+        // Avoid having the connectors having to supply the data source
+        // since we already know it at this point
+        for entity in entities.iter_mut() {
+            entity.source.data_source = self.data_source_id.clone();
+        }
+
+        Ok(entities)
     }
 
     fn register_entity(&mut self, config: EntityConfig) -> Result<()> {
@@ -717,6 +722,7 @@ mod tests {
         data::{DataType, DataValue},
     };
     use lazy_static::lazy_static;
+    use pretty_assertions::assert_eq;
 
     use crate::fdw::{
         channel::IpcClientChannel, proto::AuthDataSource, test::create_tmp_ipc_channel,
@@ -839,7 +845,7 @@ mod tests {
                     EntityAttributeConfig::minimal("first_name", DataType::rust_string()),
                     EntityAttributeConfig::minimal("last_name", DataType::rust_string()),
                 ],
-                EntitySourceConfig::minimal(""),
+                EntitySourceConfig::minimal("memory"),
             ),])
         );
 

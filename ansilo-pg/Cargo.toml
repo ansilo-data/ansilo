@@ -23,4 +23,5 @@ tokio-postgres = "0.7"
 
 [dev-dependencies]
 ansilo-connectors-memory = { path = "../ansilo-connectors/memory" }
+pretty_assertions = "*"
 tokio-test = "0.4"
