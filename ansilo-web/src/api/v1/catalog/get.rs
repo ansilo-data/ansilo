@@ -4,7 +4,7 @@ use ansilo_connectors_native_postgres::{
 };
 use ansilo_core::{
     config::{EntityConfig, NodeConfig},
-    err::{Context, Result},
+    err::Result,
     web::catalog::*,
 };
 use ansilo_logging::error;
@@ -86,7 +86,20 @@ pub(super) async fn handler(
 }
 
 fn to_catalog(conf: &NodeConfig, e: EntityConfig, table_name: String) -> Result<CatalogEntity> {
-    let source = conf.sources.iter().find(|i| i.id == e.source.data_source);
+    let source = conf
+        .sources
+        .iter()
+        .find(|i| i.id == e.source.data_source)
+        .and_then(|i| {
+            if i.r#type.as_str() == "peer" {
+                serde_yaml::from_value::<PostgresEntitySourceConfig>(e.source.options).ok()
+            } else {
+                None
+            }
+        })
+        .and_then(|i| i.as_table().cloned())
+        .and_then(|i| i.source)
+        .unwrap_or_else(|| CatalogEntitySource::table(table_name));
 
     Ok(CatalogEntity {
         id: e.id,
@@ -99,30 +112,6 @@ fn to_catalog(conf: &NodeConfig, e: EntityConfig, table_name: String) -> Result<
             .map(|a| CatalogEntityAttribue { attribute: a })
             .collect(),
         constraints: e.constraints,
-        source: CatalogEntitySource {
-            table_name,
-            url: if source.map(|i| i.r#type.as_str()) == Some("peer") {
-                Some(
-                    source.unwrap().options["url"]
-                        .as_str()
-                        .context("url")?
-                        .into(),
-                )
-            } else {
-                None
-            },
-            source: if source.map(|i| i.r#type.as_str()) == Some("peer") {
-                let source: PostgresEntitySourceConfig =
-                    serde_yaml::from_value(e.source.options)
-                        .context("Failed to deserialize table config")?;
-
-                source
-                    .as_table()
-                    .and_then(|t| t.source.clone())
-                    .map(Box::new)
-            } else {
-                None
-            },
-        },
+        source,
     })
 }

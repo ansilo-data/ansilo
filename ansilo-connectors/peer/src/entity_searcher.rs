@@ -62,7 +62,7 @@ impl PeerEntitySearcher {
                             "public".into(),
                             CatalogEntitySource::parent(
                                 e.source.table_name.clone(),
-                                url.to_string(),
+                                conf.url.to_string(),
                                 e.source.clone(),
                             ),
                         ),

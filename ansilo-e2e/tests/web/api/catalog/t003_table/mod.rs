@@ -49,11 +49,7 @@ fn test() {
                 },
             ],
             constraints: vec![],
-            source: CatalogEntitySource {
-                table_name: "people".into(),
-                url: None,
-                source: None,
-            },
+            source: CatalogEntitySource::table("people".into()),
         },]
     );
 }

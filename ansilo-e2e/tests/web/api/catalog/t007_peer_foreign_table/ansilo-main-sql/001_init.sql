@@ -1,0 +1,3 @@
+IMPORT FOREIGN SCHEMA "%"
+FROM SERVER peer
+INTO public;

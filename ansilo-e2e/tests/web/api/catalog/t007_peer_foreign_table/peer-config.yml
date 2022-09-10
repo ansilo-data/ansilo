@@ -1,0 +1,17 @@
+name: Ansilo
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-peer-sql/*.sql
+    data_dir: ${env:TEMP_DIR}/data
+    listen_socket_dir_path: ${env:TEMP_DIR}
+    fdw_socket_path: ${env:TEMP_DIR}/fdw.sock
+    build_info_path: ${env:TEMP_DIR}/build-info.json

@@ -1,7 +1,9 @@
+use std::env;
+
 use ansilo_core::{
     config::EntityAttributeConfig,
     data::{DataType, StringOptions},
-    web::catalog::*,
+    web::catalog::{Catalog, CatalogEntity, CatalogEntityAttribue, CatalogEntitySource},
 };
 use ansilo_e2e::{current_dir, web::url};
 use pretty_assertions::assert_eq;
@@ -11,10 +13,14 @@ use serial_test::serial;
 #[serial]
 fn test() {
     ansilo_logging::init_for_tests();
-    let (instance, _port) =
-        ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
+    #[allow(unused)]
+    let [(peer_instance, peer_client), (main_instance, main_client)] =
+        ansilo_e2e::peer::run_instances([
+            ("PEER", current_dir!().join("peer-config.yml")),
+            ("MAIN", current_dir!().join("main-config.yml")),
+        ]);
 
-    let res = reqwest::blocking::get(url(&instance, "/api/v1/catalog"))
+    let res = reqwest::blocking::get(url(&main_instance, "/api/v1/catalog"))
         .unwrap()
         .error_for_status()
         .unwrap()
@@ -26,7 +32,7 @@ fn test() {
         vec![CatalogEntity {
             id: "people".into(),
             name: None,
-            description: Some("This is the list of people".into()),
+            description: None,
             tags: vec![],
             attributes: vec![
                 CatalogEntityAttribue {
@@ -35,21 +41,25 @@ fn test() {
                         description: None,
                         r#type: DataType::Utf8String(StringOptions::default()),
                         primary_key: false,
-                        nullable: false,
+                        nullable: true,
                     },
                 },
                 CatalogEntityAttribue {
                     attribute: EntityAttributeConfig {
                         id: "age".into(),
                         description: None,
-                        r#type: DataType::Int64,
+                        r#type: DataType::Int32,
                         primary_key: false,
-                        nullable: false,
+                        nullable: true,
                     },
                 },
             ],
             constraints: vec![],
-            source: CatalogEntitySource::table("people".into()),
+            source: CatalogEntitySource::parent(
+                "people".into(),
+                url(&peer_instance, "/"),
+                CatalogEntitySource::table("people".into())
+            )
         },]
     );
 }
