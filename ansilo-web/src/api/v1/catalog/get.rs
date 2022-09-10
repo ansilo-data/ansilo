@@ -1,64 +1,18 @@
 use ansilo_connectors_base::interface::EntityDiscoverOptions;
-use ansilo_connectors_native_postgres::{PostgresEntitySearcher, UnpooledClient};
+use ansilo_connectors_native_postgres::{
+    PostgresEntitySearcher, PostgresEntitySourceConfig, UnpooledClient,
+};
 use ansilo_core::{
-    config::{
-        EntityAttributeConfig, EntityConfig, EntityConstraintConfig, NodeConfig, TagValueConfig,
-    },
+    config::{EntityConfig, NodeConfig},
     err::{Context, Result},
+    web::catalog::*,
 };
 use ansilo_logging::error;
 use axum::{extract::State, Json};
 use hyper::StatusCode;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 
 use crate::HttpApiState;
-
-/// Model for exposing the data catalog of this instance.
-/// As a convention, we define the data catalog as all tables and
-/// views in the postgres "public" schema.
-///
-/// We dont want to all underlying config of the entity, only
-/// the schema itself, the type of data source, and if this
-/// entity is imported from a peer instance, we expose its lineage.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct Catalog {
-    pub entities: Vec<CatalogEntity>,
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct CatalogEntity {
-    pub id: String,
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub tags: Vec<TagValueConfig>,
-    pub attributes: Vec<CatalogEntityAttribue>,
-    pub constraints: Vec<EntityConstraintConfig>,
-    pub source: CatalogEntitySource,
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct CatalogEntitySource {
-    /// If this entity is imported from a peer node, we expose the URL
-    /// of that node.
-    /// This allows a lineage to be formed if data is exposed through
-    /// "hops" along multiple nodes.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-    /// If this entity is imported from a peer node, we also expose
-    /// the source provided by the peer. This is exposed recursively
-    /// allowing the full lineage to appear.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub source: Option<Box<Self>>,
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub struct CatalogEntityAttribue {
-    #[serde(flatten)]
-    pub attribute: EntityAttributeConfig,
-    // TODO[future]: expose data lineage through querying information schema VIEW_COLUMN_USAGE
-    // pub sources: Vec<String>
-}
 
 pub(super) async fn handler(
     State(state): State<HttpApiState>,
@@ -70,7 +24,7 @@ pub(super) async fn handler(
     })?;
 
     // Then discover all the table schema's from the "public" schema
-    let entities = PostgresEntitySearcher::<&mut UnpooledClient>::discover_async(
+    let entities = PostgresEntitySearcher::<UnpooledClient>::discover_async(
         &mut con,
         EntityDiscoverOptions::new("public.%".into(), Default::default()),
     )
@@ -88,6 +42,7 @@ pub(super) async fn handler(
         .query(
             r#"
             SELECT
+                t.relname as table_name,
                 __ansilo_private.get_entity_config(t.oid) as conf
             FROM pg_class t
             WHERE t.relnamespace = 'public'::regnamespace
@@ -103,9 +58,9 @@ pub(super) async fn handler(
 
     let foreign_entities = foreign_entities
         .into_iter()
-        .map(|e| serde_json::from_value(e.get(0)))
-        .collect::<Result<Vec<EntityConfig>, _>>()
-        .map_err(|e| {
+        .map(|e| Ok((e.get(0), serde_json::from_value(e.get(1))?)))
+        .collect::<Result<Vec<(String, EntityConfig)>, _>>()
+        .map_err(|e: serde_json::Error| {
             error!("{:?}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, "Internal error")
         })?;
@@ -115,12 +70,12 @@ pub(super) async fn handler(
     // ones to take precedence so we combine them below
     let entities = foreign_entities
         .into_iter()
-        .chain(entities.into_iter())
-        .unique_by(|e| e.id.clone());
+        .chain(entities.into_iter().map(|e| (e.id.clone(), e)))
+        .unique_by(|(_, e)| e.id.clone());
 
     // Finally, map our entities to the data models we want to expose
     let entities = entities
-        .map(|e| CatalogEntity::from(state.conf(), e))
+        .map(|(t, e)| to_catalog(state.conf(), e, t))
         .collect::<Result<Vec<_>>>()
         .map_err(|e| {
             error!("{:?}", e);
@@ -130,40 +85,44 @@ pub(super) async fn handler(
     Ok(Json(Catalog { entities }))
 }
 
-impl CatalogEntity {
-    fn from(conf: &NodeConfig, e: EntityConfig) -> Result<Self> {
-        let source = conf.sources.iter().find(|i| i.id == e.source.data_source);
+fn to_catalog(conf: &NodeConfig, e: EntityConfig, table_name: String) -> Result<CatalogEntity> {
+    let source = conf.sources.iter().find(|i| i.id == e.source.data_source);
 
-        Ok(Self {
-            id: e.id,
-            name: e.name,
-            description: e.description,
-            tags: e.tags,
-            attributes: e
-                .attributes
-                .into_iter()
-                .map(|a| CatalogEntityAttribue { attribute: a })
-                .collect(),
-            constraints: e.constraints,
-            source: CatalogEntitySource {
-                url: if source.map(|i| i.r#type.as_str()) == Some("peer") {
-                    Some(
-                        source.unwrap().options["url"]
-                            .as_str()
-                            .context("type")?
-                            .into(),
-                    )
-                } else {
-                    None
-                },
-                source: if source.map(|i| i.r#type.as_str()) == Some("peer") {
-                    // TODO: deserialise from
-                    // source.unwrap().options["source"]
-                    todo!()
-                } else {
-                    None
-                },
+    Ok(CatalogEntity {
+        id: e.id,
+        name: e.name,
+        description: e.description,
+        tags: e.tags,
+        attributes: e
+            .attributes
+            .into_iter()
+            .map(|a| CatalogEntityAttribue { attribute: a })
+            .collect(),
+        constraints: e.constraints,
+        source: CatalogEntitySource {
+            table_name,
+            url: if source.map(|i| i.r#type.as_str()) == Some("peer") {
+                Some(
+                    source.unwrap().options["url"]
+                        .as_str()
+                        .context("url")?
+                        .into(),
+                )
+            } else {
+                None
             },
-        })
-    }
+            source: if source.map(|i| i.r#type.as_str()) == Some("peer") {
+                let source: PostgresEntitySourceConfig =
+                    serde_yaml::from_value(e.source.options)
+                        .context("Failed to deserialize table config")?;
+
+                source
+                    .as_table()
+                    .and_then(|t| t.source.clone())
+                    .map(Box::new)
+            } else {
+                None
+            },
+        },
+    })
 }

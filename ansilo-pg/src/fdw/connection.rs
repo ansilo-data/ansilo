@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     collections::HashMap,
     fmt::Display,
     io::{Read, Write},
@@ -6,6 +7,7 @@ use std::{
     sync::{RwLock, RwLockReadGuard},
 };
 
+use ansilo_connectors_all::PeerConnector;
 use ansilo_connectors_base::{
     common::{
         data::{QueryHandleWrite, ResultSetRead},
@@ -229,10 +231,24 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     }
 
     fn discover_entities(&mut self, opts: EntityDiscoverOptions) -> Result<Vec<EntityConfig>> {
-        self.connect()?;
+        // Check if we are trying to discover from a peer node
+        // If so we special case and discover entities using the public endpoint.
+        let mut entities = if TypeId::of::<TConnector::TEntitySearcher>()
+            == TypeId::of::<<PeerConnector as Connector>::TEntitySearcher>()
+        {
+            let conf = self
+                .nc
+                .sources
+                .iter()
+                .find(|i| i.id == self.data_source_id)
+                .context("Failed to find source config")?;
 
-        let mut entities =
-            TConnector::TEntitySearcher::discover(self.connection.get()?, self.nc, opts)?;
+            PeerConnector::discover_unauthenticated(conf, opts)?
+        } else {
+            // For regular cases we find entities using the connection to the data source
+            self.connect()?;
+            TConnector::TEntitySearcher::discover(self.connection.get()?, self.nc, opts)?
+        };
 
         // Avoid having the connectors having to supply the data source
         // since we already know it at this point

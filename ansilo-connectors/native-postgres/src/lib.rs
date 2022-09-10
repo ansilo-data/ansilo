@@ -27,7 +27,7 @@ pub use query_planner::*;
 mod result_set;
 pub use result_set::*;
 mod runtime;
-pub(crate) use runtime::*;
+pub use runtime::*;
 
 /// The connector for Postgres built on tokio-postgres
 #[derive(Default)]

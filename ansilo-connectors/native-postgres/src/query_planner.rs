@@ -25,7 +25,7 @@ use crate::{
 /// Maximum query params supported in a single query
 const MAX_PARAMS: u16 = u16::MAX;
 
-/// Query planner for Postgres JDBC driver
+/// Query planner for Postgres driver
 pub struct PostgresQueryPlanner<T> {
     _t: PhantomData<T>,
 }

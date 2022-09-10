@@ -33,9 +33,9 @@ pub trait Connector {
         TTransactionManager = Self::TTransactionManager,
     >;
     type TEntitySearcher: EntitySearcher<
-        TConnection = Self::TConnection,
-        TEntitySourceConfig = Self::TEntitySourceConfig,
-    >;
+            TConnection = Self::TConnection,
+            TEntitySourceConfig = Self::TEntitySourceConfig,
+        > + 'static;
     type TEntityValidator: EntityValidator<
         TConnection = Self::TConnection,
         TEntitySourceConfig = Self::TEntitySourceConfig,

@@ -1,11 +1,9 @@
 use ansilo_core::{
     config::EntityAttributeConfig,
     data::{DataType, StringOptions},
+    web::catalog::*,
 };
 use ansilo_e2e::{current_dir, web::url};
-use ansilo_web::api::v1::catalog::get::{
-    Catalog, CatalogEntity, CatalogEntityAttribue, CatalogEntitySource,
-};
 use pretty_assertions::assert_eq;
 use serial_test::serial;
 
@@ -52,6 +50,7 @@ fn test() {
             ],
             constraints: vec![],
             source: CatalogEntitySource {
+                table_name: "people".into(),
                 url: None,
                 source: None,
             },

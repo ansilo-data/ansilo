@@ -54,7 +54,7 @@ impl ConnectionPool for PostgresConnectionPool {
 /// Adaptor for the deadpool client wrapper type to
 /// deref into the underlying tokio_postgres::Client
 pub struct PooledClient(pub deadpool_postgres::Client);
-pub type UnpooledClient = tokio_postgres::Client;
+pub struct UnpooledClient(pub tokio_postgres::Client);
 
 impl Deref for PooledClient {
     type Target = tokio_postgres::Client;
@@ -67,5 +67,25 @@ impl Deref for PooledClient {
 impl DerefMut for PooledClient {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl Deref for UnpooledClient {
+    type Target = tokio_postgres::Client;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for UnpooledClient {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<tokio_postgres::Client> for UnpooledClient {
+    fn from(c: tokio_postgres::Client) -> Self {
+        Self(c)
     }
 }

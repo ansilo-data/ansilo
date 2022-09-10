@@ -1,5 +1,5 @@
+use ansilo_core::web::catalog::*;
 use ansilo_e2e::{current_dir, web::url};
-use ansilo_web::api::v1::catalog::get::{Catalog, CatalogEntity};
 use pretty_assertions::assert_eq;
 use serial_test::serial;
 

@@ -18,3 +18,7 @@ lazy_static! {
 pub(crate) fn runtime() -> Arc<Runtime> {
     Arc::clone(&RUNTIME)
 }
+
+pub fn postgres_connector_runtime() -> Arc<Runtime> {
+    runtime()
+}

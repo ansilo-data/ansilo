@@ -11,7 +11,7 @@ use crate::PostgresConnection;
 use super::PostgresEntitySourceConfig;
 use ansilo_connectors_base::{common::entity::EntitySource, interface::EntityValidator};
 
-/// The entity validator for Postgres JDBC
+/// The entity validator for Postgres
 pub struct PostgresEntityValidator<T> {
     _data: PhantomData<T>,
 }

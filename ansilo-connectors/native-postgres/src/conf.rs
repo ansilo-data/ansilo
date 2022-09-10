@@ -4,7 +4,9 @@ use ansilo_connectors_base::common::entity::ConnectorEntityConfig;
 use ansilo_core::{
     config,
     err::{Context, Error, Result},
+    web::catalog::CatalogEntitySource,
 };
+use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 use tokio_postgres::Config;
 
@@ -84,7 +86,7 @@ impl TryInto<Config> for PostgresConnectionConfig {
 pub type PostgresConnectorEntityConfig = ConnectorEntityConfig<PostgresEntitySourceConfig>;
 
 /// Entity source config for Postgres driver
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumAsInner)]
 #[serde(tag = "type")]
 pub enum PostgresEntitySourceConfig {
     Table(PostgresTableOptions),
@@ -106,6 +108,8 @@ pub struct PostgresTableOptions {
     pub table_name: String,
     /// Mapping of attributes to their respective column names
     pub attribute_column_map: HashMap<String, String>,
+    /// This is used to capture the source for tables imported from peer nodes
+    pub source: Option<CatalogEntitySource>,
 }
 
 impl PostgresTableOptions {
@@ -118,6 +122,16 @@ impl PostgresTableOptions {
             schema_name,
             table_name,
             attribute_column_map,
+            source: None,
+        }
+    }
+
+    pub fn peer(schema_name: String, source: CatalogEntitySource) -> Self {
+        Self {
+            schema_name: Some(schema_name),
+            table_name: source.table_name.clone(),
+            attribute_column_map: Default::default(),
+            source: Some(source),
         }
     }
 }

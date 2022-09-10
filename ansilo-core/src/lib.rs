@@ -4,3 +4,4 @@ pub mod config;
 pub mod data;
 pub mod err;
 pub mod sqlil;
+pub mod web;
