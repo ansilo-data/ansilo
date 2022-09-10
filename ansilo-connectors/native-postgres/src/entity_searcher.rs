@@ -50,6 +50,7 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
                     SELECT
                         t.table_schema,
                         t.table_name,
+                        pg_catalog.obj_description(format('%s.%s', t.table_schema, t.table_name)::regclass::oid, 'pg_class') as table_description,
                         c.column_name,
                         c.is_identity,
                         c.data_type,
@@ -57,7 +58,8 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
                         c.character_maximum_length,
                         c.numeric_precision,
                         c.numeric_scale,
-                        c.ordinal_position
+                        c.ordinal_position,
+                        pg_catalog.col_description(format('%s.%s', t.table_schema, t.table_name)::regclass::oid, c.ordinal_position) as column_description
                     FROM information_schema.tables t
                     INNER JOIN information_schema.columns C ON t.table_schema = c.table_schema AND t.table_name = c.table_name
                     WHERE 1=1
@@ -68,6 +70,7 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
                     SELECT 
                         s.nspname as table_schema, 
                         t.relname as table_name,
+                        pg_catalog.obj_description(t.oid, 'pg_class') as table_description,
                         a.attname as column_name,
                         'NO' AS is_identity,
                         pg_catalog.format_type(a.atttypid, NULL) as data_type,
@@ -75,7 +78,8 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
                         information_schema._pg_char_max_length(a.atttypid, a.atttypmod) as character_maximum_length,
                         information_schema._pg_numeric_precision(a.atttypid, a.atttypmod) as numeric_precision,
                         information_schema._pg_numeric_scale(a.atttypid, a.atttypmod) as numeric_scale,
-                        CAST(a.attnum AS information_schema.cardinal_number) AS ordinal_position
+                        CAST(a.attnum AS information_schema.cardinal_number) AS ordinal_position,
+                        pg_catalog.col_description(t.oid, CAST(a.attnum AS information_schema.cardinal_number)) as column_description
                     FROM pg_attribute a
                     INNER JOIN pg_class t on a.attrelid = t.oid
                     INNER JOIN pg_namespace s on t.relnamespace = s.oid
@@ -105,7 +109,7 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
         let entities = tables
             .into_iter()
             .filter_map(|((db, table), cols)| {
-                match parse_entity_config(&db, &table, cols.into_iter()) {
+                match parse_entity_config(&db, &table, cols.collect_vec()) {
                     Ok(conf) => Some(conf),
                     Err(err) => {
                         warn!(
@@ -125,24 +129,32 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
 pub(crate) fn parse_entity_config(
     db: &String,
     table: &String,
-    cols: impl Iterator<Item = Row>,
+    cols: Vec<Row>,
 ) -> Result<EntityConfig> {
-    Ok(EntityConfig::minimal(
+    Ok(EntityConfig::new(
         table.clone(),
-        cols.map(|c| {
-            Ok(EntityAttributeConfig::new(
-                c.try_get("column_name").context("column_name")?,
-                None,
-                from_postgres_type(&c)?,
-                c.try_get::<_, String>("is_identity")
-                    .context("is_identity")?
-                    == "YES",
-                c.try_get::<_, String>("is_nullable")
-                    .context("is_nullable")?
-                    == "YES",
-            ))
-        })
-        .collect::<Result<Vec<_>>>()?,
+        None,
+        cols[0]
+            .try_get("table_description")
+            .context("table_description")?,
+        vec![],
+        cols.into_iter()
+            .map(|c| {
+                Ok(EntityAttributeConfig::new(
+                    c.try_get("column_name").context("column_name")?,
+                    c.try_get("column_description")
+                        .context("column_description")?,
+                    from_postgres_type(&c)?,
+                    c.try_get::<_, String>("is_identity")
+                        .context("is_identity")?
+                        == "YES",
+                    c.try_get::<_, String>("is_nullable")
+                        .context("is_nullable")?
+                        == "YES",
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?,
+        vec![],
         EntitySourceConfig::from(PostgresEntitySourceConfig::Table(
             PostgresTableOptions::new(Some(db.clone()), table.clone(), HashMap::new()),
         ))?,

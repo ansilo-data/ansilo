@@ -4,7 +4,7 @@ use ansilo_core::{
     data::chrono::{DateTime, Utc},
 };
 use ansilo_pg::PostgresConnectionPools;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 /// Required state and dependencies for the http api
 #[derive(Clone)]
@@ -51,12 +51,12 @@ impl HttpApiState {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionInfo {
     /// The version string of this running instance
-    version: String,
+    pub version: String,
     /// When the ansilo build occurred
-    built_at: DateTime<Utc>,
+    pub built_at: DateTime<Utc>,
 }
 
 impl VersionInfo {

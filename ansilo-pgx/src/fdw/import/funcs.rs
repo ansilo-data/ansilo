@@ -43,7 +43,7 @@ pub unsafe extern "C" fn import_foreign_schema(
             let entity_id = pg_str_literal(&e.id);
             let server_name =
                 pg_quote_identifier(&parse_to_owned_utf8_string((*server).servername).unwrap());
-            let config = pg_str_literal(&serde_yaml::to_string(&e.source.options).unwrap());
+            let config = pg_str_literal(&serde_yaml::to_string(&e).unwrap());
 
             let cols = e
                 .attributes
@@ -66,7 +66,7 @@ pub unsafe extern "C" fn import_foreign_schema(
                 .join(",\n    ");
 
             format!(
-                r#"CREATE FOREIGN TABLE {table_name} (
+            r#"CREATE FOREIGN TABLE {table_name} (
     {cols}
 )
 SERVER {server_name}

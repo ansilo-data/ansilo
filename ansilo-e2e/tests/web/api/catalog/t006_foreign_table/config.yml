@@ -1,0 +1,36 @@
+name: Web
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: user
+
+entities:
+  - id: people
+    description: This is the list of people
+    source:
+      data_source: memory
+      options: null
+    attributes:
+      - id: name
+        type: !Utf8String
+      - id: age
+        type: Int64
+
+sources:
+  - id: memory
+    type: test.memory
+    options:
+      people:
+        - ["John", 17]
+
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-sql/*.sql
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json

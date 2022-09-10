@@ -32,6 +32,7 @@ mod tests {
         sqlil,
     };
     use ansilo_pg::fdw::proto::OperationCost;
+    use ansilo_util_pg::query::pg_str_literal;
     use pretty_assertions::assert_eq;
 
     fn create_memory_connection_pool(
@@ -89,7 +90,7 @@ mod tests {
             );
         });
 
-        unsafe {
+        let stmts = unsafe {
             let stmt = pg_sys::pg_parse_query(to_pg_cstr(query).unwrap());
             let stmt = PgList::<pg_sys::RawStmt>::from_pg(stmt);
             let stmt = (*stmt.get_ptr(0).unwrap()).stmt as *mut pg_sys::ImportForeignSchemaStmt;
@@ -101,12 +102,14 @@ mod tests {
                 .iter_ptr()
                 .map(|stmt| parse_to_owned_utf8_string(stmt).unwrap())
                 .collect::<Vec<_>>()
-        }
+        };
+
+        stmts
     }
 
     #[pg_test]
     fn test_fdw_import_table_integer_types() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![
                 EntityAttributeConfig::minimal("int8", DataType::Int8),
@@ -118,12 +121,13 @@ mod tests {
                 EntityAttributeConfig::minimal("int64", DataType::Int64),
                 EntityAttributeConfig::minimal("uint64", DataType::UInt64),
             ],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "int8" SMALLINT NOT NULL,
     "uint8" SMALLINT NOT NULL,
@@ -137,16 +141,16 @@ mod tests {
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_char_types() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![
                 EntityAttributeConfig::minimal(
@@ -158,12 +162,13 @@ OPTIONS (
                     DataType::Utf8String(StringOptions::new(Some(255))),
                 ),
             ],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "str" TEXT NOT NULL,
     "str_max_len" VARCHAR(255) NOT NULL
@@ -171,64 +176,66 @@ OPTIONS (
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_byte_type() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("binary", DataType::Binary)],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "binary" BYTEA NOT NULL
 )
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_boolean_type() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("bool", DataType::Boolean)],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "bool" BOOLEAN NOT NULL
 )
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_numeric_types() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![
                 EntityAttributeConfig::minimal("float32", DataType::Float32),
@@ -238,12 +245,13 @@ OPTIONS (
                     DataType::Decimal(DecimalOptions::default()),
                 ),
             ],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "float32" REAL NOT NULL,
     "float64" DOUBLE PRECISION NOT NULL,
@@ -252,16 +260,16 @@ OPTIONS (
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_date_time_types() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![
                 EntityAttributeConfig::minimal("date", DataType::Date),
@@ -269,12 +277,13 @@ OPTIONS (
                 EntityAttributeConfig::minimal("date_time", DataType::DateTime),
                 EntityAttributeConfig::minimal("date_time_tz", DataType::DateTimeWithTZ),
             ],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "date" DATE NOT NULL,
     "time" TIME NOT NULL,
@@ -284,88 +293,91 @@ OPTIONS (
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_json_types() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("json", DataType::JSON)],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "json" JSON NOT NULL
 )
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_uuid_types() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("uuid", DataType::Uuid)],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "uuid" UUID NOT NULL
 )
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_quoted_table_name() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "some:name",
             vec![EntityAttributeConfig::minimal("foo:bar", DataType::Int8)],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "some:name" (
     "foo:bar" SMALLINT NOT NULL
 )
 SERVER "test_srv"
 OPTIONS (
     entity_id E'some:name',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_with_primary_key() {
-        let stmts = run_import_foreign_schema(vec![EntityConfig::minimal(
+        let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::new(
                 "id".into(),
@@ -374,33 +386,35 @@ OPTIONS (
                 true,
                 false,
             )],
-            EntitySourceConfig::minimal(""),
-        )]);
+            EntitySourceConfig::minimal("memory"),
+        );
+        let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
     "id" INTEGER OPTIONS (primary_key 'true') NOT NULL
 )
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 
     #[pg_test]
     fn test_fdw_import_table_with_prefix_option() {
+        let conf = EntityConfig::minimal(
+            "tab",
+            vec![EntityAttributeConfig::minimal("col", DataType::Int8)],
+            EntitySourceConfig::minimal("memory"),
+        );
         let stmts = run_import_foreign_schema_query(
-            vec![EntityConfig::minimal(
-                "tab",
-                vec![EntityAttributeConfig::minimal("col", DataType::Int8)],
-                EntitySourceConfig::minimal(""),
-            )],
+            vec![conf.clone()],
             r#"
             IMPORT FOREIGN SCHEMA "any"
             FROM SERVER test_srv
@@ -411,17 +425,17 @@ OPTIONS (
 
         assert_eq!(
             stmts,
-            vec![
+            vec![format!(
                 r#"CREATE FOREIGN TABLE "my_prefix_tab" (
     "col" SMALLINT NOT NULL
 )
 SERVER "test_srv"
 OPTIONS (
     entity_id E'tab',
-    __config E'null
-'
-)"#
-            ]
+    __config {}
+)"#,
+                pg_str_literal(&serde_yaml::to_string(&conf).unwrap())
+            )]
         )
     }
 }

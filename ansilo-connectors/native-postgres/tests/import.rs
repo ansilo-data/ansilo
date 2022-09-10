@@ -205,3 +205,87 @@ fn test_postgres_discover_entities_number_type_mapping() {
         )
     )
 }
+
+#[test]
+#[serial]
+fn test_postgres_discover_entities_with_comments() {
+    let containers = common::start_postgres();
+    let mut con = common::connect_to_postgres(&containers);
+
+    con.execute(
+        r#"
+        DROP TABLE IF EXISTS import_comments;
+        "#,
+        vec![],
+    )
+    .unwrap();
+
+    con.execute(
+        r#"
+        CREATE TABLE import_comments (
+            col_a INT,
+            col_b INT
+        );
+        "#,
+        vec![],
+    )
+    .unwrap();
+
+    con.execute(
+        r#"COMMENT ON TABLE import_comments IS 'This is the table comment';"#,
+        vec![],
+    )
+    .unwrap();
+    con.execute(
+        r#"COMMENT ON COLUMN import_comments.col_a IS 'This is the first column comment';"#,
+        vec![],
+    )
+    .unwrap();
+    con.execute(
+        r#"COMMENT ON COLUMN import_comments.col_b IS 'This is the second column comment';"#,
+        vec![],
+    )
+    .unwrap();
+
+    let entities = PostgresEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%import_comments%"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::new(
+            "import_comments".into(),
+            None,
+            Some("This is the table comment".into()),
+            vec![],
+            vec![
+                EntityAttributeConfig::new(
+                    "col_a".into(),
+                    Some("This is the first column comment".into()),
+                    DataType::Int32,
+                    false,
+                    true
+                ),
+                EntityAttributeConfig::new(
+                    "col_b".into(),
+                    Some("This is the second column comment".into()),
+                    DataType::Int32,
+                    false,
+                    true
+                )
+            ],
+            vec![],
+            EntitySourceConfig::from(PostgresEntitySourceConfig::Table(
+                PostgresTableOptions::new(
+                    Some("public".into()),
+                    "import_comments".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}

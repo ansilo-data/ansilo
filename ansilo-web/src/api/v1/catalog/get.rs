@@ -10,7 +10,7 @@ use ansilo_logging::error;
 use axum::{extract::State, Json};
 use hyper::StatusCode;
 use itertools::Itertools;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::HttpApiState;
 
@@ -21,43 +21,43 @@ use crate::HttpApiState;
 /// We dont want to all underlying config of the entity, only
 /// the schema itself, the type of data source, and if this
 /// entity is imported from a peer instance, we expose its lineage.
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Catalog {
-    entities: Vec<CatalogEntity>,
+    pub entities: Vec<CatalogEntity>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct CatalogEntity {
-    id: String,
-    name: Option<String>,
-    description: Option<String>,
-    tags: Vec<TagValueConfig>,
-    attributes: Vec<CatalogEntityAttribue>,
-    constraints: Vec<EntityConstraintConfig>,
-    source: CatalogEntitySource,
+    pub id: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub tags: Vec<TagValueConfig>,
+    pub attributes: Vec<CatalogEntityAttribue>,
+    pub constraints: Vec<EntityConstraintConfig>,
+    pub source: CatalogEntitySource,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct CatalogEntitySource {
     /// If this entity is imported from a peer node, we expose the URL
     /// of that node.
     /// This allows a lineage to be formed if data is exposed through
     /// "hops" along multiple nodes.
     #[serde(skip_serializing_if = "Option::is_none")]
-    url: Option<String>,
+    pub url: Option<String>,
     /// If this entity is imported from a peer node, we also expose
     /// the source provided by the peer. This is exposed recursively
     /// allowing the full lineage to appear.
     #[serde(skip_serializing_if = "Option::is_none")]
-    source: Option<Box<Self>>,
+    pub source: Option<Box<Self>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct CatalogEntityAttribue {
     #[serde(flatten)]
-    attribute: EntityAttributeConfig,
+    pub attribute: EntityAttributeConfig,
     // TODO[future]: expose data lineage through querying information schema VIEW_COLUMN_USAGE
-    // sources: Vec<String>
+    // pub sources: Vec<String>
 }
 
 pub(super) async fn handler(

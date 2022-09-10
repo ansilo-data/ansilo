@@ -15,7 +15,7 @@ use tokio::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 
-mod api;
+pub mod api;
 mod handler;
 mod healthcheck;
 mod proto;

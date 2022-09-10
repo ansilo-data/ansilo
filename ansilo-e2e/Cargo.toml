@@ -13,6 +13,7 @@ ansilo-connectors-jdbc-oracle = { path = "../ansilo-connectors/jdbc-oracle" }
 ansilo-connectors-jdbc-mysql = { path = "../ansilo-connectors/jdbc-mysql" }
 ansilo-connectors-native-postgres = { path = "../ansilo-connectors/native-postgres" }
 ansilo-logging = { path = "../ansilo-logging" }
+ansilo-web = { path = "../ansilo-web" }
 ansilo-main = { path = "../ansilo-main" }
 chrono = "0.4"
 glob = "0.3"
@@ -26,6 +27,7 @@ pretty_assertions = "1.2"
 serial_test = "*"
 criterion = "0.3"
 jsonwebtoken = "*"
+reqwest = { version = "0.11", features = ["json", "native-tls"] }
 
 [[bench]]
 name = "benches"
