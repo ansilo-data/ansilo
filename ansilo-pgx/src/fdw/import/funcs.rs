@@ -2,7 +2,7 @@ use std::ptr;
 
 use ansilo_core::sqlil::EntityId;
 use ansilo_pg::fdw::proto::EntityDiscoverOptions;
-use ansilo_util_pg::query::pg_str_literal;
+use ansilo_util_pg::query::{pg_quote_identifier, pg_str_literal};
 use itertools::Itertools;
 use pgx::pg_sys::{GetForeignServer, ImportForeignSchemaStmt, List, Oid};
 use pgx::*;
@@ -23,6 +23,9 @@ pub unsafe extern "C" fn import_foreign_schema(
     // Parse the statement into EntityDiscoverOptions
     let remote_schema = parse_to_owned_utf8_string((*stmt).remote_schema).unwrap();
     let other = parse_def_elems_to_hash_map(PgList::from_pg((*stmt).options)).unwrap();
+    // We also support a "table_prefix" option which will prefix all table names
+    // with the supplied string
+    let prefix = other.get("table_prefix").cloned();
     let opts = EntityDiscoverOptions::new(remote_schema, other);
 
     // Retrieve the entity configurations from the remote data source
@@ -32,21 +35,21 @@ pub unsafe extern "C" fn import_foreign_schema(
     let stmts = entities
         .into_iter()
         .map(|e| {
-            let table_name =
-                parse_to_owned_utf8_string(pg_sys::quote_identifier(to_pg_cstr(&e.id).unwrap()))
-                    .unwrap();
+            let table_name = pg_quote_identifier(&if let Some(pfx) = prefix.as_ref() {
+                format!("{pfx}{}", e.id)
+            } else {
+                e.id.clone()
+            });
+            let entity_id = pg_str_literal(&e.id);
             let server_name =
-                parse_to_owned_utf8_string(pg_sys::quote_identifier((*server).servername)).unwrap();
+                pg_quote_identifier(&parse_to_owned_utf8_string((*server).servername).unwrap());
             let config = pg_str_literal(&serde_yaml::to_string(&e.source.options).unwrap());
 
             let cols = e
                 .attributes
                 .iter()
                 .map(|a| {
-                    let mut col = parse_to_owned_utf8_string(pg_sys::quote_identifier(
-                        to_pg_cstr(&a.id).unwrap(),
-                    ))
-                    .unwrap();
+                    let mut col = pg_quote_identifier(&a.id);
                     col.push(' ');
                     col.push_str(&to_pg_type_name(&a.r#type).unwrap());
 
@@ -68,6 +71,7 @@ pub unsafe extern "C" fn import_foreign_schema(
 )
 SERVER {server_name}
 OPTIONS (
+    entity_id {entity_id},
     __config {config}
 )"#
             )

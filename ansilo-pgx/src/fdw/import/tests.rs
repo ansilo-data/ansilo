@@ -59,6 +59,17 @@ mod tests {
     }
 
     fn run_import_foreign_schema(entities: Vec<EntityConfig>) -> Vec<String> {
+        run_import_foreign_schema_query(
+            entities,
+            r#"
+            IMPORT FOREIGN SCHEMA "any"
+            FROM SERVER test_srv
+            INTO public
+            "#,
+        )
+    }
+
+    fn run_import_foreign_schema_query(entities: Vec<EntityConfig>, query: &str) -> Vec<String> {
         let sock_path = format!("/tmp/ansilo/fdw_server/{}", Uuid::new_v4().to_string());
         start_fdw_server(create_memory_connection_pool(entities), sock_path.clone());
         Spi::execute(|mut client| {
@@ -66,7 +77,7 @@ mod tests {
                 format!(
                     r#"
                 DROP SERVER IF EXISTS test_srv CASCADE;
-                CREATE SERVER test_srv FOREIGN DATA WRAPPER ansilo_fdw OPTIONS (
+                CREATE SERVER "test_srv" FOREIGN DATA WRAPPER ansilo_fdw OPTIONS (
                     socket '{sock_path}',
                     data_source 'memory'
                 );
@@ -79,10 +90,11 @@ mod tests {
         });
 
         unsafe {
-            let server = pg_sys::GetForeignServerByName(to_pg_cstr("test_srv").unwrap(), false);
-            let mut stmt = pg_sys::ImportForeignSchemaStmt::default();
-            stmt.remote_schema = to_pg_cstr("any").unwrap();
-            let import_stmts = import_foreign_schema(&mut stmt as *mut _, (*server).serverid);
+            let stmt = pg_sys::pg_parse_query(to_pg_cstr(query).unwrap());
+            let stmt = PgList::<pg_sys::RawStmt>::from_pg(stmt);
+            let stmt = (*stmt.get_ptr(0).unwrap()).stmt as *mut pg_sys::ImportForeignSchemaStmt;
+            let server = pg_sys::GetForeignServerByName((*stmt).server_name, false);
+            let import_stmts = import_foreign_schema(stmt, (*server).serverid);
             let import_stmts = PgList::<i8>::from_pg(import_stmts);
 
             import_stmts
@@ -112,20 +124,22 @@ mod tests {
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    int8 SMALLINT NOT NULL,
-    uint8 SMALLINT NOT NULL,
-    int16 SMALLINT NOT NULL,
-    uint16 INTEGER NOT NULL,
-    int32 INTEGER NOT NULL,
-    uint32 BIGINT NOT NULL,
-    int64 BIGINT NOT NULL,
-    uint64 NUMERIC NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "int8" SMALLINT NOT NULL,
+    "uint8" SMALLINT NOT NULL,
+    "int16" SMALLINT NOT NULL,
+    "uint16" INTEGER NOT NULL,
+    "int32" INTEGER NOT NULL,
+    "uint32" BIGINT NOT NULL,
+    "int64" BIGINT NOT NULL,
+    "uint64" NUMERIC NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -150,14 +164,16 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    str TEXT NOT NULL,
-    str_max_len VARCHAR(255) NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "str" TEXT NOT NULL,
+    "str_max_len" VARCHAR(255) NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -173,13 +189,15 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    \"binary\" BYTEA NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "binary" BYTEA NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -195,13 +213,15 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    bool BOOLEAN NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "bool" BOOLEAN NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -224,15 +244,17 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    float32 REAL NOT NULL,
-    float64 DOUBLE PRECISION NOT NULL,
-    \"decimal\" NUMERIC NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "float32" REAL NOT NULL,
+    "float64" DOUBLE PRECISION NOT NULL,
+    "decimal" NUMERIC NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -253,16 +275,18 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    date DATE NOT NULL,
-    \"time\" TIME NOT NULL,
-    date_time TIMESTAMP NOT NULL,
-    date_time_tz TIMESTAMPTZ NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "date" DATE NOT NULL,
+    "time" TIME NOT NULL,
+    "date_time" TIMESTAMP NOT NULL,
+    "date_time_tz" TIMESTAMPTZ NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -278,13 +302,15 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    json JSON NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "json" JSON NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -300,13 +326,15 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    uuid UUID NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "uuid" UUID NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -322,13 +350,15 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE \"some:name\" (
-    \"foo:bar\" SMALLINT NOT NULL
+                r#"CREATE FOREIGN TABLE "some:name" (
+    "foo:bar" SMALLINT NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'some:name',
+    __config E'null
+'
+)"#
             ]
         )
     }
@@ -350,13 +380,47 @@ OPTIONS (
         assert_eq!(
             stmts,
             vec![
-                "CREATE FOREIGN TABLE tab (
-    id INTEGER OPTIONS (primary_key 'true') NOT NULL
+                r#"CREATE FOREIGN TABLE "tab" (
+    "id" INTEGER OPTIONS (primary_key 'true') NOT NULL
 )
-SERVER test_srv
+SERVER "test_srv"
 OPTIONS (
-    __config E'null\n'
-)"
+    entity_id E'tab',
+    __config E'null
+'
+)"#
+            ]
+        )
+    }
+
+    #[pg_test]
+    fn test_fdw_import_table_with_prefix_option() {
+        let stmts = run_import_foreign_schema_query(
+            vec![EntityConfig::minimal(
+                "tab",
+                vec![EntityAttributeConfig::minimal("col", DataType::Int8)],
+                EntitySourceConfig::minimal(""),
+            )],
+            r#"
+            IMPORT FOREIGN SCHEMA "any"
+            FROM SERVER test_srv
+            INTO public
+            OPTIONS (table_prefix 'my_prefix_')
+            "#,
+        );
+
+        assert_eq!(
+            stmts,
+            vec![
+                r#"CREATE FOREIGN TABLE "my_prefix_tab" (
+    "col" SMALLINT NOT NULL
+)
+SERVER "test_srv"
+OPTIONS (
+    entity_id E'tab',
+    __config E'null
+'
+)"#
             ]
         )
     }

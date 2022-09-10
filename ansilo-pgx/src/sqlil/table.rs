@@ -2,7 +2,7 @@ use std::ffi::c_void;
 
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig},
-    err::{Context, Result},
+    err::{Context, Result, bail},
     sqlil,
 };
 
@@ -69,6 +69,22 @@ pub(crate) unsafe fn get_entity_id_from_foreign_table(
 }
 
 pub(crate) unsafe fn parse_entity_id_from_rel(relid: Oid) -> Result<sqlil::EntityId> {
+    // First check if there is a table option defining the table name
+    let foreign_table = GetForeignTable(relid);
+
+    if foreign_table.is_null() {
+        bail!("Invalid foreign table oid");
+    }
+
+    let options = PgList::<DefElem>::from_pg((*foreign_table).options);
+
+    for opt in options.iter_ptr() {
+        if strcmp((*opt).defname, cstr!("entity_id").as_ptr()) == 0 {
+            return Ok(sqlil::EntityId::new(def_get_owned_utf8_string(opt)?));
+        }
+    }
+
+    // Secondly, if there is not explicit option, use the name of the table
     let table_name = {
         let name = get_rel_name(relid);
         parse_to_owned_utf8_string(name).context("Failed to get table name")?
@@ -201,6 +217,34 @@ mod tests {
         let entity = unsafe { get_entity_id_from_foreign_table(oid).unwrap() };
 
         assert_eq!(entity, sqlil::entity("example_entity"));
+    }
+
+    #[pg_test]
+    fn test_fdw_common_parse_entity_id_from_foreign_table_with_explicit_option() {
+        let oid = Spi::connect(|mut client| {
+            client.update(
+                r#"CREATE SERVER IF NOT EXISTS test_srv FOREIGN DATA WRAPPER ansilo_fdw"#,
+                None,
+                None,
+            );
+            client.update(
+                r#"
+                CREATE FOREIGN TABLE IF NOT EXISTS "example_entity" 
+                (col INTEGER) 
+                SERVER test_srv 
+                OPTIONS (entity_id 'my_entity')
+                "#,
+                None,
+                None,
+            );
+
+            Ok(Some(get_table_oid(&mut client, "example_entity")))
+        })
+        .unwrap();
+
+        let entity = unsafe { get_entity_id_from_foreign_table(oid).unwrap() };
+
+        assert_eq!(entity, sqlil::entity("my_entity"));
     }
 
     #[pg_test]
