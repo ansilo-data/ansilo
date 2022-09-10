@@ -1,17 +1,13 @@
 use std::{collections::HashMap, os::raw::c_int, thread, time::Duration};
 
-use crate::{
-    args::Command,
-    build::BuildInfo,
-    handlers::{Http1ConnectionHandler, Http2ConnectionHandler, PostgresConnectionHandler},
-};
+use crate::{args::Command, build::BuildInfo};
 use ansilo_auth::Authenticator;
 use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs, Connectors};
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{info, warn};
-use ansilo_pg::{fdw::server::FdwServer, PostgresInstance};
+use ansilo_pg::{fdw::server::FdwServer, PostgresInstance, handler::PostgresConnectionHandler};
 use ansilo_proxy::{conf::HandlerConf, server::ProxyServer};
-use ansilo_web::{HttpApi, HttpApiState};
+use ansilo_web::{HttpApi, HttpApiState, Http2ConnectionHandler, Http1ConnectionHandler};
 use clap::Parser;
 use nix::libc::SIGUSR1;
 use signal_hook::{
@@ -23,7 +19,6 @@ pub mod args;
 pub mod build;
 pub mod conf;
 pub mod dev;
-pub mod handlers;
 
 pub use ansilo_pg::fdw::log::RemoteQueryLog;
 

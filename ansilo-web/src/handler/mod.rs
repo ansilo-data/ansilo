@@ -4,6 +4,12 @@ use tokio::sync::mpsc;
 
 use crate::proto::HttpMode;
 
+mod http2;
+mod http1;
+
+pub use http2::*;
+pub use http1::*;
+
 /// Handler for incoming requests
 #[derive(Clone)]
 pub struct HttpApiHandler {

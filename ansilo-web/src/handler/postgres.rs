@@ -49,7 +49,7 @@ impl ConnectionHandler for PostgresConnectionHandler {
         let mut con = self.pool.app(&auth.username).await?;
 
         // Set the authentication context with a new reset token
-        // SEC: The reset token cannot be made available to the client,
+        // TODO[SEC]: The reset token cannot be made available to the client,
         // otherwise they could potentially change their auth context and hence
         // escalate their privilges.
         // Ideally, in future we should set the auth context "out-of-band" of the main connection

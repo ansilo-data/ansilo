@@ -1,3 +1,7 @@
+use crate::proto::{
+    be::PostgresBackendMessage,
+    fe::{PostgresFrontendMessage, PostgresFrontendMessageTag, PostgresFrontendStartupMessage},
+};
 use ansilo_core::{
     auth::{
         AuthContext, CustomAuthContext, JwtAuthContext, PasswordAuthContext, ProviderAuthContext,
@@ -9,22 +13,17 @@ use ansilo_core::{
     err::{bail, ensure, Context, Result},
 };
 use ansilo_logging::{info, warn};
-use ansilo_pg::proto::{
-    be::PostgresBackendMessage,
-    fe::{PostgresFrontendMessage, PostgresFrontendMessageTag, PostgresFrontendStartupMessage},
-};
 use ansilo_proxy::stream::IOStream;
 use rand::Rng;
 
-use crate::{
-    provider::{
-        custom::CustomAuthProvider, jwt::JwtAuthProvider, password::PasswordAuthProvider,
-        saml::SamlAuthProvider, AuthProvider,
-    },
-    Authenticator,
+use ansilo_auth::provider::{
+    custom::CustomAuthProvider, jwt::JwtAuthProvider, password::PasswordAuthProvider,
+    saml::SamlAuthProvider, AuthProvider,
 };
 
-impl Authenticator {
+use super::PostgresConnectionHandler;
+
+impl PostgresConnectionHandler {
     /// Perform authentication on the supplied client postgres connection
     ///
     /// This assumes a new connection that expects to receive a StartupMessage.
@@ -61,9 +60,9 @@ impl Authenticator {
             .get("user")
             .context("Username not specified")?;
 
-        let user = self.get_user(username)?;
+        let user = self.authenticator.get_user(username)?;
         let provider_id = user.provider.clone().unwrap_or("password".into());
-        let provider = self.get_provider(&provider_id)?;
+        let provider = self.authenticator.get_provider(&provider_id)?;
 
         let ctx = match (provider, &user.r#type) {
             (AuthProvider::Password(provider), UserTypeOptions::Password(conf)) => {

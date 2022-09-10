@@ -1,6 +1,6 @@
+use crate::{HttpApiHandler, HttpMode};
 use ansilo_core::err::Result;
 use ansilo_proxy::{handler::ConnectionHandler, stream::IOStream};
-use ansilo_web::{HttpApiHandler, HttpMode};
 use async_trait::async_trait;
 
 /// Handler for HTTP/1 connections

@@ -7,7 +7,6 @@ use ansilo_core::{
 use ansilo_logging::info;
 use provider::{password::PasswordAuthProvider, AuthProvider};
 
-pub mod handler;
 pub mod provider;
 
 /// The entrypoint to the authentication functionality.

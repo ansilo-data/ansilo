@@ -27,6 +27,7 @@ pub mod manager;
 pub mod proc;
 pub mod proto;
 pub mod server;
+pub mod handler;
 
 mod configure;
 #[cfg(test)]

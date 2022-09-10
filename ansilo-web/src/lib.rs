@@ -69,6 +69,7 @@ impl HttpApi {
         })
     }
 
+    /// The main api router
     fn router(state: HttpApiState) -> Router<HttpApiState> {
         let state = Arc::new(state);
 
