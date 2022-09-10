@@ -37,7 +37,10 @@ impl QueryPlanner for MemoryQueryPlanner {
                 connection
                     .data
                     .with_data(&entity.conf.id, |rows| rows.len())
-                    .ok_or(Error::msg("Could not find entity"))? as _,
+                    .ok_or(Error::msg(format!(
+                        "Could not find entity with id {} in source config",
+                        entity.conf.id
+                    )))? as _,
             ),
             None,
             None,

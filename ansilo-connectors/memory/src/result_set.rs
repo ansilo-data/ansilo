@@ -2,7 +2,7 @@ use std::io::{Cursor, Read, Seek};
 
 use ansilo_core::{
     data::{DataType, DataValue},
-    err::{Context, Result},
+    err::{Context, Result, ensure},
 };
 
 use ansilo_connectors_base::{
@@ -22,7 +22,8 @@ impl MemoryResultSet {
         let mut writer = DataWriter::new(Cursor::new(Vec::<u8>::new()), None);
 
         for row in data.iter() {
-            for cell in row.iter() {
+            for (idx, cell) in row.iter().enumerate() {
+                ensure!(cell.r#type() == cols[idx].1, "Data value found with unexpected data type");
                 writer.write_data_value(cell.clone())?;
             }
         }
