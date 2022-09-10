@@ -1,0 +1,27 @@
+name: Ansilo
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    # passthrough auth should work
+    - username: app
+      password: pass
+    # passthrough auth should not work
+    - username: user
+      password: pass1
+
+sources:
+  - id: peer
+    type: peer
+    options:
+      url: ${env:URL_PEER}
+
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-main-sql/*.sql
+    data_dir: /tmp/${dir}/${env:INSTANCE_NAME}/data
+    listen_socket_dir_path: /tmp/${dir}/${env:INSTANCE_NAME}
+    fdw_socket_path: /tmp/${dir}/${env:INSTANCE_NAME}/fdw.sock
+    build_info_path: /tmp/${dir}/${env:INSTANCE_NAME}/build-info.json

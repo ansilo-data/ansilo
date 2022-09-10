@@ -12,7 +12,6 @@ auth:
   users:
     - username: token
       provider: jwt
-      claims: {}
 
 postgres:
     install_dir: /usr/lib/postgresql/14/

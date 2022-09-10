@@ -48,6 +48,13 @@ pub fn connect(port: u16) -> Client {
 }
 
 /// Connects to the ansilo instance running on the supplied port
+pub fn connect_to_as_user(instance: &Ansilo, user: &str, pass: &str) -> Client {
+    let addrs = instance.subsystems().unwrap().proxy().addrs().unwrap();
+
+    connect_opts(user, pass, addrs[0].port(), |_| ()).unwrap()
+}
+
+/// Connects to the ansilo instance running on the supplied port
 pub fn connect_opts(
     user: &str,
     pass: &str,

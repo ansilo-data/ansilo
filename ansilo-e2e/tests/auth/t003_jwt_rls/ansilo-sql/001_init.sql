@@ -14,7 +14,7 @@ CREATE POLICY token_read_scope ON storage
 FOR SELECT TO token
 USING ('read' = ANY(string_to_array(auth_context()->'claims'->'scope'->>0, ' ')));
 
--- Grant SELECT to read scope
+-- Grant ALL to maintain scope
 CREATE POLICY token_maintain_scope ON storage
 FOR ALL TO token
 USING ('maintain' = ANY(string_to_array(auth_context()->'claims'->'scope'->>0, ' ')));

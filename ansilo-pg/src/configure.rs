@@ -1,4 +1,5 @@
 use ansilo_core::err::{Context, Result};
+use ansilo_util_pg::query::pg_quote_identifier;
 
 use crate::{conf::PostgresConf, connection::PostgresConnection, PG_ADMIN_USER, PG_DATABASE};
 
@@ -45,6 +46,7 @@ async fn configure_roles(
 
     // Configure user-provided users
     for user in conf.app_users.iter() {
+        let user = pg_quote_identifier(user);
         superuser_con
             .batch_execute(
                 format!(
@@ -83,6 +85,7 @@ async fn configure_extension(
 
     // Configure user-provided users
     for user in conf.app_users.iter() {
+        let user = pg_quote_identifier(user);
         superuser_con
             .batch_execute(
                 format!(

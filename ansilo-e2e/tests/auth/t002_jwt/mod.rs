@@ -1,31 +1,13 @@
-use std::{
-    env,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::env;
 
 use ansilo_core::auth::{AuthContext, JwtAuthContext, ProviderAuthContext};
-use ansilo_e2e::current_dir;
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use ansilo_e2e::{
+    auth::jwt::{make_rsa_token, valid_exp},
+    current_dir,
+};
 use pretty_assertions::assert_eq;
-use serde_json::{json, Value};
+use serde_json::json;
 use serial_test::serial;
-
-fn valid_exp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        + 1800
-}
-
-fn make_valid_token(claims: Value) -> String {
-    encode(
-        &Header::new(Algorithm::RS512),
-        &claims,
-        &EncodingKey::from_rsa_pem(include_bytes!("keys/private.key")).unwrap(),
-    )
-    .unwrap()
-}
 
 #[test]
 #[serial]
@@ -50,12 +32,10 @@ fn test_invalid_jwt_invalid_signature() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = encode(
-        &Header::new(Algorithm::RS512),
-        &json!({"scope": "read", "exp": valid_exp()}),
-        &EncodingKey::from_rsa_pem(include_bytes!("keys/foreign-private.key")).unwrap(),
-    )
-    .unwrap();
+    let token = make_rsa_token(
+        json!({"scope": "read", "exp": valid_exp()}),
+        include_bytes!("keys/foreign-private.key"),
+    );
 
     assert_eq!(
         ansilo_e2e::util::main::connect_opts("token_read", &token, port, |_| ())
@@ -73,7 +53,10 @@ fn test_expired_token() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "read", "exp": 123456}));
+    let token = make_rsa_token(
+        json!({"scope": "read", "exp": 123456}),
+        include_bytes!("keys/private.key"),
+    );
 
     assert_eq!(
         ansilo_e2e::util::main::connect_opts("token_read", &token, port, |_| ())
@@ -91,7 +74,10 @@ fn test_token_missing_claim() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "invalid", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "invalid", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
 
     assert_eq!(
         ansilo_e2e::util::main::connect_opts("token_read", &token, port, |_| ())
@@ -109,10 +95,16 @@ fn test_valid_token() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "read", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "read", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
     ansilo_e2e::util::main::connect_opts("token_read", &token, port, |_| ()).unwrap();
 
-    let token = make_valid_token(json!({"scope": "maintain", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "maintain", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
     ansilo_e2e::util::main::connect_opts("token_maintain", &token, port, |_| ()).unwrap();
 }
 
@@ -123,7 +115,10 @@ fn test_read_scope_grants_access() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "read", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "read", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
     let mut client =
         ansilo_e2e::util::main::connect_opts("token_read", &token, port, |_| ()).unwrap();
 
@@ -140,7 +135,10 @@ fn test_read_scope_denied_write_access() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "read", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "read", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
     let mut client =
         ansilo_e2e::util::main::connect_opts("token_read", &token, port, |_| ()).unwrap();
 
@@ -161,7 +159,10 @@ fn test_maintain_scope_grants_full_access() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "maintain", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "maintain", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
     let mut client =
         ansilo_e2e::util::main::connect_opts("token_maintain", &token, port, |_| ()).unwrap();
 
@@ -178,7 +179,10 @@ fn test_auth_context_read_scope() {
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
     let exp = valid_exp();
-    let token = make_valid_token(json!({"scope": "read", "exp": exp}));
+    let token = make_rsa_token(
+        json!({"scope": "read", "exp": exp}),
+        include_bytes!("keys/private.key"),
+    );
     let mut client =
         ansilo_e2e::util::main::connect_opts("token_read", &token, port, |_| ()).unwrap();
 
@@ -211,7 +215,10 @@ fn test_auth_context_maintain_scope() {
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
     let exp = valid_exp();
-    let token = make_valid_token(json!({"scope": "maintain", "exp": exp}));
+    let token = make_rsa_token(
+        json!({"scope": "maintain", "exp": exp}),
+        include_bytes!("keys/private.key"),
+    );
     let mut client =
         ansilo_e2e::util::main::connect_opts("token_maintain", &token, port, |_| ()).unwrap();
 

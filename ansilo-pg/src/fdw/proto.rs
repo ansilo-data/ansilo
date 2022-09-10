@@ -66,7 +66,7 @@ pub enum ClientQueryMessage {
     ExecuteQuery,
     /// Execute the current query and return the number of affected rows
     ExecuteModify,
-    /// Read up to the supplied number of bytes from result set 
+    /// Read up to the supplied number of bytes from result set
     Read(u32),
     /// Discard the current result set and ready the query for new params and execution
     Restart,
@@ -80,7 +80,10 @@ pub enum ClientQueryMessage {
 #[derive(Debug, PartialEq, Clone, Encode, Decode)]
 pub struct AuthDataSource {
     /// The authentication context
-    pub context: Option<AuthContext>,
+    ///
+    /// We store this as a JSON string as the structure
+    /// is not compatible with bincode
+    context: Option<String>,
     /// The data source id
     pub data_source_id: String,
 }
@@ -88,9 +91,15 @@ pub struct AuthDataSource {
 impl AuthDataSource {
     pub fn new(context: Option<AuthContext>, data_source_id: impl Into<String>) -> Self {
         Self {
-            context,
+            context: context.map(|c| serde_json::to_string(&c).unwrap()),
             data_source_id: data_source_id.into(),
         }
+    }
+
+    pub fn context(&self) -> Option<AuthContext> {
+        self.context
+            .as_ref()
+            .map(|c| serde_json::from_str(c).unwrap())
     }
 }
 

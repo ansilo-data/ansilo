@@ -115,6 +115,7 @@ pub struct JwtUserConfig {
     /// Defines which claims are required to pass authentication
     /// All claims defined in this node must be present in the token
     /// to succeed.
+    #[serde(default)]
     pub claims: HashMap<String, TokenClaimCheck>,
 }
 
@@ -124,6 +125,7 @@ pub struct SamlUserConfig {
     /// Defines which assertions are required to pass authentication
     /// All assertions defined in this node must be present in the SAML payload
     /// to succeed.
+    #[serde(default)]
     pub assertions: HashMap<String, TokenClaimCheck>,
 }
 

@@ -1,30 +1,12 @@
-use std::{
-    env,
-    time::{SystemTime, UNIX_EPOCH},
+use std::env;
+
+use ansilo_e2e::{
+    auth::jwt::{make_rsa_token, valid_exp},
+    current_dir,
 };
-
-use ansilo_e2e::current_dir;
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use pretty_assertions::assert_eq;
-use serde_json::{json, Value};
+use serde_json::json;
 use serial_test::serial;
-
-fn valid_exp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        + 1800
-}
-
-fn make_valid_token(claims: Value) -> String {
-    encode(
-        &Header::new(Algorithm::RS512),
-        &claims,
-        &EncodingKey::from_rsa_pem(include_bytes!("keys/private.key")).unwrap(),
-    )
-    .unwrap()
-}
 
 #[test]
 #[serial]
@@ -33,7 +15,10 @@ fn test_missing_scope_does_not_allow_data_access() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "invalid", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "invalid", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
     let mut client = ansilo_e2e::util::main::connect_opts("token", &token, port, |_| ()).unwrap();
 
     let rows = client.query("SELECT * FROM storage", &[]).unwrap();
@@ -63,7 +48,10 @@ fn test_read_scope_only_grants_select() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "read", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "read", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
     let mut client = ansilo_e2e::util::main::connect_opts("token", &token, port, |_| ()).unwrap();
 
     let rows = client.query("SELECT * FROM storage", &[]).unwrap();
@@ -94,7 +82,10 @@ fn test_maintain_scope_grants_crud_access() {
     let (_instance, port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let token = make_valid_token(json!({"scope": "maintain", "exp": valid_exp()}));
+    let token = make_rsa_token(
+        json!({"scope": "maintain", "exp": valid_exp()}),
+        include_bytes!("keys/private.key"),
+    );
     let mut client = ansilo_e2e::util::main::connect_opts("token", &token, port, |_| ()).unwrap();
 
     let rows = client.query("SELECT * FROM storage", &[]).unwrap();

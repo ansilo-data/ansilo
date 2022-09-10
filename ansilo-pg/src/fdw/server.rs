@@ -263,8 +263,8 @@ impl FdwListener {
         log: RemoteQueryLog,
     ) {
         let mut fdw_con = FdwConnection::<TConnector>::new(
-            auth.data_source_id,
-            auth.context,
+            auth.data_source_id.clone(),
+            auth.context(),
             nc,
             chan,
             entities,

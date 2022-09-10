@@ -1,0 +1,28 @@
+name: Ansilo
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  providers:
+    - id: jwt
+      type: jwt
+      rsa_public_key: file://${dir}/keys/public.key
+
+  users:
+    - username: app
+      password: pass
+
+    - username: token
+      provider: jwt
+
+    - username: token2
+      provider: jwt
+
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-peer-sql/*.sql
+    data_dir: /tmp/${dir}/${env:INSTANCE_NAME}/data
+    listen_socket_dir_path: /tmp/${dir}/${env:INSTANCE_NAME}
+    fdw_socket_path: /tmp/${dir}/${env:INSTANCE_NAME}/fdw.sock
+    build_info_path: /tmp/${dir}/${env:INSTANCE_NAME}/build-info.json
