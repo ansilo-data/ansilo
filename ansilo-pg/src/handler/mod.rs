@@ -259,12 +259,12 @@ impl PostgresConnectionHandler {
 mod tests {
     use std::path::PathBuf;
 
+    use crate::{conf::PostgresConf, PostgresInstance};
     use ansilo_core::{
         auth::{AuthContext, PasswordAuthContext, ProviderAuthContext},
         config::{AuthConfig, PasswordUserConfig, UserConfig, UserTypeOptions},
         err::Error,
     };
-    use crate::{conf::PostgresConf, PostgresInstance};
     use ansilo_proxy::stream::Stream;
     use tokio::net::UnixStream;
     use tokio_postgres::NoTls;
