@@ -1,0 +1,39 @@
+name: Ansilo
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+entities:
+  - id: pets
+    description: This list of pets
+    source:
+      data_source: memory
+      options: null
+    attributes:
+      - id: id
+        type: Int64
+      - id: name
+        type: !Utf8String
+
+sources:
+  - id: memory
+    type: test.memory
+    options:
+      pets:
+        - [1, "Pepper"]
+        - [2, "Relish"]
+        - [3, "Salt"]
+        - [4, "Luna"]
+
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-peer-2-sql/*.sql
+    data_dir: /tmp/${dir}/${env:INSTANCE_NAME}/data
+    listen_socket_dir_path: /tmp/${dir}/${env:INSTANCE_NAME}
+    fdw_socket_path: /tmp/${dir}/${env:INSTANCE_NAME}/fdw.sock
+    build_info_path: /tmp/${dir}/${env:INSTANCE_NAME}/build-info.json
