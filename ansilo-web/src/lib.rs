@@ -20,6 +20,7 @@ mod handler;
 mod healthcheck;
 mod proto;
 mod state;
+mod version;
 
 pub use handler::*;
 pub use proto::*;
@@ -35,6 +36,16 @@ pub struct HttpApi {
 }
 
 impl HttpApi {
+    /// The main api router
+    fn router(state: HttpApiState) -> Router<HttpApiState> {
+        let state = Arc::new(state);
+
+        Router::with_state_arc(state.clone())
+            .nest("/api", api::router(state.clone()))
+            .nest("/health", healthcheck::router(state.clone()))
+            .nest("/version", version::router(state.clone()))
+    }
+
     /// Starts the http api server
     pub async fn start(state: HttpApiState) -> Result<Self> {
         let rt_handle = tokio::runtime::Handle::current();
@@ -67,15 +78,6 @@ impl HttpApi {
             shutdown_tx,
             rt_handle,
         })
-    }
-
-    /// The main api router
-    fn router(state: HttpApiState) -> Router<HttpApiState> {
-        let state = Arc::new(state);
-
-        Router::with_state_arc(state.clone())
-            .nest("/api", api::router(state.clone()))
-            .nest("/health", healthcheck::router(state.clone()))
     }
 
     fn server(
@@ -145,7 +147,10 @@ mod tests {
     use std::time::Duration;
 
     use ansilo_auth::Authenticator;
-    use ansilo_core::config::NodeConfig;
+    use ansilo_core::{
+        config::NodeConfig,
+        data::chrono::{DateTime, Utc},
+    };
     use ansilo_pg::{
         conf::PostgresConf,
         connection::PostgresConnectionPool,
@@ -157,7 +162,7 @@ mod tests {
     use hyper::{Body, Request, StatusCode};
     use tower::ServiceExt;
 
-    use crate::{HttpApi, HttpApiState};
+    use crate::{version::VersionInfo, HttpApi, HttpApiState};
 
     fn mock_state() -> HttpApiState {
         let conf = Box::leak(Box::new(NodeConfig::default()));
@@ -186,6 +191,7 @@ mod tests {
                 .unwrap(),
             ),
             Authenticator::init(&conf.auth).unwrap(),
+            VersionInfo::new("test", DateTime::<Utc>::MIN_UTC),
         )
     }
 

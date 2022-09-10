@@ -28,5 +28,6 @@ hex = "0.4"
 
 [dev-dependencies]
 ansilo-connectors-memory = { path = "../ansilo-connectors/memory" }
+ansilo-auth = { path = "../ansilo-auth", features = ["test"] }
 pretty_assertions = "*"
 tokio-test = "0.4"

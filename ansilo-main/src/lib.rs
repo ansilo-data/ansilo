@@ -5,9 +5,9 @@ use ansilo_auth::Authenticator;
 use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs, Connectors};
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{info, warn};
-use ansilo_pg::{fdw::server::FdwServer, PostgresInstance, handler::PostgresConnectionHandler};
+use ansilo_pg::{fdw::server::FdwServer, handler::PostgresConnectionHandler, PostgresInstance};
 use ansilo_proxy::{conf::HandlerConf, server::ProxyServer};
-use ansilo_web::{HttpApi, HttpApiState, Http2ConnectionHandler, Http1ConnectionHandler};
+use ansilo_web::{Http1ConnectionHandler, Http2ConnectionHandler, HttpApi, HttpApiState};
 use clap::Parser;
 use nix::libc::SIGUSR1;
 use signal_hook::{
@@ -93,12 +93,13 @@ impl Ansilo {
         )
         .context("Failed to start fdw server")?;
 
-        let mut postgres = if let (Command::Run(_), false, Some(build_info)) =
+        let (mut postgres, build_info) = if let (Command::Run(_), false, Some(build_info)) =
             (&command, args.force_build, BuildInfo::fetch(conf)?)
         {
             info!("Build occurred at {}", build_info.built_at().to_rfc3339());
             info!("Starting postgres...");
-            runtime.block_on(PostgresInstance::start(&conf.pg))?
+            let pg = runtime.block_on(PostgresInstance::start(&conf.pg))?;
+            (pg, build_info)
         } else {
             runtime.block_on(build(conf))?
         };
@@ -121,6 +122,7 @@ impl Ansilo {
             &conf.node,
             postgres.connections().clone(),
             authenticator.clone(),
+            (&build_info).into(),
         )))?;
 
         info!("Starting proxy server...");

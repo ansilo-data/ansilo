@@ -42,7 +42,7 @@ impl PostgresConnectionHandler {
 impl ConnectionHandler for PostgresConnectionHandler {
     async fn handle(&self, mut client: Box<dyn IOStream>) -> Result<()> {
         // Authenticate the client
-        let (auth, startup) = self.authenticate_postgres(&mut client).await?;
+        let (auth, startup) = Self::authenticate_postgres(&self.authenticator, &mut client).await?;
 
         // Now that we have authenticated, we acquire a connection to to postgres
         let mut con = self.pool.app(&auth.username).await?;
@@ -264,7 +264,7 @@ mod tests {
         config::{AuthConfig, PasswordUserConfig, UserConfig, UserTypeOptions},
         err::Error,
     };
-    use ansilo_pg::{conf::PostgresConf, PostgresInstance};
+    use crate::{conf::PostgresConf, PostgresInstance};
     use ansilo_proxy::stream::Stream;
     use tokio::net::UnixStream;
     use tokio_postgres::NoTls;

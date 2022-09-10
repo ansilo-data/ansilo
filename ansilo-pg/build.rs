@@ -4,11 +4,16 @@ use std::{
 };
 
 fn main() {
+    if env::var("ANSILO_PGX_INSTALL").is_ok() {
+        print!("Running in pgx install, skipping build...");
+        return;
+    }
+
     // Build and install the ansilo-pgx so it can be loaded
     // via CREATE EXTENSION in the current postgres installation
     println!("cargo:rerun-if-changed=../ansilo-core/src");
     println!("cargo:rerun-if-changed=../ansilo-connectors/base/src");
-    println!("cargo:rerun-if-changed=../ansilo-pg/src");
+    println!("cargo:rerun-if-changed=../ansilo-pg/src/fdw");
     println!("cargo:rerun-if-changed=../ansilo-pgx/src");
     println!("cargo:rerun-if-env-changed=SSH_CONNECTION");
 
@@ -31,6 +36,7 @@ fn main() {
     // the inherited one.
     let res = Command::new("cargo")
         .args(["pgx", "install"])
+        .env("ANSILO_PGX_INSTALL", "true")
         .env(
             "CARGO_TARGET_DIR",
             format!(

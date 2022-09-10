@@ -22,10 +22,10 @@ use crate::HttpApiState;
 /// the schema itself, the type of data source, and if this
 /// entity is imported from a peer instance, we expose its lineage.
 #[derive(Debug, Serialize)]
-
 pub struct Catalog {
     entities: Vec<CatalogEntity>,
 }
+
 #[derive(Debug, Serialize)]
 pub struct CatalogEntity {
     id: String,
@@ -56,7 +56,7 @@ pub struct CatalogEntitySource {
 pub struct CatalogEntityAttribue {
     #[serde(flatten)]
     attribute: EntityAttributeConfig,
-    // TODO: expose data lineage through querying information schema VIEW_COLUMN_USAGE
+    // TODO[future]: expose data lineage through querying information schema VIEW_COLUMN_USAGE
     // sources: Vec<String>
 }
 

@@ -11,6 +11,11 @@ pub mod jwt;
 pub mod password;
 pub mod saml;
 
+#[cfg(any(test, feature = "test"))]
+pub mod jwt_test;
+#[cfg(any(test, feature = "test"))]
+pub mod password_test;
+
 /// Container type for authentication provider
 pub enum AuthProvider {
     Password(PasswordAuthProvider),

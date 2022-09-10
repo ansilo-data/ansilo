@@ -4,16 +4,20 @@ use std::{
     time::{self, UNIX_EPOCH},
 };
 
-use ansilo_core::err::{Context, Result};
+use ansilo_core::{
+    build::ansilo_version,
+    err::{Context, Result},
+};
 use ansilo_logging::info;
 use ansilo_pg::PostgresInstance;
+use ansilo_web::VersionInfo;
 use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
 
 use crate::conf::*;
 
 /// Initialises the postgres database
-pub async fn build(conf: &'static AppConf) -> Result<PostgresInstance> {
+pub async fn build(conf: &'static AppConf) -> Result<(PostgresInstance, BuildInfo)> {
     info!("Running build...");
 
     // Initialize postgres via initdb
@@ -52,10 +56,11 @@ pub async fn build(conf: &'static AppConf) -> Result<PostgresInstance> {
             .with_context(|| format!("Failed to execute sql script: {}", script.display()))?;
     }
 
-    BuildInfo::new().store(conf)?;
+    let build_info = BuildInfo::new();
+    build_info.store(conf)?;
     info!("Build complete...");
 
-    Ok(postgres)
+    Ok((postgres, build_info))
 }
 
 /// Captures information about the build
@@ -115,5 +120,11 @@ impl BuildInfo {
             .unwrap_or_default()
             .build_info_path
             .unwrap_or("/var/run/ansilo/build-info.json".into())
+    }
+}
+
+impl Into<VersionInfo> for &BuildInfo {
+    fn into(self) -> VersionInfo {
+        VersionInfo::new(ansilo_version(), self.built_at())
     }
 }

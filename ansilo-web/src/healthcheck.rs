@@ -5,6 +5,7 @@ use axum::{routing, Router};
 use crate::HttpApiState;
 
 async fn handler() -> &'static str {
+    // TODO: better healthchecks for subsytems?
     "Ok"
 }
 

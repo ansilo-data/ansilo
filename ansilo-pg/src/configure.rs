@@ -61,9 +61,6 @@ async fn configure_roles(
     Ok(())
 }
 
-/// We cannot rely this extension being available when we build run tests
-/// for this crate
-#[cfg(not(test))]
 async fn configure_extension(
     conf: &PostgresConf,
     superuser_con: &mut PostgresConnection,
@@ -99,13 +96,5 @@ async fn configure_extension(
             .context("Failed to initialise app user")?;
     }
 
-    Ok(())
-}
-
-#[cfg(test)]
-async fn configure_extension(
-    _conf: &PostgresConf,
-    _superuser_con: &mut PostgresConnection,
-) -> Result<()> {
     Ok(())
 }
