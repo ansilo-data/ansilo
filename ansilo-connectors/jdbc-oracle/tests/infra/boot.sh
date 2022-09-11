@@ -20,7 +20,7 @@ trap cleanup EXIT INT TERM
 
 echo "Starting oracle..."
 /bin/sh -c $ORACLE_BASE/$RUN_FILE &
-ORACLE_PID=$$
+ORACLE_PID=$!
 echo "Oracle started as pid $ORACLE_PID"
 
 echo "Running lazyprox"

@@ -21,10 +21,10 @@ lazy_static::lazy_static! {
 
         #[cfg(debug_assertions)]
         let jvm_args ={
-            let port = 63000 + std::time::SystemTime::now()
+            let port = 49152 + std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .subsec_millis();
+                .subsec_nanos() % 1000;
 
             ansilo_logging::info!("JVM Debug port: {}", port);
 

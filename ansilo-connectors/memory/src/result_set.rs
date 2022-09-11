@@ -2,7 +2,7 @@ use std::io::{Cursor, Read, Seek};
 
 use ansilo_core::{
     data::{DataType, DataValue},
-    err::{Context, Result, ensure},
+    err::{bail, Context, Result},
 };
 
 use ansilo_connectors_base::{
@@ -23,7 +23,12 @@ impl MemoryResultSet {
 
         for row in data.iter() {
             for (idx, cell) in row.iter().enumerate() {
-                ensure!(cell.r#type() == cols[idx].1, "Data value found with unexpected data type");
+                if !cell.is_null() && cell.r#type() != cols[idx].1 {
+                    bail!(
+                        "Expecting data type {:?} but found data value {:?} found with unexpected type",
+                        cols[idx].1, cell.r#type()
+                    );
+                }
                 writer.write_data_value(cell.clone())?;
             }
         }

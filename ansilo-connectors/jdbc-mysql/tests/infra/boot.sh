@@ -20,7 +20,7 @@ trap cleanup EXIT INT TERM
 
 echo "Starting mysql..."
 docker-entrypoint.sh mysqld &
-MYSQL_PID=$$
+MYSQL_PID=$!
 echo "Mysql started as pid $MYSQL_PID"
 
 echo "Running lazyprox..."

@@ -1002,6 +1002,24 @@ mod tests {
     }
 
     #[test]
+    fn test_mysql_jdbc_compile_select_count() {
+        let mut select = sql::Select::new(sql::source("entity", "entity"));
+        select.cols.push((
+            "COL".to_string(),
+            sql::Expr::AggregateCall(sql::AggregateCall::Count),
+        ));
+        let compiled = compile_select(select, mock_entity_table());
+
+        assert_eq!(
+            compiled,
+            JdbcQuery::new(
+                r#"SELECT COUNT(*) AS `COL` FROM `table` AS `entity`"#,
+                vec![]
+            )
+        );
+    }
+
+    #[test]
     fn test_mysql_jdbc_compile_insert_query() {
         let mut insert = sql::Insert::new(sql::source("entity", "entity"));
         insert.cols.push((

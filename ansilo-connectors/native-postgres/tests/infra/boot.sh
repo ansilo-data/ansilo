@@ -20,7 +20,7 @@ trap cleanup EXIT INT TERM
 
 echo "Starting postgres..."
 docker-entrypoint.sh postgres &
-POSTGRES_PID=$$
+POSTGRES_PID=$!
 echo "postgres started as pid $POSTGRES_PID"
 
 echo "Running lazyprox..."
