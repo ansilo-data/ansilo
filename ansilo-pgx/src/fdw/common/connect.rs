@@ -22,7 +22,7 @@ use crate::{
     sqlil::get_entity_id_from_foreign_table,
 };
 
-use super::ServerOptions;
+use super::{ServerOptions, TableOptions};
 
 // We store a global hash map of all active connections present in the session.
 // Each connection is unique per data source. This is important when we perform
@@ -90,12 +90,16 @@ pub(crate) unsafe fn connect_table(foreign_table_oid: Oid) -> FdwContext {
         panic!("Could not find table with oid: {}", foreign_table_oid);
     }
 
+    // Parse table options
+    let table_opts = TableOptions::parse(PgList::<DefElem>::from_pg((*table).options))
+        .expect("Failed to parse server table");
+
     // Find the corrosponding entity / version id from the table name
     let entity = get_entity_id_from_foreign_table(foreign_table_oid).unwrap();
 
     let con = get_server_connection((*table).serverid).unwrap();
 
-    FdwContext::new(con, entity, foreign_table_oid)
+    FdwContext::new(con, entity, foreign_table_oid, table_opts)
 }
 
 /// Returns a connection to the data source for the supplied foreign server

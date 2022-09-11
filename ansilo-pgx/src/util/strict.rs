@@ -1,6 +1,6 @@
 //! We provide a function "strict" which simply errors
 //! out if the provided flag is false.
-//! The purpose of this is ensuring that RLS policies error
+//! The purpose of this is ensuring that CHECK OPTIONS/RLS policies error
 //! out if the check fails.
 
 use pgx::*;

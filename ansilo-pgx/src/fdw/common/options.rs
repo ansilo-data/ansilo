@@ -7,7 +7,7 @@ use pgx::{
     *,
 };
 
-use crate::util::def_elem::def_get_owned_utf8_string;
+use crate::util::def_elem::{def_get_owned_utf8_string, parse_def_elems_to_hash_map};
 
 #[derive(Debug)]
 pub struct ServerOptions {
@@ -44,6 +44,34 @@ impl ServerOptions {
         Ok(Self {
             data_source,
             socket,
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Default)]
+pub struct TableOptions {
+    /// The user-defined function to call before SELECT queries
+    pub before_select: Option<String>,
+    /// The user-defined function to call before INSERT queries
+    pub before_insert: Option<String>,
+    /// The user-defined function to call before INSERT queries
+    pub before_update: Option<String>,
+    /// The user-defined function to call before DELETE queries
+    pub before_delete: Option<String>,
+    /// The user-defined function to call before INSERT/UPDATE/DELETE queries
+    pub before_modify: Option<String>,
+}
+
+impl TableOptions {
+    pub unsafe fn parse(opts: PgList<DefElem>) -> Result<Self> {
+        let opts = parse_def_elems_to_hash_map(opts)?;
+
+        Ok(Self {
+            before_select: opts.get("before_select").cloned(),
+            before_insert: opts.get("before_insert").cloned(),
+            before_update: opts.get("before_update").cloned(),
+            before_delete: opts.get("before_delete").cloned(),
+            before_modify: opts.get("before_modify").cloned(),
         })
     }
 }
@@ -111,6 +139,67 @@ mod tests {
             let opts = PgList::<DefElem>::new();
 
             ServerOptions::parse(opts).unwrap_err();
+        }
+    }
+
+    #[pg_test]
+    fn test_fdw_common_table_options_parse_no_options() {
+        unsafe {
+            let opts = PgList::<DefElem>::new();
+
+            assert_eq!(
+                TableOptions::parse(opts).unwrap(),
+                TableOptions {
+                    before_select: None,
+                    before_insert: None,
+                    before_update: None,
+                    before_delete: None,
+                    before_modify: None,
+                }
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_fdw_common_table_options_parse_all() {
+        unsafe {
+            let mut opts = PgList::<DefElem>::new();
+            opts.push(makeDefElem(
+                cstr!("before_select").as_ptr() as _,
+                makeString(cstr!("select_func").as_ptr() as _) as _,
+                0,
+            ));
+            opts.push(makeDefElem(
+                cstr!("before_insert").as_ptr() as _,
+                makeString(cstr!("insert_func").as_ptr() as _) as _,
+                0,
+            ));
+            opts.push(makeDefElem(
+                cstr!("before_update").as_ptr() as _,
+                makeString(cstr!("update_func").as_ptr() as _) as _,
+                0,
+            ));
+            opts.push(makeDefElem(
+                cstr!("before_delete").as_ptr() as _,
+                makeString(cstr!("delete_func").as_ptr() as _) as _,
+                0,
+            ));
+            opts.push(makeDefElem(
+                cstr!("before_modify").as_ptr() as _,
+                makeString(cstr!("modify_func").as_ptr() as _) as _,
+                0,
+            ));
+
+            assert_eq!(
+                TableOptions::parse(opts).unwrap(),
+                TableOptions {
+                    before_select: Some("select_func".into()),
+                    before_insert: Some("insert_func".into()),
+                    before_update: Some("update_func".into()),
+                    before_delete: Some("delete_func".into()),
+                    before_modify: Some("modify_func".into()),
+                }
+            );
         }
     }
 }

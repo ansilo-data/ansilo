@@ -25,7 +25,7 @@ use crate::{
         },
     },
     sqlil::{convert, from_datum, from_pg_type, into_pg_type},
-    util::{string::to_pg_cstr, table::PgTable, tuple::slot_get_attr},
+    util::{func::call_udf, string::to_pg_cstr, table::PgTable, tuple::slot_get_attr},
 };
 
 /// Number of executions of a single-row insert query we should "batch" together
@@ -97,11 +97,6 @@ pub unsafe extern "C" fn plan_foreign_modify(
     result_relation: Index,
     subplan_index: ::std::os::raw::c_int,
 ) -> *mut List {
-    // Currently we do not support WITH CHECK OPTION
-    if !(*plan).withCheckOptionLists.is_null() {
-        panic!("WITH CHECK OPTION is currently not supported");
-    }
-
     if !(*plan).returningLists.is_null() {
         panic!("RETURNING clauses are currently not supported");
     }
@@ -118,6 +113,11 @@ pub unsafe extern "C" fn plan_foreign_modify(
     // so all queries use the same connection which is required
     // for remote transactions or locking.
     let mut ctx = pg_transaction_scoped(common::connect_table(table.rd_id));
+
+    // If the user provided a before modify callback, invoke it now
+    if let Some(func) = ctx.foreign_table_opts.before_modify.as_ref() {
+        call_udf(func.as_str());
+    }
 
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_INSERT => {
@@ -147,6 +147,11 @@ unsafe fn plan_foreign_insert(
     rte: *mut RangeTblEntry,
     table: PgTable,
 ) -> FdwQueryContext {
+    // If the user provided a before insert callback, invoke it now
+    if let Some(func) = ctx.foreign_table_opts.before_insert.as_ref() {
+        call_udf(func.as_str());
+    }
+
     // Create an insert query to insert a single row
     let mut query = ctx
         .create_query(result_relation, sqlil::QueryType::Insert)
@@ -197,6 +202,11 @@ unsafe fn plan_foreign_update(
     rte: *mut RangeTblEntry,
     table: PgTable,
 ) -> FdwQueryContext {
+    // If the user provided a before update callback, invoke it now
+    if let Some(func) = ctx.foreign_table_opts.before_update.as_ref() {
+        call_udf(func.as_str());
+    }
+
     // Create an update query to update a single row
     let mut query = ctx
         .create_query(result_relation, sqlil::QueryType::Update)
@@ -295,6 +305,11 @@ unsafe fn plan_foreign_delete(
     rte: *mut RangeTblEntry,
     table: PgTable,
 ) -> FdwQueryContext {
+    // If the user provided a before delete callback, invoke it now
+    if let Some(func) = ctx.foreign_table_opts.before_delete.as_ref() {
+        call_udf(func.as_str());
+    }
+
     // Create an delete query to delete a single row
     let mut query = ctx
         .create_query(result_relation, sqlil::QueryType::Delete)
@@ -746,6 +761,11 @@ pub unsafe extern "C" fn plan_direct_modify(
 
     let (ctx, inner_select, planner) = from_fdw_private_rel((*foreign_scan).fdw_private);
 
+    // If the user provided a before modify callback, invoke it now
+    if let Some(func) = ctx.foreign_table_opts.before_modify.as_ref() {
+        call_udf(func.as_str());
+    }
+
     // If any quals need to be locally evaluated we cannot perform
     // the modification remotely
     if !inner_select.local_conds.is_empty() {
@@ -827,6 +847,11 @@ unsafe fn plan_direct_foreign_update(
     inner_select: &FdwQueryContext,
     table: PgTable,
 ) -> Option<FdwQueryContext> {
+    // If the user provided a before update callback, invoke it now
+    if let Some(func) = ctx.foreign_table_opts.before_update.as_ref() {
+        call_udf(func.as_str());
+    }
+
     // Create an update query to update all rows specified by the
     // inner select query
     let mut query = ctx
@@ -912,6 +937,11 @@ unsafe fn plan_direct_foreign_delete(
     inner_select: &FdwQueryContext,
     table: PgTable,
 ) -> Option<FdwQueryContext> {
+    // If the user provided a before update callback, invoke it now
+    if let Some(func) = ctx.foreign_table_opts.before_delete.as_ref() {
+        call_udf(func.as_str());
+    }
+
     // Create an delete query to delete all rows specified by the
     // inner select query
     let mut query = ctx

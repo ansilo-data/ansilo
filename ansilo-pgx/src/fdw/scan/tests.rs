@@ -761,4 +761,29 @@ mod tests {
 
         assert_eq!(results, vec![("Mary".into(),), ("John".into(),),]);
     }
+
+    #[pg_test]
+    fn test_fdw_scan_test_before_select_function_is_called_if_specified() {
+        setup_test("scan_before_select_cb");
+
+        let results = execute_query(
+            r#"
+            CREATE TABLE side_effect
+            AS SELECT 'no' AS triggered;
+
+            CREATE FUNCTION before_select_cb() RETURNS VOID
+                AS 'UPDATE side_effect SET triggered = ''yes'''
+                LANGUAGE SQL;
+
+            ALTER TABLE people OPTIONS (ADD before_select 'before_select_cb');
+            
+            SELECT * FROM people;
+            
+            SELECT triggered FROM side_effect;
+            "#,
+            |i| (i["triggered"].value::<String>().unwrap(),),
+        );
+
+        assert_eq!(results, vec![("yes".into(),),]);
+    }
 }

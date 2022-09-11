@@ -10,12 +10,13 @@ use ansilo_pg::fdw::proto::{ClientMessage, EntityDiscoverOptions, OperationCost,
 use pgx::pg_sys::Oid;
 
 use crate::{
-    fdw::common::FdwIpcConnection,
+    fdw::common::{FdwIpcConnection, TableOptions},
     sqlil::{entity_config_from_foreign_table, ConversionContext},
 };
 
 use super::{
-    FdwDeleteQuery, FdwInsertQuery, FdwQueryContext, FdwQueryType, FdwSelectQuery, FdwUpdateQuery, FdwBulkInsertQuery,
+    FdwBulkInsertQuery, FdwDeleteQuery, FdwInsertQuery, FdwQueryContext, FdwQueryType,
+    FdwSelectQuery, FdwUpdateQuery,
 };
 
 /// Context data for query planning
@@ -28,6 +29,8 @@ pub struct FdwContext {
     pub entity: sqlil::EntityId,
     /// The foreign table oid of the entity
     pub foreign_table_oid: Oid,
+    /// The foreign table options
+    pub foreign_table_opts: TableOptions,
 }
 
 impl FdwContext {
@@ -35,6 +38,7 @@ impl FdwContext {
         connection: Arc<FdwIpcConnection>,
         entity: sqlil::EntityId,
         foreign_table_oid: Oid,
+        foreign_table_opts: TableOptions,
     ) -> Self {
         let data_source_id = connection.data_source_id.clone();
 
@@ -43,6 +47,7 @@ impl FdwContext {
             data_source_id,
             entity,
             foreign_table_oid,
+            foreign_table_opts,
         }
     }
 

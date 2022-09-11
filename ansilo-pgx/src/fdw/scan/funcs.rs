@@ -35,7 +35,7 @@ use crate::{
         convert, convert_list, from_datum, get_entity_id_from_foreign_table, into_datum,
         into_pg_type, parse_entity_id_from_rel, ConversionContext,
     },
-    util::{list::vec_to_pg_list, string::to_pg_cstr, table::PgTable},
+    util::{func::call_udf, list::vec_to_pg_list, string::to_pg_cstr, table::PgTable},
 };
 
 /// Default cost values in case they cant be estimated
@@ -67,6 +67,11 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     // so all queries use the same connection which is required
     // for remote transactions or locking.
     let mut ctx = pg_transaction_scoped(common::connect_table(foreigntableid));
+
+    // Run user-defined callback if provided
+    if let Some(func) = ctx.foreign_table_opts.before_select.as_ref() {
+        call_udf(func.as_str());
+    }
 
     let planner = pg_transaction_scoped(PlannerContext::base_rel(root, baserel));
 

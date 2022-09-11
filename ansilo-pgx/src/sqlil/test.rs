@@ -14,7 +14,7 @@ use pgx::{
 
 use crate::{
     fdw::{
-        common::FdwIpcConnection,
+        common::{FdwIpcConnection, TableOptions},
         ctx::{FdwContext, PlannerContext},
     },
     sqlil::datum::into_pg_type,
@@ -39,7 +39,12 @@ pub(super) fn convert_simple_expr_with_context(
         let client = IpcClientChannel::new(UnixStream::from_raw_fd(1234));
         let con = FdwIpcConnection::new("data_source", client);
 
-        let fdw = FdwContext::new(Arc::new(con), sqlil::entity("entity"), 123 as _);
+        let fdw = FdwContext::new(
+            Arc::new(con),
+            sqlil::entity("entity"),
+            123 as _,
+            TableOptions::default(),
+        );
 
         super::convert(node.as_ptr() as *const _, ctx, &planner, &fdw)
     }

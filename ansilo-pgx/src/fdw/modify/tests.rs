@@ -647,4 +647,148 @@ mod tests {
     fn test_fdw_insert_row_with_missing_cols_explain() {
         assert_query_plan_expected!("test_cases/0011_insert_row_with_missing_cols.json");
     }
+
+    #[pg_test]
+    fn test_fdw_modify_test_before_modify_function_is_called_if_specified() {
+        setup_test("scan_before_modify_cb");
+
+        execute_query(
+            r#"
+            CREATE TABLE invocations 
+            AS SELECT 0 as cnt;
+
+            CREATE FUNCTION before_modify_cb() RETURNS VOID
+                AS 'UPDATE invocations SET cnt = cnt + 1;'
+                LANGUAGE SQL;
+
+            ALTER TABLE people OPTIONS (ADD before_modify 'before_modify_cb');
+            "#,
+            |_| (),
+        );
+
+        // Should be triggered on INSERT/UPDATE/DELETE
+        let rows = execute_query(
+            r#"
+            INSERT INTO "people" (id, first_name) VALUES (123, 'Barry');
+
+            SELECT cnt FROM invocations;
+            "#,
+            |i| i["cnt"].value::<i64>().unwrap(),
+        );
+
+        assert_eq!(rows, vec![1]);
+
+        let rows = execute_query(
+            r#"
+            UPDATE "people" SET first_name = 'test' WHERE id = 1;
+
+            SELECT cnt FROM invocations;
+            "#,
+            |i| i["cnt"].value::<i64>().unwrap(),
+        );
+
+        assert_eq!(rows, vec![2]);
+
+        let rows = execute_query(
+            r#"
+            DELETE FROM people WHERE id = 1;
+
+            SELECT cnt FROM invocations;
+            "#,
+            |i| i["cnt"].value::<i64>().unwrap(),
+        );
+
+        assert_eq!(rows, vec![3]);
+    }
+
+    #[pg_test]
+    fn test_fdw_modify_test_before_insert_function_is_called_if_specified() {
+        setup_test("scan_before_insert_cb");
+
+        execute_query(
+            r#"
+            CREATE TABLE invocations 
+            AS SELECT 0 as cnt;
+
+            CREATE FUNCTION before_modify_cb() RETURNS VOID
+                AS 'UPDATE invocations SET cnt = cnt + 1;'
+                LANGUAGE SQL;
+
+            ALTER TABLE people OPTIONS (ADD before_modify 'before_modify_cb');
+            "#,
+            |_| (),
+        );
+
+        let rows = execute_query(
+            r#"
+            INSERT INTO "people" (id, first_name) VALUES (123, 'Barry');
+
+            SELECT cnt FROM invocations;
+            "#,
+            |i| i["cnt"].value::<i64>().unwrap(),
+        );
+
+        assert_eq!(rows, vec![1]);
+    }
+
+    #[pg_test]
+    fn test_fdw_modify_test_before_update_function_is_called_if_specified() {
+        setup_test("scan_before_update_cb");
+
+        execute_query(
+            r#"
+            CREATE TABLE invocations 
+            AS SELECT 0 as cnt;
+
+            CREATE FUNCTION before_modify_cb() RETURNS VOID
+                AS 'UPDATE invocations SET cnt = cnt + 1;'
+                LANGUAGE SQL;
+
+            ALTER TABLE people OPTIONS (ADD before_modify 'before_modify_cb');
+            "#,
+            |_| (),
+        );
+
+        let rows = execute_query(
+            r#"
+            UPDATE "people" SET first_name = 'test' WHERE id = 1;
+
+            SELECT cnt FROM invocations;
+            "#,
+            |i| i["cnt"].value::<i64>().unwrap(),
+        );
+
+        assert_eq!(rows, vec![1]);
+
+    }
+
+    #[pg_test]
+    fn test_fdw_modify_test_before_delete_function_is_called_if_specified() {
+        setup_test("scan_before_delete_cb");
+
+        execute_query(
+            r#"
+            CREATE TABLE invocations 
+            AS SELECT 0 as cnt;
+
+            CREATE FUNCTION before_modify_cb() RETURNS VOID
+                AS 'UPDATE invocations SET cnt = cnt + 1;'
+                LANGUAGE SQL;
+
+            ALTER TABLE people OPTIONS (ADD before_modify 'before_modify_cb');
+            "#,
+            |_| (),
+        );
+
+        let rows = execute_query(
+            r#"
+            DELETE FROM people WHERE id = 1;
+
+            SELECT cnt FROM invocations;
+            "#,
+            |i| i["cnt"].value::<i64>().unwrap(),
+        );
+
+        assert_eq!(rows, vec![1]);
+    }
 }
