@@ -500,6 +500,32 @@ public class JdbcPreparedQueryTest {
     }
 
     @Test
+    void testLoggedParamsAsJsonWithMultipleParams() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Utf8StringDataType()));
+        this.initPreparedQuery();
+
+        var buff = this.newByteBuffer(11);
+        // param 1
+        buff.put((byte) 1); // not null
+        buff.putInt(123); // val
+        // param 2
+        buff.put((byte) 1); // not null
+        buff.put(this.lengthToByte(3)); // length
+        buff.put(StandardCharsets.UTF_8.encode("abc"));
+        buff.put(this.lengthToByte(0)); // eof
+        buff.rewind();
+
+        this.preparedQuery.write(buff);
+
+        var params = this.preparedQuery.getLoggedParamsAsJson();
+
+        assertEquals(
+                "[\"LoggedParam [index=1, method=setInt, value=123]\",\"LoggedParam [index=1, method=setNString, value=abc]\"]",
+                params);
+    }
+
+    @Test
     void getLoggedQueryParamsMultipleWithRestart() throws Exception {
         this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
         this.initPreparedQuery();

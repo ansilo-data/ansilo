@@ -8,11 +8,14 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.stream.Collectors;
 import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.data.FixedSizeDataType;
 import com.ansilo.connectors.data.StreamDataType;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 import com.ansilo.connectors.result.JdbcResultSet;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 /**
  * Wrapper class for the JDBC prepared statement class
@@ -258,6 +261,17 @@ public class JdbcPreparedQuery {
      */
     public List<LoggedParam> getLoggedParams() {
         return this.preparedStatement.getLoggedParams();
+    }
+
+    /**
+     * Gets the logged query parameters as a JSON string.
+     * 
+     * This format is far more efficient to send over the JNI barrier.
+     */
+    public String getLoggedParamsAsJson() {
+        var gson = new GsonBuilder().disableHtmlEscaping().create();
+        return gson.toJson(this.preparedStatement.getLoggedParams().stream().map(i -> i.toString())
+                .collect(Collectors.toList()));
     }
 
     private void bindConstantParameters() throws Exception {

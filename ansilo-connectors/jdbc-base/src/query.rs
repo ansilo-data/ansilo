@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ansilo_core::err::{bail, Context, Result};
 use jni::{
-    objects::{GlobalRef, JList, JMethodID, JObject, JString, JValue},
+    objects::{GlobalRef, JMethodID, JObject, JString, JValue},
     signature::{JavaType, Primitive},
     sys::jmethodID,
 };
@@ -214,43 +214,28 @@ impl QueryHandle for JdbcPreparedQuery {
             let logged_params = env.auto_local(
                 env.call_method(
                     self.jdbc_prepared_statement.as_obj(),
-                    "getLoggedParams",
-                    "()Ljava/util/List;",
+                    "getLoggedParamsAsJson",
+                    "()Ljava/lang/String;",
                     &[],
                 )
-                .context("Failed to invoke JdbcPreparedQuery::getLoggedParams")?
+                .context("Failed to invoke JdbcPreparedQuery::getLoggedParamsAsJson")?
                 .l()
                 .context("Failed to convert List into object")?,
             );
 
             self.jvm.check_exceptions(env)?;
 
-            let logged_params =
-                JList::from_env(env, logged_params.as_obj()).context("Failed to read list")?;
-            let mut params = vec![];
+            let json = env
+                .get_string(JString::from(logged_params.as_obj()))
+                .context("Failed to convert LoggedParam to java string")
+                .map(|i| {
+                    cesu8::from_java_cesu8(i.to_bytes())
+                        .unwrap_or_else(|_| String::from_utf8_lossy(i.to_bytes()))
+                        .to_string()
+                })?;
 
-            for param in logged_params.iter().context("Failed to iterate list")? {
-                let param = env.auto_local(param);
-                let param_string = env.auto_local(
-                    env.call_method(param.as_obj(), "toString", "()Ljava/lang/String;", &[])
-                        .context("Failed to call LoggedParam::toString")?
-                        .l()
-                        .context("Failed to convert to object")?,
-                );
-
-                self.jvm.check_exceptions(env)?;
-
-                let param = env
-                    .get_string(JString::from(param_string.as_obj()))
-                    .context("Failed to convert LoggedParam to java string")
-                    .map(|i| {
-                        cesu8::from_java_cesu8(i.to_bytes())
-                            .unwrap_or_else(|_| String::from_utf8_lossy(i.to_bytes()))
-                            .to_string()
-                    })?;
-
-                params.push(param);
-            }
+            let params: Vec<String> =
+                serde_json::from_str(&json).context("Failed to parse logged params json")?;
 
             Ok(params)
         })?;
