@@ -2,7 +2,7 @@
 
 use std::{ffi::CString, io::Cursor};
 
-use ansilo_core::err::{bail, Context, Error, Result};
+use ansilo_core::err::{bail, ensure, Context, Error, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::common::PostgresMessage;
@@ -17,6 +17,7 @@ pub enum PostgresBackendMessage {
     AuthenticationSaslContinue(Vec<u8>),
     AuthenticationSaslFinal(Vec<u8>),
     AuthenticationCleartextPassword,
+    ParameterStatus(String, String),
     ErrorResponse(Vec<(u8, String)>),
     ReadyForQuery(u8),
     Other(PostgresMessage),
@@ -119,6 +120,20 @@ impl PostgresBackendMessage {
                     _ => Self::Other(message),
                 }
             }
+            PostgresBackendMessageTag::ParameterStatus => {
+                let strings = message
+                    .body()
+                    .split(|i| *i == 0)
+                    .take(2)
+                    .map(|str| String::from_utf8_lossy(str).to_string())
+                    .collect::<Vec<_>>();
+                ensure!(
+                    strings.len() == 2,
+                    "Invalid number of strings in ParameterStatus"
+                );
+
+                Self::ParameterStatus(strings[0].clone(), strings[1].clone())
+            }
             // @see https://www.postgresql.org/docs/current/protocol-error-fields.html
             PostgresBackendMessageTag::ErrorResponse => {
                 let fields = message
@@ -211,6 +226,21 @@ impl PostgresBackendMessage {
                     Ok(())
                 })?
             }
+            Self::ParameterStatus(key, value) => {
+                PostgresMessage::build(PostgresBackendMessageTag::ParameterStatus as _, |body| {
+                    body.write_all(
+                        CString::new(key.as_bytes())
+                            .context("Cannot convert parameter key to cstring")?
+                            .as_bytes_with_nul(),
+                    )?;
+                    body.write_all(
+                        CString::new(value.as_bytes())
+                            .context("Cannot convert parameter value to cstring")?
+                            .as_bytes_with_nul(),
+                    )?;
+                    Ok(())
+                })?
+            }
             Self::ReadyForQuery(status) => {
                 PostgresMessage::build(PostgresBackendMessageTag::ReadyForQuery as _, |body| {
                     body.write_all(&[status])?;
@@ -246,6 +276,7 @@ impl PostgresBackendMessage {
             Self::AuthenticationSaslContinue(_) => PostgresBackendMessageTag::Authentication,
             Self::AuthenticationSaslFinal(_) => PostgresBackendMessageTag::Authentication,
             Self::AuthenticationCleartextPassword => PostgresBackendMessageTag::Authentication,
+            Self::ParameterStatus(_, _) => PostgresBackendMessageTag::ParameterStatus,
             Self::ErrorResponse(_) => PostgresBackendMessageTag::ErrorResponse,
             Self::ReadyForQuery(_) => PostgresBackendMessageTag::ReadyForQuery,
             Self::Other(msg) => msg.tag().context("Untagged message")?.try_into()?,
@@ -402,6 +433,22 @@ mod tests {
     }
 
     #[test]
+    fn test_proto_be_serialise_parameter_status() {
+        assert_eq!(
+            to_buff(PostgresBackendMessage::ParameterStatus(
+                "key".into(),
+                "value".into()
+            )),
+            vec![
+                b'S', // tag
+                0, 0, 0, 14, // len
+                b'k', b'e', b'y', 0, // key
+                b'v', b'a', b'l', b'u', b'e', 0 // value
+            ]
+        )
+    }
+
+    #[test]
     fn test_proto_be_serialise_ready_for_query() {
         assert_eq!(
             to_buff(PostgresBackendMessage::ReadyForQuery(b'I')),
@@ -512,6 +559,24 @@ mod tests {
         assert_eq!(
             parsed.tag().unwrap(),
             PostgresBackendMessageTag::Authentication
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_parameter_status() {
+        let parsed = parse(&[
+            b'S', 0, 0, 0, 14, b'e', b'n', b'c', b'o', 0, b'd', b'i', b'n', b'g', 0,
+        ])
+        .await
+        .unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::ParameterStatus("enco".into(), "ding".into())
+        );
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::ParameterStatus
         );
     }
 

@@ -26,24 +26,24 @@ use crate::proto::{
 ///
 /// @see https://www.postgresql.org/docs/current/protocol-flow.html
 pub struct LlPostgresConnection {
-    state: Arc<State>,
+    shared: Arc<SharedState>,
     reader: PgReader,
     writer: PgWriter,
-    pub(crate) recycle_queries: Vec<String>,
+}
+
+#[derive(Default)]
+struct OwnedState {
+    initial_parameters: Vec<(String, String)>,
+    recycle_queries: Vec<String>,
 }
 
 /// Shared connection state
-struct State {
+#[derive(Default)]
+struct SharedState {
     broken: AtomicBool,
 }
 
-impl State {
-    fn new() -> Self {
-        Self {
-            broken: AtomicBool::new(false),
-        }
-    }
-
+impl SharedState {
     fn set_broken(&self) {
         self.broken.store(true, Ordering::Relaxed)
     }
@@ -64,15 +64,23 @@ impl State {
 impl LlPostgresConnection {
     /// Creates a new connection over the supplied stream
     pub(crate) fn new(stream: UnixStream) -> Self {
-        let state = Arc::new(State::new());
+        let owned = OwnedState::default();
+        let shared = Arc::new(SharedState::default());
         let (read, write) = stream.into_split();
 
         Self {
-            state: Arc::clone(&state),
-            reader: PgReader(Arc::clone(&state), read),
-            writer: PgWriter(Arc::clone(&state), write),
-            recycle_queries: vec![],
+            shared: Arc::clone(&shared),
+            reader: PgReader(owned, Arc::clone(&shared), read),
+            writer: PgWriter(Arc::clone(&shared), write),
         }
+    }
+
+    fn owned(&self) -> &OwnedState {
+        &self.reader.0
+    }
+
+    fn owned_mut(&mut self) -> &mut OwnedState {
+        &mut self.reader.0
     }
 
     /// Connects to a postgres instance at the supplied socket path
@@ -116,13 +124,16 @@ impl LlPostgresConnection {
             let msg = self.receive().await?;
             match msg {
                 PostgresBackendMessage::ReadyForQuery(_) => break,
-                PostgresBackendMessage::Other(_)
-                    if [
-                        PostgresBackendMessageTag::ParameterStatus,
-                        PostgresBackendMessageTag::BackendKeyData,
-                        PostgresBackendMessageTag::NoticeResponse,
-                    ]
-                    .contains(&msg.tag()?) =>
+                PostgresBackendMessage::ParameterStatus(k, v) => {
+                    self.owned_mut().initial_parameters.push((k, v));
+                    continue;
+                }
+                _ if [
+                    PostgresBackendMessageTag::ParameterStatus,
+                    PostgresBackendMessageTag::BackendKeyData,
+                    PostgresBackendMessageTag::NoticeResponse,
+                ]
+                .contains(&msg.tag()?) =>
                 {
                     continue;
                 }
@@ -147,31 +158,44 @@ impl LlPostgresConnection {
     /// We dont support returning any results from the query, only reporting
     /// if it was successful or not.
     pub async fn execute(&mut self, sql: impl Into<String>) -> Result<()> {
-        self.state.check_broken()?;
+        self.execute_with_responses(sql).await?;
+        Ok(())
+    }
+
+    /// Executes the supplied query on the postgres connection.
+    /// We dont support returning any results from the query, only reporting
+    /// if it was successful or not.
+    pub async fn execute_with_responses(
+        &mut self,
+        sql: impl Into<String>,
+    ) -> Result<Vec<PostgresBackendMessage>> {
+        self.shared.check_broken()?;
 
         let sql = sql.into();
         trace!("Executing SQL: {}", &sql);
-        
+
         self.send(PostgresFrontendMessage::Query(sql))
             .await
             .context("Failed to execute query")?;
 
+        let mut responses = vec![];
+
         loop {
             let msg = self.receive().await.context("Failed to execute query")?;
+            responses.push(msg.clone());
 
             match msg {
                 // Query complete, we are good to go
                 PostgresBackendMessage::ReadyForQuery(_) => break,
                 // Query returning data, continue
-                PostgresBackendMessage::Other(_)
-                    if [
-                        PostgresBackendMessageTag::CommandComplete,
-                        PostgresBackendMessageTag::RowDescription,
-                        PostgresBackendMessageTag::DataRow,
-                        PostgresBackendMessageTag::ParameterStatus,
-                        PostgresBackendMessageTag::NoticeResponse,
-                    ]
-                    .contains(&msg.tag()?) =>
+                _ if [
+                    PostgresBackendMessageTag::CommandComplete,
+                    PostgresBackendMessageTag::RowDescription,
+                    PostgresBackendMessageTag::DataRow,
+                    PostgresBackendMessageTag::ParameterStatus,
+                    PostgresBackendMessageTag::NoticeResponse,
+                ]
+                .contains(&msg.tag()?) =>
                 {
                     continue
                 }
@@ -180,17 +204,23 @@ impl LlPostgresConnection {
             }
         }
 
-        Ok(())
+        Ok(responses)
     }
 
     /// Returns whether the connection has been broken.
     pub fn broken(&self) -> bool {
-        self.state.broken()
+        self.shared.broken()
     }
 
     /// Marks the connection as broken, disallowing it to be used in future sessions
     pub fn set_broken(&self) {
-        self.state.set_broken()
+        self.shared.set_broken()
+    }
+
+    /// Gets the initial parameters from the postgres backend
+    /// These can be relayed to any client connections as they come in
+    pub fn initial_parameters(&self) -> &Vec<(String, String)> {
+        &self.owned().initial_parameters
     }
 
     /// Splits the connection into a reader and writer which can be used concurrently
@@ -210,33 +240,36 @@ impl LlPostgresConnection {
     /// to ensure this.
     pub fn combine(reader: PgReader, writer: PgWriter) -> Self {
         Self {
-            state: Arc::clone(&reader.0),
+            shared: Arc::clone(&reader.1),
             reader,
             writer,
-            recycle_queries: vec![],
         }
     }
 
     /// Appends the query to use upon recycling the connection
-    pub fn recycle_queries(&mut self, mut queries: Vec<String>) {
-        self.recycle_queries.append(&mut queries);
+    pub fn add_recycle_queries(&mut self, mut queries: Vec<String>) {
+        self.owned_mut().recycle_queries.append(&mut queries);
+    }
+
+    pub fn recycle_queries_mut(&mut self) -> &mut Vec<String> {
+        &mut self.owned_mut().recycle_queries
     }
 }
 
-pub struct PgReader(Arc<State>, OwnedReadHalf);
-pub struct PgWriter(Arc<State>, OwnedWriteHalf);
+pub struct PgReader(OwnedState, Arc<SharedState>, OwnedReadHalf);
+pub struct PgWriter(Arc<SharedState>, OwnedWriteHalf);
 
 impl PgReader {
     /// Receivs a message from the postgres backend
     pub async fn receive(&mut self) -> Result<PostgresBackendMessage> {
-        self.0.check_broken()?;
+        self.1.check_broken()?;
 
-        let res = PostgresBackendMessage::read(&mut self.1)
+        let res = PostgresBackendMessage::read(&mut self.2)
             .await
             .context("Failed to read message from unix socket");
 
         if res.is_err() {
-            self.0.set_broken();
+            self.1.set_broken();
         }
 
         res
@@ -272,7 +305,7 @@ impl PgWriter {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, thread, time::Duration};
+    use std::{collections::HashMap, path::PathBuf, thread, time::Duration};
 
     use tokio_postgres::Config;
 
@@ -507,5 +540,23 @@ mod tests {
         // Now recombine
         let mut con = LlPostgresConnection::combine(reader, writer);
         con.execute("SELECT 2").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_low_level_postgres_connection_captures_initial_parameters() {
+        let conf = test_pg_config("connect_capture_initial_parameters");
+        startup_postgres(conf);
+
+        let mut pg_conf = Config::new();
+        pg_conf.user(PG_SUPER_USER);
+        pg_conf.dbname("postgres");
+
+        let con = create_connection(conf, pg_conf).await;
+
+        let params: HashMap<String, String> =
+            con.initial_parameters().clone().into_iter().collect();
+        assert_eq!(params.get("client_encoding"), Some(&"UTF8".into()));
+        assert_eq!(params.get("server_encoding"), Some(&"UTF8".into()));
+        assert_eq!(params.get("TimeZone"), Some(&"Etc/UTC".into()));
     }
 }

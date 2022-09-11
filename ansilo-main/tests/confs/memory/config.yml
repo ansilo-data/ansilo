@@ -1,11 +1,10 @@
 name: Memory
 
 networking:
+  bind: 0.0.0.0
   port: 1234
 
 auth:
-  providers:
-
   users:
     - username: app
       password: pass

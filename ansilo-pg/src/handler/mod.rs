@@ -63,7 +63,7 @@ impl ConnectionHandler for PostgresConnectionHandler {
         .await?;
 
         // We ensure the connection is clean when it is next recycled
-        con.recycle_queries(vec![
+        con.add_recycle_queries(vec![
             // Ensure the auth context is appropriately reset
             format!("SELECT __ansilo_auth.ansilo_reset_auth_context({reset_token})"),
             // Clean any other temporary state
@@ -71,7 +71,7 @@ impl ConnectionHandler for PostgresConnectionHandler {
         ]);
 
         // Forward startup parameters from the client connection
-        Self::set_client_parameters(&mut con, startup)
+        Self::set_client_parameters(&mut con, &mut client, startup)
             .await
             .context("Failed to set client connection parameters")?;
 
@@ -119,8 +119,21 @@ impl ConnectionHandler for PostgresConnectionHandler {
 }
 
 lazy_static! {
+    /// @see https://www.postgresql.org/docs/current/libpq-status.html#LIBPQ-PQPARAMETERSTATUS
+    static ref ALLOWED_SERVER_PARAMS: HashSet<&'static str> = HashSet::from([
+        "client_encoding",
+        "DateStyle",
+        "default_transaction_read_only",
+        "integer_datetimes",
+        "IntervalStyle",
+        "server_encoding",
+        "server_version",
+        "standard_conforming_strings",
+        "TimeZone"
+    ]);
+
     /// @see https://www.postgresql.org/docs/current/runtime-config-client.html
-    static ref ALLOWED_PARAMS: HashSet<&'static str> = HashSet::from([
+    static ref ALLOWED_CLIENT_PARAMS: HashSet<&'static str> = HashSet::from([
         "application_name",
         "client_min_messages",
         "search_path",
@@ -176,12 +189,13 @@ impl PostgresConnectionHandler {
     /// @see https://www.postgresql.org/docs/current/config-setting.html
     async fn set_client_parameters(
         con: &mut AppPostgresConnection,
+        client: &mut Box<dyn IOStream>,
         startup: PostgresFrontendStartupMessage,
     ) -> Result<()> {
         let params = startup
             .params
             .iter()
-            .filter(|(k, _)| ALLOWED_PARAMS.contains(k.as_str()))
+            .filter(|(k, _)| ALLOWED_CLIENT_PARAMS.contains(k.as_str()))
             .collect::<Vec<(&String, &String)>>();
 
         if params.is_empty() {
@@ -200,9 +214,32 @@ impl PostgresConnectionHandler {
             .collect::<Vec<_>>()
             .join("\n");
 
-        con.execute(query)
+        let responses = con
+            .execute_with_responses(query)
             .await
-            .context("Failed to set connection parameters")
+            .context("Failed to set connection parameters")?;
+
+        // First send the initial parameter statuses back to the client
+        for (key, value) in con.initial_parameters().iter().cloned() {
+            if ALLOWED_SERVER_PARAMS.contains(key.as_str()) {
+                PostgresBackendMessage::ParameterStatus(key, value)
+                    .write(client)
+                    .await
+                    .context("Failed to send parameter status")?;
+            }
+        }
+
+        // Send any parameter status messages back to the client
+        // to acknowledge their request
+        for res in responses {
+            if matches!(res, PostgresBackendMessage::ParameterStatus(_, _)) {
+                res.write(client)
+                    .await
+                    .context("Failed to send parameter status")?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Perfoms bi-directional proxying of messages between the client (frontend) and the server (backend)
@@ -458,7 +495,29 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_client_parameters() {
+    async fn test_client_receives_initial_server_parameters() {
+        ansilo_logging::init_for_tests();
+        let auth = mock_password_auth();
+        let (_pg, handler) = init_handler("server-params", auth).await;
+
+        let (client, stream) = init_client_stream();
+
+        tokio::spawn(async move { handler.handle(stream).await });
+
+        let (_client, con) = tokio_postgres::Config::new()
+            .user("test_user")
+            .password("pass123")
+            .connect_raw(client, NoTls)
+            .await
+            .unwrap();
+
+        assert_eq!(con.parameter("client_encoding"), Some("UTF8"));
+        assert_eq!(con.parameter("server_encoding"), Some("UTF8"));
+        assert!(con.parameter("server_version").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_client_parameters_with_reset() {
         ansilo_logging::init_for_tests();
         let auth = mock_password_auth();
         let (_pg, handler) = init_handler("client-params", auth).await;
@@ -488,14 +547,13 @@ mod tests {
         res_handler.unwrap();
         assert_eq!(res_client.unwrap(), "my_custom_app");
 
-        // Test second connection to ensure, gets reset when using recycled connection
+        // Test second connection to ensure, can get updated recycled connection
         let (client, stream) = init_client_stream();
 
         let fut_client = async move {
             let (client, con) = tokio_postgres::Config::new()
                 .user("test_user")
                 .password("pass123")
-                .application_name("another_app")
                 .connect_raw(client, NoTls)
                 .await?;
             tokio::spawn(con);
@@ -512,6 +570,6 @@ mod tests {
         let (res_client, res_handler) = tokio::join!(fut_client, fut_handler);
 
         res_handler.unwrap();
-        assert_eq!(res_client.unwrap(), "another_app");
+        assert_eq!(res_client.unwrap(), "");
     }
 }
