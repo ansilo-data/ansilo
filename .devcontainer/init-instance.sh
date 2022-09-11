@@ -67,6 +67,7 @@ sudo docker pull $DEVCONTAINER_IMAGE
 echo "Starting devcontainer..."
 sudo docker network create devcontainer
 sudo docker run \
+    --name devcontainer \
     --detach \
     --privileged \
     --cap-add=SYS_PTRACE \
