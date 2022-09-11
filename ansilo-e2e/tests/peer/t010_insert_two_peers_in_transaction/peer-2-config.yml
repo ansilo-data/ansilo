@@ -8,17 +8,29 @@ auth:
     - username: app
       password: pass
 
+entities:
+  - id: pets
+    description: This list of pets
+    source:
+      data_source: memory
+      options: null
+    attributes:
+      - id: id
+        type: Int64
+      - id: name
+        type: !Utf8String
+      - id: owner_id
+        type: Int64
+
 sources:
-  - id: peer
-    type: peer
+  - id: memory
+    type: test.memory
     options:
-      url: ${env:URL_PEER}
-      username: app
-      password: pass
+      pets: []
 
 postgres:
     install_dir: /usr/lib/postgresql/14/
-    init_sql_path: ${dir}/ansilo-main-sql/*.sql
+    init_sql_path: ${dir}/ansilo-peer-2-sql/*.sql
     data_dir: ${env:TEMP_DIR}/data
     listen_socket_dir_path: ${env:TEMP_DIR}
     fdw_socket_path: ${env:TEMP_DIR}/fdw.sock
