@@ -1,7 +1,9 @@
-use std::{fs, path::PathBuf, time::Duration};
-
 use ansilo_core::err::{bail, Context, Error, Result};
 use reqwest::Url;
+
+mod file;
+mod http;
+mod shell;
 
 /// Retrieves the contents from the supplied URL.
 ///
@@ -11,10 +13,21 @@ pub fn get(url: impl Into<String>) -> Result<Vec<u8>> {
     let url = Url::parse(&url).with_context(|| format!("Failed to parse URL: {}", url))?;
 
     match url.scheme() {
-        "http" | "https" => get_http(url),
-        "file" => get_file(
+        "http" | "https" => http::get_http(url),
+        "file" => file::get_file(
             url.to_file_path()
                 .map_err(|_| Error::msg("Failed to get file path from URL"))?,
+        ),
+        "sh" => shell::get_shell(
+            url.to_file_path()
+                .map_err(|_| Error::msg("Failed to get file path from URL"))?,
+            url.query_pairs().find_map(|(k, v)| {
+                if k == "args" {
+                    Some(v.to_string())
+                } else {
+                    None
+                }
+            }),
         ),
         _ => bail!(
             "Unsupported URL protocol '{}' in url: {}",
@@ -24,32 +37,10 @@ pub fn get(url: impl Into<String>) -> Result<Vec<u8>> {
     }
 }
 
-/// Gets response body from the supplied http(s) url
-fn get_http(url: Url) -> Result<Vec<u8>> {
-    let client = reqwest::blocking::Client::builder()
-        .connect_timeout(Duration::from_secs(30))
-        .user_agent("Ansilo/v1")
-        .build()
-        .context("Failed to build http client")?;
-
-    let response = client
-        .get(url.clone())
-        .timeout(Duration::from_secs(30))
-        .send()
-        .with_context(|| format!("Error during request to {}", url))?;
-
-    let response = response.error_for_status()?;
-
-    Ok(response.bytes()?.to_vec())
-}
-
-/// Gets the file contents from the supplied file url
-fn get_file(path: PathBuf) -> Result<Vec<u8>> {
-    fs::read(&path).with_context(|| format!("Failed to read file {}", path.display()))
-}
-
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     #[test]
@@ -120,6 +111,56 @@ mod tests {
         assert_eq!(
             get("file:///tmp/ansilo-example-file.txt").unwrap(),
             "file content".as_bytes().to_vec()
+        );
+    }
+
+    #[test]
+    fn test_sh_run_bin_true() {
+        assert_eq!(get("sh:///bin/true").unwrap(), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_sh_run_echo_with_args() {
+        assert_eq!(
+            get("sh:///bin/echo?args=hello world").unwrap(),
+            b"hello world\n".to_vec()
+        );
+    }
+
+    #[test]
+    fn test_sh_run_echo_with_args_url_encoding() {
+        assert_eq!(
+            get("sh:///bin/echo?args=hello+world").unwrap(),
+            b"hello world\n".to_vec()
+        );
+
+        assert_eq!(
+            get("sh:///bin/echo?args=hello%20world").unwrap(),
+            b"hello world\n".to_vec()
+        );
+        assert_eq!(
+            get("sh:///bin/echo?args=hello+world").unwrap(),
+            b"hello world\n".to_vec()
+        );
+        assert_eq!(
+            get("sh:///bin/echo?args=hello+world").unwrap(),
+            b"hello world\n".to_vec()
+        );
+    }
+
+    #[test]
+    fn test_sh_run_bin_false() {
+        assert_eq!(
+            get("sh:///bin/false").unwrap_err().to_string(),
+            "Running process '/bin/false' failed with exit code: Some(1)"
+        );
+    }
+
+    #[test]
+    fn test_sh_run_invalid_path() {
+        assert_eq!(
+            get("sh:///non/existant/test").unwrap_err().to_string(),
+            "Failed to spawn '/non/existant/test', please check file exists and has correct permissions"
         );
     }
 }
