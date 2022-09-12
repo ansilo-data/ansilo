@@ -1,0 +1,26 @@
+[package]
+name = "ansilo-connectors-native-sqlite"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansilo-core = { path = "../../ansilo-core" }
+ansilo-logging = { path = "../../ansilo-logging" }
+ansilo-connectors-base = { path = "../base" }
+ansilo-util-pg = { path = "../../ansilo-util/pg" }
+itertools = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+enum-as-inner = "0.5"
+rusqlite = { version = "0.28", features = ["chrono", "bundled", "column_decltype"] }
+owning_ref = "0.4"
+
+[build-dependencies]
+ansilo-connectors-base = { path = "../base", features = ["build"] }
+
+[dev-dependencies]
+ansilo-connectors-base = { path = "../base", features = ["test"] }
+pretty_assertions = "*"
+serial_test = "*"
