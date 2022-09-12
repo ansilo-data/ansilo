@@ -16,7 +16,9 @@ use crate::{
     ctx::Ctx,
     processor::{
         dir::DirConfigProcessor,
+        embed::EmbedConfigProcessor,
         env::EnvConfigProcessor,
+        fetch::FetchConfigProcessor,
         util::{expression_to_string, parse_expression, process_expression, process_strings},
         ConfigExprProcessor, ConfigExprResult,
     },
@@ -42,6 +44,8 @@ impl ConfigLoader {
 
     fn default_processors() -> Vec<Box<dyn ConfigExprProcessor>> {
         vec![
+            Box::new(EmbedConfigProcessor::default()),
+            Box::new(FetchConfigProcessor::default()),
             Box::new(EnvConfigProcessor::default()),
             Box::new(DirConfigProcessor::default()),
         ]

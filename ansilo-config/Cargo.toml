@@ -6,5 +6,9 @@ edition = "2021"
 [dependencies]
 ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
+ansilo-util-url = { path = "../ansilo-util/url" }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
+
+[dev-dependencies]
+tempfile = "3.3.0"

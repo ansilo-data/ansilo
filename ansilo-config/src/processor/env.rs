@@ -1,9 +1,9 @@
 use std::env;
 
 use ansilo_core::err::Result;
-use ansilo_logging::{warn, trace};
+use ansilo_logging::{trace, warn};
 
-use crate::ctx::Ctx;
+use crate::{ctx::Ctx, processor::util::expression_to_string};
 
 use super::{
     util::match_interpolation, ConfigExprProcessor, ConfigExprResult, ConfigStringExpr as X,
@@ -41,7 +41,11 @@ impl ConfigExprProcessor for EnvConfigProcessor {
                     };
 
                     let replacement = var.unwrap_or(default);
-                    trace!("Replaced configuration expression '{}' with '{}'", name, replacement);
+                    trace!(
+                        "Replaced configuration expression '{}' with '{}'",
+                        expression_to_string(&expr),
+                        replacement
+                    );
                     X::Constant(replacement)
                 }
                 _ => expr,
