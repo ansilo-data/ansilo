@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
     data::{DataType, DataValue, DecimalOptions, StringOptions},
-    err::{Context, Result},
+    err::{bail, Context, Result},
 };
 
 use ansilo_connectors_base::{
@@ -101,22 +101,34 @@ pub(crate) fn parse_entity_config(
 ) -> Result<EntityConfig> {
     Ok(EntityConfig::minimal(
         table.clone(),
-        cols.map(|c| {
-            Ok(EntityAttributeConfig::new(
-                c["COLUMN_NAME"]
-                    .as_utf8_string()
-                    .context("COLUMN_NAME")?
-                    .clone(),
-                None,
-                from_mysql_type(&c)?,
-                c["COLUMN_KEY"].as_utf8_string().context("COLUMN_KEY")? == "PRI",
-                c["IS_NULLABLE"].as_utf8_string().context("IS_NULLABLE")? == "YES",
-            ))
+        cols.filter_map(|c| {
+            let name = c["COLUMN_NAME"].as_utf8_string().or_else(|| {
+                warn!("Failed to parse column name");
+                None
+            })?;
+            parse_column(name, &c)
+                .map_err(|e| warn!("Ignoring column '{}': {:?}", name, e))
+                .ok()
         })
-        .collect::<Result<Vec<_>>>()?,
+        .collect(),
         EntitySourceConfig::from(MysqlJdbcEntitySourceConfig::Table(
             MysqlJdbcTableOptions::new(Some(db.clone()), table.clone(), HashMap::new()),
         ))?,
+    ))
+}
+
+pub(crate) fn parse_column(
+    name: &str,
+    c: &HashMap<String, DataValue>,
+) -> Result<EntityAttributeConfig> {
+    let data_type = from_mysql_type(&c)?;
+
+    Ok(EntityAttributeConfig::new(
+        name.to_string(),
+        None,
+        data_type,
+        c["COLUMN_KEY"].as_utf8_string().context("COLUMN_KEY")? == "PRI",
+        c["IS_NULLABLE"].as_utf8_string().context("IS_NULLABLE")? == "YES",
     ))
 }
 
@@ -181,8 +193,7 @@ pub(crate) fn from_mysql_type(col: &HashMap<String, DataValue>) -> Result<DataTy
         "YEAR" => DataType::UInt16,
         // Default unknown data types to json
         _ => {
-            warn!("Encountered unknown data type '{col_type}', defaulting to JSON seralisation");
-            DataType::JSON
+            bail!("Encountered unknown data type '{col_type}'");
         }
     })
 }

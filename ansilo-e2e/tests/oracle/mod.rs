@@ -16,3 +16,4 @@ pub mod t015_insert_default_values;
 pub mod t016_transactions;
 pub mod t017_select_view;
 pub mod t018_select_mview;
+pub mod t019_unsupported_column_types;

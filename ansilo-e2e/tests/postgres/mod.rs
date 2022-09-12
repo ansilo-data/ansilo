@@ -11,3 +11,4 @@ pub mod t010_transactions;
 pub mod t011_select_view;
 pub mod t012_select_mview;
 pub mod t013_insert_select;
+pub mod t014_unsupported_column_types;

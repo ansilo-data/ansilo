@@ -34,6 +34,14 @@ pub unsafe extern "C" fn import_foreign_schema(
     // Construct the CREATE FOREIGN TABLE statements
     let stmts = entities
         .into_iter()
+        .filter(|e| {
+            if e.attributes.is_empty() {
+                warning!("Could not import table '{}': no columns are defined", e.id);
+                return false;
+            }
+
+            return true;
+        })
         .map(|e| {
             let table_name = pg_quote_identifier(&if let Some(pfx) = prefix.as_ref() {
                 format!("{pfx}{}", e.id)
@@ -66,7 +74,7 @@ pub unsafe extern "C" fn import_foreign_schema(
                 .join(",\n    ");
 
             format!(
-            r#"CREATE FOREIGN TABLE {table_name} (
+                r#"CREATE FOREIGN TABLE {table_name} (
     {cols}
 )
 SERVER {server_name}

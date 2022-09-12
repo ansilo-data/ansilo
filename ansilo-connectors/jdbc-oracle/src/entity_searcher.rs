@@ -3,12 +3,13 @@ use std::collections::HashMap;
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
     data::{DataType, DataValue, DecimalOptions, StringOptions},
-    err::{Context, Result},
+    err::{bail, Context, Result},
 };
 
-use ansilo_connectors_base::{interface::{
-    Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet,
-}, common::query::QueryParam};
+use ansilo_connectors_base::{
+    common::query::QueryParam,
+    interface::{Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet},
+};
 use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 use ansilo_logging::warn;
 use itertools::Itertools;
@@ -107,22 +108,34 @@ pub(crate) fn parse_entity_config(
 ) -> Result<EntityConfig> {
     Ok(EntityConfig::minimal(
         table.clone(),
-        cols.map(|c| {
-            Ok(EntityAttributeConfig::new(
-                c["COLUMN_NAME"]
-                    .as_utf8_string()
-                    .context("COLUMN_NAME")?
-                    .clone(),
-                None,
-                from_oracle_type(&c)?,
-                false,
-                c["NULLABLE"].as_utf8_string().context("NULLABLE")? == "Y",
-            ))
+        cols.filter_map(|c| {
+            let name = c["COLUMN_NAME"].as_utf8_string().or_else(|| {
+                warn!("Failed to parse column name");
+                None
+            })?;
+            parse_column(name, &c)
+                .map_err(|e| warn!("Ignoring column '{}': {:?}", name, e))
+                .ok()
         })
-        .collect::<Result<Vec<_>>>()?,
+        .collect(),
         EntitySourceConfig::from(OracleJdbcEntitySourceConfig::Table(
             OracleJdbcTableOptions::new(Some(owner.clone()), table.clone(), HashMap::new()),
         ))?,
+    ))
+}
+
+pub(crate) fn parse_column(
+    name: &str,
+    c: &HashMap<String, DataValue>,
+) -> Result<EntityAttributeConfig> {
+    let data_type = from_oracle_type(&c)?;
+
+    Ok(EntityAttributeConfig::new(
+        name.to_string(),
+        None,
+        data_type,
+        false,
+        c["NULLABLE"].as_utf8_string().context("NULLABLE")? == "Y",
     ))
 }
 
@@ -170,7 +183,7 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
                 _ => DataType::Decimal(DecimalOptions::new(precision, scale)),
             }
         }
-            
+
         "BINARY_FLOAT" => DataType::Float32,
         "BINARY_DOUBLE" => DataType::Float64,
         "RAW" | "LONG RAW" | "LONG" | "BFILE" | "BLOB" => DataType::Binary,
@@ -178,10 +191,8 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
         "DATE" => DataType::Date,
         "TIMESTAMP" => DataType::DateTime,
         "TIMESTAMP WITH TIME ZONE" | "TIMESTAMP WITH LOCAL TIME ZONE" => DataType::DateTimeWithTZ,
-        // Default unknown data types to json
         _ => {
-            warn!("Encountered unknown data type '{ora_type}', defaulting to JSON seralisation");
-            DataType::JSON
+            bail!("Encountered unknown data type '{ora_type}'");
         }
     })
 }

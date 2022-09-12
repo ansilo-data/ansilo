@@ -1,0 +1,26 @@
+name: mysql
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+sources:
+  - id: mysql
+    type: jdbc.mysql
+    options:
+      jdbc_url: jdbc:mysql://${env:MYSQL_IP}:3307/db
+      properties:
+        user: ansilo_admin
+        password: ansilo_testing
+        
+postgres:
+    install_dir: /usr/lib/postgresql/14/
+    init_sql_path: ${dir}/ansilo-sql/*.sql
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json

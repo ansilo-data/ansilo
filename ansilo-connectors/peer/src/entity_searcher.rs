@@ -21,6 +21,8 @@ impl EntitySearcher for PeerEntitySearcher {
     type TConnection = PostgresConnection<UnpooledClient>;
     type TEntitySourceConfig = PostgresEntitySourceConfig;
 
+    // For peer nodes we do not use this function,
+    // instead we call the discover_unauthenticated function below
     fn discover(
         connection: &mut Self::TConnection,
         nc: &NodeConfig,
@@ -36,6 +38,7 @@ impl PeerEntitySearcher {
         _opts: EntityDiscoverOptions,
     ) -> Result<Vec<EntityConfig>> {
         let conf = PeerConfig::parse(conf.options.clone()).context("Failed to parse options")?;
+
         let mut url = conf.url.clone();
         url.set_path("/api/v1/catalog");
 

@@ -139,25 +139,35 @@ pub(crate) fn parse_entity_config(
             .context("table_description")?,
         vec![],
         cols.into_iter()
-            .map(|c| {
-                Ok(EntityAttributeConfig::new(
-                    c.try_get("column_name").context("column_name")?,
-                    c.try_get("column_description")
-                        .context("column_description")?,
-                    from_postgres_type(&c)?,
-                    c.try_get::<_, String>("is_identity")
-                        .context("is_identity")?
-                        == "YES",
-                    c.try_get::<_, String>("is_nullable")
-                        .context("is_nullable")?
-                        == "YES",
-                ))
+            .filter_map(|c| {
+                let name: String = c
+                    .try_get("column_name")
+                    .map_err(|e| warn!("Failed to parse column name: {:?}", e))
+                    .ok()?;
+                parse_column(name.as_str(), c)
+                    .map_err(|e| warn!("Ignoring column '{}': {:?}", name, e))
+                    .ok()
             })
-            .collect::<Result<Vec<_>>>()?,
+            .collect(),
         vec![],
         EntitySourceConfig::from(PostgresEntitySourceConfig::Table(
             PostgresTableOptions::new(Some(db.clone()), table.clone(), HashMap::new()),
         ))?,
+    ))
+}
+
+fn parse_column(name: &str, c: Row) -> Result<EntityAttributeConfig, ansilo_core::err::Error> {
+    Ok(EntityAttributeConfig::new(
+        name.to_string(),
+        c.try_get("column_description")
+            .context("column_description")?,
+        from_postgres_type(&c)?,
+        c.try_get::<_, String>("is_identity")
+            .context("is_identity")?
+            == "YES",
+        c.try_get::<_, String>("is_nullable")
+            .context("is_nullable")?
+            == "YES",
     ))
 }
 
