@@ -1,125 +1,69 @@
-use std::{collections::HashMap, marker::PhantomData, ops::DerefMut};
+use std::collections::HashMap;
 
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
-    data::{DataType, DecimalOptions, StringOptions},
-    err::{bail, Context, Result},
+    err::{Context, Error, Result},
 };
 
 use ansilo_connectors_base::interface::{EntityDiscoverOptions, EntitySearcher};
 use ansilo_logging::warn;
-use itertools::Itertools;
-use tokio_postgres::{Client, Row};
+use fallible_iterator::FallibleIterator;
+use rusqlite::ToSql;
 
-use crate::{runtime, PostgresConnection, PostgresTableOptions};
+use crate::{from_sqlite_type, SqliteConnection, SqliteTableOptions};
 
-use super::PostgresEntitySourceConfig;
+use super::SqliteEntitySourceConfig;
 
-/// The entity searcher for Postgres
-pub struct PostgresEntitySearcher<T> {
-    _data: PhantomData<T>,
-}
+/// The entity searcher for Sqlite
+pub struct SqliteEntitySearcher {}
 
-impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> {
-    type TConnection = PostgresConnection<T>;
-    type TEntitySourceConfig = PostgresEntitySourceConfig;
+impl EntitySearcher for SqliteEntitySearcher {
+    type TConnection = SqliteConnection;
+    type TEntitySourceConfig = SqliteEntitySourceConfig;
 
     fn discover(
         connection: &mut Self::TConnection,
         _nc: &NodeConfig,
         opts: EntityDiscoverOptions,
     ) -> Result<Vec<EntityConfig>> {
-        runtime().block_on(Self::discover_async(connection.client(), opts))
-    }
-}
-
-impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
-    pub async fn discover_async(
-        connection: &Client,
-        opts: EntityDiscoverOptions,
-    ) -> Result<Vec<EntityConfig>> {
-        // Query postgres's information schema tables to retrieve all column definitions
-        // Importantly we order the results by table and then by column position
-        // when lets us efficiently group the result by table using `group_by` below.
-        // Additionally, we the results to be deterministic and return the columns
-        // the user-defined order on the oracle side.
-        let rows = connection
-            .query(
-                r#"
-                SELECT * FROM (
-                    SELECT
-                        t.table_schema,
-                        t.table_name,
-                        pg_catalog.obj_description(format('%s.%s', t.table_schema, t.table_name)::regclass::oid, 'pg_class') as table_description,
-                        c.column_name,
-                        c.is_identity,
-                        c.data_type,
-                        c.is_nullable,
-                        c.character_maximum_length,
-                        c.numeric_precision,
-                        c.numeric_scale,
-                        c.ordinal_position,
-                        pg_catalog.col_description(format('%s.%s', t.table_schema, t.table_name)::regclass::oid, c.ordinal_position) as column_description
-                    FROM information_schema.tables t
-                    INNER JOIN information_schema.columns C ON t.table_schema = c.table_schema AND t.table_name = c.table_name
-                    WHERE 1=1
-                    AND concat(t.table_schema, '.', t.table_name) LIKE $1
-                    AND t.table_type != 'LOCAL TEMPORARY'
-                    UNION ALL
-                    -- Include materialised views
-                    SELECT 
-                        s.nspname as table_schema, 
-                        t.relname as table_name,
-                        pg_catalog.obj_description(t.oid, 'pg_class') as table_description,
-                        a.attname as column_name,
-                        'NO' AS is_identity,
-                        pg_catalog.format_type(a.atttypid, NULL) as data_type,
-                        CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END as is_nullable,
-                        information_schema._pg_char_max_length(a.atttypid, a.atttypmod) as character_maximum_length,
-                        information_schema._pg_numeric_precision(a.atttypid, a.atttypmod) as numeric_precision,
-                        information_schema._pg_numeric_scale(a.atttypid, a.atttypmod) as numeric_scale,
-                        CAST(a.attnum AS information_schema.cardinal_number) AS ordinal_position,
-                        pg_catalog.col_description(t.oid, CAST(a.attnum AS information_schema.cardinal_number)) as column_description
-                    FROM pg_attribute a
-                    INNER JOIN pg_class t on a.attrelid = t.oid
-                    INNER JOIN pg_namespace s on t.relnamespace = s.oid
-                    WHERE 1=1
-                    AND t.relkind = 'm'
-                    AND a.attnum > 0 
-                    AND NOT a.attisdropped
-                    AND concat(s.nspname, '.', t.relname) LIKE $1
-                ) AS a
-                ORDER BY a.table_schema, a.table_name, a.ordinal_position
+        let tables = {
+            let mut query = connection
+                .con()
+                .prepare(
+                    r#"
+                SELECT name
+                FROM sqlite_schema
+                WHERE 1=1
+                AND type = 'table'
+                AND name LIKE ?
             "#,
-            &[
-               & opts.remote_schema
-                    .as_ref()
-                    .map(|i| i.as_str())
-                    .unwrap_or("%")
-                ],
-            ).await?;
+                )
+                .context("Failed to prepare query")?;
 
-        let tables = rows.into_iter().group_by(|row| {
-            (
-                row.get::<_, String>("table_schema"),
-                row.get::<_, String>("table_name"),
-            )
-        });
+            let tables = query
+                .query(&[&opts
+                    .remote_schema
+                    .as_ref()
+                    .unwrap_or(&"%".to_string())
+                    .to_sql()?])
+                .context("Failed to execute query")?;
+
+            tables
+                .map(|row| row.get::<_, String>("name"))
+                .collect::<Vec<String>>()?
+        };
 
         let entities = tables
             .into_iter()
-            .filter_map(|((db, table), cols)| {
-                match parse_entity_config(&db, &table, cols.collect_vec()) {
+            .filter_map(
+                |table| match parse_entity_config(connection, table.clone()) {
                     Ok(conf) => Some(conf),
                     Err(err) => {
-                        warn!(
-                            "Failed to import schema for table \"{}.{}\": {:?}",
-                            db, table, err
-                        );
+                        warn!("Failed to import schema for table \"{}\": {:?}", table, err);
                         None
                     }
-                }
-            })
+                },
+            )
             .collect();
 
         Ok(entities)
@@ -127,97 +71,60 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
 }
 
 pub(crate) fn parse_entity_config(
-    db: &String,
-    table: &String,
-    cols: Vec<Row>,
+    con: &mut SqliteConnection,
+    table: String,
 ) -> Result<EntityConfig> {
+    let mut query = con
+        .con()
+        .prepare("SELECT * FROM pragma_table_info(?)")
+        .context("Failed to prepare query")?;
+
+    let rows = query
+        .query(&[&table.to_sql()?])
+        .context("Failed to execute query")?;
+
+    let cols = rows
+        .map(|row| {
+            Ok((
+                row.get::<_, String>("name")?,
+                row.get::<_, String>("type")?,
+                row.get::<_, bool>("notnull")?,
+                row.get::<_, bool>("pk")?,
+            ))
+        })
+        .map_err(|e| Error::msg(e.to_string()))
+        .collect::<Vec<(String, String, bool, bool)>>()?;
+
     Ok(EntityConfig::new(
         table.clone(),
         None,
-        cols[0]
-            .try_get("table_description")
-            .context("table_description")?,
+        None,
         vec![],
         cols.into_iter()
             .filter_map(|c| {
-                let name: String = c
-                    .try_get("column_name")
-                    .map_err(|e| warn!("Failed to parse column name: {:?}", e))
-                    .ok()?;
+                let name = c.0.clone();
                 parse_column(name.as_str(), c)
                     .map_err(|e| warn!("Ignoring column '{}': {:?}", name, e))
                     .ok()
             })
             .collect(),
         vec![],
-        EntitySourceConfig::from(PostgresEntitySourceConfig::Table(
-            PostgresTableOptions::new(Some(db.clone()), table.clone(), HashMap::new()),
-        ))?,
+        EntitySourceConfig::from(SqliteEntitySourceConfig::Table(SqliteTableOptions::new(
+            table.clone(),
+            HashMap::new(),
+        )))?,
     ))
 }
 
-fn parse_column(name: &str, c: Row) -> Result<EntityAttributeConfig, ansilo_core::err::Error> {
+fn parse_column(
+    name: &str,
+    c: (String, String, bool, bool),
+) -> Result<EntityAttributeConfig, ansilo_core::err::Error> {
     Ok(EntityAttributeConfig::new(
         name.to_string(),
-        c.try_get("column_description")
-            .context("column_description")?,
-        from_postgres_type(&c)?,
-        c.try_get::<_, String>("is_identity")
-            .context("is_identity")?
-            == "YES",
-        c.try_get::<_, String>("is_nullable")
-            .context("is_nullable")?
-            == "YES",
+        None,
+        from_sqlite_type(&c.1)?,
+        c.2,
+        !c.3,
     ))
-}
-
-pub(crate) fn from_postgres_type(col: &Row) -> Result<DataType> {
-    let data_type = &col
-        .try_get::<_, String>("data_type")
-        .context("data_type")?
-        .to_uppercase();
-
-    Ok(match data_type.as_str() {
-        "CHAR" | "CHARACTER" | "TEXT" | "VARCHAR" | "CITEXT" | "NAME" | "UNKNOWN"
-        | "CHARACTER VARYING" => {
-            let length = col
-                .try_get::<_, Option<i32>>("character_maximum_length")
-                .context("character_maximum_length")?
-                .and_then(|i| if i >= 1 { Some(i) } else { None });
-
-            DataType::Utf8String(StringOptions::new(length.map(|i| i as _)))
-        }
-        "BOOLEAN" | "BIT" => DataType::Boolean,
-        "\"CHAR\"" => DataType::Int8,
-        "SMALLINT" => DataType::Int16,
-        "INTEGER" => DataType::Int32,
-        "BIGINT" => DataType::Int64,
-        "NUMERIC" => {
-            let precision = col
-                .try_get::<_, Option<i32>>("numeric_precision")
-                .context("numeric_precision")?;
-            let scale = col
-                .try_get::<_, Option<i32>>("numeric_scale")
-                .context("numeric_scale")?;
-
-            DataType::Decimal(DecimalOptions::new(
-                precision.map(|i| i as _),
-                scale.map(|i| i as _),
-            ))
-        }
-
-        "FLOAT4" | "REAL" => DataType::Float32,
-        "FLOAT8" | "DOUBLE" | "DOUBLE PRECISION" => DataType::Float64,
-        "BYTEA" | "VARBINARY" | "TINYBLOB" | "MEDIUMBLOB" | "BLOB" => DataType::Binary,
-        "JSON" | "JSONB" => DataType::JSON,
-        "DATE" => DataType::Date,
-        "TIME" | "TIME WITHOUT TIME ZONE" => DataType::Time,
-        "TIMESTAMP" | "TIMESTAMP WITHOUT TIME ZONE" => DataType::DateTime,
-        "TIMESTAMP WITH TIME ZONE" => DataType::DateTimeWithTZ,
-        "UUID" => DataType::Uuid,
-        // Default unknown data types to json
-        _ => {
-            bail!("Encountered unsupported data type '{data_type}'");
-        }
-    })
 }

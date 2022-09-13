@@ -26,26 +26,24 @@ mod query_planner;
 pub use query_planner::*;
 mod result_set;
 pub use result_set::*;
-mod runtime;
-pub use runtime::*;
 
-/// The connector for Sqlite built on tokio-sqlite
+/// The connector for Sqlite built on rusqlite
 #[derive(Default)]
 pub struct SqliteConnector;
 
 impl Connector for SqliteConnector {
-    type TConnectionPool = SqliteConnectionPool;
-    type TConnection = SqliteConnection<PooledClient>;
+    type TConnectionPool = SqliteConnectionUnpool;
+    type TConnection = SqliteConnection;
     type TConnectionConfig = SqliteConnectionConfig;
-    type TEntitySearcher = SqliteEntitySearcher<PooledClient>;
-    type TEntityValidator = SqliteEntityValidator<PooledClient>;
+    type TEntitySearcher = SqliteEntitySearcher;
+    type TEntityValidator = SqliteEntityValidator;
     type TEntitySourceConfig = SqliteEntitySourceConfig;
-    type TQueryPlanner = SqliteQueryPlanner<PooledClient>;
-    type TQueryCompiler = SqliteQueryCompiler<PooledClient>;
-    type TQueryHandle = SqlitePreparedQuery<PooledClient>;
+    type TQueryPlanner = SqliteQueryPlanner;
+    type TQueryCompiler = SqliteQueryCompiler;
+    type TQueryHandle = SqlitePreparedQuery;
     type TQuery = SqliteQuery;
     type TResultSet = SqliteResultSet;
-    type TTransactionManager = SqliteConnection<PooledClient>;
+    type TTransactionManager = SqliteConnection;
 
     const TYPE: &'static str = "native.sqlite";
 
@@ -62,7 +60,7 @@ impl Connector for SqliteConnector {
         _nc: &NodeConfig,
         _entities: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
     ) -> Result<Self::TConnectionPool> {
-        SqliteConnectionPool::new(options)
+        Ok(SqliteConnectionUnpool::new(options))
     }
 }
 

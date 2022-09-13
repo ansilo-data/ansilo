@@ -1,14 +1,12 @@
-use std::{collections::HashMap, convert::TryInto, str::FromStr, time::Duration};
+use std::collections::HashMap;
 
 use ansilo_connectors_base::common::entity::ConnectorEntityConfig;
 use ansilo_core::{
     config,
-    err::{Context, Error, Result},
-    web::catalog::CatalogEntitySource,
+    err::{Context, Result},
 };
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
-use tokio_sqlite::Config;
 
 /// The connection config
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -51,10 +49,7 @@ pub struct SqliteTableOptions {
 }
 
 impl SqliteTableOptions {
-    pub fn new(
-        table_name: String,
-        attribute_column_map: HashMap<String, String>,
-    ) -> Self {
+    pub fn new(table_name: String, attribute_column_map: HashMap<String, String>) -> Self {
         Self {
             table_name,
             attribute_column_map,

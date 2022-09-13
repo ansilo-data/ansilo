@@ -110,7 +110,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
     ) -> Result<Vec<(sql::Expr, DataType)>> {
         Ok(vec![(
             sql::Expr::attr(source.alias.clone(), "ctid"),
-            DataType::Binary
+            DataType::Binary,
         )])
     }
 
@@ -295,10 +295,6 @@ impl<T: DerefMut<Target = Client>> PostgresQueryPlanner<T> {
     }
 
     fn select_add_join(select: &mut sql::Select, join: sql::Join) -> Result<QueryOperationResult> {
-        if join.r#type == sql::JoinType::Full {
-            return Ok(QueryOperationResult::Unsupported);
-        }
-
         if !Self::exprs_supported(&join.conds[..]) {
             return Ok(QueryOperationResult::Unsupported);
         }

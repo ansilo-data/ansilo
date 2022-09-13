@@ -1,5 +1,3 @@
-use std::{marker::PhantomData, ops::DerefMut};
-
 use ansilo_core::{
     data::{DataType, DataValue},
     err::{bail, ensure, Context, Result},
@@ -15,34 +13,35 @@ use ansilo_connectors_base::{
     },
 };
 
-use tokio_postgres::Client;
-
 use crate::{
-    PostgresConnection, PostgresConnectorEntityConfig, PostgresEntitySourceConfig, PostgresQuery,
-    PostgresQueryCompiler,
+    SqliteConnection, SqliteConnectorEntityConfig, SqliteEntitySourceConfig, SqliteQuery,
+    SqliteQueryCompiler,
 };
 
 /// Maximum query params supported in a single query
-const MAX_PARAMS: u16 = u16::MAX;
+///
+/// From @see https://www.sqlite.org/limits.html
+/// To prevent excessive memory allocations, the maximum value of a host parameter number is SQLITE_MAX_VARIABLE_NUMBER,
+/// which defaults to 999 for SQLite versions prior to 3.32.0 (2020-05-22) or
+/// 32766 for SQLite versions after 3.32.0.const MAX_PARAMS: u16 = 32766;
+const MAX_PARAMS: u16 = 32766;
 
-/// Query planner for Postgres driver
-pub struct PostgresQueryPlanner<T> {
-    _t: PhantomData<T>,
-}
+/// Query planner for Sqlite driver
+pub struct SqliteQueryPlanner {}
 
-impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
-    type TConnection = PostgresConnection<T>;
-    type TQuery = PostgresQuery;
-    type TEntitySourceConfig = PostgresEntitySourceConfig;
+impl QueryPlanner for SqliteQueryPlanner {
+    type TConnection = SqliteConnection;
+    type TQuery = SqliteQuery;
+    type TEntitySourceConfig = SqliteEntitySourceConfig;
 
     fn estimate_size(
         connection: &mut Self::TConnection,
-        entity: &EntitySource<PostgresEntitySourceConfig>,
+        entity: &EntitySource<SqliteEntitySourceConfig>,
     ) -> Result<OperationCost> {
-        let mut query = connection.prepare(PostgresQuery::new(
+        let mut query = connection.prepare(SqliteQuery::new(
             format!(
-                r#"EXPLAIN (FORMAT JSON) SELECT * FROM {}"#,
-                PostgresQueryCompiler::<T>::compile_source_identifier(&entity.source)?
+                r#"SELECT COUNT(*) FROM {}"#,
+                SqliteQueryCompiler::compile_source_identifier(&entity.source)?
             ),
             vec![],
         ))?;
@@ -52,72 +51,30 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
             .read_data_value()?
             .context("Unexpected empty result set")?;
 
-        let plan = match value.clone() {
-            DataValue::JSON(plan) => plan,
+        let count = match value.clone() {
+            DataValue::Int64(count) => count,
             _ => bail!("Unexpected data value returned: {:?}", value),
         };
 
-        let plan: serde_json::Value = serde_json::from_str(&plan)?;
-        let plan = plan
-            .as_array()
-            .context("Expected array")?
-            .get(0)
-            .context("Expected not empty")?
-            .as_object()
-            .context("Expected object")?
-            .get("Plan")
-            .context("Expected Plan key")?
-            .as_object()
-            .context("Expected object")?;
-
-        let num_rows = plan
-            .get("Plan Rows")
-            .context("Expected Plan Rows key")?
-            .as_u64()
-            .context("Expected row count integer")?;
-
-        let width = plan
-            .get("Plan Width")
-            .context("Expected Plan Width key")?
-            .as_u64()
-            .context("Expected width integer")?;
-
-        let startup_cost = plan
-            .get("Startup Cost")
-            .context("Expected Startup Cost key")?
-            .as_f64()
-            .context("Expected startup cost float64")?;
-
-        let total_cost = plan
-            .get("Total Cost")
-            .context("Expected Total Cost key")?
-            .as_f64()
-            .context("Expected total cost float64")?;
-
-        Ok(OperationCost::new(
-            Some(num_rows as _),
-            Some(width as _),
-            Some(startup_cost),
-            Some(total_cost),
-        ))
+        Ok(OperationCost::new(Some(count as _), None, None, None))
     }
 
     fn get_row_id_exprs(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
-        _entity: &EntitySource<PostgresEntitySourceConfig>,
+        _conf: &SqliteConnectorEntityConfig,
+        _entity: &EntitySource<SqliteEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<Vec<(sql::Expr, DataType)>> {
         Ok(vec![(
-            sql::Expr::attr(source.alias.clone(), "ctid"),
-            DataType::Binary
+            sql::Expr::attr(source.alias.clone(), "rowid"),
+            DataType::Binary,
         )])
     }
 
     fn create_base_select(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
-        _entity: &EntitySource<PostgresEntitySourceConfig>,
+        _conf: &SqliteConnectorEntityConfig,
+        _entity: &EntitySource<SqliteEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Select)> {
         let select = sql::Select::new(source.clone());
@@ -126,7 +83,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn apply_select_operation(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
+        _conf: &SqliteConnectorEntityConfig,
         select: &mut sql::Select,
         op: SelectQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -152,8 +109,8 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn create_base_insert(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
-        _entity: &EntitySource<PostgresEntitySourceConfig>,
+        _conf: &SqliteConnectorEntityConfig,
+        _entity: &EntitySource<SqliteEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Insert)> {
         Ok((OperationCost::default(), sql::Insert::new(source.clone())))
@@ -161,8 +118,8 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn create_base_bulk_insert(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
-        _entity: &EntitySource<PostgresEntitySourceConfig>,
+        _conf: &SqliteConnectorEntityConfig,
+        _entity: &EntitySource<SqliteEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::BulkInsert)> {
         Ok((
@@ -173,8 +130,8 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn create_base_update(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
-        _entity: &EntitySource<PostgresEntitySourceConfig>,
+        _conf: &SqliteConnectorEntityConfig,
+        _entity: &EntitySource<SqliteEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Update)> {
         Ok((OperationCost::default(), sql::Update::new(source.clone())))
@@ -182,8 +139,8 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn create_base_delete(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
-        _entity: &EntitySource<PostgresEntitySourceConfig>,
+        _conf: &SqliteConnectorEntityConfig,
+        _entity: &EntitySource<SqliteEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Delete)> {
         Ok((OperationCost::default(), sql::Delete::new(source.clone())))
@@ -191,10 +148,10 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn get_insert_max_batch_size(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
+        _conf: &SqliteConnectorEntityConfig,
         insert: &sql::Insert,
     ) -> Result<u32> {
-        // @see https://doxygen.postgresql.org/libpq-fe_8h.html#afcd90c8ad3fd816d18282eb622678c25
+        // @see https://doxygen.sqliteql.org/libpq-fe_8h.html#afcd90c8ad3fd816d18282eb622678c25
         let params: usize = insert
             .cols
             .iter()
@@ -210,7 +167,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn apply_insert_operation(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
+        _conf: &SqliteConnectorEntityConfig,
         insert: &mut sql::Insert,
         op: InsertQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -221,7 +178,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn apply_bulk_insert_operation(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
+        _conf: &SqliteConnectorEntityConfig,
         bulk_insert: &mut sql::BulkInsert,
         op: BulkInsertQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -234,7 +191,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn apply_update_operation(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
+        _conf: &SqliteConnectorEntityConfig,
         update: &mut sql::Update,
         op: UpdateQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -246,7 +203,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn apply_delete_operation(
         _connection: &mut Self::TConnection,
-        _conf: &PostgresConnectorEntityConfig,
+        _conf: &SqliteConnectorEntityConfig,
         delete: &mut sql::Delete,
         op: DeleteQueryOperation,
     ) -> Result<QueryOperationResult> {
@@ -257,11 +214,11 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
 
     fn explain_query(
         connection: &mut Self::TConnection,
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         verbose: bool,
     ) -> Result<serde_json::Value> {
-        let compiled = PostgresQueryCompiler::<T>::compile_query(connection, conf, query.clone())?;
+        let compiled = SqliteQueryCompiler::compile_query(connection, conf, query.clone())?;
 
         Ok(if verbose {
             serde_json::to_value(compiled)
@@ -271,7 +228,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
     }
 }
 
-impl<T: DerefMut<Target = Client>> PostgresQueryPlanner<T> {
+impl SqliteQueryPlanner {
     fn select_add_col(
         select: &mut sql::Select,
         expr: sql::Expr,
@@ -348,11 +305,10 @@ impl<T: DerefMut<Target = Client>> PostgresQueryPlanner<T> {
     }
 
     fn select_set_row_lock_mode(
-        select: &mut sql::Select,
-        mode: sql::SelectRowLockMode,
+        _select: &mut sql::Select,
+        _mode: sql::SelectRowLockMode,
     ) -> Result<QueryOperationResult> {
-        select.row_lock = mode;
-        Ok(QueryOperationResult::Ok(OperationCost::default()))
+        Ok(QueryOperationResult::Unsupported)
     }
 
     fn insert_add_col(

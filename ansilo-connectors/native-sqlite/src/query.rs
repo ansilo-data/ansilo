@@ -14,15 +14,10 @@ use ansilo_core::{
     data::DataValue,
     err::{Context, Result},
 };
-use rusqlite::ToSql;
+use rusqlite::{ParamsFromIter, ToSql};
 use serde::Serialize;
 
-use crate::{
-    data::{from_sql_type, to_pg},
-    result_set::SqliteResultSet,
-    runtime::runtime,
-    OwnedSqliteRows,
-};
+use crate::{result_set::SqliteResultSet, to_sqlite, OwnedSqliteRows};
 
 /// Sqlite query
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -55,7 +50,7 @@ pub struct SqlitePreparedQuery {
 }
 
 impl SqlitePreparedQuery {
-    pub fn new(stmt: OwnedSqliteStatment, inner: SqliteQuery) -> Result<Self> {
+    pub(crate) fn new(stmt: OwnedSqliteStatment, inner: SqliteQuery) -> Result<Self> {
         let sink = QueryParamSink::new(inner.params.clone());
 
         Ok(Self {
@@ -66,7 +61,7 @@ impl SqlitePreparedQuery {
         })
     }
 
-    fn get_params(&mut self) -> Result<Vec<Box<dyn ToSql>>> {
+    fn get_params(&mut self) -> Result<ParamsFromIter<impl Iterator<Item = Box<dyn ToSql>>>> {
         let vals = self.sink.get_all()?;
         let mut params = vec![];
 
@@ -75,7 +70,7 @@ impl SqlitePreparedQuery {
             self.logged_params.push(val.clone());
         }
 
-        Ok(params)
+        Ok(rusqlite::params_from_iter(params.into_iter()))
     }
 }
 
@@ -101,7 +96,7 @@ impl QueryHandle for SqlitePreparedQuery {
 
         let rows = OwnedSqliteRows::query(stmt, self.get_params()?)?;
 
-        Ok(SqliteResultSet::new(rows))
+        Ok(SqliteResultSet::new(rows)?)
     }
 
     fn execute_modify(&mut self) -> Result<Option<u64>> {
@@ -109,10 +104,10 @@ impl QueryHandle for SqlitePreparedQuery {
 
         let affected = self
             .stmt
-            .execute(self.get_params()?)
+            .execute(params)
             .context("Failed to execute query")?;
 
-        Ok(Some(affected))
+        Ok(Some(affected as u64))
     }
 
     fn logged(&self) -> Result<LoggedQuery> {
@@ -120,7 +115,7 @@ impl QueryHandle for SqlitePreparedQuery {
             &self.inner.sql,
             self.logged_params
                 .iter()
-                .map(|(val, sql_t)| format!("value={:?} type={}", val, sql_t))
+                .map(|val| format!("value={:?}", val))
                 .collect(),
             None,
         ))
@@ -159,7 +154,7 @@ impl OwnedSqliteStatment {
     /// To support multiple executions of the query we create new prepared statements
     /// of the same query.
     pub fn try_clone(&self) -> Result<Self> {
-        Self::prepare(Arc::clone(&self.con), &self.sql)
+        Self::prepare(Pin::clone(&self.con), &self.sql)
     }
 }
 

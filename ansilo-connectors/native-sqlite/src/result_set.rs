@@ -1,4 +1,8 @@
-use std::{cmp, pin::Pin};
+use std::{
+    cmp, mem,
+    ops::{Deref, DerefMut},
+    pin::Pin,
+};
 
 use ansilo_connectors_base::{
     common::data::DataWriter,
@@ -8,11 +12,9 @@ use ansilo_core::{
     data::DataType,
     err::{Context, Result},
 };
-use futures_util::TryStreamExt;
-use itertools::Itertools;
-use tokio_sqlite::RowStream;
+use rusqlite::types::Value;
 
-use crate::{data::from_pg, runtime::runtime, OwnedSqliteStatment};
+use crate::{from_sqlite, from_sqlite_type, OwnedSqliteStatment};
 
 /// Sqlite result set
 pub struct SqliteResultSet {
@@ -27,20 +29,25 @@ pub struct SqliteResultSet {
 }
 
 impl SqliteResultSet {
-    pub fn new(rows: OwnedSqliteRows) -> Self {
+    pub(crate) fn new(rows: OwnedSqliteRows) -> Result<Self> {
         let cols = rows
             .stmt
             .columns()
             .into_iter()
-            .map(|c| Ok((c.name().to_string(), from_sqlite_type(c.decl_type())?)))
+            .map(|c| {
+                Ok((
+                    c.name().to_string(),
+                    from_sqlite_type(c.decl_type().unwrap_or("BLOB"))?,
+                ))
+            })
             .collect::<Result<Vec<_>>>()?;
 
-        Self {
+        Ok(Self {
             rows,
             cols,
             buf: vec![],
             done: false,
-        }
+        })
     }
 }
 
@@ -74,7 +81,11 @@ impl ResultSet for SqliteResultSet {
                     .cols
                     .iter()
                     .enumerate()
-                    .map(|(idx, (_, typ))| from_sqlite(&row, idx, typ))
+                    .map(|(idx, (_, typ))| {
+                        row.get::<_, Value>(idx)
+                            .context("Failed to get row value")
+                            .and_then(|v| from_sqlite(v, typ))
+                    })
                     .collect::<Result<Vec<_>>>()?;
 
                 self.buf
@@ -101,7 +112,7 @@ pub(crate) struct OwnedSqliteRows {
 impl OwnedSqliteRows {
     pub fn query(stmt: OwnedSqliteStatment, params: impl rusqlite::Params) -> Result<Self> {
         // Box the statement so it has a stable address
-        let stmt = Box::pin(stmt);
+        let mut stmt = Box::pin(stmt);
         let rows = stmt.query(params).context("Failed to execute query")?;
 
         // SAFETY: We maintain a stable reference to the statement

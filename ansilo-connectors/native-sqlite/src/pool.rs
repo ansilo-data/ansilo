@@ -23,7 +23,7 @@ impl SqliteConnectionUnpool {
 impl ConnectionPool for SqliteConnectionUnpool {
     type TConnection = SqliteConnection;
 
-    fn acquire(&mut self, auth: Option<&AuthContext>) -> Result<Self::TConnection> {
+    fn acquire(&mut self, _auth: Option<&AuthContext>) -> Result<Self::TConnection> {
         let con =
             rusqlite::Connection::open_with_flags(self.conf.path.clone(), OpenFlags::default())
                 .context("Failed to connect to sqlite")?;

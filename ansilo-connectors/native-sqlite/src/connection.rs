@@ -1,4 +1,4 @@
-use std::{ops::DerefMut, pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc};
 
 use ansilo_connectors_base::{
     common::query::QueryParam,
@@ -8,8 +8,6 @@ use ansilo_core::{
     data::DataValue,
     err::{ensure, Context, Result},
 };
-use rusqlite::Connection;
-use tokio_sqlite::Client;
 
 use crate::{OwnedSqliteStatment, SqlitePreparedQuery, SqliteQuery, SqliteResultSet};
 
@@ -24,7 +22,7 @@ impl SqliteConnection {
         Self { con: Arc::pin(con) }
     }
 
-    pub(crate) fn con<'a>(&'a self) -> &'a T {
+    pub(crate) fn con<'a>(&'a self) -> &'a rusqlite::Connection {
         &*self.con
     }
 }
@@ -52,7 +50,7 @@ impl Connection for SqliteConnection {
     }
 }
 
-impl<T: DerefMut<Target = Client>> SqliteConnection<T> {
+impl SqliteConnection {
     /// Executes the supplied sql on the connection
     pub fn execute(
         &mut self,
@@ -86,28 +84,28 @@ impl<T: DerefMut<Target = Client>> SqliteConnection<T> {
     }
 }
 
-impl<T: DerefMut<Target = Client>> TransactionManager for SqliteConnection<T> {
+impl TransactionManager for SqliteConnection {
     fn is_in_transaction(&mut self) -> Result<bool> {
         Ok(!self.con.is_autocommit())
     }
 
     fn begin_transaction(&mut self) -> Result<()> {
         self.con
-            .execute("BEGIN DEFERRED", &[])
+            .execute("BEGIN DEFERRED", [])
             .context("Failed to begin transaction")?;
         Ok(())
     }
 
     fn rollback_transaction(&mut self) -> Result<()> {
         self.con
-            .execute("ROLLBACK", &[])
+            .execute("ROLLBACK", [])
             .context("Failed to rollback transaction")?;
         Ok(())
     }
 
     fn commit_transaction(&mut self) -> Result<()> {
         self.con
-            .execute("COMMIT", &[])
+            .execute("COMMIT", [])
             .context("Failed to commit transaction")?;
         Ok(())
     }

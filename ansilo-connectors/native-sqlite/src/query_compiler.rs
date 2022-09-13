@@ -1,5 +1,3 @@
-use std::{marker::PhantomData, ops::DerefMut};
-
 use ansilo_core::{
     data::DataValue,
     err::{bail, Context, Result},
@@ -7,28 +5,24 @@ use ansilo_core::{
 };
 
 use ansilo_connectors_base::{common::query::QueryParam, interface::QueryCompiler};
-use ansilo_util_pg::query::pg_quote_identifier;
-use tokio_postgres::Client;
 
-use crate::{to_pg_type, PostgresConnection, PostgresQuery};
+use crate::{to_sqlite_type, SqliteConnection, SqliteQuery};
 
-use super::{PostgresConnectorEntityConfig, PostgresEntitySourceConfig, PostgresTableOptions};
+use super::{SqliteConnectorEntityConfig, SqliteEntitySourceConfig, SqliteTableOptions};
 
-/// Query compiler for Postgres driver
-pub struct PostgresQueryCompiler<T> {
-    _data: PhantomData<T>,
-}
+/// Query compiler for Sqlite driver
+pub struct SqliteQueryCompiler {}
 
-impl<T: DerefMut<Target = Client>> QueryCompiler for PostgresQueryCompiler<T> {
-    type TConnection = PostgresConnection<T>;
-    type TQuery = PostgresQuery;
-    type TEntitySourceConfig = PostgresEntitySourceConfig;
+impl QueryCompiler for SqliteQueryCompiler {
+    type TConnection = SqliteConnection;
+    type TQuery = SqliteQuery;
+    type TEntitySourceConfig = SqliteEntitySourceConfig;
 
     fn compile_query(
         _con: &mut Self::TConnection,
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: sql::Query,
-    ) -> Result<PostgresQuery> {
+    ) -> Result<SqliteQuery> {
         match &query {
             sql::Query::Select(select) => Self::compile_select_query(conf, &query, select),
             sql::Query::Insert(insert) => Self::compile_insert_query(conf, &query, insert),
@@ -39,12 +33,12 @@ impl<T: DerefMut<Target = Client>> QueryCompiler for PostgresQueryCompiler<T> {
     }
 }
 
-impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
+impl SqliteQueryCompiler {
     fn compile_select_query(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         select: &sql::Select,
-    ) -> Result<PostgresQuery> {
+    ) -> Result<SqliteQuery> {
         let mut params = Vec::<QueryParam>::new();
 
         let query = [
@@ -59,21 +53,20 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
             Self::compile_select_group_by(conf, query, &select.group_bys, &mut params)?,
             Self::compile_order_by(conf, query, &select.order_bys, &mut params)?,
             Self::compile_offet_limit(select.row_skip, select.row_limit)?,
-            Self::compile_select_lock_clause(select.row_lock)?,
         ]
         .into_iter()
         .filter(|i| !i.is_empty())
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(PostgresQuery::new(query, params))
+        Ok(SqliteQuery::new(query, params))
     }
 
     fn compile_insert_query(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         insert: &sql::Insert,
-    ) -> Result<PostgresQuery> {
+    ) -> Result<SqliteQuery> {
         let mut params = Vec::<QueryParam>::new();
 
         let query = [
@@ -108,14 +101,14 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(PostgresQuery::new(query, params))
+        Ok(SqliteQuery::new(query, params))
     }
 
     fn compile_bulk_insert_query(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         insert: &sql::BulkInsert,
-    ) -> Result<PostgresQuery> {
+    ) -> Result<SqliteQuery> {
         let mut params = Vec::<QueryParam>::new();
 
         let query = [
@@ -154,14 +147,14 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(PostgresQuery::new(query, params))
+        Ok(SqliteQuery::new(query, params))
     }
 
     fn compile_update_query(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         update: &sql::Update,
-    ) -> Result<PostgresQuery> {
+    ) -> Result<SqliteQuery> {
         let mut params = Vec::<QueryParam>::new();
 
         let query = [
@@ -192,14 +185,14 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(PostgresQuery::new(query, params))
+        Ok(SqliteQuery::new(query, params))
     }
 
     fn compile_delete_query(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         delete: &sql::Delete,
-    ) -> Result<PostgresQuery> {
+    ) -> Result<SqliteQuery> {
         let mut params = Vec::<QueryParam>::new();
 
         let query = [
@@ -212,11 +205,11 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
         .collect::<Vec<String>>()
         .join(" ");
 
-        Ok(PostgresQuery::new(query, params))
+        Ok(SqliteQuery::new(query, params))
     }
 
     fn compile_select_cols(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         cols: &Vec<(String, sql::Expr)>,
         params: &mut Vec<QueryParam>,
@@ -235,7 +228,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     }
 
     fn compile_select_joins(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         joins: &Vec<sql::Join>,
         params: &mut Vec<QueryParam>,
@@ -248,7 +241,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     }
 
     fn compile_select_join(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         join: &sql::Join,
         params: &mut Vec<QueryParam>,
@@ -276,7 +269,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     }
 
     fn compile_where(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         r#where: &Vec<sql::Expr>,
         params: &mut Vec<QueryParam>,
@@ -295,7 +288,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     }
 
     fn compile_select_group_by(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         group_bys: &Vec<sql::Expr>,
         params: &mut Vec<QueryParam>,
@@ -314,7 +307,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     }
 
     fn compile_order_by(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         order_bys: &Vec<sql::Ordering>,
         params: &mut Vec<QueryParam>,
@@ -355,16 +348,8 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
         Ok(parts.join(" "))
     }
 
-    fn compile_select_lock_clause(mode: sql::SelectRowLockMode) -> Result<String> {
-        Ok(match mode {
-            sql::SelectRowLockMode::None => "",
-            sql::SelectRowLockMode::ForUpdate => "FOR UPDATE",
-        }
-        .into())
-    }
-
     fn compile_expr(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         expr: &sql::Expr,
         params: &mut Vec<QueryParam>,
@@ -386,16 +371,15 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     }
 
     pub fn compile_identifier(id: String) -> Result<String> {
-        // @see https://dev.postgres.com/doc/refman/8.0/en/identifiers.html#:~:text=An%20identifier%20may%20be%20quoted,it%20need%20not%20be%20quoted.)
         if id.contains("\0") {
             bail!("Invalid identifier: \"{id}\", cannot contain '\\0' chars");
         }
 
-        Ok(pg_quote_identifier(&id))
+        Ok(ansilo_util_pg::query::pg_quote_identifier(&id))
     }
 
     pub fn compile_entity_source(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         source: &sql::EntitySource,
         include_alias: bool,
     ) -> Result<String> {
@@ -414,27 +398,16 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
         })
     }
 
-    pub fn compile_source_identifier(source: &PostgresEntitySourceConfig) -> Result<String> {
+    pub fn compile_source_identifier(source: &SqliteEntitySourceConfig) -> Result<String> {
         Ok(match &source {
-            PostgresEntitySourceConfig::Table(PostgresTableOptions {
-                schema_name: Some(schema),
-                table_name: table,
-                ..
-            }) => format!(
-                "{}.{}",
-                Self::compile_identifier(schema.clone())?,
-                Self::compile_identifier(table.clone())?
-            ),
-            PostgresEntitySourceConfig::Table(PostgresTableOptions {
-                schema_name: None,
-                table_name: table,
-                ..
+            SqliteEntitySourceConfig::Table(SqliteTableOptions {
+                table_name: table, ..
             }) => Self::compile_identifier(table.clone())?,
         })
     }
 
     fn compile_attribute_identifier(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         eva: &sql::AttributeId,
         include_table: bool,
@@ -445,7 +418,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
             .with_context(|| format!("Failed to find entity {:?}", source.entity.clone()))?;
 
         let table = match &entity.source {
-            PostgresEntitySourceConfig::Table(table) => table,
+            SqliteEntitySourceConfig::Table(table) => table,
         };
 
         let column = table
@@ -472,16 +445,16 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
 
     fn compile_constant(c: &sql::Constant, params: &mut Vec<QueryParam>) -> Result<String> {
         params.push(QueryParam::Constant(c.value.clone()));
-        Ok(format!("${}", params.len()))
+        Ok(format!("?{}", params.len()))
     }
 
     fn compile_param(p: &sql::Parameter, params: &mut Vec<QueryParam>) -> Result<String> {
         params.push(QueryParam::Dynamic(p.clone()));
-        Ok(format!("${}", params.len()))
+        Ok(format!("?{}", params.len()))
     }
 
     fn compile_unary_op(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         op: &sql::UnaryOp,
         params: &mut Vec<QueryParam>,
@@ -489,16 +462,16 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
         let inner = Self::compile_expr(conf, query, &*op.expr, params)?;
 
         Ok(match op.r#type {
-            sql::UnaryOpType::LogicalNot => format!("!({})", inner),
+            sql::UnaryOpType::LogicalNot => format!("NOT ({})", inner),
             sql::UnaryOpType::Negate => format!("-({})", inner),
             sql::UnaryOpType::BitwiseNot => format!("~({})", inner),
-            sql::UnaryOpType::IsNull => format!("({}) IS NULL", inner),
-            sql::UnaryOpType::IsNotNull => format!("({}) IS NOT NULL", inner),
+            sql::UnaryOpType::IsNull => format!("({}) ISNULL", inner),
+            sql::UnaryOpType::IsNotNull => format!("({}) NOTNULL", inner),
         })
     }
 
     fn compile_binary_op(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         op: &sql::BinaryOp,
         params: &mut Vec<QueryParam>,
@@ -533,18 +506,18 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     }
 
     fn compile_cast(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         cast: &sql::Cast,
         params: &mut Vec<QueryParam>,
     ) -> Result<String> {
         let arg = Self::compile_expr(conf, query, &cast.expr, params)?;
 
-        Ok(format!("({})::{}", arg, to_pg_type(&cast.r#type).name()))
+        Ok(format!("CAST({} AS {})", arg, to_sqlite_type(&cast.r#type)))
     }
 
     fn compile_function_call(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         func: &sql::FunctionCall,
         params: &mut Vec<QueryParam>,
@@ -566,12 +539,19 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
                 format!("lower({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::FunctionCall::Substring(call) => format!(
-                "substring({} FROM {} FOR {})",
+                "substring({}, {}, {})",
                 Self::compile_expr(conf, query, &*call.string, params)?,
                 Self::compile_expr(conf, query, &*call.start, params)?,
                 Self::compile_expr(conf, query, &*call.len, params)?
             ),
-            sql::FunctionCall::Uuid => "gen_random_uuid()".into(),
+            sql::FunctionCall::Uuid => "lower(
+                hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-' || '4' || 
+                substr(hex( randomblob(2)), 2) || '-' || 
+                substr('AB89', 1 + (abs(random()) % 4) , 1)  ||
+                substr(hex(randomblob(2)), 2) || '-' || 
+                hex(randomblob(6))
+              )"
+            .into(),
             sql::FunctionCall::Coalesce(args) => format!(
                 "coalecse({})",
                 args.iter()
@@ -583,7 +563,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
     }
 
     fn compile_aggregate_call(
-        conf: &PostgresConnectorEntityConfig,
+        conf: &SqliteConnectorEntityConfig,
         query: &sql::Query,
         agg: &sql::AggregateCall,
         params: &mut Vec<QueryParam>,
@@ -611,7 +591,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
                     call.separator.clone(),
                 )));
                 format!(
-                    "string_agg({}, {})",
+                    "group_concat({}, {})",
                     Self::compile_expr(conf, query, &call.expr, params)?,
                     params.len()
                 )
@@ -632,13 +612,11 @@ mod tests {
     use ansilo_connectors_base::common::entity::EntitySource;
     use pretty_assertions::assert_eq;
 
-    use crate::PooledClient;
-
     use super::*;
 
-    fn compile_select(select: sql::Select, conf: PostgresConnectorEntityConfig) -> PostgresQuery {
+    fn compile_select(select: sql::Select, conf: SqliteConnectorEntityConfig) -> SqliteQuery {
         let query = sql::Query::Select(select);
-        PostgresQueryCompiler::<PooledClient>::compile_select_query(
+        SqliteQueryCompiler::compile_select_query(
             &conf,
             &query,
             query.as_select().unwrap(),
@@ -646,9 +624,9 @@ mod tests {
         .unwrap()
     }
 
-    fn compile_insert(insert: sql::Insert, conf: PostgresConnectorEntityConfig) -> PostgresQuery {
+    fn compile_insert(insert: sql::Insert, conf: SqliteConnectorEntityConfig) -> SqliteQuery {
         let query = sql::Query::Insert(insert);
-        PostgresQueryCompiler::<PooledClient>::compile_insert_query(
+        SqliteQueryCompiler::compile_insert_query(
             &conf,
             &query,
             query.as_insert().unwrap(),
@@ -658,10 +636,10 @@ mod tests {
 
     fn compile_bulk_insert(
         bulk_insert: sql::BulkInsert,
-        conf: PostgresConnectorEntityConfig,
-    ) -> PostgresQuery {
+        conf: SqliteConnectorEntityConfig,
+    ) -> SqliteQuery {
         let query = sql::Query::BulkInsert(bulk_insert);
-        PostgresQueryCompiler::<PooledClient>::compile_bulk_insert_query(
+        SqliteQueryCompiler::compile_bulk_insert_query(
             &conf,
             &query,
             query.as_bulk_insert().unwrap(),
@@ -669,51 +647,41 @@ mod tests {
         .unwrap()
     }
 
-    fn compile_update(update: sql::Update, conf: PostgresConnectorEntityConfig) -> PostgresQuery {
+    fn compile_update(update: sql::Update, conf: SqliteConnectorEntityConfig) -> SqliteQuery {
         let query = sql::Query::Update(update);
-        PostgresQueryCompiler::<PooledClient>::compile_update_query(
-            &conf,
-            &query,
-            query.as_update().unwrap(),
-        )
-        .unwrap()
+        SqliteQueryCompiler::compile_update_query(&conf, &query, query.as_update().unwrap())
+            .unwrap()
     }
 
-    fn compile_delete(delete: sql::Delete, conf: PostgresConnectorEntityConfig) -> PostgresQuery {
+    fn compile_delete(delete: sql::Delete, conf: SqliteConnectorEntityConfig) -> SqliteQuery {
         let query = sql::Query::Delete(delete);
-        PostgresQueryCompiler::<PooledClient>::compile_delete_query(
-            &conf,
-            &query,
-            query.as_delete().unwrap(),
-        )
-        .unwrap()
+        SqliteQueryCompiler::compile_delete_query(&conf, &query, query.as_delete().unwrap())
+            .unwrap()
     }
 
     fn create_entity_config(
         id: &str,
-        source: PostgresEntitySourceConfig,
-    ) -> EntitySource<PostgresEntitySourceConfig> {
+        source: SqliteEntitySourceConfig,
+    ) -> EntitySource<SqliteEntitySourceConfig> {
         EntitySource::new(
             EntityConfig::minimal(id, vec![], EntitySourceConfig::minimal("")),
             source,
         )
     }
 
-    fn mock_entity_table() -> PostgresConnectorEntityConfig {
-        let mut conf = PostgresConnectorEntityConfig::new();
+    fn mock_entity_table() -> SqliteConnectorEntityConfig {
+        let mut conf = SqliteConnectorEntityConfig::new();
 
         conf.add(create_entity_config(
             "entity",
-            PostgresEntitySourceConfig::Table(PostgresTableOptions::new(
-                None,
+            SqliteEntitySourceConfig::Table(SqliteTableOptions::new(
                 "table".to_string(),
                 HashMap::from([("attr1".to_string(), "col1".to_string())]),
             )),
         ));
         conf.add(create_entity_config(
             "other",
-            PostgresEntitySourceConfig::Table(PostgresTableOptions::new(
-                None,
+            SqliteEntitySourceConfig::Table(SqliteTableOptions::new(
                 "other".to_string(),
                 HashMap::from([("otherattr1".to_string(), "othercol1".to_string())]),
             )),
@@ -723,7 +691,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select() {
+    fn test_sqlite_compile_select() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -732,7 +700,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity""#,
                 vec![]
             )
@@ -740,7 +708,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_where() {
+    fn test_sqlite_compile_select_where() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -754,15 +722,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" WHERE (("entity"."col1") = ($1))"#,
+            SqliteQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" WHERE (("entity"."col1") = (?1))"#,
                 vec![QueryParam::Dynamic(sql::Parameter::new(DataType::Int32, 1))]
             )
         );
     }
 
     #[test]
-    fn test_postgres_compile_select_inner_join() {
+    fn test_sqlite_compile_select_inner_join() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -780,7 +748,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" INNER JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
@@ -788,7 +756,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_left_join() {
+    fn test_sqlite_compile_select_left_join() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -806,7 +774,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" LEFT JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
@@ -814,7 +782,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_right_join() {
+    fn test_sqlite_compile_select_right_join() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -832,7 +800,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" RIGHT JOIN "other" AS "other" ON (("entity"."col1") = ("other"."othercol1"))"#,
                 vec![]
             )
@@ -840,7 +808,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_group_by() {
+    fn test_sqlite_compile_select_group_by() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -853,15 +821,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" GROUP BY "entity"."col1", $1"#,
+            SqliteQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" GROUP BY "entity"."col1", ?1"#,
                 vec![QueryParam::Constant(DataValue::Int32(1))]
             )
         );
     }
 
     #[test]
-    fn test_postgres_compile_select_order_by() {
+    fn test_sqlite_compile_select_order_by() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -878,15 +846,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
-                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" ORDER BY "entity"."col1" ASC, $1 DESC"#,
+            SqliteQuery::new(
+                r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" ORDER BY "entity"."col1" ASC, ?1 DESC"#,
                 vec![QueryParam::Constant(DataValue::Int32(1))]
             )
         );
     }
 
     #[test]
-    fn test_postgres_compile_select_row_skip_and_limit() {
+    fn test_sqlite_compile_select_row_skip_and_limit() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -897,7 +865,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" LIMIT 20 OFFSET 10"#,
                 vec![]
             )
@@ -905,7 +873,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_row_skip() {
+    fn test_sqlite_compile_select_row_skip() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -915,7 +883,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
@@ -923,7 +891,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_row_limit() {
+    fn test_sqlite_compile_select_row_limit() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select
             .cols
@@ -933,7 +901,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT "entity"."col1" AS "COL" FROM "table" AS "entity" LIMIT 20"#,
                 vec![]
             )
@@ -941,7 +909,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_function_call() {
+    fn test_sqlite_compile_select_function_call() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select.cols.push((
             "COL".to_string(),
@@ -954,7 +922,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT length("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
@@ -962,7 +930,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_aggregate_call() {
+    fn test_sqlite_compile_select_aggregate_call() {
         let mut select = sql::Select::new(sql::source("entity", "entity"));
         select.cols.push((
             "COL".to_string(),
@@ -975,7 +943,7 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
+            SqliteQuery::new(
                 r#"SELECT sum("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
@@ -983,28 +951,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_select_for_update() {
-        let mut select = sql::Select::new(sql::source("entity", "entity"));
-        select.cols.push((
-            "COL".to_string(),
-            sql::Expr::AggregateCall(sql::AggregateCall::Sum(Box::new(sql::Expr::attr(
-                "entity", "attr1",
-            )))),
-        ));
-        select.row_lock = sql::SelectRowLockMode::ForUpdate;
-        let compiled = compile_select(select, mock_entity_table());
-
-        assert_eq!(
-            compiled,
-            PostgresQuery::new(
-                r#"SELECT sum("entity"."col1") AS "COL" FROM "table" AS "entity" FOR UPDATE"#,
-                vec![]
-            )
-        );
-    }
-
-    #[test]
-    fn test_postgres_compile_insert_query() {
+    fn test_sqlite_compile_insert_query() {
         let mut insert = sql::Insert::new(sql::source("entity", "entity"));
         insert.cols.push((
             "attr1".to_string(),
@@ -1015,15 +962,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
-                r#"INSERT INTO "table" ("col1") VALUES ($1)"#,
+            SqliteQuery::new(
+                r#"INSERT INTO "table" ("col1") VALUES (?1)"#,
                 vec![QueryParam::Dynamic(sql::Parameter::new(DataType::Int8, 1))]
             )
         );
     }
 
     #[test]
-    fn test_postgres_compile_bulk_insert_query() {
+    fn test_sqlite_compile_bulk_insert_query() {
         let mut bulk_insert = sql::BulkInsert::new(sql::source("entity", "entity"));
         bulk_insert.cols.push("attr1".into());
         bulk_insert.values = vec![
@@ -1036,8 +983,8 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
-                r#"INSERT INTO "table" ("col1") VALUES ($1), ($2), ($3)"#,
+            SqliteQuery::new(
+                r#"INSERT INTO "table" ("col1") VALUES (?1), (?2), (?3)"#,
                 vec![
                     QueryParam::Dynamic(sql::Parameter::new(DataType::Int8, 1)),
                     QueryParam::Dynamic(sql::Parameter::new(DataType::Int8, 2)),
@@ -1048,7 +995,7 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_update_query() {
+    fn test_sqlite_compile_update_query() {
         let mut update = sql::Update::new(sql::source("entity", "entity"));
         update
             .cols
@@ -1058,15 +1005,15 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
-                r#"UPDATE "table" SET "col1" = $1"#,
+            SqliteQuery::new(
+                r#"UPDATE "table" SET "col1" = ?1"#,
                 vec![QueryParam::Constant(DataValue::Int8(1))]
             )
         );
     }
 
     #[test]
-    fn test_postgres_compile_update_where_query() {
+    fn test_sqlite_compile_update_where_query() {
         let mut update = sql::Update::new(sql::source("entity", "entity"));
         update
             .cols
@@ -1082,8 +1029,8 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
-                r#"UPDATE "table" SET "col1" = $1 WHERE (("table"."col1") = ($2))"#,
+            SqliteQuery::new(
+                r#"UPDATE "table" SET "col1" = ?1 WHERE (("table"."col1") = (?2))"#,
                 vec![
                     QueryParam::Constant(DataValue::Int8(1)),
                     QueryParam::Dynamic(sql::Parameter::new(DataType::Int32, 1))
@@ -1093,18 +1040,15 @@ mod tests {
     }
 
     #[test]
-    fn test_postgres_compile_delete_query() {
+    fn test_sqlite_compile_delete_query() {
         let delete = sql::Delete::new(sql::source("entity", "entity"));
         let compiled = compile_delete(delete, mock_entity_table());
 
-        assert_eq!(
-            compiled,
-            PostgresQuery::new(r#"DELETE FROM "table""#, vec![])
-        );
+        assert_eq!(compiled, SqliteQuery::new(r#"DELETE FROM "table""#, vec![]));
     }
 
     #[test]
-    fn test_postgres_compile_delete_where_query() {
+    fn test_sqlite_compile_delete_where_query() {
         let mut delete = sql::Delete::new(sql::source("entity", "entity"));
 
         delete.r#where.push(sql::Expr::BinaryOp(sql::BinaryOp::new(
@@ -1117,8 +1061,8 @@ mod tests {
 
         assert_eq!(
             compiled,
-            PostgresQuery::new(
-                r#"DELETE FROM "table" WHERE (("table"."col1") = ($1))"#,
+            SqliteQuery::new(
+                r#"DELETE FROM "table" WHERE (("table"."col1") = (?1))"#,
                 vec![QueryParam::Dynamic(sql::Parameter::new(DataType::Int32, 1))]
             )
         );
