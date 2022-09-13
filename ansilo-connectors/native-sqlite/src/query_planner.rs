@@ -52,7 +52,11 @@ impl QueryPlanner for SqliteQueryPlanner {
             .context("Unexpected empty result set")?;
 
         let count = match value.clone() {
-            DataValue::Int64(count) => count,
+            DataValue::Binary(_) => *value
+                .try_coerce_into(&DataType::rust_string())?
+                .try_coerce_into(&DataType::Int64)?
+                .as_int64()
+                .unwrap(),
             _ => bail!("Unexpected data value returned: {:?}", value),
         };
 
@@ -67,7 +71,7 @@ impl QueryPlanner for SqliteQueryPlanner {
     ) -> Result<Vec<(sql::Expr, DataType)>> {
         Ok(vec![(
             sql::Expr::attr(source.alias.clone(), "rowid"),
-            DataType::Binary,
+            DataType::Int64,
         )])
     }
 

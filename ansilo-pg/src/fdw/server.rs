@@ -209,6 +209,10 @@ impl FdwListener {
                     ConnectionPools::NativePostgres(pool),
                     RwLockEntityConfigs::NativePostgres(entities),
                 ) => Self::process::<PostgresConnector>(auth, nc, chan, pool, entities, log),
+                (
+                    ConnectionPools::NativeSqlite(pool),
+                    RwLockEntityConfigs::NativeSqlite(entities),
+                ) => Self::process::<SqliteConnector>(auth, nc, chan, pool, entities, log),
                 (ConnectionPools::Peer(pool), RwLockEntityConfigs::Peer(entities)) => {
                     Self::process::<PeerConnector>(auth, nc, chan, pool, entities, log)
                 }
@@ -296,6 +300,9 @@ pub enum RwLockEntityConfigs {
     NativePostgres(
         RwLock<ConnectorEntityConfig<<PostgresConnector as Connector>::TEntitySourceConfig>>,
     ),
+    NativeSqlite(
+        RwLock<ConnectorEntityConfig<<SqliteConnector as Connector>::TEntitySourceConfig>>,
+    ),
     Peer(RwLock<ConnectorEntityConfig<<PeerConnector as Connector>::TEntitySourceConfig>>),
     Memory(RwLock<ConnectorEntityConfig<<MemoryConnector as Connector>::TEntitySourceConfig>>),
 }
@@ -306,6 +313,7 @@ impl From<ConnectorEntityConfigs> for RwLockEntityConfigs {
             ConnectorEntityConfigs::OracleJdbc(e) => Self::OracleJdbc(RwLock::new(e)),
             ConnectorEntityConfigs::MysqlJdbc(e) => Self::MysqlJdbc(RwLock::new(e)),
             ConnectorEntityConfigs::NativePostgres(e) => Self::NativePostgres(RwLock::new(e)),
+            ConnectorEntityConfigs::NativeSqlite(e) => Self::NativeSqlite(RwLock::new(e)),
             ConnectorEntityConfigs::Peer(e) => Self::Peer(RwLock::new(e)),
             ConnectorEntityConfigs::Memory(e) => Self::Memory(RwLock::new(e)),
         }

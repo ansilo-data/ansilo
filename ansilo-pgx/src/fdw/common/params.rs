@@ -58,12 +58,15 @@ pub(crate) unsafe fn send_query_params(
             input_structure
                 .params
                 .iter()
-                .map(|(id, _type)| {
+                .map(|(id, r#type)| {
                     let (expr, type_oid) = *param_exprs.get(id).unwrap();
                     let mut is_null = false;
 
                     let datum = (*expr).evalfunc.unwrap()(expr, econtext, &mut is_null as *mut _);
-                    from_datum(type_oid, datum).unwrap()
+                    from_datum(type_oid, datum)
+                        .unwrap()
+                        .try_coerce_into(r#type)
+                        .unwrap()
                 })
                 .collect::<Vec<_>>()
         })

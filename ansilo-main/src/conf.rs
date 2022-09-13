@@ -10,6 +10,8 @@ use ansilo_pg::{conf::PostgresConf, PG_ADMIN_USER};
 use ansilo_proxy::conf::{HandlerConf, ProxyConf, TlsConf};
 use ansilo_util_pg::query::{pg_quote_identifier, pg_str_literal};
 
+use crate::args::Args;
+
 /// Container for the application config
 pub struct AppConf {
     /// Node configuration from main config file
@@ -21,12 +23,12 @@ pub struct AppConf {
 }
 
 /// Initialises the node global config state
-pub fn init_conf(config_path: &Path) -> AppConf {
+pub fn init_conf(config_path: &Path, args: &Args) -> AppConf {
     info!("Loading configuration...");
     let config_loader = ConfigLoader::new();
 
     let node = config_loader
-        .load(&config_path)
+        .load(&config_path, args.config_args.iter().cloned().collect())
         .context("Failed to load configuration")
         .unwrap();
 

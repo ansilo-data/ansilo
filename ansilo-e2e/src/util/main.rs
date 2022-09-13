@@ -18,12 +18,38 @@ pub fn run_instance(config_path: PathBuf) -> (Ansilo, Client) {
 }
 
 /// Runs an instance of ansilo using the supplied config
+pub fn run_instance_args(
+    config_path: PathBuf,
+    args: &[(impl Into<String> + Clone, impl Into<String> + Clone)],
+) -> (Ansilo, Client) {
+    let (instance, port) = run_instance_without_connect_args(Args {
+        config: Some(config_path),
+        config_args: args
+            .iter()
+            .cloned()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect(),
+        force_build: true,
+    });
+
+    let client = connect(port);
+
+    (instance, client)
+}
+
+/// Runs an instance of ansilo using the supplied config
 pub fn run_instance_without_connect(config_path: PathBuf) -> (Ansilo, u16) {
-    let instance = Ansilo::start(
-        Command::Run(Args::testing(config_path)),
-        Some(RemoteQueryLog::store_in_memory()),
-    )
-    .unwrap();
+    run_instance_without_connect_args(Args {
+        config: Some(config_path),
+        config_args: vec![],
+        force_build: true,
+    })
+}
+
+/// Runs an instance of ansilo using the supplied args
+pub fn run_instance_without_connect_args(args: Args) -> (Ansilo, u16) {
+    let instance =
+        Ansilo::start(Command::Run(args), Some(RemoteQueryLog::store_in_memory())).unwrap();
 
     let port = loop {
         let addrs = instance.subsystems().unwrap().proxy().addrs().unwrap();

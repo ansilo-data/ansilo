@@ -43,6 +43,9 @@ pub(crate) unsafe fn convert(
         pg_sys::NodeTag_T_RelabelType => {
             convert_relabel_type(node as *const pg_sys::RelabelType, ctx, planner, fdw)
         }
+        pg_sys::NodeTag_T_CoerceViaIO => {
+            convert_coerce_via_io_type(node as *const pg_sys::CoerceViaIO, ctx, planner, fdw)
+        }
         pg_sys::NodeTag_T_BoolExpr => {
             convert_bool_expr(node as *const pg_sys::BoolExpr, ctx, planner, fdw)
         }

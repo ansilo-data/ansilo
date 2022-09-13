@@ -5,3 +5,4 @@ pub mod peer;
 pub mod postgres;
 pub mod util;
 pub mod web;
+pub mod sqlite;

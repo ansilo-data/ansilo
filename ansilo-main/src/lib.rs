@@ -73,7 +73,7 @@ impl Ansilo {
         // Load configuration
         let config_path = args.config.clone().unwrap_or("/etc/ansilo/main.yml".into());
         // We are happy to let the app-wide config leak for the rest of the program
-        let conf: &'static _ = Box::leak(Box::new(init_conf(&config_path)));
+        let conf: &'static _ = Box::leak(Box::new(init_conf(&config_path, &args)));
 
         // Boot tokio
         let runtime = tokio::runtime::Builder::new_multi_thread()

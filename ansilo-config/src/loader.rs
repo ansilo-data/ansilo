@@ -1,5 +1,6 @@
 use std::{
     any::type_name,
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -15,6 +16,7 @@ use serde_yaml::Deserializer;
 use crate::{
     ctx::Ctx,
     processor::{
+        arg::ArgConfigProcessor,
         dir::DirConfigProcessor,
         embed::EmbedConfigProcessor,
         env::EnvConfigProcessor,
@@ -44,21 +46,22 @@ impl ConfigLoader {
 
     fn default_processors() -> Vec<Box<dyn ConfigExprProcessor>> {
         vec![
+            Box::new(DirConfigProcessor::default()),
             Box::new(EmbedConfigProcessor::default()),
             Box::new(FetchConfigProcessor::default()),
             Box::new(EnvConfigProcessor::default()),
-            Box::new(DirConfigProcessor::default()),
+            Box::new(ArgConfigProcessor::default()),
         ]
     }
 
     /// Loads the node configuration from the supplied file
-    pub fn load(&self, path: &Path) -> Result<NodeConfig> {
+    pub fn load(&self, path: &Path, args: HashMap<String, String>) -> Result<NodeConfig> {
         let path = path
             .canonicalize()
             .context("Failed to get full config path")?;
         info!("Loading config from path {}", path.display());
 
-        let processed = self.load_yaml(path.as_path())?;
+        let processed = self.load_yaml(path.as_path(), args)?;
         debug!("Parsing into {}", type_name::<NodeConfig>());
         let config: NodeConfig =
             serde_yaml::from_value(processed).context("Failed to parse yaml into NodeConfig")?;
@@ -67,7 +70,11 @@ impl ConfigLoader {
     }
 
     /// Loads processed yaml from the supplied file
-    pub(crate) fn load_yaml(&self, path: &Path) -> Result<serde_yaml::Value> {
+    pub(crate) fn load_yaml(
+        &self,
+        path: &Path,
+        args: HashMap<String, String>,
+    ) -> Result<serde_yaml::Value> {
         debug!("Loading yaml from file {}", path.display());
 
         let file_data = fs::read(path).context(format!(
@@ -75,7 +82,7 @@ impl ConfigLoader {
             path.display()
         ))?;
 
-        self.load_data(file_data.as_slice(), Some(path.to_path_buf()))
+        self.load_data(file_data.as_slice(), Some(path.to_path_buf()), args)
     }
 
     /// Parses and processes the supplied yaml
@@ -83,6 +90,7 @@ impl ConfigLoader {
         &self,
         data: &[u8],
         path: Option<PathBuf>,
+        args: HashMap<String, String>,
     ) -> Result<serde_yaml::Value> {
         let mut config = serde_yaml::Value::deserialize(Deserializer::from_slice(data))
             .context("Failed to parse yaml")?;
@@ -119,7 +127,7 @@ impl ConfigLoader {
             })
         }
 
-        config = process_config(&Ctx::new(self, path), config)?;
+        config = process_config(&Ctx::new(self, path, args), config)?;
 
         debug!("Finished processing yaml from file");
         Ok(config)
@@ -132,10 +140,14 @@ mod tests {
 
     use super::*;
 
-    fn process_yaml(yaml: &str, path: Option<PathBuf>) -> Result<String> {
+    fn process_yaml(
+        yaml: &str,
+        path: Option<PathBuf>,
+        args: Option<HashMap<String, String>>,
+    ) -> Result<String> {
         let loader = ConfigLoader::new();
 
-        let processed = loader.load_data(yaml.as_bytes(), path);
+        let processed = loader.load_data(yaml.as_bytes(), path, args.unwrap_or_default());
 
         processed
             .and_then(|val| Ok(serde_yaml::to_string(&val)?))
@@ -146,7 +158,7 @@ mod tests {
     #[test]
     fn test_config_loader_basic_yaml() {
         let input = "a: b";
-        let result = process_yaml(input, None);
+        let result = process_yaml(input, None, None);
 
         assert_eq!(result.unwrap(), "a: b");
     }
@@ -154,7 +166,7 @@ mod tests {
     #[test]
     fn test_config_loader_unknown_interpolation() {
         let input = r#"a: ${unknown}"#;
-        let result = process_yaml(input, None);
+        let result = process_yaml(input, None, None);
 
         assert_eq!(result.unwrap(), r#"a: ${unknown}"#);
     }
@@ -163,7 +175,7 @@ mod tests {
     fn test_config_loader_env_interpolation() {
         env::set_var("ANSILO_CONFIG_LOADER_TEST1", "FROM_ENV_VAR");
         let input = r#"a: "${env:ANSILO_CONFIG_LOADER_TEST1}""#;
-        let result = process_yaml(input, None);
+        let result = process_yaml(input, None, None);
 
         assert_eq!(result.unwrap(), r#"a: FROM_ENV_VAR"#);
     }
@@ -176,7 +188,7 @@ mod tests {
         );
         env::set_var("ANSILO_CONFIG_LOADER_TEST2_OUTER", "RESOLVED_OUTER_VALUE");
         let input = r#"a: "${env:${env:ANSILO_CONFIG_LOADER_TEST2_INNER}}""#;
-        let result = process_yaml(input, None);
+        let result = process_yaml(input, None, None);
 
         assert_eq!(result.unwrap(), r#"a: RESOLVED_OUTER_VALUE"#);
     }
@@ -184,8 +196,24 @@ mod tests {
     #[test]
     fn test_config_loader_dir_interpolation() {
         let input = r#"a: "${dir}/bar/baz""#;
-        let result = process_yaml(input, Some("/foo/config.yml".into()));
+        let result = process_yaml(input, Some("/foo/config.yml".into()), None);
 
         assert_eq!(result.unwrap(), r#"a: /foo/bar/baz"#);
+    }
+
+    #[test]
+    fn test_config_loader_arg_interpolation() {
+        let input = r#"a: "${arg:TEST_ARG} bar""#;
+        let result = process_yaml(
+            input,
+            Some("/foo/config.yml".into()),
+            Some(
+                [("TEST_ARG".to_string(), "foo".to_string())]
+                    .into_iter()
+                    .collect(),
+            ),
+        );
+
+        assert_eq!(result.unwrap(), r#"a: foo bar"#);
     }
 }

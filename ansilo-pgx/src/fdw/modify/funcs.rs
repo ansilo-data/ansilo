@@ -881,7 +881,10 @@ unsafe fn plan_direct_foreign_update(
         // Try convert the tle expr to sqlil, if this fails we bail out
         let expr = match convert((*tle).expr as *mut _, &mut query.cvt, planner, ctx) {
             Ok(expr) => expr,
-            Err(_) => return None,
+            Err(e) => {
+                pgx::debug1!("Could not push down update where clause: {:?}", e);
+                return None;
+            }
         };
 
         // Try apply this as a SET expression to the update query
@@ -890,6 +893,7 @@ unsafe fn plan_direct_foreign_update(
         match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
+                pgx::debug1!("Could not push down update where clause: data source does not support expression {:?}", op);
                 return None;
             }
         }
@@ -907,7 +911,10 @@ unsafe fn plan_direct_foreign_update(
             ctx,
         ) {
             Ok(expr) => expr,
-            Err(_) => return None,
+            Err(e) => {
+                pgx::debug1!("Could not push down update where clause: {:?}", e);
+                return None;
+            }
         };
 
         // Try push down the where clause
@@ -916,6 +923,7 @@ unsafe fn plan_direct_foreign_update(
         match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
+                pgx::debug1!("Could not push down update where clause: data source does not support expression {:?}", op);
                 return None;
             }
         }
@@ -958,7 +966,10 @@ unsafe fn plan_direct_foreign_delete(
             ctx,
         ) {
             Ok(expr) => expr,
-            Err(_) => return None,
+            Err(e) => {
+                pgx::debug1!("Could not push down delete where clause: {:?}", e);
+                return None;
+            }
         };
 
         // Try push down the where clause
@@ -967,6 +978,7 @@ unsafe fn plan_direct_foreign_delete(
         match query.apply(op.clone().into()).unwrap() {
             QueryOperationResult::Ok(_) => {}
             QueryOperationResult::Unsupported => {
+                pgx::debug1!("Could not push down delete where clause: expression is not supported by data source");
                 return None;
             }
         }

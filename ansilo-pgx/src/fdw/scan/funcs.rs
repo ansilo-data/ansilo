@@ -1416,6 +1416,7 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
             (*slot).tts_isnull.add(attr_idx),
             (*slot).tts_values.add(attr_idx),
         )
+        .with_context(|| format!("Reading from column '{}'", attr.name()))
         .unwrap();
 
         col_idx += 1;

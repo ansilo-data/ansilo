@@ -7,6 +7,7 @@ pub(crate) mod embed;
 pub(crate) mod env;
 pub(crate) mod fetch;
 pub(crate) mod util;
+pub mod arg;
 
 /// A config processor applies transformations to the yaml config
 /// This is used for interpolating config items from various sources

@@ -1,6 +1,6 @@
 use ansilo_core::{
     data::{chrono::Utc, DataType, DataValue, StringOptions},
-    err::{bail, Result},
+    err::Result,
 };
 use rusqlite::{
     types::{Type, Value},
