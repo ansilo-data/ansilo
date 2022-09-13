@@ -570,28 +570,28 @@ impl SqliteQueryCompiler {
     ) -> Result<String> {
         Ok(match agg {
             sql::AggregateCall::Sum(arg) => {
-                format!("sum({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("SUM({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
-            sql::AggregateCall::Count => "count(*)".into(),
+            sql::AggregateCall::Count => "COUNT(*)".into(),
             sql::AggregateCall::CountDistinct(arg) => format!(
-                "count(distinct {})",
+                "COUNT(DISTINCT {})",
                 Self::compile_expr(conf, query, &*arg, params)?
             ),
             sql::AggregateCall::Max(arg) => {
-                format!("max({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("MAX({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::AggregateCall::Min(arg) => {
-                format!("min({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("MIN({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::AggregateCall::Average(arg) => {
-                format!("avg({})", Self::compile_expr(conf, query, &*arg, params)?)
+                format!("AVG({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
             sql::AggregateCall::StringAgg(call) => {
                 params.push(QueryParam::Constant(DataValue::Utf8String(
                     call.separator.clone(),
                 )));
                 format!(
-                    "group_concat({}, {})",
+                    "GROUP_CONCAT({}, {})",
                     Self::compile_expr(conf, query, &call.expr, params)?,
                     params.len()
                 )
