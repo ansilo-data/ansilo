@@ -1,5 +1,8 @@
 import { styled } from "@mui/material/styles";
-import TextField from "@mui/material/TextField";
+import CodeMirror from '@uiw/react-codemirror';
+import { sql as sqlExtension, PostgreSQL } from "@codemirror/lang-sql"
+import { darcula } from '@uiw/codemirror-theme-darcula'
+
 import { CatalogState } from "../catalog/catalog.slice";
 
 interface Props {
@@ -9,33 +12,36 @@ interface Props {
   onChange: (sql: string) => void;
 }
 
-const StyledTextField = styled(
-  TextField,
+const StyledContainer = styled(
+  'div',
   {}
 )({
   "&": {
     width: "100%",
     height: "100%",
+    borderRadius: 3,
+    boxShadow: '0 0 2px #333'
   },
-  "& .MuiInputBase-root": {
+  "& > *": {
     width: "100%",
     height: "100%",
-  },
-  "& textarea": {
-    width: "100%",
-    height: "100%!important",
   },
 });
 
 export const QueryEditor = ({ sql, onChange, ...props }: Props) => {
   return (
-    <StyledTextField
-      label="SQL Editor"
-      placeholder="SELECT * FROM your_dataset..."
-      multiline
-      value={sql}
-      onChange={(e) => onChange(e.target.value)}
-      {...props}
-    />
+    <StyledContainer>
+      <CodeMirror
+        height="100%"
+        width="100%"
+        theme={darcula}
+        extensions={[sqlExtension({
+          dialect: PostgreSQL,
+        })]}
+        value={sql}
+        onChange={(value, viewUpdate) => onChange(value)}
+        {...props}
+      />
+    </StyledContainer>
   );
 };

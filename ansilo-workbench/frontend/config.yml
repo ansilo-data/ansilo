@@ -1,0 +1,16 @@
+auth:
+  - name: Login with Cognito 
+    type: oidc
+    redirect_url: https://my-idp.test.com?client_id=1234567
+
+  - name: Login with Cognito 
+    type: saml
+    redirect_url: https://my-idp.test.com?client_id=1234567
+
+  - name: Login with Username / Password 
+    type: password
+
+nodes:
+  - url: http://customers.ans.ecomm.com
+  - url: http://orders.ans.ecomm.com
+  - url: http://transactions.ans.ecomm.com

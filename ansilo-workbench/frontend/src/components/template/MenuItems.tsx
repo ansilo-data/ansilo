@@ -42,21 +42,6 @@ export const MainMenuItems = () => {
           <ListItemText primary="Jobs" />
         </ListItemButton>
       </Link>
-      <Link href="/streams">
-        <ListItemButton selected={router.asPath.startsWith("/streams")}>
-          <ListItemIcon>
-            <ModelTraining />
-          </ListItemIcon>
-          <ListItemText
-            primary={
-              <>
-                Streams{" "}
-                <small style={{ color: theme.palette.grey[500] }}>(soon)</small>
-              </>
-            }
-          />
-        </ListItemButton>
-      </Link>
     </React.Fragment>
   );
 };
