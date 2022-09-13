@@ -1219,6 +1219,27 @@ pub unsafe extern "C" fn get_foreign_plan(
         }
     }
 
+    // Most connectors will require at least one column
+    // to generate valid SQL. In the edge-case no columns
+    // are required from the underlying table, attempt to add
+    // a constant null return value.
+    if !query
+        .as_select()
+        .unwrap()
+        .remote_ops
+        .iter()
+        .any(|op| op.is_add_column())
+    {
+        let col = query
+            .as_select_mut()
+            .unwrap()
+            .new_column(sqlil::Expr::constant(DataValue::Null));
+
+        if apply_query_operation(&mut query, col).is_none() {
+            pgx::debug1!("Failed to add constant return column when no columns have been added");
+        }
+    }
+
     // Convert to pg list
     let fdw_scan_list = vec_to_pg_list(fdw_scan_list);
 
