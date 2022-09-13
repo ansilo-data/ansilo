@@ -53,6 +53,7 @@ impl DataSink {
 
         if *not_null == 0 {
             let _ = self.buf.pop_front();
+            self.advance();
             return Ok(Some(DataValue::Null));
         }
 
@@ -494,6 +495,37 @@ mod tests {
         )
         .unwrap();
 
+        assert_eq!(
+            sink.read_data_value().unwrap(),
+            Some(DataValue::Utf8String("hello".into()))
+        );
+        assert_eq!(sink.read_data_value().unwrap(), None,);
+    }
+
+    #[test]
+    fn test_data_sink_null_mid_row() {
+        let mut sink = DataSink::new(vec![
+            DataType::UInt8,
+            DataType::UInt32,
+            DataType::rust_string(),
+        ]);
+
+        sink.write_all(
+            &[
+                vec![1u8],                   // not null
+                vec![123u8],                 // data val 1
+                vec![0u8],                   // null (data val 2)
+                vec![1u8],                   // not null
+                vec![5u8],                   // chunk len
+                "hello".as_bytes().to_vec(), // data
+                vec![0u8],                   // eof
+            ]
+            .concat(),
+        )
+        .unwrap();
+
+        assert_eq!(sink.read_data_value().unwrap(), Some(DataValue::UInt8(123)));
+        assert_eq!(sink.read_data_value().unwrap(), Some(DataValue::Null));
         assert_eq!(
             sink.read_data_value().unwrap(),
             Some(DataValue::Utf8String("hello".into()))
