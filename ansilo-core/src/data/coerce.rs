@@ -20,9 +20,22 @@ impl DataValue {
     /// If this cannot hold due to data being discarded during the coercion we
     /// MUST bail out here.
     pub fn try_coerce_into(self, r#type: &DataType) -> Result<Self> {
-        Ok(match self {
-            // Nulls are type-independent
-            DataValue::Null => self,
+        // Nulls are type-independent
+        if self.is_null() {
+            return Ok(self);
+        }
+
+        // If we are coercing into binary (our widest type) want to
+        // easy roundtrip through the textual representation
+        let data = if !self.as_binary().is_some() && r#type.is_binary() {
+            self.try_coerce_into(&DataType::rust_string())
+                .expect("Should be able to convert non-binary to string")
+        } else {
+            self
+        };
+
+        Ok(match data {
+            DataValue::Null => unreachable!(),
             DataValue::Utf8String(data) => Self::try_coerce_utf8_string(data, r#type)?,
             DataValue::Binary(data) => Self::try_coerce_binary(data, r#type)?,
             DataValue::Boolean(data) => Self::try_coerce_boolean(data, r#type)?,
@@ -158,10 +171,19 @@ impl DataValue {
                     bail!("Failed to coerce binary data into UTF-8 string: data is not valid utf-8 encoded")
                 }
             }
-            DataType::Uuid if data.len() == 16 => {
-                Self::Uuid(Uuid::from_bytes(data[..].try_into().unwrap()))
+            _ => {
+                // To support storing all types in binary we convert them to the textual
+                // representation first, so if we are converting binart to another type
+                // let's try coerce the string to that type
+                if let Ok(str) = String::from_utf8(data) {
+                    if let Ok(data) = Self::Utf8String(str).try_coerce_into(r#type) {
+                        return Ok(data);
+                    }
+
+                    bail!("Failed to coerce binary data into UTF-8 string: data is not valid utf-8 encoded")
+                }
+                bail!("No type coercion exists from type 'binary' to {:?}", r#type)
             }
-            _ => bail!("No type coercion exists from type 'binary' to {:?}", r#type),
         })
     }
 
@@ -676,7 +698,6 @@ impl DataValue {
         Ok(match r#type {
             DataType::Uuid => Self::Uuid(data),
             DataType::Utf8String(_) => Self::Utf8String(data.to_string()),
-            DataType::Binary => Self::Binary(data.into_bytes().to_vec()),
             _ => bail!(
                 "No type coercion exists from type 'uuid' ({}) to {:?}",
                 data,
@@ -720,6 +741,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -746,6 +768,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -764,6 +787,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -786,6 +810,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -802,6 +827,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -819,6 +845,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -829,6 +856,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -841,6 +869,7 @@ mod tests {
                     DataType::Int64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -849,6 +878,7 @@ mod tests {
                     DataType::Int64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -858,6 +888,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -866,6 +897,7 @@ mod tests {
                     DataType::Float64,
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -876,6 +908,7 @@ mod tests {
                     DataType::Decimal(DecimalOptions::default()),
                     DataType::Float64,
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -886,6 +919,7 @@ mod tests {
                 vec![
                     DataType::Utf8String(StringOptions::default()),
                     DataType::JSON,
+                    DataType::Binary,
                 ],
             ),
             (
@@ -896,6 +930,7 @@ mod tests {
                 vec![
                     DataType::JSON,
                     DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
                 ],
             ),
             (
@@ -914,7 +949,10 @@ mod tests {
                         Tz::UTC,
                     )),
                 ],
-                vec![DataType::Utf8String(StringOptions::default())],
+                vec![
+                    DataType::Utf8String(StringOptions::default()),
+                    DataType::Binary,
+                ],
             ),
             (
                 vec![DataValue::Uuid(Uuid::new_v4())],
