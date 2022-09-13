@@ -1,10 +1,10 @@
-use std::{collections::HashMap, os::raw::c_int, thread, time::Duration};
+use std::{collections::HashMap, os::raw::c_int, panic, thread, time::Duration};
 
 use crate::{args::Command, build::BuildInfo};
 use ansilo_auth::Authenticator;
 use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs, Connectors};
 use ansilo_core::err::{Context, Result};
-use ansilo_logging::{info, warn};
+use ansilo_logging::{error, info, warn};
 use ansilo_pg::{fdw::server::FdwServer, handler::PostgresConnectionHandler, PostgresInstance};
 use ansilo_proxy::{conf::HandlerConf, server::ProxyServer};
 use ansilo_web::{Http1ConnectionHandler, Http2ConnectionHandler, HttpApi, HttpApiState};
@@ -62,7 +62,22 @@ impl Ansilo {
         ansilo_logging::init_logging().unwrap();
         info!("Hi, thanks for using Ansilo!");
 
-        Self::start(Command::parse(), None).unwrap().wait().unwrap();
+        let cmd = Command::parse();
+        let boot = || Self::start(cmd.clone(), None).unwrap().wait().unwrap();
+
+        // In dev mode we want to restart if the config is invalid
+        // On error we wait for a signal to either terminate or restart
+        // SIGUSR1 is triggered by our file inotify watcher.
+        if cmd.is_dev() {
+            if let Err(_) = panic::catch_unwind(boot) {
+                error!("Error while booting ansilo, waiting for change before restart...");
+                if SIGUSR1 == Self::wait_for_signal().unwrap() {
+                    dev::restart();
+                }
+            }
+        } else {
+            boot()
+        }
     }
 
     /// Runs the supplied command
@@ -71,9 +86,15 @@ impl Ansilo {
         let log = log.unwrap_or_default();
 
         // Load configuration
-        let config_path = args.config.clone().unwrap_or("/etc/ansilo/main.yml".into());
+        let config_path = args.config();
         // We are happy to let the app-wide config leak for the rest of the program
         let conf: &'static _ = Box::leak(Box::new(init_conf(&config_path, &args)));
+
+        if command.is_dev() {
+            thread::spawn(|| {
+                dev::signal_on_config_update(conf);
+            });
+        }
 
         // Boot tokio
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -82,7 +103,7 @@ impl Ansilo {
             .build()
             .context("Failed to create tokio runtime")?;
 
-        let pools = Self::init_connectors(conf);
+        let pools = Self::init_connectors(conf)?;
 
         info!("Starting fdw listener...");
         let fdw = FdwServer::start(
@@ -180,26 +201,7 @@ impl Ansilo {
             return Ok(());
         }
 
-        if self.command.is_dev() {
-            thread::spawn(|| {
-                dev::signal_on_config_update(self.conf);
-            });
-        }
-
-        let mut sigs =
-            Signals::new(&[SIGINT, SIGTERM, SIGUSR1]).context("Failed to attach signal handler")?;
-        let sig = sigs.forever().next().unwrap();
-
-        // TODO: better handling if critical threads fail
-        info!(
-            "Received {}",
-            match sig {
-                SIGINT => "SIGINT".into(),
-                SIGTERM => "SIGTERM".into(),
-                SIGUSR1 => "SIGUSR1".into(),
-                _ => format!("unkown signal {}", sig),
-            }
-        );
+        let sig = Self::wait_for_signal()?;
 
         self.terminate_mut(Some(sig))?;
 
@@ -247,7 +249,7 @@ impl Ansilo {
 
     fn init_connectors(
         conf: &'static AppConf,
-    ) -> HashMap<String, (ConnectionPools, ConnectorEntityConfigs)> {
+    ) -> Result<HashMap<String, (ConnectionPools, ConnectorEntityConfigs)>> {
         info!("Initializing connectors...");
         let pools = conf
             .node
@@ -256,22 +258,38 @@ impl Ansilo {
             .map(|i| {
                 info!("Initializing connector: {}", i.id);
                 let connector = Connectors::from_type(&i.r#type)
-                    .with_context(|| format!("Unknown connector type: {}", i.r#type))
-                    .unwrap();
+                    .with_context(|| format!("Unknown connector type: {}", i.r#type))?;
                 let options = connector
                     .parse_options(i.options.clone())
-                    .context("Failed to parse options")
-                    .unwrap();
+                    .context("Failed to parse options")?;
 
                 let pool = connector
                     .create_connection_pool(&conf.node, &i.id, options)
-                    .context("Failed to create connection pool")
-                    .unwrap();
+                    .context("Failed to create connection pool")?;
 
-                (i.id.clone(), pool)
+                Ok((i.id.clone(), pool))
             })
             .collect();
         pools
+    }
+
+    fn wait_for_signal() -> Result<i32> {
+        let mut sigs =
+            Signals::new(&[SIGINT, SIGTERM, SIGUSR1]).context("Failed to attach signal handler")?;
+        let sig = sigs.forever().next().unwrap();
+
+        // TODO: better handling if critical threads fail
+        info!(
+            "Received {}",
+            match sig {
+                SIGINT => "SIGINT".into(),
+                SIGTERM => "SIGTERM".into(),
+                SIGUSR1 => "SIGUSR1".into(),
+                _ => format!("unkown signal {}", sig),
+            }
+        );
+
+        Ok(sig)
     }
 }
 

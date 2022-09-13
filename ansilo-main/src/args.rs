@@ -6,7 +6,7 @@ use clap::Parser;
 /// Arguments for running the Ansilo main program
 ///
 /// TODO[docs]: Add about strings below
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub enum Command {
     Run(Args),
@@ -14,7 +14,7 @@ pub enum Command {
     Build(Args),
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub struct Args {
     /// The path of the main configuration file
@@ -64,6 +64,15 @@ impl Command {
     #[must_use]
     pub(crate) fn is_build(&self) -> bool {
         matches!(self, Self::Build(..))
+    }
+}
+
+impl Args {
+    pub(crate) fn config(&self) -> std::path::PathBuf {
+        self.config
+            .clone()
+            .unwrap_or("/etc/ansilo/main.yml".into())
+            .to_path_buf()
     }
 }
 
