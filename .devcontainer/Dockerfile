@@ -103,5 +103,10 @@ RUN cd /tmp && \
 # Install docker
 RUN curl --fail https://get.docker.com | bash
 
+# Install node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash - && \
+    sudo apt-get install -y nodejs && \
+    sudo npm install -g npm@latest
+
 # Add boot.sh file
 COPY ./boot.sh /boot.sh
