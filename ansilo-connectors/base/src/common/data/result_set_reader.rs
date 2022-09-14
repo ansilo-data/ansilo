@@ -73,7 +73,7 @@ where
         self.inner.read_data_value()
     }
 
-    /// Reads an whole row from the underlying result set
+    /// Reads a whole row from the underlying result set
     /// Returns Ok(None) if there are no more rows left in the result set.
     pub fn read_row(&mut self) -> Result<Option<HashMap<String, DataValue>>> {
         Ok(self.read_row_vec()?.map(|row| {
@@ -86,9 +86,13 @@ where
         }))
     }
 
-    /// Reads an whole row from the underlying result set
+    /// Reads a whole row from the underlying result set
     /// Returns Ok(None) if there are no more rows left in the result set.
     pub fn read_row_vec(&mut self) -> Result<Option<Vec<DataValue>>> {
+        if self.structure.cols.is_empty() {
+            return Ok(None);
+        }
+
         let mut row = vec![];
 
         for idx in 0..self.structure.cols.len() {
@@ -508,5 +512,15 @@ pub(super) mod rs_tests {
         );
 
         rows.next().unwrap().unwrap_err();
+    }
+
+    #[test]
+    fn test_result_set_reader_read_row_vec_returns_none_for_empty_cols() {
+        let mut res = MockResultSet::new(RowStructure::new(vec![]), vec![]);
+
+        assert_eq!(res.read_row_vec().unwrap(), None);
+        assert_eq!(res.read_row().unwrap(), None);
+        assert_eq!(res.iter_rows().count(), 0);
+        assert_eq!(res.iter_row_vecs().count(), 0);
     }
 }

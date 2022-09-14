@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ansilo_connectors_native_postgres::{PostgresConnection, UnpooledClient};
 use ansilo_core::err::{Context, Result};
-use ansilo_logging::debug;
+use ansilo_logging::{debug, warn};
 use ansilo_pg::handler::PostgresConnectionHandler;
 use ansilo_proxy::{handler::ConnectionHandler, stream::Stream};
 use axum::{
@@ -92,22 +92,27 @@ async fn connect_to_postgres(
     let (client, server) = UnixStream::pair().context("Failed to create unix sockets")?;
     let handler = PostgresConnectionHandler::new(state.auth().clone(), state.pools().clone());
 
-    let res = tokio::try_join!(handler.handle(Box::new(Stream(server))), async move {
-        let mut conf = tokio_postgres::Config::new();
-
-        conf.user(user)
-            .password(pass)
-            .application_name("ansilo-web");
-
-        let (client, con) = conf
-            .connect_raw(client, NoTls)
-            .await
-            .context("Failed to authenticate")?;
-
-        tokio::spawn(con);
-
-        Ok(PostgresConnection::new(UnpooledClient(client)))
+    tokio::spawn(async move {
+        if let Err(err) = handler.handle(Box::new(Stream(server))).await {
+            warn!(
+                "Error while authenticating web request for postgres connection: {:?}",
+                err
+            );
+        }
     });
 
-    res.map(|(_, client)| client)
+    let mut conf = tokio_postgres::Config::new();
+
+    conf.user(user)
+        .password(pass)
+        .application_name("ansilo-web");
+
+    let (client, con) = conf
+        .connect_raw(client, NoTls)
+        .await
+        .context("Failed to authenticate")?;
+
+    tokio::spawn(con);
+
+    Ok(PostgresConnection::new(UnpooledClient(client)))
 }

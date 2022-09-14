@@ -58,19 +58,28 @@ pub(super) async fn handler(
         )
     })?;
 
-    let data = reader
-        .iter_row_vecs()
-        .take(ROW_LIMIT)
-        .collect::<Result<Vec<_>>>()
-        .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(QueryResponse::Error(err.to_string().into())),
-            )
-        })?
-        .into_iter()
-        .map(|r| r.into_iter().map(|r| to_string(r)).collect_vec())
-        .collect();
+    let data = tokio::task::spawn_blocking(move || {
+        Ok(reader
+            .iter_row_vecs()
+            .take(ROW_LIMIT)
+            .collect::<Result<Vec<_>>>()
+            .map_err(|err| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(QueryResponse::Error(err.to_string().into())),
+                )
+            })?
+            .into_iter()
+            .map(|r| r.into_iter().map(|r| to_string(r)).collect_vec())
+            .collect())
+    })
+    .await
+    .map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(QueryResponse::Error(err.to_string().into())),
+        )
+    })??;
 
     Ok((
         StatusCode::OK,
