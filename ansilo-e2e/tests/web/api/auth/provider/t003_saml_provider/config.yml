@@ -1,0 +1,28 @@
+name: Web
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  providers:
+    - id: saml
+      type: saml
+      rsa_public_key: file://${dir}/keys/public.key
+      login:
+        authorize_endpoint: https://authorize.endpoint
+        entity_id: test
+
+  users:
+    - username: app
+      password: user
+
+    - username: token
+      provider: saml
+
+postgres:
+  install_dir: /usr/lib/postgresql/14/
+  init_sql_path: ${dir}/ansilo-sql/*.sql
+  data_dir: /tmp/${dir}/data
+  listen_socket_dir_path: /tmp/${dir}
+  fdw_socket_path: /tmp/${dir}/fdw.sock
+  build_info_path: /tmp/${dir}/build-info.json

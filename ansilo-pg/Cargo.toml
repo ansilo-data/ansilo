@@ -31,3 +31,9 @@ ansilo-connectors-memory = { path = "../ansilo-connectors/memory" }
 ansilo-auth = { path = "../ansilo-auth", features = ["test"] }
 pretty_assertions = "*"
 tokio-test = "0.4"
+
+[build-dependencies]
+# We add this as a build depedency so the build script does not run
+# in parallel with build scripts of the connectors which causes
+# concurrent maven builds which error out
+ansilo-connectors-all = { path = "../ansilo-connectors/all" }

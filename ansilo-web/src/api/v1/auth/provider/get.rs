@@ -39,7 +39,7 @@ pub(super) async fn handler(
     {
         methods.push(AuthMethod {
             id: "password".into(),
-            name: Some("Username / Password".into()),
+            name: None,
             usernames: None,
             r#type: AuthMethodType::UsernamePassword,
         })
