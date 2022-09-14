@@ -3,10 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "sh -c 'NODE_INSTANCE=nodes/${0:-contacts} node_modules/.bin/next dev -p ${1:-5000}'",
+    "dev": "./dev.sh",
     "build": "next build",
-    "start": "sh -c 'NODE_INSTANCE=nodes/${0:-contacts} node_modules/.bin/next start -p ${1:-5000}'",
-    "start:all": "sh -c \"ls nodes | tr '\\t' '\\n' | cat -n | awk '{print \\\"\\042 npm run start \\\" \\$2 \\\" \\\" 500\\$1 \\\"\\042\\\"}' | xargs node_modules/.bin/concurrently\"",
     "lint": "next lint"
   },
   "dependencies": {

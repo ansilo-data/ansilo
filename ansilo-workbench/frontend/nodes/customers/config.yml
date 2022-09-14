@@ -1,0 +1,17 @@
+name: Customers
+
+networking:
+  port: 5001
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+postgres:
+    init_sql_path: ${dir}/ansilo/*.sql
+    install_dir: /usr/lib/postgresql/14/
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json

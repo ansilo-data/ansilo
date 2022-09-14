@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{env, sync::Arc, time::Duration};
 
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{error, warn};
@@ -31,6 +31,7 @@ pub use proto::*;
 pub use state::*;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::{
+    cors::CorsLayer,
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
     LatencyUnit, ServiceBuilderExt,
 };
@@ -66,7 +67,12 @@ impl HttpApi {
             .insert_response_header_if_not_present(
                 header::CONTENT_TYPE,
                 HeaderValue::from_static("application/octet-stream"),
-            );
+            )
+            .layer(if let Ok(host) = env::var("ANSILO_CORS_ALLOWED_HOST") {
+                CorsLayer::new().allow_origin(host.parse::<HeaderValue>().unwrap())
+            } else {
+                CorsLayer::new()
+            });
 
         Router::with_state_arc(state.clone())
             .nest("/api", api::router(state.clone()))
