@@ -66,7 +66,7 @@ pub fn from_pg_type(r#type: &Type) -> Result<DataType> {
 }
 
 /// Converts a DataValue into the supplied postgres type
-pub fn to_pg(val: DataValue, r#type: &Type) -> Result<Box<dyn ToSql>> {
+pub fn to_pg(val: DataValue, r#type: &Type) -> Result<Box<dyn ToSql + Send + Sync>> {
     // Coerce to the desired type if necessary
     let val = val.try_coerce_into(&from_pg_type(r#type)?)?;
 

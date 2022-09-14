@@ -48,6 +48,25 @@ pub struct JwtAuthProviderConfig {
     pub ec_public_key: Option<String>,
     /// URL of ED public key
     pub ed_public_key: Option<String>,
+    /// Authentication method options
+    pub login: Option<JwtLoginConfig>,
+}
+
+/// Defines options used for JWT token authentication on the frontend
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum JwtLoginConfig {
+    #[serde(rename = "oauth2")]
+    Oauth2(JwtOauth2Config),
+}
+
+/// Options for OAuth2 based authentication
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct JwtOauth2Config {
+    /// The redirection uri used for authentication (including query params)
+    pub authorize_endpoint: String,
+    #[serde(default)]
+    pub params: HashMap<String, String>,
 }
 
 /// Defines options used for SAML2 authentication
@@ -57,6 +76,17 @@ pub struct SamlAuthProviderConfig {
     pub metadata: Option<String>,
     /// Inline signing certificate
     pub x509_certificate: Option<String>,
+    /// Authentication method options
+    pub login: Option<SamlLoginConfig>,
+}
+
+/// Options for Saml based authentication
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct SamlLoginConfig {
+    /// The redirection uri used for authentication (including query params)
+    pub authorize_endpoint: String,
+    /// The application entity id
+    pub entity_id: String,
 }
 
 /// Defines options used for custom authentication

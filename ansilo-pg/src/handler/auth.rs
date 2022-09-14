@@ -208,8 +208,8 @@ mod tests {
     use tokio::net::UnixStream;
 
     use super::*;
-    use ansilo_auth::provider::password_test::md5::{Md5, Digest};
     use ansilo_auth::provider::jwt_test::*;
+    use ansilo_auth::provider::password_test::md5::{Digest, Md5};
 
     fn mock_password_authentictor() -> Authenticator {
         let conf = Box::leak(Box::new(AuthConfig {
@@ -242,6 +242,7 @@ mod tests {
                     )),
                     ec_public_key: None,
                     ed_public_key: None,
+                    login: None,
                 }),
             }],
             users: vec![UserConfig {

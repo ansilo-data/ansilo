@@ -17,7 +17,7 @@ pub struct PostgresConnection<T> {
     transaction: bool,
 }
 
-impl<T> PostgresConnection<T> {
+impl<T: DerefMut<Target = Client>> PostgresConnection<T> {
     pub fn new(client: T) -> Self {
         Self {
             client: Arc::new(client),
@@ -28,6 +28,17 @@ impl<T> PostgresConnection<T> {
     pub(crate) fn client<'a>(&'a self) -> &'a T {
         &*self.client
     }
+
+    pub async fn prepare_async(&mut self, query: PostgresQuery) -> Result<PostgresPreparedQuery<T>> {
+        let statement = self.client.prepare(&query.sql).await?;
+
+        Ok(PostgresPreparedQuery::new(
+            Arc::clone(&self.client),
+            statement,
+            query.sql,
+            query.params,
+        )?)
+    }
 }
 
 impl<T: DerefMut<Target = Client>> Connection for PostgresConnection<T> {
@@ -36,14 +47,7 @@ impl<T: DerefMut<Target = Client>> Connection for PostgresConnection<T> {
     type TTransactionManager = Self;
 
     fn prepare(&mut self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
-        let statement = runtime().block_on(self.client.prepare(&query.sql))?;
-
-        Ok(PostgresPreparedQuery::new(
-            Arc::clone(&self.client),
-            statement,
-            query.sql,
-            query.params,
-        )?)
+        runtime().block_on(self.prepare_async(query))
     }
 
     fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager> {
@@ -58,12 +62,12 @@ impl<T: DerefMut<Target = Client>> PostgresConnection<T> {
         query: impl Into<String>,
         params: Vec<DataValue>,
     ) -> Result<PostgresResultSet> {
-        let jdbc_params = params
+        let params = params
             .iter()
             .map(|p| QueryParam::constant(p.clone()))
             .collect::<Vec<_>>();
 
-        let mut prepared = self.prepare(PostgresQuery::new(query, jdbc_params))?;
+        let mut prepared = self.prepare(PostgresQuery::new(query, params))?;
 
         prepared.execute_query()
     }
@@ -74,12 +78,12 @@ impl<T: DerefMut<Target = Client>> PostgresConnection<T> {
         query: impl Into<String>,
         params: Vec<DataValue>,
     ) -> Result<Option<u64>> {
-        let jdbc_params = params
+        let params = params
             .iter()
             .map(|p| QueryParam::constant(p.clone()))
             .collect::<Vec<_>>();
 
-        let mut prepared = self.prepare(PostgresQuery::new(query, jdbc_params))?;
+        let mut prepared = self.prepare(PostgresQuery::new(query, params))?;
 
         prepared.execute_modify()
     }

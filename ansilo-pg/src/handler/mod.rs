@@ -50,7 +50,7 @@ impl ConnectionHandler for PostgresConnectionHandler {
         // Set the authentication context with a new reset token
         // TODO[SEC]: The reset token cannot be made available to the client,
         // otherwise they could potentially change their auth context and hence
-        // escalate their privilges.
+        // escalate their privileges.
         // Ideally, in future we should set the auth context "out-of-band" of the main connection
         // through some form of IPC to eliminate this possibility categorically.
         let reset_token = pg_str_literal(&Alphanumeric.sample_string(&mut rand::thread_rng(), 32));
@@ -256,7 +256,7 @@ impl PostgresConnectionHandler {
 
                 // If the client sends a terminate message we dont want
                 // to actually close the connection since then it cannot be
-                // recycled for future connects.
+                // recycled for future sessions.
                 // Instead we use this as a signal to stop the proxying and
                 // end the session.
                 if msg == PostgresFrontendMessage::Terminate {

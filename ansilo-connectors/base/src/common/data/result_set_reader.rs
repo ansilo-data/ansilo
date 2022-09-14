@@ -76,9 +76,22 @@ where
     /// Reads an whole row from the underlying result set
     /// Returns Ok(None) if there are no more rows left in the result set.
     pub fn read_row(&mut self) -> Result<Option<HashMap<String, DataValue>>> {
-        let mut row = HashMap::new();
+        Ok(self.read_row_vec()?.map(|row| {
+            self.structure
+                .cols
+                .iter()
+                .map(|(name, _)| name.clone())
+                .zip(row.into_iter())
+                .collect()
+        }))
+    }
 
-        for (idx, (col, _)) in self.structure.cols.iter().enumerate() {
+    /// Reads an whole row from the underlying result set
+    /// Returns Ok(None) if there are no more rows left in the result set.
+    pub fn read_row_vec(&mut self) -> Result<Option<Vec<DataValue>>> {
+        let mut row = vec![];
+
+        for idx in 0..self.structure.cols.len() {
             let val = self.inner.read_data_value()?;
 
             if val.is_none() {
@@ -89,7 +102,7 @@ where
                 }
             }
 
-            row.insert(col.clone(), val.unwrap());
+            row.push(val.unwrap());
         }
 
         Ok(Some(row))
@@ -99,9 +112,15 @@ where
     pub fn iter_rows(&mut self) -> ResultSetRows<T> {
         ResultSetRows(self)
     }
+
+    /// Iterates through each row of the result set
+    pub fn iter_row_vecs(&mut self) -> ResultSetRowVecs<T> {
+        ResultSetRowVecs(self)
+    }
 }
 
 pub struct ResultSetRows<'a, T: ResultSet>(&'a mut ResultSetReader<T>);
+pub struct ResultSetRowVecs<'a, T: ResultSet>(&'a mut ResultSetReader<T>);
 
 impl<'a, T: ResultSet> Iterator for ResultSetRows<'a, T> {
     type Item = Result<HashMap<String, DataValue>>;
@@ -109,6 +128,16 @@ impl<'a, T: ResultSet> Iterator for ResultSetRows<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         self.0
             .read_row()
+            .map_or_else(|e| Some(Err(e)), |d| d.map(|d| Ok(d)))
+    }
+}
+
+impl<'a, T: ResultSet> Iterator for ResultSetRowVecs<'a, T> {
+    type Item = Result<Vec<DataValue>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0
+            .read_row_vec()
             .map_or_else(|e| Some(Err(e)), |d| d.map(|d| Ok(d)))
     }
 }
@@ -364,6 +393,118 @@ pub(super) mod rs_tests {
             ]
             .into_iter()
             .collect()
+        );
+
+        rows.next().unwrap().unwrap_err();
+    }
+
+    #[test]
+    fn test_result_set_reader_read_row_vec_multiple_cols() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                       // not null
+                123_i32.to_be_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                456_i32.to_be_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                789_i32.to_be_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                1234_i32.to_be_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_row_vec().unwrap(),
+            Some(vec![DataValue::Int32(123), DataValue::Int32(456)])
+        );
+        assert_eq!(
+            res.read_row_vec().unwrap(),
+            Some(vec![DataValue::Int32(789), DataValue::Int32(1234)])
+        );
+        assert_eq!(res.read_row_vec().unwrap(), None);
+    }
+
+    #[test]
+    fn test_result_set_reader_read_row_vec_end_mid_row_error() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                      // not null
+                123_i32.to_be_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                456_i32.to_be_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                789_i32.to_be_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.read_row_vec().unwrap(),
+            Some(vec![DataValue::Int32(123), DataValue::Int32(456)])
+        );
+        res.read_row_vec().unwrap_err();
+    }
+
+    #[test]
+    fn test_result_set_reader_iter_row_vecs() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                       // not null
+                123_i32.to_be_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                456_i32.to_be_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                789_i32.to_be_bytes().to_vec(),  // data
+                vec![1u8],                       // not null
+                1234_i32.to_be_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            res.iter_row_vecs().collect::<Result<Vec<_>>>().unwrap(),
+            vec![
+                vec![DataValue::Int32(123), DataValue::Int32(456)],
+                vec![DataValue::Int32(789), DataValue::Int32(1234)]
+            ]
+        );
+    }
+
+    #[test]
+    fn test_result_set_reader_iter_row_vecs_error_partial_data() {
+        let mut res = MockResultSet::new(
+            RowStructure::new(vec![
+                ("a".to_string(), DataType::Int32),
+                ("b".to_string(), DataType::Int32),
+            ]),
+            [
+                vec![1u8],                      // not null
+                123_i32.to_be_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                456_i32.to_be_bytes().to_vec(), // data
+                vec![1u8],                      // not null
+                789_i32.to_be_bytes().to_vec(), // data
+            ]
+            .concat(),
+        );
+
+        let mut rows = res.iter_row_vecs();
+        assert_eq!(
+            rows.next().unwrap().unwrap(),
+            vec![DataValue::Int32(123), DataValue::Int32(456)]
         );
 
         rows.next().unwrap().unwrap_err();

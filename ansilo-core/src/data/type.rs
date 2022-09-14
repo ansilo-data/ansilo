@@ -1,3 +1,5 @@
+use std::fmt;
+
 use bincode::{Decode, Encode};
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
@@ -33,6 +35,12 @@ pub enum DataType {
 impl DataType {
     pub fn rust_string() -> Self {
         Self::Utf8String(StringOptions::new(None))
+    }
+}
+
+impl fmt::Display for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 

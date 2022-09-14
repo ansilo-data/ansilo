@@ -1,10 +1,13 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{error, warn};
 use ansilo_proxy::stream::IOStream;
-use axum::{routing::IntoMakeService, Router};
-use hyper::server::accept::from_stream;
+use axum::{
+    body::Bytes, error_handling::HandleErrorLayer, http::HeaderValue, response::IntoResponse,
+    routing::IntoMakeService, Router,
+};
+use hyper::{header, server::accept::from_stream, StatusCode};
 use tokio::{
     runtime::Handle,
     sync::{
@@ -18,6 +21,7 @@ use tokio_stream::wrappers::ReceiverStream;
 pub mod api;
 mod handler;
 mod healthcheck;
+mod middleware;
 mod proto;
 mod state;
 mod version;
@@ -25,6 +29,11 @@ mod version;
 pub use handler::*;
 pub use proto::*;
 pub use state::*;
+use tower::{BoxError, ServiceBuilder};
+use tower_http::{
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+    LatencyUnit, ServiceBuilderExt,
+};
 
 /// The main http api application
 pub struct HttpApi {
@@ -40,10 +49,30 @@ impl HttpApi {
     fn router(state: HttpApiState) -> Router<HttpApiState> {
         let state = Arc::new(state);
 
+        // Build our middleware stack
+        let middleware = ServiceBuilder::new()
+            .sensitive_request_headers(vec![header::AUTHORIZATION, header::COOKIE].into())
+            .layer(
+                TraceLayer::new_for_http()
+                    .on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
+                        tracing::trace!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")
+                    })
+                    .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                    .on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
+            )
+            .layer(HandleErrorLayer::new(Self::handle_errors))
+            .timeout(Duration::from_secs(180))
+            .compression()
+            .insert_response_header_if_not_present(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/octet-stream"),
+            );
+
         Router::with_state_arc(state.clone())
             .nest("/api", api::router(state.clone()))
             .nest("/health", healthcheck::router(state.clone()))
             .nest("/version", version::router(state.clone()))
+            .layer(middleware)
     }
 
     /// Starts the http api server
@@ -78,6 +107,20 @@ impl HttpApi {
             shutdown_tx,
             rt_handle,
         })
+    }
+
+    async fn handle_errors(err: BoxError) -> impl IntoResponse {
+        if err.is::<tower::timeout::error::Elapsed>() {
+            (
+                StatusCode::REQUEST_TIMEOUT,
+                "Request took too long".to_string(),
+            )
+        } else {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Unhandled internal error: {}", err),
+            )
+        }
     }
 
     fn server(
@@ -162,7 +205,7 @@ mod tests {
     use hyper::{Body, Request, StatusCode};
     use tower::ServiceExt;
 
-    use crate::{version::VersionInfo, HttpApi, HttpApiState};
+    use crate::{HttpApi, HttpApiState, VersionInfo};
 
     fn mock_state() -> HttpApiState {
         let conf = Box::leak(Box::new(NodeConfig::default()));

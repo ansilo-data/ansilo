@@ -9,7 +9,10 @@ use ansilo_core::{
     err::{ensure, Context, Result},
 };
 use serde::Serialize;
-use tokio_postgres::{types::{Type, ToSql}, Client, Statement};
+use tokio_postgres::{
+    types::{ToSql, Type},
+    Client, Statement,
+};
 
 use crate::{
     data::{from_pg_type, to_pg},
@@ -49,7 +52,7 @@ pub struct PostgresPreparedQuery<T> {
     sink: QueryParamSink,
 }
 
-impl<T> PostgresPreparedQuery<T> {
+impl<T: DerefMut<Target = Client>> PostgresPreparedQuery<T> {
     pub fn new(
         client: Arc<T>,
         statement: Statement,
@@ -69,7 +72,7 @@ impl<T> PostgresPreparedQuery<T> {
         })
     }
 
-    fn get_params(&mut self) -> Result<Vec<Box<dyn ToSql>>> {
+    fn get_params(&mut self) -> Result<Vec<Box<dyn ToSql + Send + Sync>>> {
         let vals = self.sink.get_all()?;
         let mut params = vec![];
 
@@ -79,6 +82,37 @@ impl<T> PostgresPreparedQuery<T> {
         }
 
         Ok(params)
+    }
+
+    pub async fn execute_query_async(&mut self) -> Result<PostgresResultSet> {
+        let params = self.get_params()?;
+
+        let stream = self
+            .client
+            .query_raw(&self.statement, params.into_iter().map(|p| p))
+            .await
+            .context("Failed to execute query")?;
+
+        let cols = self
+            .statement
+            .columns()
+            .iter()
+            .map(|c| Ok((c.name().to_string(), from_pg_type(c.type_())?)))
+            .collect::<Result<_>>()?;
+
+        Ok(PostgresResultSet::new(stream, cols))
+    }
+
+    pub async fn execute_modify_async(&mut self) -> Result<Option<u64>> {
+        let params = self.get_params()?;
+
+        let affected = self
+            .client
+            .execute_raw(&self.statement, params.into_iter().map(|p| p))
+            .await
+            .context("Failed to execute query")?;
+
+        Ok(Some(affected))
     }
 }
 
@@ -100,36 +134,11 @@ impl<T: DerefMut<Target = Client>> QueryHandle for PostgresPreparedQuery<T> {
     }
 
     fn execute_query(&mut self) -> Result<Self::TResultSet> {
-        let params = self.get_params()?;
-
-        let stream = runtime()
-            .block_on(
-                self.client
-                    .query_raw(&self.statement, params.iter().map(|p| &**p)),
-            )
-            .context("Failed to execute query")?;
-
-        let cols = self
-            .statement
-            .columns()
-            .iter()
-            .map(|c| Ok((c.name().to_string(), from_pg_type(c.type_())?)))
-            .collect::<Result<_>>()?;
-
-        Ok(PostgresResultSet::new(stream, cols))
+        runtime().block_on(self.execute_query_async())
     }
 
     fn execute_modify(&mut self) -> Result<Option<u64>> {
-        let params = self.get_params()?;
-
-        let affected = runtime()
-            .block_on(
-                self.client
-                    .execute_raw(&self.statement, params.iter().map(|p| &**p)),
-            )
-            .context("Failed to execute query")?;
-
-        Ok(Some(affected))
+        runtime().block_on(self.execute_modify_async())
     }
 
     fn logged(&self) -> Result<LoggedQuery> {
