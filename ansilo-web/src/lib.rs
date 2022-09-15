@@ -68,8 +68,8 @@ impl HttpApi {
                 header::CONTENT_TYPE,
                 HeaderValue::from_static("application/octet-stream"),
             )
-            .layer(if let Ok(host) = env::var("ANSILO_CORS_ALLOWED_HOST") {
-                CorsLayer::new().allow_origin(host.parse::<HeaderValue>().unwrap())
+            .layer(if let Ok(origin) = env::var("ANSILO_CORS_ALLOWED_ORIGIN") {
+                CorsLayer::new().allow_origin(origin.parse::<HeaderValue>().unwrap())
             } else {
                 CorsLayer::new()
             });

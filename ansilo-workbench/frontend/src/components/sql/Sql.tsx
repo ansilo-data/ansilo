@@ -40,23 +40,16 @@ export const Sql = () => {
         )
       )
       ?.find(([n, e, v]) => v.id === versionId) || [
-      undefined,
-      undefined,
-      undefined,
-    ];
+        undefined,
+        undefined,
+        undefined,
+      ];
 
     if (!version) {
       return;
     }
 
-    const sqlName =
-      node.name.replace(/ /g, '_').toLowerCase() +
-      "." +
-      entity.name.replace(/ /g, '_').toLowerCase() +
-      "_v" +
-      version.version.major +
-      "_" +
-      version.version.minor;
+    const sqlName = version.tableName;
     dispatch(updateCurrentQuery(sql.currentQuery.sql + sqlName));
   };
 

@@ -11,7 +11,7 @@ export const CatalogDataRefresh = () => {
     if (catalog.status !== "loading") {
       dispatch(fetchCatalogAsync());
     }
-  }, 3000);
+  }, 30000);
 
   useEffect(() => {
     dispatch(fetchCatalogAsync());

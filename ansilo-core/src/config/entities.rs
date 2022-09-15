@@ -141,8 +141,11 @@ impl EntityAttributeConfig {
 
 /// A constraint on the entity
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
+#[serde(tag = "type")]
 pub enum EntityConstraintConfig {
+    #[serde(rename = "foreign_key")]
     ForeignKey(ForeignKeyConstraintConfig),
+    #[serde(rename = "unique")]
     Unique(UniqueConstraintConfig),
 }
 

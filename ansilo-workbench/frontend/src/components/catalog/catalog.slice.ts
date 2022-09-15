@@ -39,20 +39,16 @@ export interface TagValue {
 
 export interface EntitySchemaVersion {
   id: Id;
-  version: VersionNumber;
+  version: string;
+  tableName: string;
   attributes: EntitySchemaAttribute[];
   constraints?: Constraint[];
-}
-
-export interface VersionNumber {
-  major: number;
-  minor: number;
-  patch: number;
 }
 
 export interface EntitySchemaAttribute {
   id: Id;
   name: string;
+  primaryKey: boolean;
   description: string;
   type: DataType;
   validations?: Validation[];
@@ -65,7 +61,7 @@ export interface DataType {
 
 export interface Constraint {
   id: Id;
-  type: "fk" | "unique";
+  type: "fk" | "unique" | "unknown";
   attributes: Id[];
   // fk attributes
   targetEntity?: Id;
