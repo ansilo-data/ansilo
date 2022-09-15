@@ -32,34 +32,14 @@ export default function OperationsMenu(props: Props) {
             <ListItemText primary="Data Flow" />
           </ListItemButton>
         </Link>
-        <Link href="/operations/logs">
+        <Link href="/operations/status">
           <ListItemButton
-            selected={router.asPath.startsWith("/operations/logs")}
-          >
-            <ListItemIcon>
-              <LogsIcon />
-            </ListItemIcon>
-            <ListItemText primary="Logs" />
-          </ListItemButton>
-        </Link>
-        <Link href="/operations/metrics">
-          <ListItemButton
-            selected={router.asPath.startsWith("/operations/metrics")}
+            selected={router.asPath.startsWith("/operations/status")}
           >
             <ListItemIcon>
               <InsertChartIcon />
             </ListItemIcon>
-            <ListItemText primary="Metrics" />
-          </ListItemButton>
-        </Link>
-        <Link href="/operations/alerts">
-          <ListItemButton
-            selected={router.asPath.startsWith("/operations/alerts")}
-          >
-            <ListItemIcon>
-              <NotificationsActiveIcon />
-            </ListItemIcon>
-            <ListItemText primary="Alerts" />
+            <ListItemText primary="Status" />
           </ListItemButton>
         </Link>
       </List>

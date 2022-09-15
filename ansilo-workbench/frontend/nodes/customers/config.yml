@@ -23,6 +23,7 @@ auth:
 
     - username: token
       provider: jwt
+      description: Coginto token user
 
 postgres:
     init_sql_path: ${dir}/ansilo/*.sql
