@@ -22,7 +22,7 @@ export const AuthoritiesTable = () => {
 
   useEffect(() => {
     dispatch(fetchAuthMethodsAsync())
-  }, [])
+  }, [dispatch])
 
   const methods = auth.methods?.filter(i => i.type !== 'username_password');
 
@@ -41,7 +41,7 @@ export const AuthoritiesTable = () => {
               methods?.length
                 ?
                 methods.map(method => (
-                  <TableRow >
+                  <TableRow key={method.name}>
                     <TableCell>{method.name}</TableCell>
                     <TableCell>{method.type.toUpperCase()}</TableCell>
                   </TableRow>

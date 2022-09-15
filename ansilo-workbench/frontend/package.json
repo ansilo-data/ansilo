@@ -1,10 +1,11 @@
 {
-  "name": "workbench",
+  "name": "ansilo-workbench",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "./dev.sh",
     "build": "next build",
+    "export": "next export",
     "lint": "next lint"
   },
   "dependencies": {

@@ -55,7 +55,7 @@ export const CredentialsForm = (props: CredentialsFormProps) => {
         handleSubmit()
       }
     }, 0);
-  }, []);
+  }, [props.usernames?.length, props.password, handleSubmit]);
 
   return (
     <Box

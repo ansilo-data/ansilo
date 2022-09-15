@@ -7,7 +7,7 @@ export const AuthInit = () => {
 
   useEffect(() => {
     dispatch(loadInitialState(null))
-  }, []);
+  }, [dispatch]);
 
   return <></>
 };

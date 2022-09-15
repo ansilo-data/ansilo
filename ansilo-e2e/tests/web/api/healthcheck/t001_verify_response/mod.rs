@@ -1,6 +1,4 @@
-use ansilo_core::build::ansilo_version;
 use ansilo_e2e::{current_dir, web::url};
-use ansilo_web::VersionInfo;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
 
@@ -11,12 +9,12 @@ fn test() {
     let (instance, _port) =
         ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
 
-    let res = reqwest::blocking::get(url(&instance, "/version"))
+    let res = reqwest::blocking::get(url(&instance, "/api/health"))
         .unwrap()
         .error_for_status()
         .unwrap()
-        .json::<VersionInfo>()
+        .text()
         .unwrap();
 
-    assert_eq!(res.version, ansilo_version());
+    assert_eq!(res, "Ok");
 }

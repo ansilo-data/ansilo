@@ -27,7 +27,7 @@ export const AuthModal = () => {
     if (hasJwtTokenInUrl()) {
       dispatch(setAuthModalOpen(true))
     }
-  }, [])
+  }, [dispatch])
 
   if (!auth.methods) {
     return <></>

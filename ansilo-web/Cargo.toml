@@ -13,6 +13,8 @@ ansilo-pg = { path = "../ansilo-pg" }
 ansilo-proxy = { path = "../ansilo-proxy" }
 ansilo-connectors-base = { path = "../ansilo-connectors/base" }
 ansilo-connectors-native-postgres = { path = "../ansilo-connectors/native-postgres" }
+# Ensure the frontend gets compiled to out directory
+ansilo-workbench = { path = "../ansilo-workbench" }
 axum = "^0.6.0-rc.1"
 hyper = { version = "^0.14", features = ["http1", "http2", "stream"] }
 tower = { version = "0.4", features = ["full"] }

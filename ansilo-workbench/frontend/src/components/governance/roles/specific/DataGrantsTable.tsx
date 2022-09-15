@@ -49,7 +49,7 @@ export const DataGrantsTable = () => {
 
       setGrants(res.values.map(v => ({ table: v[0], grants: v[1] }) as Grant))
     })();
-  }, [auth.creds])
+  }, [auth.creds, dispatch])
 
   return (
     <TableContainer sx={{ minWidth: 500 }}>
@@ -62,7 +62,7 @@ export const DataGrantsTable = () => {
         </TableHead>
         <TableBody>
           {grants?.length ?
-            grants.map(grant => <TableRow>
+            grants.map(grant => <TableRow key={grant.table}>
               <TableCell>{grant.table}</TableCell>
               <TableCell>{grant.grants}</TableCell>
             </TableRow>)

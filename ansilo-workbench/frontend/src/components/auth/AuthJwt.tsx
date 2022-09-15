@@ -11,10 +11,6 @@ export const AuthJwt = ({ method }: { method: AuthMethod }) => {
   const [token, setToken] = useState<string>();
   const [expiresAt, setExpiresAt] = useState<number>();
 
-  if (method.options?.type !== 'oauth2' || !method.options?.authorize_endpoint) {
-    return <CredentialsForm usernames={method.usernames} />
-  }
-
   useEffect(() => {
     if (hasJwtTokenInUrl()) {
       let params = qs.parse(window.location.hash.substring(1));
@@ -29,7 +25,12 @@ export const AuthJwt = ({ method }: { method: AuthMethod }) => {
     }
   }, [])
 
+  if (method.options?.type !== 'oauth2' || !method.options?.authorize_endpoint) {
+    return <CredentialsForm usernames={method.usernames} />
+  }
+
   let uri = getRedirectUri(method);
+
 
   if (state === 'new') {
     return <></>

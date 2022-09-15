@@ -34,7 +34,7 @@ export const Status = () => {
 
   useEffect(() => {
     (async () => {
-      fetch(`${API_CONFIG.origin}/health`).then(r => {
+      fetch(`${API_CONFIG.origin}/api/health`).then(r => {
         if (r.status >= 400) {
           throw new Error(`Unexpected status code from health check: ${r.status}`)
         }
@@ -52,7 +52,7 @@ export const Status = () => {
           setStatus({ ok: false, error: String(e) })
         })
 
-      fetch(`${API_CONFIG.origin}/version`).then(r => r.json())
+      fetch(`${API_CONFIG.origin}/api/version`).then(r => r.json())
         .then(res => setVersionInfo({
           version: res.version,
           builtAt: new Date(res.built_at)

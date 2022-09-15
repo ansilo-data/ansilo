@@ -49,7 +49,7 @@ export const RolesTable = () => {
 
       setRoles(res.values.map(v => ({ username: v[0], description: v[1] === "NULL" ? "N/A" : v[1] }) as Role))
     })();
-  }, [auth.creds])
+  }, [auth.creds, dispatch])
 
   return (
     <Authenticated>
@@ -63,7 +63,7 @@ export const RolesTable = () => {
           </TableHead>
           <TableBody>
             {roles?.length ? roles.map(role =>
-              <TableRow>
+              <TableRow key={role.username}>
                 <TableCell sx={{ "& a": { color: "white" } }}>
                   <Link href={`/governance/roles/specific?username=${role.username}`}>{role.username}</Link>
                 </TableCell>

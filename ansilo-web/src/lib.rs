@@ -1,11 +1,15 @@
-use std::{env, sync::Arc, time::Duration};
+use std::{env, io, sync::Arc, time::Duration};
 
 use ansilo_core::err::{Context, Result};
 use ansilo_logging::{error, warn};
 use ansilo_proxy::stream::IOStream;
 use axum::{
-    body::Bytes, error_handling::HandleErrorLayer, http::HeaderValue, response::IntoResponse,
-    routing::IntoMakeService, Router,
+    body::Bytes,
+    error_handling::HandleErrorLayer,
+    http::HeaderValue,
+    response::IntoResponse,
+    routing::{get_service, IntoMakeService},
+    Router,
 };
 use hyper::{header, server::accept::from_stream, StatusCode};
 use tokio::{
@@ -20,11 +24,9 @@ use tokio_stream::wrappers::ReceiverStream;
 
 pub mod api;
 mod handler;
-mod healthcheck;
 mod middleware;
 mod proto;
 mod state;
-mod version;
 
 pub use handler::*;
 pub use proto::*;
@@ -32,6 +34,7 @@ pub use state::*;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::{
     cors::{Any, CorsLayer},
+    services::ServeDir,
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
     LatencyUnit, ServiceBuilderExt,
 };
@@ -76,8 +79,10 @@ impl HttpApi {
 
         Router::with_state_arc(state.clone())
             .nest("/api", api::router(state.clone()))
-            .nest("/health", healthcheck::router(state.clone()))
-            .nest("/version", version::router(state.clone()))
+            .fallback_service(
+                get_service(ServeDir::new(Self::get_frontend_path()))
+                    .handle_error(Self::handle_file_error),
+            )
             .layer(middleware)
     }
 
@@ -115,6 +120,20 @@ impl HttpApi {
         })
     }
 
+    fn get_frontend_path() -> String {
+        if let Ok(path) = env::var("ANSILO_FRONTEND_PATH") {
+            return path;
+        }
+
+        std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("frontend")
+            .to_string_lossy()
+            .to_string()
+    }
+
     async fn handle_errors(err: BoxError) -> impl IntoResponse {
         if err.is::<tower::timeout::error::Elapsed>() {
             (
@@ -127,6 +146,10 @@ impl HttpApi {
                 format!("Unhandled internal error: {}", err),
             )
         }
+    }
+
+    async fn handle_file_error(_err: io::Error) -> impl IntoResponse {
+        (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong...")
     }
 
     fn server(

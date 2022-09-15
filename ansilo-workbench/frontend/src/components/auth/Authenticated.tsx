@@ -11,7 +11,7 @@ export const Authenticated = ({ children }: { children: any }) => {
     return () => {
       dispatch(decrementAuthRequired(null))
     }
-  }, [])
+  }, [dispatch])
 
   return (
     <>
