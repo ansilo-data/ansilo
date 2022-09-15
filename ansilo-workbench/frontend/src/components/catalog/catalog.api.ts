@@ -101,16 +101,20 @@ const TYPE_NAME_MAP = {
 } as { [i: string]: string };
 
 const convertType = (type: any): DataType => {
-  const typeName: string = Object.keys(type)[0] || "Unknown";
-  let opts = [];
+  if (typeof type === "object") {
+    const typeName: string = Object.keys(type)[0] || "Unknown";
+    let opts = [];
 
-  for (let optName in type[typeName] || {}) {
-    opts.push(`${type[typeName][optName]}`);
+    for (let optName in type[typeName] || {}) {
+      opts.push(`${type[typeName][optName]}`);
+    }
+
+    let name = TYPE_NAME_MAP[typeName] || typeName.toUpperCase();
+
+    return { name: opts.length ? `${name}(${opts.join(", ")})` : name };
+  } else {
+    return { name: String(type).toUpperCase() };
   }
-
-  let name = TYPE_NAME_MAP[typeName] || typeName.toUpperCase();
-
-  return { name: opts.length ? `${name}(${opts.join(", ")})` : name };
 };
 
 const convertAttribute = (e: any, a: any): EntitySchemaAttribute => {
