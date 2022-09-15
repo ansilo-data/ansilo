@@ -31,7 +31,7 @@ pub use proto::*;
 pub use state::*;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::{
-    cors::CorsLayer,
+    cors::{Any, CorsLayer},
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
     LatencyUnit, ServiceBuilderExt,
 };
@@ -69,7 +69,7 @@ impl HttpApi {
                 HeaderValue::from_static("application/octet-stream"),
             )
             .layer(if let Ok(origin) = env::var("ANSILO_CORS_ALLOWED_ORIGIN") {
-                CorsLayer::new().allow_origin(origin.parse::<HeaderValue>().unwrap())
+                CorsLayer::new().allow_origin(origin.parse::<HeaderValue>().unwrap()).allow_headers(Any)
             } else {
                 CorsLayer::new()
             });

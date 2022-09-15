@@ -9,6 +9,7 @@ import createEmotionCache from "../util/createEmotionCache";
 import { Provider } from "react-redux";
 import store from "../store/store";
 import { CatalogDataRefresh } from "../components/catalog/CatalogDataRefresh";
+import { AuthInit } from "../components/auth/AuthInit";
 
 // Client-side cache, shared for the whole session of the user in the browser.
 const clientSideEmotionCache = createEmotionCache();
@@ -23,6 +24,7 @@ export default function MyApp(props: MyAppProps) {
 
   return (
     <Provider store={store}>
+      <AuthInit />
       <CacheProvider value={emotionCache}>
         <Head>
           <meta name="viewport" content="initial-scale=1, width=device-width" />

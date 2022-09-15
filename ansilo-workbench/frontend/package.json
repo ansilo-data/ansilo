@@ -22,16 +22,17 @@
     "d3": "^7.4.4",
     "lodash": "^4.17.21",
     "next": "12.1.6",
+    "qs": "^6.11.0",
     "react": "18.1.0",
     "react-dom": "18.1.0",
     "react-redux": "^8.0.1",
     "recharts": "^2.1.9",
-    "sql.js": "^1.6.2",
     "yaml": "^2.1.1"
   },
   "devDependencies": {
     "@types/lodash": "^4.14.182",
     "@types/node": "17.0.32",
+    "@types/qs": "^6.9.7",
     "@types/react": "18.0.9",
     "@types/react-dom": "18.0.3",
     "@types/sql.js": "^1.4.3",

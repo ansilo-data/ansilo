@@ -8,13 +8,17 @@ import List from "@mui/material/List";
 import Typography from "@mui/material/Typography";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
-import Badge from "@mui/material/Badge";
 import Container from "@mui/material/Container";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import NotificationsIcon from "@mui/icons-material/Notifications";
 import { MainMenuItems, SecondaryMenuItems } from "./MenuItems";
-import Image from "next/image";
+import { AuthModal } from "../auth/AuthModal";
+import { useState } from "react";
+import { clearCredentials, selectAuth, selectCredentials, setModalOpen as setAuthModalOpen } from "../auth/auth.slice";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import Button from "@mui/material/Button";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 
 const drawerWidth: number = 240;
 
@@ -72,14 +76,35 @@ interface TemplateProps {
 }
 
 export const Template = (props: TemplateProps) => {
-  const [open, setOpen] = React.useState(true);
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth)
+  const creds = useAppSelector(selectCredentials)
+  const [open, setOpen] = useState(true);
   const toggleDrawer = () => {
     setOpen(!open);
+  };
+
+  const [authMenuAnchorEl, setAuthMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const authMenuOpen = Boolean(authMenuAnchorEl);
+  const handleAuthClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAuthMenuAnchorEl(event.currentTarget);
+  };
+  const handleAuthClose = () => {
+    setAuthMenuAnchorEl(null);
+  };
+  const handleLogin = () => {
+    dispatch(setAuthModalOpen(true))
+    handleAuthClose();
+  };
+  const handleLogout = () => {
+    dispatch(clearCredentials(null))
+    handleAuthClose();
   };
 
   return (
     <Box sx={{ display: "flex" }}>
       <AppBar position="absolute" open={open}>
+        <AuthModal />
         <Toolbar
           sx={{
             pr: "24px", // keep right padding when drawer closed
@@ -106,11 +131,22 @@ export const Template = (props: TemplateProps) => {
           >
             {props.title}
           </Typography>
-          <IconButton color="inherit">
-            <Badge badgeContent={4} color="secondary">
-              <NotificationsIcon />
-            </Badge>
-          </IconButton>
+          <Button
+            onClick={handleAuthClick}
+          >
+            {creds ? `Logged in as ${creds.username}` : 'Login'}
+          </Button>
+          <Menu
+            anchorEl={authMenuAnchorEl}
+            open={authMenuOpen}
+            onClose={handleAuthClose}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          >
+            {creds
+              ? <MenuItem onClick={handleLogout}>Log out</MenuItem> :
+              <MenuItem onClick={handleLogin}>Log in</MenuItem>
+            }
+          </Menu>
         </Toolbar>
       </AppBar>
       <Drawer variant="permanent" open={open}>
@@ -131,7 +167,7 @@ export const Template = (props: TemplateProps) => {
               px: [0],
             }}
           >
-            <Typography variant="h6" sx={{fontWeight: '100', lineHeight: '16px'}}>Ansilo</Typography>
+            <Typography variant="h6" sx={{ fontWeight: '100', lineHeight: '16px' }}>Ansilo</Typography>
           </Container>
           <IconButton onClick={toggleDrawer}>
             <ChevronLeftIcon />

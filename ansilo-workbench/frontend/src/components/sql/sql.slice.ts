@@ -2,6 +2,7 @@ import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import _ from "lodash";
 
 import type { AppState, AppThunk } from "../../store/store";
+import { selectCredentials } from "../auth/auth.slice";
 import { executeQuery } from "./sql.api";
 
 export interface Query {
@@ -38,10 +39,10 @@ const initialState: SqlState = {
 
 export const executeCurrentQueryAsync = createAsyncThunk(
   "sql/execute",
-  async (_, { getState }) => {
-    console.log("exec");
+  async (_, { getState, dispatch }) => {
     const state = getState() as AppState;
-    return await executeQuery(state.catalog, state.sql.currentQuery);
+    const creds = selectCredentials(state);
+    return await executeQuery(dispatch as any, creds!, state.sql.currentQuery);
   }
 );
 

@@ -28,7 +28,7 @@ const StyledContainer = styled(
   },
 });
 
-export const QueryEditor = ({ sql, onChange, ...props }: Props) => {
+export const QueryEditor = ({ catalog, sql, onChange, ...props }: Props) => {
   return (
     <StyledContainer>
       <CodeMirror
@@ -37,6 +37,8 @@ export const QueryEditor = ({ sql, onChange, ...props }: Props) => {
         theme={darcula}
         extensions={[sqlExtension({
           dialect: PostgreSQL,
+          schema: getSchema(catalog),
+          defaultSchema: 'public',
         })]}
         value={sql}
         onChange={(value, viewUpdate) => onChange(value)}
@@ -45,3 +47,13 @@ export const QueryEditor = ({ sql, onChange, ...props }: Props) => {
     </StyledContainer>
   );
 };
+
+const getSchema = (catalog: CatalogState): { [table: string]: string[] } => {
+  let schema = {} as any;
+
+  for (const entity of catalog.nodes?.flatMap(n => n.schema.entities.flatMap(e => e.versions)) || []) {
+    schema[`public.${entity.tableName}`] = entity.attributes.map(a => a.name);
+  }
+
+  return schema;
+}

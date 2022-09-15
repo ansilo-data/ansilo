@@ -29,9 +29,9 @@ export const ErdDiagram = (props: Props) => {
 
   const groupingFn =
     props.categorisation === "node"
-      ? (e: Entity) => e.node.id
+      ? (e: Entity) => e.node.name || e.node.id
       : (e: Entity) =>
-          e.tags.find((i) => i.key === props.categorisation)?.value || "";
+        e.tags.find((i) => i.key === props.categorisation)?.value || "";
 
   // @ts-ignore
   useEffect(() => {
@@ -57,7 +57,7 @@ export const ErdDiagram = (props: Props) => {
       for (const child of Array.from(container.current.childNodes)) {
         child.remove();
       }
-      container.current?.appendChild(graph);
+      container.current?.appendChild(graph as any);
       setGraph(graph);
     }, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,15 +135,15 @@ const constructGraphData = (nodes: Node[]): [Entity[], Relationship[]] => {
         ?.filter((c) => c.type === "fk")
         .map(
           (c) =>
-            ({
-              source: e.id,
-              target: c.targetEntity!,
-              sourceType: getRelationshipType(e, c.attributes),
-              targetType: getRelationshipType(
-                entityLookup[c.targetEntity!],
-                c.targetAttributes!
-              ),
-            } as Relationship)
+          ({
+            source: e.id,
+            target: c.targetEntity!,
+            sourceType: getRelationshipType(e, c.attributes),
+            targetType: getRelationshipType(
+              entityLookup[c.targetEntity!],
+              c.targetAttributes!
+            ),
+          } as Relationship)
         ) || []
   );
 
@@ -206,12 +206,12 @@ const D3ErdGraph = (
   const startingX = (e: Entity) =>
     Math.round(
       Math.sin(startingAngle(e)) * GLOBAL_CIRCLE_RADIUS +
-        Math.sin(groupAngle(e)) * GROUP_CIRCLE_RADIUS
+      Math.sin(groupAngle(e)) * GROUP_CIRCLE_RADIUS
     );
   const startingY = (e: Entity) =>
     Math.round(
       Math.cos(startingAngle(e)) * GLOBAL_CIRCLE_RADIUS +
-        Math.cos(groupAngle(e)) * GROUP_CIRCLE_RADIUS
+      Math.cos(groupAngle(e)) * GROUP_CIRCLE_RADIUS
     );
 
   // Compute values.
@@ -227,15 +227,15 @@ const D3ErdGraph = (
     .map(
       entities,
       (e, i) =>
-        ({
-          id: EID[i],
-          entity: e,
-          open: true,
-          width: 0,
-          height: 0,
-          x: startingX(e),
-          y: startingY(e),
-        } as EntityNode)
+      ({
+        id: EID[i],
+        entity: e,
+        open: true,
+        width: 0,
+        height: 0,
+        x: startingX(e),
+        y: startingY(e),
+      } as EntityNode)
     )
     .map((d) => ({ ...d, ...calculateEntityDimensions(d) }));
   const links = d3.map(relationships, (r, i) => ({
@@ -281,7 +281,7 @@ const D3ErdGraph = (
     .attr("viewBox", [-width / 2, -height / 2, width, height])
     .attr("style", "max-width: 100%; height: auto; height: intrinsic;");
 
-    // legend
+  // legend
   svg
     .append("svg")
     .attr("y", (height / 2) - 40)
@@ -461,7 +461,7 @@ const D3ErdGraph = (
     zoomToFitAll();
   }
 
-  return Object.assign(svg.node(), {
+  return Object.assign(svg.node() as any, {
     scales: { color },
     callbacks: { zoomToEntity, zoomToFitAll },
   });
@@ -527,19 +527,19 @@ const renderEntityHtml = (e: Entity, color: string): string => {
       <table class="attrs" cellspacing="0">
         <tbody>
         ${e.attributes
-          .map(
-            (a) => `<tr>
+      .map(
+        (a) => `<tr>
           <td style="font-size: ${Math.min(
-            14,
-            (1.5 * col1Width) / a.name.length
-          )}px">${a.name}</td>
+          14,
+          (1.5 * col1Width) / a.name.length
+        )}px">${a.name}</td>
           <td style="font-size: ${Math.min(
-            14,
-            (1.5 * col2Width) / a.type.name.length
-          )}px">${a.type.name}</td>
+          14,
+          (1.5 * col2Width) / a.type.name.length
+        )}px">${a.type.name}</td>
         </tr>`
-          )
-          .join("")}
+      )
+      .join("")}
         </tbody>
       </table>
     </div>
@@ -612,13 +612,13 @@ const renderLegend = (
     </head>
     <div class="erd-legend">
       ${uniqueGroups
-        .map(
-          (g) => `<span class="erd-legend-item">
+      .map(
+        (g) => `<span class="erd-legend-item">
           <span class="erd-legend-icon" style="background: ${color(g)}"></span>
           <span class="erd-legend-text">${g.replace('n-', '')}</span>
       </span>`
-        )
-        .join("")}
+      )
+      .join("")}
     </div>
   </html>`;
 };
