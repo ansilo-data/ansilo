@@ -7,13 +7,14 @@ import { Query, QueryResults } from "./sql.slice";
 export const executeQuery = async (
   dispatch: AppDispatch,
   creds: AuthCredentials,
-  query: Query
+  query: { sql: string; params?: string[] }
 ): Promise<QueryResults> => {
   let res = await authenticatedFetch(dispatch, creds, "/api/v1/query", {
     method: "post",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       sql: query.sql,
+      params: query.params,
     }),
   });
 

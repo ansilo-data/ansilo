@@ -6,7 +6,7 @@ use ansilo_connectors_base::{
 };
 use ansilo_core::{
     data::DataValue,
-    err::{ensure, Context, Result},
+    err::{ensure, Result},
 };
 use serde::Serialize;
 use tokio_postgres::{

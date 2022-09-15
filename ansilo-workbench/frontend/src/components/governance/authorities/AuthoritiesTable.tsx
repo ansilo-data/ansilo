@@ -10,34 +10,49 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
-import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
-import GovernanceMenu from "../GovernanceMenu";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { fetchAuthMethodsAsync, selectAuth } from "../../auth/auth.slice";
+import { useEffect } from "react";
+import { Authenticated } from "../../auth/Authenticated";
 
 export const AuthoritiesTable = () => {
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+
+  useEffect(() => {
+    dispatch(fetchAuthMethodsAsync())
+  }, [])
+
+  const methods = auth.methods?.filter(i => i.type !== 'username_password');
+
   return (
-    <TableContainer>
-      <Table stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell>Type</TableCell>
-            <TableCell>Name</TableCell>
-            <TableCell>Host</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          <TableRow>
-            <TableCell>User</TableCell>
-            <TableCell>Microsoft Azure AD</TableCell>
-            <TableCell>organisation.onmicrosoft.com</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>System</TableCell>
-            <TableCell>Token Service</TableCell>
-            <TableCell>token-service.organisation</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
+    <Authenticated>
+      <TableContainer>
+        <Table stickyHeader sx={{ minWidth: 300 }}>
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Type</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {
+              methods?.length
+                ?
+                methods.map(method => (
+                  <TableRow >
+                    <TableCell>{method.name}</TableCell>
+                    <TableCell>{method.type.toUpperCase()}</TableCell>
+                  </TableRow>
+                ))
+                : <TableRow>
+                  <TableCell colSpan={3}>No authentication providers are configured</TableCell>
+                </TableRow>
+            }
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Authenticated>
   );
 };

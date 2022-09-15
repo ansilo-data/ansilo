@@ -61,6 +61,7 @@ pub fn from_pg_type(r#type: &Type) -> Result<DataType> {
         Type::TIMESTAMP => DataType::DateTime,
         Type::TIMESTAMPTZ => DataType::DateTimeWithTZ,
         Type::UUID => DataType::Uuid,
+        Type::OID => DataType::UInt32,
         _ => bail!("Postgres type '{:?}' is not supported", r#type),
     })
 }
@@ -119,6 +120,9 @@ pub fn from_pg(row: &Row, idx: usize, r#type: &Type) -> Result<DataValue> {
         DataType::Int64 => row
             .try_get::<_, Option<_>>(idx)?
             .map(|d| DataValue::Int64(d)),
+        DataType::UInt32 => row
+            .try_get::<_, Option<_>>(idx)?
+            .map(|d| DataValue::UInt32(d)),
         DataType::Float32 => row
             .try_get::<_, Option<_>>(idx)?
             .map(|d| DataValue::Float32(d)),
@@ -154,7 +158,6 @@ pub fn from_pg(row: &Row, idx: usize, r#type: &Type) -> Result<DataValue> {
         DataType::Null => Some(DataValue::Null),
         DataType::UInt8 => unreachable!(),
         DataType::UInt16 => unreachable!(),
-        DataType::UInt32 => unreachable!(),
         DataType::UInt64 => unreachable!(),
     };
 

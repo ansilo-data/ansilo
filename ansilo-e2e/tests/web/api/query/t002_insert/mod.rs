@@ -15,6 +15,7 @@ fn test() {
         .post(url(&instance, "/api/v1/query"))
         .json(&QueryRequest {
             sql: "INSERT INTO test (data) VALUES ('abc')".into(),
+            params: vec![],
         })
         .basic_auth("app", Some("pass"))
         .send()

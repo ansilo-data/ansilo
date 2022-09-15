@@ -9,6 +9,7 @@ import Typography from "@mui/material/Typography";
 import LoadingButton from "@mui/lab/LoadingButton";
 import GovernanceMenu from "../GovernanceMenu";
 import { AuthoritiesTable } from "./AuthoritiesTable";
+import { Authenticated } from "../../auth/Authenticated";
 
 export const Authorities = () => {
   return (

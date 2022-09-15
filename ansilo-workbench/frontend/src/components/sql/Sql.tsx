@@ -85,8 +85,8 @@ export const Sql = () => {
         sx={{
           flexGrow: 1,
           display: "flex",
-          justifyContent: "center",
-          height: '100%'
+          height: '100%',
+          width: 'calc(100% - 240px)',
         }}
       >
         <QueryIDE />

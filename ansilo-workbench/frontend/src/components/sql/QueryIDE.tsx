@@ -24,16 +24,16 @@ export const QueryIDE = () => {
         sx={{
           display: "flex",
           flexDirection: "row",
-          flexGrow: 1,
           height: "100%",
+          width: '100%'
         }}
       >
         <Box
           sx={{
             display: "flex",
             flexDirection: "column",
-            flexGrow: 1,
             height: "100%",
+            width: 'calc(100% - 340px)',
           }}
         >
           <Box
@@ -42,6 +42,7 @@ export const QueryIDE = () => {
               height: "40%",
               minHeight: "300px",
               width: "100%",
+              overflowX: "auto",
               p: 2,
             }}
           >

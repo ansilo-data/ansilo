@@ -34,6 +34,7 @@ export const QueryEditor = ({ catalog, sql, onChange, ...props }: Props) => {
       <CodeMirror
         height="100%"
         width="100%"
+        maxWidth="100%"
         theme={darcula}
         extensions={[sqlExtension({
           dialect: PostgreSQL,

@@ -1,6 +1,5 @@
 use ansilo_core::{build::ansilo_version, web::node::NodeInfo};
 use ansilo_e2e::{current_dir, web::url};
-use ansilo_web::VersionInfo;
 use pretty_assertions::assert_eq;
 use serial_test::serial;
 

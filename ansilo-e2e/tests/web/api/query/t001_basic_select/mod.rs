@@ -16,6 +16,7 @@ fn test() {
         .post(url(&instance, "/api/v1/query"))
         .json(&QueryRequest {
             sql: "SELECT 1 as col".into(),
+            params: vec![],
         })
         .basic_auth("app", Some("pass"))
         .send()
@@ -36,6 +37,40 @@ fn test() {
 
 #[test]
 #[serial]
+fn test_with_query_param() {
+    ansilo_logging::init_for_tests();
+    let (instance, _port) =
+        ansilo_e2e::util::main::run_instance_without_connect(current_dir!().join("config.yml"));
+
+    let client = reqwest::blocking::Client::new();
+    let res = client
+        .post(url(&instance, "/api/v1/query"))
+        .json(&QueryRequest {
+            sql: "SELECT $1 as col".into(),
+            params: vec!["abc".into()],
+        })
+        .basic_auth("app", Some("pass"))
+        .send()
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json::<QueryResponse>()
+        .unwrap();
+
+    assert_eq!(
+        res,
+        QueryResponse::Success(QueryResults {
+            columns: vec![(
+                "col".to_string(),
+                "Utf8String(StringOptions { length: None })".to_string()
+            )],
+            data: vec![vec!["abc".to_string()]]
+        })
+    );
+}
+
+#[test]
+#[serial]
 fn test_invalid_user() {
     ansilo_logging::init_for_tests();
     let (instance, _port) =
@@ -46,6 +81,7 @@ fn test_invalid_user() {
         .post(url(&instance, "/api/v1/query"))
         .json(&QueryRequest {
             sql: "SELECT 1 as col".into(),
+            params: vec![],
         })
         .basic_auth("invalid", Some("pass"))
         .send()
@@ -53,7 +89,6 @@ fn test_invalid_user() {
 
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }
-
 
 #[test]
 #[serial]
@@ -67,6 +102,7 @@ fn test_invalid_password() {
         .post(url(&instance, "/api/v1/query"))
         .json(&QueryRequest {
             sql: "SELECT 1 as col".into(),
+            params: vec![],
         })
         .basic_auth("app", Some("invalid"))
         .send()

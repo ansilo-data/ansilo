@@ -21,6 +21,7 @@ fn test() {
             SELECT * FROM test 
             "#
             .into(),
+            params: vec![],
         })
         .basic_auth("app", Some("pass"))
         .send()

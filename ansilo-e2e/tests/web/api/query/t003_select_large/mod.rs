@@ -15,6 +15,7 @@ fn test() {
         .post(url(&instance, "/api/v1/query"))
         .json(&QueryRequest {
             sql: "SELECT x FROM generate_series(1, 1000000) AS x".into(),
+            params: vec![],
         })
         .basic_auth("app", Some("pass"))
         .send()

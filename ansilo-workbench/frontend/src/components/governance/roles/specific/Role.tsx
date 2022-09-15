@@ -9,35 +9,34 @@ import Typography from "@mui/material/Typography";
 import LoadingButton from "@mui/lab/LoadingButton";
 import GovernanceMenu from "../../GovernanceMenu";
 import { DataGrantsTable } from "./DataGrantsTable";
-import { SystemGrantsTable } from "./SystemGrantsTable";
+import { Authenticated } from "../../../auth/Authenticated";
 
 export const Role = () => {
+
   return (
-    <Box sx={{ flexGrow: "1", display: "flex" }}>
-      <GovernanceMenu />
-      <Container
-        sx={{
-          maxWidth: 800,
-          flexGrow: 1,
-          display: "flex",
-          justifyContent: "center",
-          padding: 4,
-        }}
-      >
-        <Paper
-          sx={{ display: "flex", p: 4, flexDirection: "column" }}
-          elevation={8}
+    <Authenticated>
+      <Box sx={{ flexGrow: "1", display: "flex" }}>
+        <GovernanceMenu />
+        <Container
+          sx={{
+            maxWidth: 800,
+            flexGrow: 1,
+            display: "flex",
+            justifyContent: "center",
+            padding: 4,
+          }}
         >
-          <Typography sx={{ mb: 2 }} variant="h6">
-            Data Permissions
-          </Typography>
-          <DataGrantsTable />
-          <Typography sx={{ mt: 4, mb: 2 }} variant="h6">
-            System Permissions
-          </Typography>
-          <SystemGrantsTable />
-        </Paper>
-      </Container>
-    </Box>
+          <Paper
+            sx={{ display: "flex", p: 4, flexDirection: "column" }}
+            elevation={8}
+          >
+            <Typography sx={{ mb: 2 }} variant="h6">
+              Permissions
+            </Typography>
+            <DataGrantsTable />
+          </Paper>
+        </Container>
+      </Box>
+    </Authenticated>
   );
 };

@@ -19,6 +19,7 @@ auth:
   users:
     - username: app
       password: pass
+      description: Standard app user
 
     - username: token
       provider: jwt

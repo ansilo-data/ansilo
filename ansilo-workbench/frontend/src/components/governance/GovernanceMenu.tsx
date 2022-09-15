@@ -42,26 +42,6 @@ export default function GovernanceMenu(props: Props) {
             <ListItemText primary="Roles" />
           </ListItemButton>
         </Link>
-        <Link href="/governance/auth-mappings">
-          <ListItemButton
-            selected={router.asPath.startsWith("/governance/auth-mappings")}
-          >
-            <ListItemIcon>
-              <GppGoodIcon />
-            </ListItemIcon>
-            <ListItemText primary="Mappings" />
-          </ListItemButton>
-        </Link>
-        <Link href="/governance/users">
-          <ListItemButton
-            selected={router.asPath.startsWith("/governance/users")}
-          >
-            <ListItemIcon>
-              <GroupIcon />
-            </ListItemIcon>
-            <ListItemText primary="Users" />
-          </ListItemButton>
-        </Link>
       </List>
     </Paper>
   );

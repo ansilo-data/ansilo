@@ -106,5 +106,5 @@ INSERT INTO customers (id, first_name, last_name, email, gender, country) VALUES
 ('c3917a45-f5a2-4b68-8962-2ca0c959b993','Bernard','Bleibaum','bbleibaum2q@usatoday.com','Male','CN'),
 ('18085d67-ed78-4b1a-8d82-ce3dc049c138','Maddalena','OMullaney','momullaney2r@issuu.com','Female','MK');
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app, token;
 

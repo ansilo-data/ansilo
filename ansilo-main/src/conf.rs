@@ -44,6 +44,7 @@ pub fn init_conf(config_path: &Path, args: &Args) -> AppConf {
 /// Gets the postgres configuration for this instance
 fn pg_conf(node: &NodeConfig) -> PostgresConf {
     let pg_conf = node.postgres.clone().unwrap_or_default();
+    ansilo_logging::error!("{:?}", create_db_init_sql(node));
 
     PostgresConf {
         install_dir: pg_conf
@@ -76,14 +77,15 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
 }
 
 fn create_db_init_sql(node: &NodeConfig) -> Vec<String> {
-    // Run CREATE SERVER for each data source
-    node.sources
-        .iter()
-        .map(|source| {
-            let name = pg_quote_identifier(&source.id);
-            let id = pg_str_literal(&source.id);
-            format!(
-                r#"
+    [
+        // Run CREATE SERVER for each data source
+        node.sources
+            .iter()
+            .map(|source| {
+                let name = pg_quote_identifier(&source.id);
+                let id = pg_str_literal(&source.id);
+                format!(
+                    r#"
                 CREATE SERVER {name}
                 FOREIGN DATA WRAPPER ansilo_fdw
                 OPTIONS (
@@ -92,9 +94,27 @@ fn create_db_init_sql(node: &NodeConfig) -> Vec<String> {
                 
                 GRANT ALL ON FOREIGN SERVER {name} TO {PG_ADMIN_USER};
             "#
-            )
-        })
-        .collect()
+                )
+            })
+            .collect::<Vec<_>>(),
+        // Add descriptions of users
+        node.auth
+            .users
+            .iter()
+            .filter(|user| user.description.is_some())
+            .map(|user| {
+                let username = pg_quote_identifier(&user.username);
+                let description = pg_str_literal(user.description.as_ref().unwrap());
+
+                format!(
+                    r#"
+                    COMMENT ON ROLE {username} IS {description};
+                "#
+                )
+            })
+            .collect::<Vec<_>>(),
+    ]
+    .concat()
 }
 
 /// Initialises the proxy configuration

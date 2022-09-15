@@ -11,26 +11,62 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import { useAppDispatch, useAppSelector } from "../../../../store/hooks";
+import { selectAuth } from "../../../auth/auth.slice";
+import { useEffect, useState } from "react";
+import { executeQuery } from "../../../sql/sql.api";
+import qs from 'qs';
+
+export interface Grant {
+  table: string,
+  grants: string
+}
 
 export const DataGrantsTable = () => {
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(selectAuth);
+  const [grants, setGrants] = useState<Grant[]>()
+
+  useEffect(() => {
+    if (!auth.creds) {
+      return;
+    }
+
+    let username = (qs.parse(window.location.search.substring(1)) || {})['username'];
+
+    (async () => {
+      let res = await executeQuery(
+        dispatch, auth.creds!, {
+        sql: `
+        SELECT table_name, string_agg(privilege_type, ', ') as grants
+        FROM information_schema.role_table_grants
+        WHERE grantee = $1
+        GROUP BY grantee, table_name;
+        `,
+        params: [String(username)]
+      }
+      );
+
+      setGrants(res.values.map(v => ({ table: v[0], grants: v[1] }) as Grant))
+    })();
+  }, [auth.creds])
+
   return (
-    <TableContainer sx={{minWidth: 500}}>
+    <TableContainer sx={{ minWidth: 500 }}>
       <Table stickyHeader>
         <TableHead>
           <TableRow>
-            <TableCell>Entity</TableCell>
+            <TableCell>Table</TableCell>
             <TableCell width="50%">Operations</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          <TableRow>
-            <TableCell>Contacts</TableCell>
-            <TableCell>SELECT, INSERT, UPDATE, DELETE</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Interactions</TableCell>
-            <TableCell>SELECT</TableCell>
-          </TableRow>
+          {grants?.length ?
+            grants.map(grant => <TableRow>
+              <TableCell>{grant.table}</TableCell>
+              <TableCell>{grant.grants}</TableCell>
+            </TableRow>)
+            : <TableRow><TableCell colSpan={2}>No grants found</TableCell></TableRow>}
         </TableBody>
       </Table>
     </TableContainer>
