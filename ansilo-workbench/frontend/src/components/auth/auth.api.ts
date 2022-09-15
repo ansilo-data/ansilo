@@ -78,11 +78,11 @@ function getAuthMethodName(m: any): string {
   }
 
   if (m.type === "jwt") {
-    return `JWT Token (${m.id}`;
+    return `JWT Token (${m.id})`;
   }
 
   if (m.type === "saml") {
-    return `SAML (${m.id}`;
+    return `SAML (${m.id})`;
   }
 
   return m.id;

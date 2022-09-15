@@ -4,9 +4,24 @@ networking:
   port: 5001
 
 auth:
+  providers:
+    - id: jwt
+      type: jwt
+      jwk: https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_w97qYETe0/.well-known/jwks.json
+      login:
+        type: oauth2
+        authorize_endpoint: https://test-ansilo-demo.auth.ap-southeast-2.amazoncognito.com/login
+        params:
+          client_id: 21iais50jj7blc3rkr6paqbrqd
+          redirect_uri: http://localhost:5000
+          response_type: token
+
   users:
     - username: app
       password: pass
+
+    - username: token
+      provider: jwt
 
 postgres:
     init_sql_path: ${dir}/ansilo/*.sql

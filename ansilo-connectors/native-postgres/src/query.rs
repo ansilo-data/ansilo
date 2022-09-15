@@ -90,8 +90,7 @@ impl<T: DerefMut<Target = Client>> PostgresPreparedQuery<T> {
         let stream = self
             .client
             .query_raw(&self.statement, params.into_iter().map(|p| p))
-            .await
-            .context("Failed to execute query")?;
+            .await?;
 
         let cols = self
             .statement
@@ -109,8 +108,7 @@ impl<T: DerefMut<Target = Client>> PostgresPreparedQuery<T> {
         let affected = self
             .client
             .execute_raw(&self.statement, params.into_iter().map(|p| p))
-            .await
-            .context("Failed to execute query")?;
+            .await?;
 
         Ok(Some(affected))
     }

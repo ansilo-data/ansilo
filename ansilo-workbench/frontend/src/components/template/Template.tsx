@@ -87,7 +87,11 @@ export const Template = (props: TemplateProps) => {
   const [authMenuAnchorEl, setAuthMenuAnchorEl] = useState<null | HTMLElement>(null);
   const authMenuOpen = Boolean(authMenuAnchorEl);
   const handleAuthClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAuthMenuAnchorEl(event.currentTarget);
+    if (!creds) {
+      handleLogin();
+    } else {
+      setAuthMenuAnchorEl(event.currentTarget);
+    }
   };
   const handleAuthClose = () => {
     setAuthMenuAnchorEl(null);
@@ -144,7 +148,7 @@ export const Template = (props: TemplateProps) => {
           >
             {creds
               ? <MenuItem onClick={handleLogout}>Log out</MenuItem> :
-              <MenuItem onClick={handleLogin}>Log in</MenuItem>
+              undefined
             }
           </Menu>
         </Toolbar>

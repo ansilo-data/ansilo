@@ -39,8 +39,8 @@ export const AuthJwt = ({ method }: { method: AuthMethod }) => {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center' }}>
         <Link href={uri}>
-          <Button>
-            Login with {method.name}
+          <Button variant="contained">
+            Sign in with identity provider
           </Button>
         </Link>
       </Box>

@@ -23,15 +23,14 @@ export const AuthModal = () => {
 
   useEffect(() => {
     dispatch(fetchAuthMethodsAsync())
+
+    if (hasJwtTokenInUrl()) {
+      dispatch(setAuthModalOpen(true))
+    }
   }, [])
 
   if (!auth.methods) {
     return <></>
-  }
-
-  if (hasJwtTokenInUrl()) {
-    dispatch(clearCredentials(null))
-    dispatch(setAuthModalOpen(true))
   }
 
   const handleClose = () => {

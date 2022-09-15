@@ -50,9 +50,11 @@ export const CredentialsForm = (props: CredentialsFormProps) => {
   }
 
   useEffect(() => {
-    if (props.usernames?.length === 1 && props.password) {
-      handleSubmit()
-    }
+    setTimeout(() => {
+      if (props.usernames?.length === 1 && props.password) {
+        handleSubmit()
+      }
+    }, 0);
   }, []);
 
   return (

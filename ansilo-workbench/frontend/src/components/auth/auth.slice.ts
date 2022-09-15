@@ -65,6 +65,7 @@ export const authSlice = createSlice({
     },
     setCredentials: (state, action: PayloadAction<AuthCredentials>) => {
       sessionStorage.setItem(CREDENTIALS_KEY, JSON.stringify(action.payload));
+      window.location.hash = "";
       state.creds = action.payload;
       state.modalOpen = false;
     },
