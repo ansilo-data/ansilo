@@ -50,14 +50,14 @@ jobs:
       - name: Build base image
         run: |
           docker build -t ansilo-source \
-            --dockerfile .github/workflows/docker/source.ubi9.Dockerfile \
+            --file .github/workflows/docker/source.ubi9.Dockerfile \
             -v $HOME/.cargo:/home/build/.cargo \
             .
 
       - name: Run release build
         run: |
           docker build -t ansilo-release \
-            --dockerfile .github/workflows/docker/release.ubi9.Dockerfile \
+            --file .github/workflows/docker/release.ubi9.Dockerfile \
             -e CARGO_INCREMENTAL=false
             # Cached directories
             -v $HOME/.cargo:/home/build/.cargo \

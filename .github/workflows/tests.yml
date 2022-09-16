@@ -53,7 +53,7 @@ jobs:
       - name: Build base image
         run: |
         docker build -t ansilo-source \
-          --dockerfile .github/workflows/docker/source.ubi9.Dockerfile \
+          --file .github/workflows/docker/source.ubi9.Dockerfile \
           -v $HOME/.cargo:/home/build/.cargo \
           .
 
@@ -66,7 +66,7 @@ jobs:
       - name: Run tests
         run: |
           docker build -t tests \
-            --dockerfile .github/workflows/docker/test.ubi9.Dockerfile \
+            --file .github/workflows/docker/test.ubi9.Dockerfile \
             -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
             -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
             -e AWS_DEFAULT_REGION=ap-southeast-2 \
