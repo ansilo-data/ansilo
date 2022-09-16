@@ -51,7 +51,7 @@ jobs:
 
       - name: Push to Amazon ECR
         env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REGISTRY: 635198228996.dkr.ecr.ap-southeast-2.amazonaws.com
           REPOSITORY: ansilo-dev
           IMAGE_TAG: ${{ github.head_ref || github.ref_name }}
         run: |

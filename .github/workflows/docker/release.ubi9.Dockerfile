@@ -1,5 +1,7 @@
 FROM ansilo-source as source
 
+ENV CARGO_INCREMENTAL=false
+
 RUN mvn --version
 # Run build
 RUN source $HOME/.cargo/env && cargo build --release && \

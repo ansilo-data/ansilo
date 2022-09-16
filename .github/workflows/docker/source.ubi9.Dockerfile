@@ -40,7 +40,7 @@ USER build
 WORKDIR /build
 
 # Configure ecs cli
-RUN ecs-cli configure --cluster dev-cluster --region ap-southeast-2
+RUN ecs-cli configure
 
 # Install rust
 RUN curl --proto '=https' --tlsv1.3 -sSf https://sh.rustup.rs | sh -s -- -y
