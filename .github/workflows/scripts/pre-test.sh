@@ -16,7 +16,7 @@ echo "PUB_IP=$PUB_IP" >> $GITHUB_ENV
 echo ""
 
 echo "----- Authorizing inbound from $PUB_IP -----"
-aws ec2 authorize-security-group-ingress \
+/usr/local/bin/aws ec2 authorize-security-group-ingress \
     --group-id=sg-080dc71fb99e4fcb5 \
     --ip-permissions="IpProtocol=tcp,FromPort=0,ToPort=65535,IpRanges=[{CidrIp=$PUB_IP/32,Description='Authorise traffic from $PUB_IP@github-actions'}]"
 echo ""
