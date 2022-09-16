@@ -7,6 +7,7 @@ ENV RUST_BACKTRACE=1
 ENV CARGO_INCREMENTAL=false
 ENV ANSILO_TESTS_ECS_USE_PUBLIC_IP=true
 ENV ANSILO_TEST_PG_DIR=/usr/pgsql-14/
+ENV AWS_PAGER=""
 
 # Configure ecs-cli
 RUN ecs-cli configure \
