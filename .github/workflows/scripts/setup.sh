@@ -64,6 +64,12 @@ sudo chmod +x /usr/local/bin/ecs-cli
 ecs-cli configure --cluster dev-cluster --region ap-southeast-2
 echo ""
 
+echo "----- Set up awscli -----"
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+echo ""
+
 echo "----- Install node.js and npm -----"
 curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash - 
 sudo apt-get install -y nodejs 
@@ -93,4 +99,3 @@ echo ""
 echo "----- Run 'cargo pgx init' against system-level postgres ------"
 cargo pgx init --pg$PG_VER /usr/lib/postgresql/$PG_VER/bin/pg_config
 echo ""
-

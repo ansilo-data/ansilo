@@ -6,7 +6,6 @@ echo "----- Print env -----"
 env
 echo ""
 
-echo ""
 echo "----- Configuring ld paths -----"
 echo "$JAVA_HOME/lib/server" | sudo tee /etc/ld.so.conf.d/jdk.conf 
 sudo ldconfig

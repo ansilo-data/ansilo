@@ -121,7 +121,7 @@ fn start_containers_ecs(
             )
         })
         .map(|((cluster, task_id, service), port)| {
-            let ip_addr = get_task_private_ip(cluster, task_id.clone());
+            let ip_addr = get_task_ip(cluster, task_id.clone());
             if let Some(port) = port {
                 println!("Waiting for {service} service to come online");
                 wait_for_port_open(ip_addr, port);
@@ -161,9 +161,18 @@ fn parse_service_port(port_mapping: String) -> Option<u16> {
     port.parse().ok()
 }
 
-fn get_task_private_ip(cluster: String, task_id: String) -> IpAddr {
+fn get_task_ip(cluster: String, task_id: String) -> IpAddr {
+    let cmd = if env::var("ANSILO_TESTS_ECS_USE_PUBLIC_IP").is_ok() {
+        format!("
+            ENI_ID=$(aws ecs describe-tasks --tasks {} --cluster {cluster} --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text); 
+            aws ec2 describe-network-interfaces --network-interface-ids $ENI_ID --query 'NetworkInterfaces[0].Association.PublicIp' --output text
+            ", task_id.clone())
+    } else {
+        format!("aws ecs describe-tasks --tasks {} --cluster {cluster} --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' --output text", task_id.clone())
+    };
+
     let output = Command::new("bash")
-        .args(&["-c".to_string(), format!("aws ecs describe-tasks --tasks {} --cluster {cluster} --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' --output text", task_id.clone())])
+        .args(&["-c".to_string(), cmd])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

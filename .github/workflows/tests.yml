@@ -15,6 +15,7 @@ env:
   RUST_BACKTRACE: 1
   CARGO_INCREMENTAL: "false"
   AWS_DEFAULT_REGION: ap-southeast-2
+  ANSILO_TESTS_ECS_USE_PUBLIC_IP: true
 
 jobs:
   tests:
@@ -72,7 +73,16 @@ jobs:
     - name: Run tests
       run: |
         .github/workflows/scripts/pre-build.sh
+        .github/workflows/scripts/pre-test.sh
         cargo test
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+
+    - name: Post tests cleanup
+      if: always()
+      run: |
+        .github/workflows/scripts/post-test.sh
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
