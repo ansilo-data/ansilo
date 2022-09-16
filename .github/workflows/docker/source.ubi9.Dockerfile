@@ -1,7 +1,7 @@
 FROM registry.access.redhat.com/ubi9/ubi
 
 # Install openjdk
-RUN yum install -y java-17-openjdk-headless && \
+RUN yum install -y java-17-openjdk-headless maven-openjdk17 && \
     export JAVA_HOME="$(dirname $(dirname $(readlink -f $(which java))))" && \
     echo "$JAVA_HOME/lib/server" | tee /etc/ld.so.conf.d/jdk.conf && \
     ldconfig
