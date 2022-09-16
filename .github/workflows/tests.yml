@@ -56,7 +56,7 @@ jobs:
 
     - name: Run tests
       run: |
-        echo $LD_LIBRARY_PATH
+        .github/workflows/scripts/pre-build.sh
         cargo test
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}

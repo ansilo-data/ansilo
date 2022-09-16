@@ -54,8 +54,6 @@ echo ""
 
 echo "----- Set up JDK and Maven -----"
 sudo apt-get -y install openjdk-17-jdk maven
-# Adding libjvm.so to ld path
-echo "LD_LIBRARY_PATH='$LD_LIBRARY_PATH:$JAVA_HOME/lib/server/'" >> $GITHUB_ENV
 echo ""
 
 echo "----- Set up ecs-cli -----"
