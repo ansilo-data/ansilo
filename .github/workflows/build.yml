@@ -1,0 +1,83 @@
+name: Run tests
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+  pull_request:
+    branches:
+      - master
+      - develop
+
+env:
+  CARGO_INCREMENTAL: "false"
+  AWS_DEFAULT_REGION: ap-southeast-2
+
+jobs:
+  build:
+    name: build
+    runs-on: ${{ matrix.os }}
+    if: "!contains(github.event.head_commit.message, 'nogha')"
+    env:
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: /home/runner/.cache/sccache
+
+    strategy:
+      matrix:
+        version: ["postgres-14"]
+        os: ["ubuntu-20.04"]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      continue-on-error: false
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: build-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/build.yml') }}
+
+    - name: Cache maven registry
+      uses: actions/cache@v3
+      continue-on-error: false
+      with:
+        path: |
+          ~/.m2
+        key: build-maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.github/workflows/build.yml') }}
+
+    - name: Cache sccache directory
+      uses: actions/cache@v3
+      continue-on-error: false
+      with:
+        path: /home/runner/.cache/sccache
+        key: build-sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/build.yml') }}
+
+    - name: Set up prerequisites and environment
+      run: .github/workflows/scripts/setup.sh
+      env:
+        POSTGRES_VERSION: ${{ matrix.version }}
+
+    - name: Run build
+      run: |
+        .github/workflows/scripts/pre-build.sh
+        cargo build --release
+        cargo pgx package -p ansilo-pgx --out-dir target/release/ansilo-pgx/
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ansilo
+        path: |
+          target/release/ansilo-main
+          target/release/*.jar
+          target/release/frontend/**
+          target/release/ansilo-pgx/**
+
+    - name: Teardown environment
+      run: .github/workflows/scripts/teardown.sh
+      env:
+        POSTGRES_VERSION: ${{ matrix.version }}
+
