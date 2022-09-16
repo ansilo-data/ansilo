@@ -1,7 +1,7 @@
 FROM ansilo-source as source
 
-ENV AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-ENV AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+ARG AWS_ACCESS_KEY_ID
+ARG AWS_SECRET_ACCESS_KEY
 ENV RUSTFLAGS=-Copt-level=0
 ENV RUST_BACKTRACE=1
 ENV CARGO_INCREMENTAL=false
@@ -14,8 +14,8 @@ RUN ecs-cli configure \
         --region ap-southeast-2
 RUN ecs-cli configure profile --profile-name default \
         --profile-name default \
-        --access-key $AWS_ACCESS_KEY_ID \
-        --secret-key $AWS_SECRET_ACCESS_KEY
+        --access-key ${AWS_ACCESS_KEY_ID} \
+        --secret-key ${AWS_SECRET_ACCESS_KEY}
 
 # Run tests
 RUN source $HOME/.cargo/env && cargo test
