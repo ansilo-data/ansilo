@@ -39,9 +39,6 @@ USER build
 # Add source
 WORKDIR /build
 
-# Configure ecs cli
-RUN ecs-cli configure
-
 # Install rust
 RUN curl --proto '=https' --tlsv1.3 -sSf https://sh.rustup.rs | sh -s -- -y
 
