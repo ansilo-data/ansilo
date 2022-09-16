@@ -26,30 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Cache cargo registry
-        uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: tests-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/tests.yml') }}
-
-      - name: Cache maven registry
-        uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: |
-            ~/.m2
-          key: tests-maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.github/workflows/tests.yml') }}
-
-      - name: Cache criterion directory
-        uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: target/criterion
-          key: tests-criterion-${{ runner.os }}
-
       - name: Build base image
         run: |
           docker build -t ansilo-source \
