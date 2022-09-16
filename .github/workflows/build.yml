@@ -24,7 +24,6 @@ jobs:
 
     strategy:
       matrix:
-        version: ["postgres-14"]
         os: ["ubuntu-20.04"]
 
     steps:
@@ -40,7 +39,7 @@ jobs:
         run: |
           docker build -t ansilo-release \
             --file .github/workflows/docker/release.ubi9.Dockerfile \
-            --build-arg CARGO_INCREMENTAL=false
+            --build-arg CARGO_INCREMENTAL=false \
             .
 
       - name: Configure AWS Credentials
@@ -64,5 +63,3 @@ jobs:
 
       - name: Teardown environment
         run: .github/workflows/scripts/teardown.sh
-        env:
-          POSTGRES_VERSION: ${{ matrix.version }}
