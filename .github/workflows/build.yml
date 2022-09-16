@@ -36,7 +36,6 @@ jobs:
         run: |
           docker build -t ansilo-release \
             --file .github/workflows/docker/release.ubi9.Dockerfile \
-            --build-arg CARGO_INCREMENTAL=false \
             .
 
       - name: Configure AWS Credentials
