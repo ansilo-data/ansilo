@@ -55,7 +55,7 @@ jobs:
           REPOSITORY: ansilo-dev
           IMAGE_TAG: ${{ github.head_ref || github.ref_name }}
         run: |
-          docker tag -t ansilo-release $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          docker tag ansilo-release $REGISTRY/$REPOSITORY:$IMAGE_TAG
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
       - name: Teardown environment

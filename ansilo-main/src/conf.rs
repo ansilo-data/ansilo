@@ -47,9 +47,7 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
     ansilo_logging::error!("{:?}", create_db_init_sql(node));
 
     PostgresConf {
-        install_dir: pg_conf
-            .install_dir
-            .unwrap_or("/usr/lib/postgresql/14/".into()),
+        install_dir: pg_conf.install_dir.unwrap_or("/usr/pgsql-14/".into()),
         //
         postgres_conf_path: pg_conf.config_path,
         //

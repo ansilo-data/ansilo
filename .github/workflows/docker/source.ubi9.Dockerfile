@@ -20,8 +20,7 @@ RUN yum install -y openssl openssl-devel
 
 # Install ecs-cli
 RUN curl -Lo /usr/local/bin/ecs-cli https://ansilo-dev-tmp.s3.ap-southeast-2.amazonaws.com/ecs-cli  && \
-    chmod +x /usr/local/bin/ecs-cli  && \
-    ecs-cli configure --cluster dev-cluster --region ap-southeast-2
+    chmod +x /usr/local/bin/ecs-cli
 
 # Install awscli
 RUN yum install -y zip
@@ -39,6 +38,9 @@ USER build
 
 # Add source
 WORKDIR /build
+
+# Configure ecs cli
+RUN ecs-cli configure --cluster dev-cluster --region ap-southeast-2
 
 # Install rust
 RUN curl --proto '=https' --tlsv1.3 -sSf https://sh.rustup.rs | sh -s -- -y
