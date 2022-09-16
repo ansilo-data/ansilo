@@ -39,13 +39,13 @@ jobs:
         run: |
           docker build -t tests \
             --file .github/workflows/docker/test.ubi9.Dockerfile \
-            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            -e AWS_DEFAULT_REGION=ap-southeast-2 \
-            -e RUSTFLAGS=-Copt-level=0 \
-            -e RUST_BACKTRACE=1 \
-            -e CARGO_INCREMENTAL=false \
-            -e ANSILO_TESTS_ECS_USE_PUBLIC_IP=true \
+            --build-arg AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+            --build-arg AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+            --build-arg AWS_DEFAULT_REGION=ap-southeast-2 \
+            --build-arg RUSTFLAGS=-Copt-level=0 \
+            --build-arg RUST_BACKTRACE=1 \
+            --build-arg CARGO_INCREMENTAL=false \
+            --build-arg ANSILO_TESTS_ECS_USE_PUBLIC_IP=true \
             .
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
