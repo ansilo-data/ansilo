@@ -29,7 +29,7 @@ mod tests {
 
     #[test]
     fn test_init_logging() {
-        let conf = NodeConfig::default();
+        let _conf = NodeConfig::default();
 
         let res = init_logging();
 

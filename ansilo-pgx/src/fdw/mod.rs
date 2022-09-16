@@ -22,10 +22,12 @@ pub mod ctx;
 #[cfg(any(test, feature = "pg_test"))]
 pub mod test;
 
+#[allow(unused)]
 use analyze::*;
 use explain::*;
 use import::*;
 use modify::*;
+#[allow(unused)]
 use r#async::*;
 use scan::*;
 

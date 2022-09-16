@@ -33,7 +33,8 @@ fn main() {
         "Copying frontend to target dir {} ...",
         target_dir.display()
     );
-    fs::remove_dir_all(target_dir.join("frontend")).unwrap();
+    let _ = fs::remove_dir_all(target_dir.join("frontend"));
+    let _ = fs::create_dir_all(target_dir.join("frontend"));
 
     let res = Command::new("cp")
         .args([

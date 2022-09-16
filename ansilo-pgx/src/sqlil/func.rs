@@ -3,7 +3,7 @@ use ansilo_core::{
     sqlil::{self, SubstringCall},
 };
 use pgx::{
-    pg_sys::{self, Node, Oid},
+    pg_sys::{Node, Oid},
     *,
 };
 

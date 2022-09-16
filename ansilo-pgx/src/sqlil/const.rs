@@ -3,11 +3,7 @@ use ansilo_core::{
     err::{Context, Result},
     sqlil,
 };
-use pgx::{
-    pg_schema,
-    pg_sys::{self},
-    *,
-};
+use pgx::*;
 
 use crate::fdw::ctx::{FdwContext, PlannerContext};
 

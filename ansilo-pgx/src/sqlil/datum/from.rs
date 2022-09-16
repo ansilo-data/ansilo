@@ -10,11 +10,7 @@ use ansilo_core::{
     },
     err::{bail, Context, Error, Result},
 };
-use pgx::{
-    pg_schema,
-    pg_sys::{self, Oid},
-    FromDatum,
-};
+use pgx::{pg_sys::Oid, *};
 
 /// Attempt to convert a postgres datum union type to ansilo's DataValue
 ///
@@ -32,9 +28,7 @@ pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValu
         pg_sys::FLOAT8OID => Ok(DataValue::Float64(f64::parse(datum)?)),
         pg_sys::NUMERICOID => Ok(from_numeric(datum)),
         // We assume UTF8 as we hard code this configuration during initdb
-        pg_sys::TEXTOID|pg_sys::VARCHAROID => Ok(DataValue::Utf8String(
-            String::parse(datum)?,
-        )),
+        pg_sys::TEXTOID | pg_sys::VARCHAROID => Ok(DataValue::Utf8String(String::parse(datum)?)),
         // char is an internal type (i8) used by postgres, likely not portable
         // and should not be used across db's
         pg_sys::CHAROID => {
@@ -130,7 +124,6 @@ fn to_uuid(datum: pgx::Uuid) -> Uuid {
 #[pg_schema]
 mod tests {
     use ansilo_core::data::uuid;
-    use pgx::*;
 
     use super::*;
 

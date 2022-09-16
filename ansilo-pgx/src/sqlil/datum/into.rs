@@ -7,11 +7,7 @@ use ansilo_core::{
     },
     err::{bail, Result},
 };
-use pgx::{
-    pg_schema,
-    pg_sys::{self, Oid},
-    IntoDatum, PgBox,
-};
+use pgx::{*, pg_sys::Oid};
 
 use crate::util::string::parse_to_owned_utf8_string;
 
@@ -130,6 +126,7 @@ pub unsafe fn into_datum(
 }
 
 /// Converts the supplied DataValue into a pgalloc'd Datum
+#[allow(unused)]
 pub(crate) unsafe fn into_datum_pg_alloc(
     type_oid: Oid,
     r#type: &DataType,
@@ -208,7 +205,6 @@ fn into_uuid(data: uuid::Uuid) -> pgx::Uuid {
 #[pg_schema]
 mod tests {
     use ansilo_core::data::{chrono_tz::Tz, rust_decimal::Decimal, DecimalOptions, StringOptions};
-    use pgx::*;
 
     use super::*;
 

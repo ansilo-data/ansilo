@@ -288,7 +288,7 @@ mod tests {
         let res = router
             .oneshot(
                 Request::builder()
-                    .uri("/health")
+                    .uri("/api/health")
                     .body(Body::empty())
                     .unwrap(),
             )

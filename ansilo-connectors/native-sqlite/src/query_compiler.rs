@@ -944,7 +944,7 @@ mod tests {
         assert_eq!(
             compiled,
             SqliteQuery::new(
-                r#"SELECT sum("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
+                r#"SELECT SUM("entity"."col1") AS "COL" FROM "table" AS "entity" OFFSET 10"#,
                 vec![]
             )
         );

@@ -234,9 +234,8 @@ impl State {
 #[cfg(test)]
 mod tests {
     use ansilo_core::config::TokenClaimCheck;
-    use jsonwebtoken::{encode, EncodingKey, Header};
+    use jsonwebtoken::Header;
     use serde_json::Value;
-    use tempfile::NamedTempFile;
 
     use super::*;
     use crate::provider::jwt_test::*;
@@ -253,6 +252,7 @@ mod tests {
             )),
             ec_public_key: None,
             ed_public_key: None,
+            login: None,
         }));
 
         let user = JwtUserConfig {
@@ -295,6 +295,7 @@ mod tests {
                 decoding_key_path.path().to_str().unwrap()
             )),
             ed_public_key: None,
+            login: None,
         }));
 
         let user = JwtUserConfig {
@@ -337,6 +338,7 @@ mod tests {
                 "file://{}",
                 decoding_key_path.path().to_str().unwrap()
             )),
+            login: None,
         }));
 
         let user = JwtUserConfig {
@@ -377,6 +379,7 @@ mod tests {
             rsa_public_key: None,
             ec_public_key: None,
             ed_public_key: None,
+            login: None,
         }));
 
         let user = JwtUserConfig {
@@ -415,6 +418,7 @@ mod tests {
                 "file://{}",
                 decoding_key_path.path().to_str().unwrap()
             )),
+            login: None,
         }));
 
         let user = JwtUserConfig {
@@ -447,6 +451,7 @@ mod tests {
                 "file://{}",
                 decoding_key_path.path().to_str().unwrap()
             )),
+            login: None,
         }));
 
         let user = JwtUserConfig {

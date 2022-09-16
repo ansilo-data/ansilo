@@ -2,7 +2,7 @@ use ansilo_core::{
     err::{bail, Context, Result},
     sqlil,
 };
-use pgx::{pg_schema, pg_sys};
+use pgx::*;
 
 use crate::{
     fdw::ctx::{FdwContext, PlannerContext},
@@ -52,8 +52,6 @@ pub(super) unsafe fn convert_var(
 #[pg_schema]
 mod tests {
     use super::*;
-    use pgx::*;
-
     use crate::sqlil::test;
 
     #[pg_test]
