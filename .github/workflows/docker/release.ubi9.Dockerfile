@@ -32,8 +32,7 @@ RUN yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x
 RUN yum install -y openssl
 
 # Copy artifacts
-RUN mkdir /ansilo/
-COPY --from=source /build/artifacts/* /ansilo/
+COPY --from=source /build/artifacts /ansilo
 RUN ls -al /ansilo/
 # Install postgres extension
 RUN cp -r /ansilo/pgx / && rm -rf /ansilo/pgx
@@ -43,8 +42,6 @@ RUN yum clean all && \
     rpm -q java-17-openjdk-headless postgresql14-server openssl && \
     rm -rf /var/cache/yum && \
     rm -rf /tmp/
-
-RUN mkdir /ansilo
 
 EXPOSE 80 443
 ENTRYPOINT [ "/ansilo/ansilo-main" ]
