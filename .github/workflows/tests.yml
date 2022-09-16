@@ -52,10 +52,10 @@ jobs:
 
       - name: Build base image
         run: |
-        docker build -t ansilo-source \
-          --file .github/workflows/docker/source.ubi9.Dockerfile \
-          -v $HOME/.cargo:/home/build/.cargo \
-          .
+          docker build -t ansilo-source \
+            --file .github/workflows/docker/source.ubi9.Dockerfile \
+            -v $HOME/.cargo:/home/build/.cargo \
+            .
 
       - name: Pre test setup
         run: .github/workflows/scripts/pre-test.sh
