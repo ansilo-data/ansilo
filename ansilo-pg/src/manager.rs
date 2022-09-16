@@ -175,7 +175,7 @@ mod tests {
 
     fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
         let conf = PostgresConf {
-            install_dir: PathBuf::from("/usr/lib/postgresql/14"),
+            install_dir: PathBuf::from(std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into())),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/manager/{}", test_name)),
             socket_dir_path: PathBuf::from(format!("/tmp/ansilo-tests/manager/{}", test_name)),

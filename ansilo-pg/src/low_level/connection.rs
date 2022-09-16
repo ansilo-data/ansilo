@@ -305,7 +305,7 @@ impl PgWriter {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::PathBuf, thread, time::Duration};
+    use std::{collections::HashMap, env, path::PathBuf, thread, time::Duration};
 
     use tokio_postgres::Config;
 
@@ -318,7 +318,10 @@ mod tests {
 
     fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
         let conf = PostgresConf {
-            install_dir: PathBuf::from("/home/vscode/.pgx/14.5/pgx-install/"),
+            install_dir: PathBuf::from(
+                env::var("ANSILO_TEST_PG_DIR")
+                    .unwrap_or("/home/vscode/.pgx/14.5/pgx-install/".into()),
+            ),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/pg-ll-connection/{}", test_name)),
             socket_dir_path: PathBuf::from(format!(

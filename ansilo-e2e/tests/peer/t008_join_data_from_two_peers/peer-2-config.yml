@@ -33,7 +33,7 @@ sources:
         - [4, "Luna", 3]
 
 postgres:
-    install_dir: /usr/lib/postgresql/14/
+    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
     init_sql_path: ${dir}/ansilo-peer-2-sql/*.sql
     data_dir: ${env:TEMP_DIR}/data
     listen_socket_dir_path: ${env:TEMP_DIR}

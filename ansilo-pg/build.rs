@@ -19,7 +19,7 @@ fn main() {
 
     println!("Granting access to postgres ext/lib dirs...");
     let res = Command::new("bash")
-        .args(["-c", "sudo setfacl -m u:$USER:rwx /usr/share/postgresql/14/extension/ /usr/lib/postgresql/14/lib/"])
+        .args(["-c", &format!("sudo setfacl -m u:$USER:rwx $(pg_config --sharedir)/extension/ $(pg_config --pkglibdir)")])
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())

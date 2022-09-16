@@ -338,7 +338,7 @@ mod tests {
     async fn init_pg(test_name: &'static str) -> PostgresInstance {
         // This runs blocking code and contains a runtime
         let conf = Box::leak(Box::new(PostgresConf {
-            install_dir: PathBuf::from("/usr/lib/postgresql/14"),
+            install_dir: PathBuf::from(std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into())),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/main-pg-handler/{}", test_name)),
             socket_dir_path: PathBuf::from(format!(

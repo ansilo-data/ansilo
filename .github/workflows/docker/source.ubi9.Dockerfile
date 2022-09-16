@@ -28,7 +28,10 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     ./aws/install --update
 
 # Switch to non-root user
-RUN adduser build
+RUN yum install -y sudo
+RUN echo "%sudoers        ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers.d/sudeors
+RUN groupadd sudoers
+RUN adduser build -G sudoers
 RUN mkdir /build && chown build:build /build
 USER build
 
@@ -44,3 +47,5 @@ RUN source $HOME/.cargo/env && cargo pgx init --pg14 /usr/pgsql-14/bin/pg_config
 
 # Add source
 COPY . /build
+USER root
+RUN sudo chown -R build:build /build

@@ -73,13 +73,16 @@ impl MultiUserPostgresConnectionPool {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{path::PathBuf, env};
 
     use super::*;
 
     fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
         let conf = PostgresConf {
-            install_dir: PathBuf::from("/home/vscode/.pgx/14.5/pgx-install/"),
+            install_dir: PathBuf::from(
+                env::var("ANSILO_TEST_PG_DIR")
+                    .unwrap_or("/home/vscode/.pgx/14.5/pgx-install/".into()),
+            ),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!(
                 "/tmp/ansilo-tests/pg-multi-user-ll-connection-pool/{}",
