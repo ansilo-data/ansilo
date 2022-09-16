@@ -9,7 +9,7 @@ RUN source $HOME/.cargo/env && cargo build --release && \
 RUN mkdir artifacts
 RUN cp target/release/ansilo-main artifacts && \
     cp target/release/*.jar artifacts && \
-    cp -r target/release/frontend/* artifacts && \
+    cp -r target/release/frontend/out artifacts/frontend && \
     cp -r target/release/ansilo-pgx artifacts/pgx 
 
 # List artifacts
@@ -33,15 +33,20 @@ RUN yum install -y openssl
 
 # Copy artifacts
 COPY --from=source /build/artifacts /ansilo
-RUN ls -al /ansilo/
 # Install postgres extension
-RUN cp -r /ansilo/pgx / && rm -rf /ansilo/pgx
+RUN cp -vr /ansilo/pgx/* / && rm -rf /ansilo/pgx
+
+# Set up runtime user
+RUN adduser ansilo && \
+    chown -R ansilo:ansilo /ansilo/ 
 
 # Clean up
 RUN yum clean all && \
     rpm -q java-17-openjdk-headless postgresql14-server openssl && \
     rm -rf /var/cache/yum && \
-    rm -rf /tmp/
+    rm -rf /tmp/*
 
 EXPOSE 80 443
+
+USER ansilo
 ENTRYPOINT [ "/ansilo/ansilo-main" ]
