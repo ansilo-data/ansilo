@@ -2,8 +2,9 @@ FROM registry.access.redhat.com/ubi9/ubi
 
 # Install openjdk
 RUN yum install -y java-17-openjdk-headless maven-openjdk17 && \
-    export JAVA_HOME="$(dirname $(dirname $(readlink -f $(which java))))" && \
-    echo "$JAVA_HOME/lib/server" | tee /etc/ld.so.conf.d/jdk.conf && \
+    alternatives --set java java-17-openjdk.x86_64
+ENV JAVA_HOME="/etc/alternatives/jre_17_openjdk/"
+RUN echo "$JAVA_HOME/lib/server" | tee /etc/ld.so.conf.d/jdk.conf && \
     ldconfig
 
 # Install postgres

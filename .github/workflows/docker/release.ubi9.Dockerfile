@@ -2,15 +2,18 @@ FROM ansilo-source as source
 
 RUN mvn --version
 # Run build
-RUN source $HOME/.cargo/env && cargo build --release
-RUN source $HOME/.cargo/env && cargo pgx package -p ansilo-pgx --out-dir target/release/ansilo-pgx/
+RUN source $HOME/.cargo/env && cargo build --release && \
+    cargo pgx package -p ansilo-pgx --out-dir target/release/ansilo-pgx/
 
 # Copy release artifacts
 RUN mkdir artifacts
 RUN cp target/release/ansilo-main artifacts && \
     cp target/release/*.jar artifacts && \
-    cp -r target/release/frontend/** artifacts && \
-    cp -r target/release/ansilo-pgx artifacts/pgx
+    cp -r target/release/frontend/* artifacts && \
+    cp -r target/release/ansilo-pgx artifacts/pgx 
+
+# List artifacts
+RUN du -h /build/artifacts
 
 # Create runtime image
 FROM registry.access.redhat.com/ubi9/ubi
@@ -31,6 +34,7 @@ RUN yum install -y openssl
 # Copy artifacts
 RUN mkdir /ansilo/
 COPY --from=source /build/artifacts/* /ansilo/
+RUN ls -al /ansilo/
 # Install postgres extension
 RUN cp -r /ansilo/pgx / && rm -rf /ansilo/pgx
 
