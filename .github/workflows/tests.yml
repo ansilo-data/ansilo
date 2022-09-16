@@ -23,6 +23,12 @@ jobs:
       matrix:
         os: ["ubuntu-20.04"]
 
+      - name: Build base image
+        run: |
+          docker build -t ansilo-source \
+            --file .github/workflows/docker/source.ubi9.Dockerfile \
+            .
+
     steps:
       - uses: actions/checkout@v3
       - name: Pre test setup
@@ -30,13 +36,6 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
-
-
-      - name: Build base image
-        run: |
-          docker build -t ansilo-source \
-            --file .github/workflows/docker/source.ubi9.Dockerfile \
-            .
 
       - name: Run tests
         run: |

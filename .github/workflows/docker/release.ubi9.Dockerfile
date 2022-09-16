@@ -1,5 +1,7 @@
 FROM ansilo-source as source
 
+USER build
+
 # Run build
 RUN source $HOME/.cargo/env && cargo build --release
 RUN source $HOME/.cargo/env && cargo pgx package -p ansilo-pgx --out-dir target/release/ansilo-pgx/

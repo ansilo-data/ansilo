@@ -27,7 +27,6 @@ fn main() {
         .unwrap()
         .wait()
         .unwrap();
-
     assert!(res.success());
 
     println!("Installing ansilo-pgx extension...");
