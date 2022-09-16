@@ -1,13 +1,26 @@
 use std::{
-    env, fs,
+    env,
+    fs::{self, OpenOptions},
     path::PathBuf,
     process::{Command, Stdio},
 };
+
+use fd_lock::RwLock;
 
 /// Builds a mvn java module
 pub fn build_java_maven_module(path: &str) {
     println!("cargo:rerun-if-changed={}/src", path);
     println!("cargo:rerun-if-changed={}/pom.xml", path);
+
+    println!("Acquiring file lock...");
+    let lock_file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(PathBuf::from(path).join(".lock"))
+        .unwrap();
+    let mut lock = RwLock::new(lock_file);
+    let _guard = lock.write().unwrap();
 
     println!("Running mvn build...");
 
