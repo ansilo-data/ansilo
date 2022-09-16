@@ -38,9 +38,16 @@ COPY --from=source /build/artifacts /ansilo
 # Install postgres extension
 RUN cp -vr /ansilo/pgx/* / && rm -rf /ansilo/pgx
 
+# Create symlinks
+RUN ln -s /ansilo/ansilo-main /usr/bin/ansilo 
+
 # Set up runtime user
 RUN adduser ansilo && \
     chown -R ansilo:ansilo /ansilo/ 
+
+# Set up user folders
+RUN mkdir /app/ && \
+    chown -R ansilo:ansilo /app/
 
 # Clean up
 RUN yum clean all && \
@@ -48,7 +55,5 @@ RUN yum clean all && \
     rm -rf /var/cache/yum && \
     rm -rf /tmp/*
 
-EXPOSE 80 443
-
 USER ansilo
-ENTRYPOINT [ "/ansilo/ansilo-main" ]
+ENTRYPOINT [ "ansilo" ]
