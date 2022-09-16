@@ -14,6 +14,7 @@ env:
   RUSTFLAGS: -Copt-level=0
   RUST_BACKTRACE: 1
   CARGO_INCREMENTAL: "false"
+  AWS_DEFAULT_REGION: ap-southeast-2
 
 jobs:
   tests:
@@ -120,6 +121,13 @@ jobs:
     - name: Run 'cargo pgx init' against system-level ${{ matrix.version }}
       run: cargo pgx init --pg$PG_VER /usr/lib/postgresql/$PG_VER/bin/pg_config
 
+    - name: Install and configure ecs-cli
+      run: |
+        sudo curl -Lo /usr/local/bin/ecs-cli https://ansilo-dev-tmp.s3.ap-southeast-2.amazonaws.com/ecs-cli && \
+        sudo chmod +x /usr/local/bin/ecs-cli && \
+        echo 'export $(strings /proc/1/environ | grep -P "(AWS|ECS)")' | tee -a ~/.bashrc ~/.zshrc && \
+        ecs-cli configure --cluster dev-cluster --region ap-southeast-2
+
     - name: Install OpenJDK
       uses: actions/setup-java@v3
       with:
@@ -129,12 +137,17 @@ jobs:
     - name: Run tests
       run: |
         cargo test
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
     - name: Run benchmarks
       run: |
         cargo bench
       env:
         RUSTFLAGS: ""
+        AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
     - name: Stop sccache server
       run: sccache --stop-server || true
