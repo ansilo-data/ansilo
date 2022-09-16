@@ -54,7 +54,6 @@ jobs:
         run: |
           docker build -t ansilo-source \
             --file .github/workflows/docker/source.ubi9.Dockerfile \
-            -v $HOME/.cargo:/home/build/.cargo \
             .
 
       - name: Pre test setup
@@ -74,10 +73,6 @@ jobs:
             -e RUST_BACKTRACE=1 \
             -e CARGO_INCREMENTAL=false \
             -e ANSILO_TESTS_ECS_USE_PUBLIC_IP=true \
-            # Cached directories
-            -v $HOME/.cargo:/home/build/.cargo \
-            -v $HOME/.m2:/home/build/.m2 \
-            -v $HOME/target:/build/target \
             .
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}

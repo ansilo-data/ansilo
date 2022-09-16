@@ -51,7 +51,6 @@ jobs:
         run: |
           docker build -t ansilo-source \
             --file .github/workflows/docker/source.ubi9.Dockerfile \
-            -v $HOME/.cargo:/home/build/.cargo \
             .
 
       - name: Run release build
@@ -59,10 +58,6 @@ jobs:
           docker build -t ansilo-release \
             --file .github/workflows/docker/release.ubi9.Dockerfile \
             -e CARGO_INCREMENTAL=false
-            # Cached directories
-            -v $HOME/.cargo:/home/build/.cargo \
-            -v $HOME/.m2:/home/build/.m2 \
-            -v $HOME/target:/build/target \
             .
 
       - name: Login to Amazon ECR
