@@ -53,9 +53,8 @@ sudo chmod a+rwx `/usr/lib/postgresql/$PG_VER/bin/pg_config --pkglibdir` `/usr/l
 echo ""
 
 echo "----- Set up JDK and Maven -----"
-sudo apt-get -y install openjdk-17-jdk maven
-export JAVA_HOME="$(dirname $(dpkg -L openjdk-17-jdk | grep -E 'bin$' | head -n1))"
-echo "JAVA_HOME='$JAVA_HOME'" >> $GITHUB_ENV
+export JAVA_HOME=$JAVA_HOME_17_X64
+echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
 echo ""
 
 echo "----- Set up ecs-cli -----"
