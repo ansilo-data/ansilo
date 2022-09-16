@@ -10,6 +10,9 @@ on:
       - master
       - develop
 
+env:
+  AWS_DEFAULT_REGION: ap-southeast-2
+
 jobs:
   tests:
     name: tests
