@@ -33,66 +33,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Set up prerequisites and environment
-      run: |
-        echo ""
-        echo "----- Install sccache -----"
-        mkdir -p $HOME/.local/bin
-        curl -L https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz | tar xz
-        mv -f sccache-v0.2.15-x86_64-unknown-linux-musl/sccache $HOME/.local/bin/sccache
-        chmod +x $HOME/.local/bin/sccache
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        echo 'SCCACHE_CACHE_SIZE="20G"' >> $GITHUB_ENV
-        mkdir -p /home/runner/.cache/sccache
-        echo ""
-
-        echo "----- Set up dynamic variables -----"
-        export PG_VER=$(echo ${{ matrix.version }} | cut -d '-' -f2)
-        echo "PG_VER=$PG_VER" >> $GITHUB_ENV
-        echo "MAKEFLAGS=$MAKEFLAGS -j $(grep -c ^processor /proc/cpuinfo)" >> $GITHUB_ENV
-        cat $GITHUB_ENV
-        echo ""
-
-        echo "----- Remove old postgres -----"
-        sudo apt remove -y postgres*
-        echo ""
-
-        echo "----- Set up PostgreSQL Apt repository -----"
-        sudo apt-get install -y wget gnupg
-        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
-        sudo apt-get update -y -qq --fix-missing
-        echo ""
-
-        echo "----- Install system dependencies and PostgreSQL version $PG_VER -----"
-        sudo apt-get install -y \
-          clang-10 \
-          llvm-10 \
-          clang \
-          gcc \
-          make \
-          build-essential \
-          libz-dev \
-          zlib1g-dev \
-          strace \
-          libssl-dev \
-          pkg-config \
-          postgresql-$PG_VER \
-          postgresql-server-dev-$PG_VER
-        echo ""
-
-        echo "----- Set up Postgres permissions -----"
-        sudo chmod a+rwx `/usr/lib/postgresql/$PG_VER/bin/pg_config --pkglibdir` `/usr/lib/postgresql/$PG_VER/bin/pg_config --sharedir`/extension /var/run/postgresql/
-        echo ""
-
-        echo "----- Print env -----"
-        env
-        echo ""
-
-        echo "----- Get cargo version -----"
-        cargo --version
-        echo ""
-
     - name: Cache cargo registry
       uses: actions/cache@v2
       continue-on-error: false
@@ -109,36 +49,10 @@ jobs:
         path: /home/runner/.cache/sccache
         key: tests-sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/tests.yml') }}
 
-    - name: Start sccache server
-      run: sccache --start-server
-
-    - name: Print sccache stats (before run)
-      run: sccache --show-stats
-
-    - name: Install cargo-pgx
-      run: cargo install cargo-pgx --version 0.5.0-beta.0
-
-    - name: Run 'cargo pgx init' against system-level ${{ matrix.version }}
-      run: cargo pgx init --pg$PG_VER /usr/lib/postgresql/$PG_VER/bin/pg_config
-
-    - name: Install and configure ecs-cli
-      run: |
-        sudo curl -Lo /usr/local/bin/ecs-cli https://ansilo-dev-tmp.s3.ap-southeast-2.amazonaws.com/ecs-cli && \
-        sudo chmod +x /usr/local/bin/ecs-cli && \
-        echo 'export $(strings /proc/1/environ | grep -P "(AWS|ECS)")' | tee -a ~/.bashrc ~/.zshrc && \
-        ecs-cli configure --cluster dev-cluster --region ap-southeast-2
-
-    - name: Install OpenJDK
-      uses: actions/setup-java@v3
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: Configure jvm path
-      run: |
-        echo "Adding libjvm to ld path: $JAVA_HOME/lib/server/"
-        ls -al $JAVA_HOME/lib/server/
-        echo "LD_LIBRARY_PATH='$LD_LIBRARY_PATH:$JAVA_HOME/lib/server/'" >> $GITHUB_ENV
+    - name: Set up prerequisites and environment
+      run: .github/workflows/scripts/setup.sh
+      env:
+        POSTGRES_VERSION: ${{ matrix.version }}
 
     - name: Run tests
       run: |
@@ -156,6 +70,8 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-    - name: Stop sccache server
-      run: sccache --stop-server || true
+    - name: Teardown environment
+      run: .github/workflows/scripts/teardown.sh
+      env:
+        POSTGRES_VERSION: ${{ matrix.version }}
 
