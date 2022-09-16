@@ -134,8 +134,15 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
+    - name: Configure jvm path
+      run: |
+        echo "Adding libjvm to ld path: $JAVA_HOME/lib/server/"
+        ls -al $JAVA_HOME/lib/server/
+        echo "LD_LIBRARY_PATH='$LD_LIBRARY_PATH:$JAVA_HOME/lib/server/'" >> $GITHUB_ENV
+
     - name: Run tests
       run: |
+        echo $LD_LIBRARY_PATH
         cargo test
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
