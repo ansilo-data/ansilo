@@ -65,6 +65,12 @@ sudo chmod +x /usr/local/bin/ecs-cli
 ecs-cli configure --cluster dev-cluster --region ap-southeast-2
 echo ""
 
+echo "----- Install node.js and npm -----"
+curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash - 
+sudo apt-get install -y nodejs 
+sudo npm install -g npm@latest
+echo ""
+
 echo "----- Print env -----"
 env
 echo ""
