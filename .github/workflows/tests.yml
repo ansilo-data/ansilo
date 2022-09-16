@@ -10,13 +10,6 @@ on:
       - master
       - develop
 
-env:
-  RUSTFLAGS: -Copt-level=0
-  RUST_BACKTRACE: 1
-  CARGO_INCREMENTAL: "false"
-  AWS_DEFAULT_REGION: ap-southeast-2
-  ANSILO_TESTS_ECS_USE_PUBLIC_IP: true
-
 jobs:
   tests:
     name: tests
@@ -28,75 +21,71 @@ jobs:
 
     strategy:
       matrix:
-        version: ["postgres-14"]
         os: ["ubuntu-20.04"]
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      continue-on-error: false
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-        key: tests-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/tests.yml') }}
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: tests-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/tests.yml') }}
 
-    - name: Cache maven registry
-      uses: actions/cache@v3
-      continue-on-error: false
-      with:
-        path: |
-          ~/.m2
-        key: tests-maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.github/workflows/tests.yml') }}
+      - name: Cache maven registry
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.m2
+          key: tests-maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.github/workflows/tests.yml') }}
 
-    - name: Cache sccache directory
-      uses: actions/cache@v3
-      continue-on-error: false
-      with:
-        path: /home/runner/.cache/sccache
-        key: tests-sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/tests.yml') }}
+      - name: Cache criterion directory
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: target/criterion
+          key: tests-criterion-${{ runner.os }}
 
-    - name: Cache criterion directory
-      uses: actions/cache@v3
-      continue-on-error: false
-      with:
-        path: target/criterion
-        key: tests-criterion-${{ runner.os }}-${{ matrix.version }}
+      - name: Build base image
+        run: |
+        docker build -t ansilo-source \
+          --dockerfile .github/workflows/docker/source.ubi9.Dockerfile \
+          -v $HOME/.cargo:/home/build/.cargo \
+          .
 
-    - name: Set up prerequisites and environment
-      run: .github/workflows/scripts/setup.sh
-      env:
-        POSTGRES_VERSION: ${{ matrix.version }}
+      - name: Pre test setup
+        run: .github/workflows/scripts/pre-test.sh
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-    - name: Run tests
-      run: |
-        .github/workflows/scripts/pre-build.sh
-        .github/workflows/scripts/pre-test.sh
-        cargo test
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+      - name: Run tests
+        run: |
+          docker build -t tests \
+            --dockerfile .github/workflows/docker/test.ubi9.Dockerfile \
+            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+            -e AWS_DEFAULT_REGION=ap-southeast-2 \
+            -e RUSTFLAGS=-Copt-level=0 \
+            -e RUST_BACKTRACE=1 \
+            -e CARGO_INCREMENTAL=false \
+            -e ANSILO_TESTS_ECS_USE_PUBLIC_IP=true \
+            # Cached directories
+            -v $HOME/.cargo:/home/build/.cargo \
+            -v $HOME/.m2:/home/build/.m2 \
+            -v $HOME/target:/build/target \
+            .
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-    - name: Post tests cleanup
-      if: always()
-      run: |
-        .github/workflows/scripts/post-test.sh
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
-
-    - name: Run benchmarks
-      run: |
-        cargo bench
-      env:
-        RUSTFLAGS: ""
-        AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
-
-    - name: Teardown environment
-      run: .github/workflows/scripts/teardown.sh
-      env:
-        POSTGRES_VERSION: ${{ matrix.version }}
-
+      - name: Post tests cleanup
+        if: always()
+        run: .github/workflows/scripts/post-test.sh
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}

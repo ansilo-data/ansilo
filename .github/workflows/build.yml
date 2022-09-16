@@ -11,7 +11,6 @@ on:
       - develop
 
 env:
-  CARGO_INCREMENTAL: "false"
   AWS_DEFAULT_REGION: ap-southeast-2
 
 jobs:
@@ -29,55 +28,58 @@ jobs:
         os: ["ubuntu-20.04"]
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      continue-on-error: false
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-        key: build-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/build.yml') }}
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/build.yml') }}
 
-    - name: Cache maven registry
-      uses: actions/cache@v3
-      continue-on-error: false
-      with:
-        path: |
-          ~/.m2
-        key: build-maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.github/workflows/build.yml') }}
+      - name: Cache maven registry
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.m2
+          key: build-maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.github/workflows/build.yml') }}
 
-    - name: Cache sccache directory
-      uses: actions/cache@v3
-      continue-on-error: false
-      with:
-        path: /home/runner/.cache/sccache
-        key: build-sccache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/build.yml') }}
+      - name: Build base image
+        run: |
+          docker build -t ansilo-source \
+            --dockerfile .github/workflows/docker/source.ubi9.Dockerfile \
+            -v $HOME/.cargo:/home/build/.cargo \
+            .
 
-    - name: Set up prerequisites and environment
-      run: .github/workflows/scripts/setup.sh
-      env:
-        POSTGRES_VERSION: ${{ matrix.version }}
+      - name: Run release build
+        run: |
+          docker build -t ansilo-release \
+            --dockerfile .github/workflows/docker/release.ubi9.Dockerfile \
+            -e CARGO_INCREMENTAL=false
+            # Cached directories
+            -v $HOME/.cargo:/home/build/.cargo \
+            -v $HOME/.m2:/home/build/.m2 \
+            -v $HOME/target:/build/target \
+            .
 
-    - name: Run build
-      run: |
-        .github/workflows/scripts/pre-build.sh
-        cargo build --release
-        cargo pgx package -p ansilo-pgx --out-dir target/release/ansilo-pgx/
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: ansilo
-        path: |
-          target/release/ansilo-main
-          target/release/*.jar
-          target/release/frontend/**
-          target/release/ansilo-pgx/**
+      - name: Push to Amazon ECR
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: ansilo-dev
+          IMAGE_TAG: ${{ github.head_ref || github.ref_name }}
+        run: |
+          docker tag -t ansilo-release $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          docker tag -t ansilo-release $REGISTRY/$REPOSITORY:latest
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          docker push $REGISTRY/$REPOSITORY:latest
 
-    - name: Teardown environment
-      run: .github/workflows/scripts/teardown.sh
-      env:
-        POSTGRES_VERSION: ${{ matrix.version }}
-
+      - name: Teardown environment
+        run: .github/workflows/scripts/teardown.sh
+        env:
+          POSTGRES_VERSION: ${{ matrix.version }}

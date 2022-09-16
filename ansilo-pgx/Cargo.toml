@@ -59,7 +59,8 @@ pretty_assertions = "*"
 # panic = "unwind"
 # lto = "thin"
 
-# [profile.release]
+[profile.release]
+strip = "debuginfo"
 # panic = "unwind"
 # opt-level = 3
 # lto = "fat"
