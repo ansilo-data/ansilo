@@ -22,18 +22,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - name: Pre test setup
+        run: .github/workflows/scripts/pre-test.sh
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+
 
       - name: Build base image
         run: |
           docker build -t ansilo-source \
             --file .github/workflows/docker/source.ubi9.Dockerfile \
             .
-
-      - name: Pre test setup
-        run: .github/workflows/scripts/pre-test.sh
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
       - name: Run tests
         run: |
