@@ -23,11 +23,11 @@ jobs:
       matrix:
         os: ["ubuntu-20.04"]
 
-      - name: Build base image
-        run: |
-          docker build -t ansilo-source \
-            --file .github/workflows/docker/source.ubi9.Dockerfile \
-            .
+    - name: Build base image
+      run: |
+        docker build -t ansilo-source \
+          --file .github/workflows/docker/source.ubi9.Dockerfile \
+          .
 
     steps:
       - uses: actions/checkout@v3
