@@ -42,6 +42,14 @@ jobs:
           ~/.cargo/git
         key: tests-cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '.github/workflows/tests.yml') }}
 
+    - name: Cache maven registry
+      uses: actions/cache@v2
+      continue-on-error: false
+      with:
+        path: |
+          ~/.m2
+        key: tests-maven-${{ runner.os }}-${{ hashFiles('**/pom.xml', '.github/workflows/tests.yml') }}
+
     - name: Cache sccache directory
       uses: actions/cache@v2
       continue-on-error: false
