@@ -47,5 +47,4 @@ RUN source $HOME/.cargo/env && cargo pgx init --pg14 /usr/pgsql-14/bin/pg_config
 
 # Add source
 COPY . /build
-USER root
 RUN sudo chown -R build:build /build
