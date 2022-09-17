@@ -53,6 +53,9 @@ jobs:
       - name: Build base image
         run: .github/workflows/scripts/build-build-image.sh
 
+      - name: Create volume dirs
+        run: .github/workflows/scripts/volumes.sh
+
       - name: Cargo build
         run: |
           docker run \

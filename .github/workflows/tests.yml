@@ -38,7 +38,7 @@ jobs:
         continue-on-error: false
         with:
           path: |
-            ~/.mvn
+            ~/.m2
             ~/.cargo/registry
             ~/.cargo/git
           key: ansilo-test-cargo-${{ runner.os }}
@@ -52,6 +52,9 @@ jobs:
 
       - name: Build base image
         run: .github/workflows/scripts/build-build-image.sh
+
+      - name: Create volume dirs
+        run: .github/workflows/scripts/volumes.sh
 
       - name: Cargo build
         run: |
@@ -76,19 +79,19 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-      - name: Run tests
-        run: |
-          docker run \
-            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            -v $HOME/.cargo:/home/build/.cargo \
-            -v $HOME/.m2:/home/build/.m2 \
-            -v $PWD:/build/ \
-            -w /build/ \
-            ansilo-build /build/.github/workflows/scripts/test.sh
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+      # - name: Run tests
+      #   run: |
+      #     docker run \
+      #       -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      #       -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      #       -v $HOME/.cargo:/home/build/.cargo \
+      #       -v $HOME/.m2:/home/build/.m2 \
+      #       -v $PWD:/build/ \
+      #       -w /build/ \
+      #       ansilo-build /build/.github/workflows/scripts/test.sh
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
       - name: Post tests teardown
         if: always()
