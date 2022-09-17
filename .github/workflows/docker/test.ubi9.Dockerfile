@@ -2,18 +2,20 @@ FROM ansilo-source as source
 
 ARG AWS_ACCESS_KEY_ID
 ARG AWS_SECRET_ACCESS_KEY
+ENV AWS_PAGER=""
+ENV AWS_DEFAULT_REGION=ap-southeast-2
+ENV AWS_REGION=ap-southeast-2
 ENV RUSTFLAGS=-Copt-level=0
 ENV RUST_BACKTRACE=1
 ENV CARGO_INCREMENTAL=false
 ENV ANSILO_TESTS_ECS_USE_PUBLIC_IP=true
 ENV ANSILO_TEST_PG_DIR=/usr/pgsql-14/
-ENV AWS_PAGER=""
 
 # Configure ecs-cli
 RUN ecs-cli configure \
         --cluster dev-cluster \
-        --region ap-southeast-2
-RUN ecs-cli configure profile --profile-name default \
+        --region ${AWS_REGION}
+RUN ecs-cli configure profile \
         --profile-name default \
         --access-key ${AWS_ACCESS_KEY_ID} \
         --secret-key ${AWS_SECRET_ACCESS_KEY}
