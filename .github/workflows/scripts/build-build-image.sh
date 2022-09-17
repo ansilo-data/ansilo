@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [[ -f ~/image-build.tgz ]];
 then 
     docker load ~/image-build.tgz

@@ -31,31 +31,75 @@ jobs:
         continue-on-error: false
         with:
           path: /home/runner/image-build.tgz
-          key: ansilo-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
+          key: ansilo-test-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ansilo-test-cargo-${{ runner.os }}
+
+      - name: Cache target dir
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: target/
+          key: ansilo-tests-${{ runner.os }}
 
       - name: Build base image
         run: .github/workflows/scripts/build-build-image.sh
 
-      - name: Pre test setup
-        run: .github/workflows/scripts/pre-test.sh
+      - name: Cargo build
+        run: |
+          docker run ansilo-build \
+            -v $HOME/.cargo:/home/build/.cargo \
+            -v $HOME/.m2:/home/build/.m2 \
+            -v $PWD:/build/ \
+            -w /build/ \
+            /build/.github/workflows/scripts/test-build.sh
+
+      - name: Test setup
+        run: |
+          docker run ansilo-build \
+            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+            -v $HOME/.cargo:/home/build/.cargo \
+            -v $HOME/.m2:/home/build/.m2 \
+            -v $PWD:/build/ \
+            -w /build/ \
+            /build/.github/workflows/scripts/test-setup.sh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-      # - name: Run tests
-      #   run: |
-      #     docker build -t tests \
-      #       --file .github/workflows/docker/test.ubi9.Dockerfile \
-      #       --build-arg AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-      #       --build-arg AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-      #       .
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+      - name: Run tests
+        run: |
+          docker run ansilo-build \
+            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+            -v $HOME/.cargo:/home/build/.cargo \
+            -v $HOME/.m2:/home/build/.m2 \
+            -v $PWD:/build/ \
+            -w /build/ \
+            /build/.github/workflows/scripts/test.sh
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-      - name: Post tests cleanup
+      - name: Post tests teardown
         if: always()
-        run: .github/workflows/scripts/post-test.sh
+        run: |
+          docker run ansilo-build \
+            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+            -v $HOME/.cargo:/home/build/.cargo \
+            -v $HOME/.m2:/home/build/.m2 \
+            -v $PWD:/build/ \
+            -w /build/ \
+            /build/.github/workflows/scripts/test-teardown.sh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
