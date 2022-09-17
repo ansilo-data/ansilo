@@ -3,7 +3,6 @@
 target/
 *.iml
 **/*.rs.bk
-Cargo.lock
 .cargo/
 !.devcontainer/.cargo/
 .m2/

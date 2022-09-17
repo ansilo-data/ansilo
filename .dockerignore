@@ -3,7 +3,6 @@
 target/*
 *.iml
 **/*.rs.bk
-Cargo.lock
 .cargo/*
 .m2/*
 .vscode-server/*

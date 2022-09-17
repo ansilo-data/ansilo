@@ -33,11 +33,12 @@ jobs:
           path: /home/runner/image-build.tgz
           key: ansilo-test-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
 
-      - name: Cache cargo registry
+      - name: Cache cargo/maven registry
         uses: actions/cache@v3
         continue-on-error: false
         with:
           path: |
+            ~/.mvn
             ~/.cargo/registry
             ~/.cargo/git
           key: ansilo-test-cargo-${{ runner.os }}
