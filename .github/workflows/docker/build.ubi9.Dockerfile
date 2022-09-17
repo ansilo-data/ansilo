@@ -13,7 +13,7 @@ RUN yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x
 ENV PATH="${PATH}:/usr/pgsql-14/bin/"
 
 # Install node and npm
-RUN yum install -y nodejs npm
+RUN yum install -y nodejs npm jq
 
 # Install openssl
 RUN yum install -y openssl openssl-devel
