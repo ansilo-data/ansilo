@@ -16,6 +16,7 @@ ansilo-connectors-native-sqlite = { path = "../ansilo-connectors/native-sqlite" 
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-web = { path = "../ansilo-web" }
 ansilo-main = { path = "../ansilo-main" }
+ansilo-util-pgx-install = { path = "../ansilo-util/pgx-install" }
 chrono = "0.4"
 glob = "0.3"
 itertools = "0.10"

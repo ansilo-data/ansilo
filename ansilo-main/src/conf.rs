@@ -1,6 +1,8 @@
 use std::{
+    env,
     net::{IpAddr, Ipv4Addr},
     path::{Path, PathBuf},
+    process::{Command, Stdio},
 };
 
 use ansilo_config::loader::ConfigLoader;
@@ -47,21 +49,25 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
     ansilo_logging::error!("{:?}", create_db_init_sql(node));
 
     PostgresConf {
-        install_dir: pg_conf.install_dir.unwrap_or("/usr/pgsql-14/".into()),
+        install_dir: pg_conf
+            .install_dir
+            .or_else(|| env::var("ANSILO_PG_INSTALL_DIR").ok().map(PathBuf::from))
+            .or_else(|| try_get_pg_install_dir())
+            .unwrap_or("/usr/pgsql-14/".into()),
         //
         postgres_conf_path: pg_conf.config_path,
         //
         data_dir: pg_conf
             .data_dir
-            .unwrap_or("/var/run/postgresql/ansilo/data".into()),
+            .unwrap_or("/var/run/ansilo/data".into()),
         //
         socket_dir_path: pg_conf
             .listen_socket_dir_path
-            .unwrap_or("/var/run/postgresql/ansilo/".into()),
+            .unwrap_or("/var/run/ansilo/".into()),
         //
         fdw_socket_path: pg_conf
             .fdw_socket_path
-            .unwrap_or("/var/run/postgresql/ansilo/fdw.sock".into()),
+            .unwrap_or("/var/run/ansilo/fdw.sock".into()),
         //
         app_users: node
             .auth
@@ -72,6 +78,28 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
         //
         init_db_sql: create_db_init_sql(node),
     }
+}
+
+fn try_get_pg_install_dir() -> Option<PathBuf> {
+    let output = Command::new("pg_config")
+        .arg("--bindir")
+        .stdin(Stdio::null())
+        .stderr(Stdio::inherit())
+        .stdout(Stdio::piped())
+        .spawn()
+        .ok()?
+        .wait_with_output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let path = String::from_utf8(output.stdout).ok()?;
+
+    let path: PathBuf = path.trim().parse().ok()?;
+
+    Some(path.parent()?.to_path_buf())
 }
 
 fn create_db_init_sql(node: &NodeConfig) -> Vec<String> {

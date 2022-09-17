@@ -292,6 +292,7 @@ dependencies = [
  "ansilo-core",
  "ansilo-logging",
  "ansilo-main",
+ "ansilo-util-pgx-install",
  "ansilo-web",
  "chrono",
  "criterion",
@@ -330,6 +331,7 @@ dependencies = [
  "ansilo-pg",
  "ansilo-proxy",
  "ansilo-util-pg",
+ "ansilo-util-pgx-install",
  "ansilo-web",
  "assert_cmd",
  "chrono",
@@ -360,6 +362,7 @@ dependencies = [
  "ansilo-logging",
  "ansilo-proxy",
  "ansilo-util-pg",
+ "ansilo-util-pgx-install",
  "ansilo-util-r2d2",
  "async-trait",
  "bincode 2.0.0-rc.1",
@@ -425,6 +428,13 @@ version = "0.1.0"
 [[package]]
 name = "ansilo-util-pg"
 version = "0.1.0"
+
+[[package]]
+name = "ansilo-util-pgx-install"
+version = "0.1.0"
+dependencies = [
+ "ctor",
+]
 
 [[package]]
 name = "ansilo-util-r2d2"

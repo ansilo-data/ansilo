@@ -27,6 +27,7 @@ rand = "0.8"
 hex = "0.4"
 
 [dev-dependencies]
+ansilo-util-pgx-install = { path = "../ansilo-util/pgx-install" }
 ansilo-connectors-memory = { path = "../ansilo-connectors/memory" }
 ansilo-auth = { path = "../ansilo-auth", features = ["test"] }
 pretty_assertions = "*"

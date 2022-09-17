@@ -1,5 +1,7 @@
 use std::process::{Command, Stdio};
 
+ansilo_util_pgx_install::install_ansilo_pgx!();
+
 pub fn assert_not_running(pid: u32) {
     assert_ps_output_lines(pid, 1);
 }

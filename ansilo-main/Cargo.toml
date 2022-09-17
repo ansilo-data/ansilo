@@ -28,6 +28,7 @@ nix = { version = "^0.25", features = ["process"] }
 tokio = { version = "^1.20", features = ["io-util"] }
 
 [dev-dependencies]
+ansilo-util-pgx-install = { path = "../ansilo-util/pgx-install" }
 assert_cmd = "2.0"
 predicates = "2.1"
 serial_test = "0.9"

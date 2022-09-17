@@ -1,0 +1,12 @@
+[package]
+name = "ansilo-util-pgx-install"
+version = "0.1.0"
+edition = "2021"
+
+# Used as a dev/build dependency in other crates to ensure the pgx extension is installed
+
+[features]
+ctor = []
+
+[dependencies]
+ctor = "0.1"
