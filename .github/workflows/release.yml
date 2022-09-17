@@ -40,7 +40,7 @@ jobs:
           path: |
             m2.tgz
             cargo.tgz
-          key: ansilo-release-pkg-${{ runner.os }-${{ hashFiles('**/Cargo.lock', '**/pom.xml') }}
+          key: ansilo-release-pkg-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/pom.xml') }}
 
       - name: Cache target dir
         uses: actions/cache@v3
