@@ -4,7 +4,7 @@ set -e
 
 if [[ -f ~/image-build.tgz ]];
 then 
-    docker load ~/image-build.tgz
+    docker load -i ~/image-build.tgz
     echo "Image loaded from cache..."
 else
     docker build -t ansilo-build \
