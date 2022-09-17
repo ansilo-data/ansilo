@@ -171,15 +171,6 @@ fn get_task_ip(cluster: String, task_id: String) -> IpAddr {
         format!("aws ecs describe-tasks --tasks {} --cluster {cluster} --query 'tasks[0].attachments[0].details[?name==`privateIPv4Address`].value' --output text", task_id.clone())
     };
 
-    let _ = Command::new("bash")
-        .args(&["-c".to_string(), cmd.clone()])
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .unwrap()
-        .wait()
-        .unwrap();
-
     let output = Command::new("bash")
         .args(&["-c".to_string(), cmd])
         .stdout(Stdio::piped())

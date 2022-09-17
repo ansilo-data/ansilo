@@ -33,7 +33,6 @@ sources:
 
 
 postgres:
-    install_dir: /usr/lib/postgresql/14/
     config_path: ${dir}/postgres.conf
     data_dir: /tmp/ansilo/pg-main/memory/data/
     listen_socket_dir_path: /tmp/ansilo/pg-main/memory/
