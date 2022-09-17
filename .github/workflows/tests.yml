@@ -52,54 +52,54 @@ jobs:
       - name: Build base image
         run: .github/workflows/scripts/build-build-image.sh
 
-      - name: Cargo build
-        run: |
-          docker run ansilo-build \
-            -v $HOME/.cargo:/home/build/.cargo \
-            -v $HOME/.m2:/home/build/.m2 \
-            -v $PWD:/build/ \
-            -w /build/ \
-            /build/.github/workflows/scripts/test-build.sh
+      # - name: Cargo build
+      #   run: |
+      #     docker run ansilo-build \
+      #       -v $HOME/.cargo:/home/build/.cargo \
+      #       -v $HOME/.m2:/home/build/.m2 \
+      #       -v $PWD:/build/ \
+      #       -w /build/ \
+      #       /build/.github/workflows/scripts/test-build.sh
 
-      - name: Test setup
-        run: |
-          docker run ansilo-build \
-            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            -v $HOME/.cargo:/home/build/.cargo \
-            -v $HOME/.m2:/home/build/.m2 \
-            -v $PWD:/build/ \
-            -w /build/ \
-            /build/.github/workflows/scripts/test-setup.sh
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+      # - name: Test setup
+      #   run: |
+      #     docker run ansilo-build \
+      #       -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      #       -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      #       -v $HOME/.cargo:/home/build/.cargo \
+      #       -v $HOME/.m2:/home/build/.m2 \
+      #       -v $PWD:/build/ \
+      #       -w /build/ \
+      #       /build/.github/workflows/scripts/test-setup.sh
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-      - name: Run tests
-        run: |
-          docker run ansilo-build \
-            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            -v $HOME/.cargo:/home/build/.cargo \
-            -v $HOME/.m2:/home/build/.m2 \
-            -v $PWD:/build/ \
-            -w /build/ \
-            /build/.github/workflows/scripts/test.sh
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+      # - name: Run tests
+      #   run: |
+      #     docker run ansilo-build \
+      #       -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      #       -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      #       -v $HOME/.cargo:/home/build/.cargo \
+      #       -v $HOME/.m2:/home/build/.m2 \
+      #       -v $PWD:/build/ \
+      #       -w /build/ \
+      #       /build/.github/workflows/scripts/test.sh
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-      - name: Post tests teardown
-        if: always()
-        run: |
-          docker run ansilo-build \
-            -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            -v $HOME/.cargo:/home/build/.cargo \
-            -v $HOME/.m2:/home/build/.m2 \
-            -v $PWD:/build/ \
-            -w /build/ \
-            /build/.github/workflows/scripts/test-teardown.sh
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+      # - name: Post tests teardown
+      #   if: always()
+      #   run: |
+      #     docker run ansilo-build \
+      #       -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      #       -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      #       -v $HOME/.cargo:/home/build/.cargo \
+      #       -v $HOME/.m2:/home/build/.m2 \
+      #       -v $PWD:/build/ \
+      #       -w /build/ \
+      #       /build/.github/workflows/scripts/test-teardown.sh
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
