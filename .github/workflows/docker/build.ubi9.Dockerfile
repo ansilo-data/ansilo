@@ -43,8 +43,9 @@ WORKDIR /build
 
 # Install rust
 RUN curl --proto '=https' --tlsv1.3 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/home/build/.cargo/bin:${PATH}"
 
 # Install cargo pgx
-RUN source $HOME/.cargo/env && cargo install cargo-pgx --version 0.5.0-beta.0 
-RUN source $HOME/.cargo/env && cargo pgx init --pg14 /usr/pgsql-14/bin/pg_config
+RUN cargo install cargo-pgx --version 0.5.0-beta.0 
+RUN cargo pgx init --pg14 /usr/pgsql-14/bin/pg_config
 
