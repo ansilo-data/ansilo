@@ -23,3 +23,8 @@ ecs-cli configure profile \
         --access-key ${AWS_ACCESS_KEY_ID} \
         --secret-key ${AWS_SECRET_ACCESS_KEY}
 echo ""
+
+echo "----- Installing cargo pgx -----"
+cargo install cargo-pgx --version 0.5.0-beta.0 
+cargo pgx init --pg14 /usr/pgsql-14/bin/pg_config
+echo ""
