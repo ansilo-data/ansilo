@@ -29,10 +29,12 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     ./aws/install --update
 
 # Switch to non-root user
+# Use the same uid/gid as github actions so we can mount in volumes without changing perms
 RUN yum install -y sudo
 RUN echo "%sudoers        ALL=(ALL)       NOPASSWD: ALL" >> /etc/sudoers.d/sudeors
 RUN groupadd sudoers
-RUN adduser build -G sudoers
+RUN groupadd build -g 121
+RUN adduser build -u 1001 -g build -G sudoers
 RUN mkdir /build && chown build:build /build
 USER build
 
