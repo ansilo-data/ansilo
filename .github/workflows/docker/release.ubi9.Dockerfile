@@ -15,15 +15,16 @@ RUN yum install -y openssl
 
 # Copy artifacts
 COPY . /ansilo
+
+# Set up runtime user
+RUN adduser ansilo -u 1000 && \
+    chown -R ansilo:ansilo /ansilo/
+
 # Install postgres extension
 RUN cp -vr /ansilo/pgx/* / && rm -rf /ansilo/pgx
 
 # Create symlinks
 RUN ln -s /ansilo/ansilo-main /usr/bin/ansilo 
-
-# Set up runtime user
-RUN adduser ansilo -u 1000 && \
-    chown -R ansilo:ansilo /ansilo/ 
 
 # Set up user folders
 RUN mkdir /app/ && \
