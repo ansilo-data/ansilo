@@ -45,7 +45,3 @@ RUN curl --proto '=https' --tlsv1.3 -sSf https://sh.rustup.rs | sh -s -- -y
 # Install cargo pgx
 RUN source $HOME/.cargo/env && cargo install cargo-pgx --version 0.5.0-beta.0 
 RUN source $HOME/.cargo/env && cargo pgx init --pg14 /usr/pgsql-14/bin/pg_config
-
-# Add source
-COPY . /build
-RUN sudo chown -R build:build /build

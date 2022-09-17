@@ -26,11 +26,25 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+    - name: Cache build image
+      uses: actions/cache@v3
+      continue-on-error: false
+      with:
+        path: /home/runner/image-build.tgz
+        key: ansilo-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
+
       - name: Build base image
         run: |
-          docker build -t ansilo-source \
-            --file .github/workflows/docker/source.ubi9.Dockerfile \
-            .
+          if [[ -f ~/image-build.tgz ]];
+          then 
+            docker load ~/image-build.tgz
+            echo "Image loaded from cache..."
+          else
+            docker build -t ansilo-build \
+              --file .github/workflows/docker/build.ubi9.Dockerfile \
+              .
+            docker save -o ~/image-build.tgx ansilo-build
+          fi;
 
       - name: Pre test setup
         run: .github/workflows/scripts/pre-test.sh
@@ -38,16 +52,16 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
-      - name: Run tests
-        run: |
-          docker build -t tests \
-            --file .github/workflows/docker/test.ubi9.Dockerfile \
-            --build-arg AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-            --build-arg AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-            .
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
+      # - name: Run tests
+      #   run: |
+      #     docker build -t tests \
+      #       --file .github/workflows/docker/test.ubi9.Dockerfile \
+      #       --build-arg AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+      #       --build-arg AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+      #       .
+      #   env:
+      #     AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
+      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
       - name: Post tests cleanup
         if: always()
