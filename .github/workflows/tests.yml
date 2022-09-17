@@ -55,37 +55,37 @@ jobs:
 
       - name: Cargo build
         run: |
-          docker run ansilo-build \
+          docker run \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
             -v $PWD:/build/ \
             -w /build/ \
-            /build/.github/workflows/scripts/test-build.sh
+            ansilo-build /build/.github/workflows/scripts/test-build.sh
 
       - name: Test setup
         run: |
-          docker run ansilo-build \
+          docker run \
             -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
             -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
             -v $PWD:/build/ \
             -w /build/ \
-            /build/.github/workflows/scripts/test-setup.sh
+            ansilo-build /build/.github/workflows/scripts/test-setup.sh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
 
       - name: Run tests
         run: |
-          docker run ansilo-build \
+          docker run \
             -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
             -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
             -v $PWD:/build/ \
             -w /build/ \
-            /build/.github/workflows/scripts/test.sh
+            ansilo-build /build/.github/workflows/scripts/test.sh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
@@ -93,14 +93,14 @@ jobs:
       - name: Post tests teardown
         if: always()
         run: |
-          docker run ansilo-build \
+          docker run \
             -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
             -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
             -v $PWD:/build/ \
             -w /build/ \
-            /build/.github/workflows/scripts/test-teardown.sh
+            ansilo-build /build/.github/workflows/scripts/test-teardown.sh
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}

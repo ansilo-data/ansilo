@@ -55,12 +55,12 @@ jobs:
 
       - name: Cargo build
         run: |
-          docker run ansilo-build \
+          docker run \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
             -v $PWD:/build/ \
             -w /build/ \
-            /build/.github/workflows/scripts/release-build.sh
+            ansilo-build /build/.github/workflows/scripts/release-build.sh
 
       - name: Build release image
         run: |
