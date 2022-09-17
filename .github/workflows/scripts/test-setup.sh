@@ -15,7 +15,6 @@ aws ec2 authorize-security-group-ingress \
 echo ""
 
 echo "----- Configuring ecs-cli -----"
-aws ec2 authorize-security-group-ingress \
 ecs-cli configure \
         --cluster dev-cluster \
         --region ap-southeast-2
