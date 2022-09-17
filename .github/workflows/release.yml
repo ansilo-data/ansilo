@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+  pull_request:
+    branches:
+      - master
+      - develop
+
+env:
+  AWS_DEFAULT_REGION: ap-southeast-2
+
+jobs:
+  build:
+    name: build
+    runs-on: ${{ matrix.os }}
+    if: "!contains(github.event.head_commit.message, 'nogha')"
+
+    strategy:
+      matrix:
+        os: ["ubuntu-20.04"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Cache build image
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: /home/runner/image-build.tgz
+          key: ansilo-release-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
+
+      - name: Cache cargo/maven registry
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.mvn
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ansilo-release-cargo-${{ runner.os }}
+
+      - name: Cache target dir
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: target/
+          key: ansilo-release-${{ runner.os }}
+
+      - name: Build base image
+        run: .github/workflows/scripts/build-build-image.sh
+
+      - name: Cargo build
+        run: |
+          docker run ansilo-build \
+            -v $HOME/.cargo:/home/build/.cargo \
+            -v $HOME/.m2:/home/build/.m2 \
+            -v $PWD:/build/ \
+            -w /build/ \
+            /build/.github/workflows/scripts/release-build.sh
+
+      - name: Build release image
+        run: |
+          docker build -t ansilo-release \
+            --file .github/workflows/docker/release.ubi9.Dockerfile \
+            ./artifacts
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Push to Amazon ECR
+        env:
+          REGISTRY: 635198228996.dkr.ecr.ap-southeast-2.amazonaws.com
+          REPOSITORY: ansilo-dev
+          IMAGE_TAG: ${{ github.head_ref || github.ref_name }}
+        run: |
+          docker tag ansilo-release $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
