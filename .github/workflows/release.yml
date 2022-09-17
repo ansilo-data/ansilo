@@ -31,7 +31,7 @@ jobs:
         continue-on-error: false
         with:
           path: /home/runner/image-build.tgz
-          key: ansilo-release-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
+          key: ansilo-release-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ubi9.Dockerfile') }}
 
       - name: Cache cargo/maven registry
         uses: actions/cache@v3
