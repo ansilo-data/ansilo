@@ -1,4 +1,4 @@
-FROM ansilo-source as source
+FROM ansilo-build as build
 
 ENV CARGO_INCREMENTAL=false
 
@@ -34,7 +34,7 @@ RUN yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x
 RUN yum install -y openssl
 
 # Copy artifacts
-COPY --from=source /build/artifacts /ansilo
+COPY --from=build /build/artifacts /ansilo
 # Install postgres extension
 RUN cp -vr /ansilo/pgx/* / && rm -rf /ansilo/pgx
 

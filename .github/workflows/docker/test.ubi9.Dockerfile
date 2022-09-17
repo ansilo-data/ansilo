@@ -1,4 +1,4 @@
-FROM ansilo-source as source
+FROM ansilo-build as build
 
 ARG AWS_ACCESS_KEY_ID
 ARG AWS_SECRET_ACCESS_KEY

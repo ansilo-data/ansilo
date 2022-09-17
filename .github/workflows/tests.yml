@@ -34,17 +34,7 @@ jobs:
           key: ansilo-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
 
       - name: Build base image
-        run: |
-          if [[ -f ~/image-build.tgz ]];
-          then 
-            docker load ~/image-build.tgz
-            echo "Image loaded from cache..."
-          else
-            docker build -t ansilo-build \
-              --file .github/workflows/docker/build.ubi9.Dockerfile \
-              .
-            docker save -o ~/image-build.tgx ansilo-build
-          fi;
+        run: .github/workflows/scripts/build-build-image.sh
 
       - name: Pre test setup
         run: .github/workflows/scripts/pre-test.sh
