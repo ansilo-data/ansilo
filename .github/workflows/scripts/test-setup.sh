@@ -18,7 +18,7 @@ echo "----- Configuring ecs-cli -----"
 aws ec2 authorize-security-group-ingress \
 ecs-cli configure \
         --cluster dev-cluster \
-        --region ${AWS_REGION}
+        --region ap-southeast-2
 ecs-cli configure profile \
         --profile-name default \
         --access-key ${AWS_ACCESS_KEY_ID} \
