@@ -26,12 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-    - name: Cache build image
-      uses: actions/cache@v3
-      continue-on-error: false
-      with:
-        path: /home/runner/image-build.tgz
-        key: ansilo-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
+      - name: Cache build image
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: /home/runner/image-build.tgz
+          key: ansilo-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ub9.Dockerfile') }}
 
       - name: Build base image
         run: |
