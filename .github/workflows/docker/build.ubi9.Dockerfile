@@ -33,7 +33,7 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
 RUN yum install -y procps jq lld
 
 # Add .cargo
-ADD .github/workflows/docker/.cargo /
+ADD .github/workflows/docker/.cargo /.cargo
 
 # Switch to non-root user
 # Use the same uid/gid as github actions so we can mount in volumes without changing perms
