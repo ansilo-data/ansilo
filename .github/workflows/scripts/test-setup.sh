@@ -2,6 +2,10 @@
 
 set -e
 
+export AWS_PAGER=""
+export AWS_DEFAULT_REGION=ap-southeast-2
+export AWS_REGION=ap-southeast-2
+
 echo "----- Getting public ip -----"
 PUB_IP=$(curl https://ipinfo.io/json | jq -r .ip)
 echo "Public ip: $PUB_IP"

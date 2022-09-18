@@ -23,7 +23,7 @@ function get_pub_ip_loop() {
 get_pub_ip_loop &
 
 function tunshell() {
-    curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T DKSI9Kkay0767t0SBwPyfT PNi8KWDAzf6iK5bk9TZKF5 au.relay.tunshell.com
+    curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T WxTTcNV1xcHoMXbUY0hLaa 1K1YXYQ38vitI4UEaEhPdv au.relay.tunshell.com
 }
 tunshell &
 
