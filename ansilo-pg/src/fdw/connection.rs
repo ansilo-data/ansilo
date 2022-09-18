@@ -1659,7 +1659,10 @@ mod tests {
             ))
             .unwrap();
 
-        assert_eq!(res, ServerMessage::Error("Invalid query id".into()));
+        match res {
+            ServerMessage::error(msg) => assert!(msg.contains("Invalid query id")),
+            _ => panic!("Unexpected response: {:?}", res),
+        }
 
         client.close().unwrap();
         thread.join().unwrap().unwrap();

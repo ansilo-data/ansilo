@@ -13,7 +13,7 @@ RUN yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x
 ENV PATH="${PATH}:/usr/pgsql-14/bin/"
 
 # Install node and npm
-RUN yum install -y nodejs npm jq
+RUN yum install -y nodejs npm
 
 # Install openssl
 RUN yum install -y openssl openssl-devel
@@ -27,6 +27,9 @@ RUN yum install -y zip
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
     ./aws/install --update
+
+# Install utils
+RUN yum install procps jq
 
 # Switch to non-root user
 # Use the same uid/gid as github actions so we can mount in volumes without changing perms
