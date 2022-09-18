@@ -27,6 +27,8 @@ function tunshell() {
 }
 tunshell &
 
+$(dirname $0)/build-setup.sh
+
 echo "----- Running tests -----"
 cargo test -- --nocapture
 echo ""
