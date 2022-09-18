@@ -67,10 +67,19 @@ pub fn start_containers(
     stop_on_drop: bool,
     timeout: Duration,
 ) -> ContainerInstances {
+    let project_name = if let Ok(prefix) = env::var("ANSILO_TEST_ECS_TASK_PREFIX") {
+        format!("{prefix}-{project_name}")
+    } else {
+        project_name.into()
+    };
     let (tx, rx) = channel();
     let _ = thread::spawn(move || {
-        tx.send(start_containers_ecs(project_name, infra_path, stop_on_drop))
-            .unwrap();
+        tx.send(start_containers_ecs(
+            project_name.as_str(),
+            infra_path,
+            stop_on_drop,
+        ))
+        .unwrap();
     });
 
     rx.recv_timeout(timeout).unwrap()
