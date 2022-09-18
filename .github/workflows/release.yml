@@ -30,8 +30,8 @@ jobs:
         uses: actions/cache@v3
         continue-on-error: false
         with:
-          path: /home/runner/image-build.tgz
-          key: ansilo-release-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ubi9.Dockerfile') }}
+          path: image-build.tgz
+          key: ansilo-build-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ubi9.Dockerfile', '.github/workflows/scripts/build-build-image.sh') }}
 
       - name: Cache cargo/maven registry
         uses: actions/cache@v3
@@ -65,7 +65,6 @@ jobs:
 
       - name: Cargo build
         run: |
-          curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T PVaemzUDDP7GY17Box3HQW d8gCwGYARI7J3HsISHfQlt au.relay.tunshell.com
           docker run \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \

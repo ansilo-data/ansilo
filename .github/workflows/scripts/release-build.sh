@@ -5,7 +5,7 @@ set -e
 $(dirname $0)/build-setup.sh
 
 echo "----- Building release -----"
-cargo build --locked --release -vvv
+cargo build --locked --release
 cargo pgx package -p ansilo-pgx --out-dir target/release/ansilo-pgx/
 echo ""
 

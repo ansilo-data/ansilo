@@ -2,10 +2,10 @@
 
 set -e
 
-if [[ -f ~/image-build.tgz ]];
+if [[ -f image-build.tgz ]];
 then 
     echo "----- Loading image from cache -----"
-    docker load -i ~/image-build.tgz
+    docker load -i image-build.tgz
     echo ""
 else
     echo "----- Building image -----"
@@ -15,6 +15,6 @@ else
     echo ""
     
     echo "----- Saving image -----"
-    docker save -o ~/image-build.tgz ansilo-build
+    docker save -o image-build.tgz ansilo-build
     echo ""
 fi;
