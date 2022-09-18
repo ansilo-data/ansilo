@@ -12,5 +12,5 @@ export ANSILO_TEST_ECS_TASK_PREFIX="gha-$GHA_RUN_ID"
 export ANSILO_GHA_TESTS=true
 
 echo "----- Running tests -----"
-cargo test -- --nocapture
+cargo test
 echo ""
