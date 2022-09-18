@@ -29,7 +29,7 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     ./aws/install --update
 
 # Install utils
-RUN yum install procps jq
+RUN yum install -y procps jq
 
 # Switch to non-root user
 # Use the same uid/gid as github actions so we can mount in volumes without changing perms
