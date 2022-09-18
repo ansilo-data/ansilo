@@ -1,4 +1,4 @@
-use std::{env, collections::HashMap};
+use std::{collections::HashMap, env};
 
 use ansilo_connectors_base::interface::{LoggedQuery, ResultSet};
 use ansilo_core::err::Result;
@@ -59,25 +59,29 @@ fn test_update_where_remote() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "oracle".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"UPDATE "ANSILO_ADMIN"."T007__TEST_TAB" SET "NAME" = ? "#,
-                    r#"WHERE (("T007__TEST_TAB"."ID") = (?))"#,
-                ]
-                .join(""),
-                vec![
-                    "LoggedParam [index=1, method=setNString, value=Jannet]".into(),
-                    "LoggedParam [index=2, method=setBigDecimal, value=2]".into(),
-                ],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "oracle".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"UPDATE "ANSILO_ADMIN"."T007__TEST_TAB" SET "NAME" = ? "#,
+                        r#"WHERE (("T007__TEST_TAB"."ID") = (?))"#,
+                    ]
+                    .join(""),
+                    vec![
+                        "LoggedParam [index=1, method=setNString, value=Jannet]".into(),
+                        "LoggedParam [index=2, method=setBigDecimal, value=2]".into(),
+                    ],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -135,6 +139,10 @@ fn test_update_where_local() {
     // Update with local eval should lock remote rows using FOR UPDATE first
     assert_eq!(
         query_log[0],
+        ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
+    );
+    assert_eq!(
+        query_log[1],
         (
             "oracle".to_string(),
             LoggedQuery::new(
@@ -149,9 +157,9 @@ fn test_update_where_local() {
             )
         )
     );
-    assert_eq!(query_log[1].0, "oracle".to_string());
+    assert_eq!(query_log[2].0, "oracle".to_string());
     assert_eq!(
-        query_log[1].1.query(),
+        query_log[2].1.query(),
         [
             r#"UPDATE "ANSILO_ADMIN"."T007__TEST_TAB" SET "NAME" = ? "#,
             r#"WHERE (("T007__TEST_TAB"."ROWID") = (?))"#,
@@ -160,16 +168,20 @@ fn test_update_where_local() {
         .as_str(),
     );
     assert_eq!(
-        query_log[1].1.params()[0].as_str(),
+        query_log[2].1.params()[0].as_str(),
         "LoggedParam [index=1, method=setNString, value=Johnny]"
     );
-    assert!(query_log[1].1.params()[1]
+    assert!(query_log[2].1.params()[1]
         .as_str()
         .starts_with("LoggedParam [index=2, method=setNString, value="));
     assert_eq!(
-        query_log[1].1.other(),
+        query_log[2].1.other(),
         &[("affected".into(), "Some(1)".into())]
             .into_iter()
             .collect::<HashMap<String, String>>()
     );
+    assert_eq!(
+        query_log[3],
+        ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
+    )
 }

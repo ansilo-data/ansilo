@@ -146,41 +146,45 @@ fn test() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "public"."t002__test_tab" "#,
-                    r#"("col_char", "col_varchar", "col_text", "col_decimal", "col_bool", "col_int16", "col_int32", "col_int64", "col_float", "col_double", "col_bytea", "col_json", "col_jsonb", "col_date", "col_time", "col_timestamp", "col_timestamp_tz", "col_uuid", "col_null")"#,
-                    r#" VALUES "#,
-                    r#"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)"#
-                ].join(""),
-                vec![
-                    "value=Utf8String(\"🔥\") type=bpchar".into(),
-                    "value=Utf8String(\"foobar\") type=varchar".into(),
-                    "value=Utf8String(\"🥑🚀\") type=text".into(),
-                    "value=Decimal(123.456) type=numeric".into(),
-                    "value=Boolean(true) type=bool".into(),
-                    "value=Int16(5432) type=int2".into(),
-                    "value=Int32(123456) type=int4".into(),
-                    "value=Int64(-9876543210) type=int8".into(),
-                    "value=Float32(11.22) type=float4".into(),
-                    "value=Float64(33.44) type=float8".into(),
-                    "value=Binary([66, 76, 79, 66]) type=bytea".into(),
-                    "value=JSON(\"{\\\"foo\\\": \\\"bar\\\"}\") type=json".into(),
-                    "value=JSON(\"{\\\"hello\\\": \\\"world\\\"}\") type=jsonb".into(),
-                    "value=Date(2020-12-23) type=date".into(),
-                    "value=Time(01:02:03) type=time".into(),
-                    "value=DateTime(2018-02-01T01:02:03) type=timestamp".into(),
-                    "value=DateTimeWithTZ(DateTimeWithTZ { dt: 1999-01-15T03:00:00, tz: UTC }) type=timestamptz".into(),
-                    "value=Uuid(b4c52a77-44c5-4f5e-a1a3-95b6dac1b9d0) type=uuid".into(),
-                    "value=Null type=bpchar".into(),
-                ],
-                Some([("affected".into(), "Some(1)".into())]
-                .into_iter()
-                .collect())
-            )
-        )]
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "public"."t002__test_tab" "#,
+                        r#"("col_char", "col_varchar", "col_text", "col_decimal", "col_bool", "col_int16", "col_int32", "col_int64", "col_float", "col_double", "col_bytea", "col_json", "col_jsonb", "col_date", "col_time", "col_timestamp", "col_timestamp_tz", "col_uuid", "col_null")"#,
+                        r#" VALUES "#,
+                        r#"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)"#
+                    ].join(""),
+                    vec![
+                        "value=Utf8String(\"🔥\") type=bpchar".into(),
+                        "value=Utf8String(\"foobar\") type=varchar".into(),
+                        "value=Utf8String(\"🥑🚀\") type=text".into(),
+                        "value=Decimal(123.456) type=numeric".into(),
+                        "value=Boolean(true) type=bool".into(),
+                        "value=Int16(5432) type=int2".into(),
+                        "value=Int32(123456) type=int4".into(),
+                        "value=Int64(-9876543210) type=int8".into(),
+                        "value=Float32(11.22) type=float4".into(),
+                        "value=Float64(33.44) type=float8".into(),
+                        "value=Binary([66, 76, 79, 66]) type=bytea".into(),
+                        "value=JSON(\"{\\\"foo\\\": \\\"bar\\\"}\") type=json".into(),
+                        "value=JSON(\"{\\\"hello\\\": \\\"world\\\"}\") type=jsonb".into(),
+                        "value=Date(2020-12-23) type=date".into(),
+                        "value=Time(01:02:03) type=time".into(),
+                        "value=DateTime(2018-02-01T01:02:03) type=timestamp".into(),
+                        "value=DateTimeWithTZ(DateTimeWithTZ { dt: 1999-01-15T03:00:00, tz: UTC }) type=timestamptz".into(),
+                        "value=Uuid(b4c52a77-44c5-4f5e-a1a3-95b6dac1b9d0) type=uuid".into(),
+                        "value=Null type=bpchar".into(),
+                    ],
+                    Some([("affected".into(), "Some(1)".into())]
+                    .into_iter()
+                    .collect())
+                )
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
+            ]
     );
 }
 
@@ -287,40 +291,44 @@ fn test_insert_nulls() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "public"."t002__test_tab" "#,
-                    r#"("col_char", "col_varchar", "col_text", "col_decimal", "col_bool", "col_int16", "col_int32", "col_int64", "col_float", "col_double", "col_bytea", "col_json", "col_jsonb", "col_date", "col_time", "col_timestamp", "col_timestamp_tz", "col_uuid", "col_null")"#,
-                    r#" VALUES "#,
-                    r#"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)"#
-                ].join(""),
-                vec![
-                    "value=Null type=bpchar".into(),
-                    "value=Null type=varchar".into(),
-                    "value=Null type=text".into(),
-                    "value=Null type=numeric".into(),
-                    "value=Null type=bool".into(),
-                    "value=Null type=int2".into(),
-                    "value=Null type=int4".into(),
-                    "value=Null type=int8".into(),
-                    "value=Null type=float4".into(),
-                    "value=Null type=float8".into(),
-                    "value=Null type=bytea".into(),
-                    "value=Null type=json".into(),
-                    "value=Null type=jsonb".into(),
-                    "value=Null type=date".into(),
-                    "value=Null type=time".into(),
-                    "value=Null type=timestamp".into(),
-                    "value=Null type=timestamptz".into(),
-                    "value=Null type=uuid".into(),
-                    "value=Null type=bpchar".into(),
-                ],
-                Some([("affected".into(), "Some(1)".into())]
-                .into_iter()
-                .collect())
-            )
-        )]
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "public"."t002__test_tab" "#,
+                        r#"("col_char", "col_varchar", "col_text", "col_decimal", "col_bool", "col_int16", "col_int32", "col_int64", "col_float", "col_double", "col_bytea", "col_json", "col_jsonb", "col_date", "col_time", "col_timestamp", "col_timestamp_tz", "col_uuid", "col_null")"#,
+                        r#" VALUES "#,
+                        r#"($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)"#
+                    ].join(""),
+                    vec![
+                        "value=Null type=bpchar".into(),
+                        "value=Null type=varchar".into(),
+                        "value=Null type=text".into(),
+                        "value=Null type=numeric".into(),
+                        "value=Null type=bool".into(),
+                        "value=Null type=int2".into(),
+                        "value=Null type=int4".into(),
+                        "value=Null type=int8".into(),
+                        "value=Null type=float4".into(),
+                        "value=Null type=float8".into(),
+                        "value=Null type=bytea".into(),
+                        "value=Null type=json".into(),
+                        "value=Null type=jsonb".into(),
+                        "value=Null type=date".into(),
+                        "value=Null type=time".into(),
+                        "value=Null type=timestamp".into(),
+                        "value=Null type=timestamptz".into(),
+                        "value=Null type=uuid".into(),
+                        "value=Null type=bpchar".into(),
+                    ],
+                    Some([("affected".into(), "Some(1)".into())]
+                    .into_iter()
+                    .collect())
+                )
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

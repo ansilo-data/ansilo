@@ -618,24 +618,39 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     }
 
     fn begin_transaction(&mut self) -> Result<ServerMessage> {
-        self.with_transaction_manager(|tm| {
+        let res = self.with_transaction_manager(|tm| {
             tm.begin_transaction()?;
             Ok(ServerMessage::TransactionBegun)
-        })
+        })?;
+
+        self.log
+            .record(&self.data_source_id, LoggedQuery::new_query("BEGIN"))?;
+
+        Ok(res)
     }
 
     fn rollback_transaction(&mut self) -> Result<ServerMessage> {
-        self.with_transaction_manager(|tm| {
+        let res = self.with_transaction_manager(|tm| {
             tm.rollback_transaction()?;
             Ok(ServerMessage::TransactionRolledBack)
-        })
+        })?;
+
+        self.log
+            .record(&self.data_source_id, LoggedQuery::new_query("ROLLBACK"))?;
+
+        Ok(res)
     }
 
     fn commit_transaction(&mut self) -> Result<ServerMessage> {
-        self.with_transaction_manager(|tm| {
+        let res = self.with_transaction_manager(|tm| {
             tm.commit_transaction()?;
             Ok(ServerMessage::TransactionCommitted)
-        })
+        })?;
+
+        self.log
+            .record(&self.data_source_id, LoggedQuery::new_query("COMMIT"))?;
+
+        Ok(res)
     }
 
     fn execute_batch(&mut self, reqs: Vec<ClientMessage>) -> Result<ServerMessage> {

@@ -50,22 +50,26 @@ fn test_transaction_commit() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "oracle".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "ANSILO_ADMIN"."T016__TEST_TAB" "#,
-                    r#"("DATA") VALUES (?)"#
-                ]
-                .join(""),
-                vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "oracle".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "ANSILO_ADMIN"."T016__TEST_TAB" "#,
+                        r#"("DATA") VALUES (?)"#
+                    ]
+                    .join(""),
+                    vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -104,22 +108,26 @@ fn test_transaction_rollback() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "oracle".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "ANSILO_ADMIN"."T016__TEST_TAB" "#,
-                    r#"("DATA") VALUES (?)"#
-                ]
-                .join(""),
-                vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "oracle".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "ANSILO_ADMIN"."T016__TEST_TAB" "#,
+                        r#"("DATA") VALUES (?)"#
+                    ]
+                    .join(""),
+                    vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("ROLLBACK")),
+        ]
     );
 }
 
@@ -162,21 +170,25 @@ fn test_transaction_rollback_due_to_error() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "oracle".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "ANSILO_ADMIN"."T016__TEST_TAB" "#,
-                    r#"("DATA") VALUES (?)"#
-                ]
-                .join(""),
-                vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "oracle".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "ANSILO_ADMIN"."T016__TEST_TAB" "#,
+                        r#"("DATA") VALUES (?)"#
+                    ]
+                    .join(""),
+                    vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("ROLLBACK")),
+        ]
     );
 }

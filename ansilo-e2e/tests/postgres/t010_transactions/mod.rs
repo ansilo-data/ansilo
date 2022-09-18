@@ -52,22 +52,26 @@ fn test_transaction_commit() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "public"."t010__test_tab" "#,
-                    r#"("data") VALUES ($1)"#
-                ]
-                .join(""),
-                vec!["value=Utf8String(\"value\") type=varchar".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "public"."t010__test_tab" "#,
+                        r#"("data") VALUES ($1)"#
+                    ]
+                    .join(""),
+                    vec!["value=Utf8String(\"value\") type=varchar".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -108,22 +112,26 @@ fn test_transaction_rollback() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "public"."t010__test_tab" "#,
-                    r#"("data") VALUES ($1)"#
-                ]
-                .join(""),
-                vec!["value=Utf8String(\"value\") type=varchar".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "public"."t010__test_tab" "#,
+                        r#"("data") VALUES ($1)"#
+                    ]
+                    .join(""),
+                    vec!["value=Utf8String(\"value\") type=varchar".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("ROLLBACK")),
+        ]
     );
 }
 
@@ -168,21 +176,25 @@ fn test_transaction_rollback_due_to_error() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "public"."t010__test_tab" "#,
-                    r#"("data") VALUES ($1)"#
-                ]
-                .join(""),
-                vec!["value=Utf8String(\"value\") type=varchar".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "public"."t010__test_tab" "#,
+                        r#"("data") VALUES ($1)"#
+                    ]
+                    .join(""),
+                    vec!["value=Utf8String(\"value\") type=varchar".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("ROLLBACK")),
+        ]
     );
 }

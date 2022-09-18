@@ -78,33 +78,37 @@ fn test_insert_select_local_values() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "public"."t013__test_target" "#,
-                    r#"("id", "name", "source", "created_at") VALUES "#,
-                    r#"($1, $2, $3, $4), ($5, $6, $7, $8)"#
-                ]
-                .join(""),
-                vec![
-                    "value=Int32(1) type=int4".into(),
-                    "value=Utf8String(\"Jerry\") type=varchar".into(),
-                    "value=Utf8String(\"SELECT\") type=varchar".into(),
-                    "value=DateTime(1999-01-15T16:00:00) type=timestamp".into(),
-                    //
-                    "value=Int32(2) type=int4".into(),
-                    "value=Utf8String(\"George\") type=varchar".into(),
-                    "value=Utf8String(\"SELECT\") type=varchar".into(),
-                    "value=DateTime(2000-01-15T16:00:00) type=timestamp".into(),
-                ],
-                Some(
-                    [("affected".into(), "Some(2)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "public"."t013__test_target" "#,
+                        r#"("id", "name", "source", "created_at") VALUES "#,
+                        r#"($1, $2, $3, $4), ($5, $6, $7, $8)"#
+                    ]
+                    .join(""),
+                    vec![
+                        "value=Int32(1) type=int4".into(),
+                        "value=Utf8String(\"Jerry\") type=varchar".into(),
+                        "value=Utf8String(\"SELECT\") type=varchar".into(),
+                        "value=DateTime(1999-01-15T16:00:00) type=timestamp".into(),
+                        //
+                        "value=Int32(2) type=int4".into(),
+                        "value=Utf8String(\"George\") type=varchar".into(),
+                        "value=Utf8String(\"SELECT\") type=varchar".into(),
+                        "value=DateTime(2000-01-15T16:00:00) type=timestamp".into(),
+                    ],
+                    Some(
+                        [("affected".into(), "Some(2)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -188,6 +192,7 @@ fn test_insert_select_from_remote_table() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "postgres".to_string(),
                 LoggedQuery::new(
@@ -229,7 +234,8 @@ fn test_insert_select_from_remote_table() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

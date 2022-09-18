@@ -116,37 +116,41 @@ fn test() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "sqlite".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "t002__test_tab" "#,
-                    r#"("col_char", "col_varchar", "col_decimal", "col_int8", "col_int16", "col_int32", "col_int64", "col_float", "col_double", "col_blob", "col_date", "col_time", "col_timestamp", "col_timestamp_tz", "col_null")"#,
-                    r#" VALUES "#,
-                    r#"(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#
-                ].join(""),
-                vec![
-                    "value=Utf8String(\"🔥\")".into(),
-                    "value=Utf8String(\"foobar\")".into(),
-                    "value=Utf8String(\"123.456\")".into(),
-                    "value=Int64(123)".into(),
-                    "value=Int64(5432)".into(),
-                    "value=Int64(123456)".into(),
-                    "value=Int64(-9876543210)".into(),
-                    "value=Float64(11.22)".into(),
-                    "value=Float64(33.44)".into(),
-                    "value=Binary([66, 76, 79, 66])".into(),
-                    "value=Utf8String(\"2020-12-23\")".into(),
-                    "value=Utf8String(\"01:02:03\")".into(),
-                    "value=Utf8String(\"2018-02-01 01:02:03\")".into(),
-                    "value=Utf8String(\"1999-01-15 03:00:00+00\")".into(),
-                    "value=Null".into(),
-                ],
-                Some([("affected".into(), "Some(1)".into())]
-                .into_iter()
-                .collect())
-            )
-        )]
+        vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "sqlite".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "t002__test_tab" "#,
+                        r#"("col_char", "col_varchar", "col_decimal", "col_int8", "col_int16", "col_int32", "col_int64", "col_float", "col_double", "col_blob", "col_date", "col_time", "col_timestamp", "col_timestamp_tz", "col_null")"#,
+                        r#" VALUES "#,
+                        r#"(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#
+                    ].join(""),
+                    vec![
+                        "value=Utf8String(\"🔥\")".into(),
+                        "value=Utf8String(\"foobar\")".into(),
+                        "value=Utf8String(\"123.456\")".into(),
+                        "value=Int64(123)".into(),
+                        "value=Int64(5432)".into(),
+                        "value=Int64(123456)".into(),
+                        "value=Int64(-9876543210)".into(),
+                        "value=Float64(11.22)".into(),
+                        "value=Float64(33.44)".into(),
+                        "value=Binary([66, 76, 79, 66])".into(),
+                        "value=Utf8String(\"2020-12-23\")".into(),
+                        "value=Utf8String(\"01:02:03\")".into(),
+                        "value=Utf8String(\"2018-02-01 01:02:03\")".into(),
+                        "value=Utf8String(\"1999-01-15 03:00:00+00\")".into(),
+                        "value=Null".into(),
+                    ],
+                    Some([("affected".into(), "Some(1)".into())]
+                    .into_iter()
+                    .collect())
+                )
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -240,36 +244,40 @@ fn test_insert_nulls() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "sqlite".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "t002__test_tab" "#,
-                    r#"("col_char", "col_varchar", "col_decimal", "col_int8", "col_int16", "col_int32", "col_int64", "col_float", "col_double", "col_blob", "col_date", "col_time", "col_timestamp", "col_timestamp_tz", "col_null")"#,
-                    r#" VALUES "#,
-                    r#"(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#
-                ].join(""),
-                vec![
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                    "value=Null".into(),
-                ],
-                Some([("affected".into(), "Some(1)".into())]
-                .into_iter()
-                .collect())
-            )
-        )]
+        vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "sqlite".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "t002__test_tab" "#,
+                        r#"("col_char", "col_varchar", "col_decimal", "col_int8", "col_int16", "col_int32", "col_int64", "col_float", "col_double", "col_blob", "col_date", "col_time", "col_timestamp", "col_timestamp_tz", "col_null")"#,
+                        r#" VALUES "#,
+                        r#"(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#
+                    ].join(""),
+                    vec![
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                        "value=Null".into(),
+                    ],
+                    Some([("affected".into(), "Some(1)".into())]
+                    .into_iter()
+                    .collect())
+                )
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

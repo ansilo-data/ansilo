@@ -56,22 +56,26 @@ fn test_generated_always() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "oracle".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "ANSILO_ADMIN"."T015__GENERATED_ALWAYS" "#,
-                    r#"("DATA") VALUES (?)"#
-                ]
-                .join(""),
-                vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "oracle".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "ANSILO_ADMIN"."T015__GENERATED_ALWAYS" "#,
+                        r#"("DATA") VALUES (?)"#
+                    ]
+                    .join(""),
+                    vec!["LoggedParam [index=1, method=setNString, value=value]".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -129,6 +133,7 @@ fn test_generated_default() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "oracle".to_string(),
                 LoggedQuery::new(
@@ -163,7 +168,8 @@ fn test_generated_default() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }
@@ -222,6 +228,7 @@ fn test_default() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "oracle".to_string(),
                 LoggedQuery::new(
@@ -256,7 +263,8 @@ fn test_default() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

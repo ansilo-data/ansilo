@@ -53,22 +53,26 @@ fn test_delete_where_remote() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "mysql".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"DELETE FROM `db`.`t011__test_tab` "#,
-                    r#"WHERE ((`t011__test_tab`.`id`) = (?))"#,
-                ]
-                .join(""),
-                vec!["LoggedParam [index=1, method=setInt, value=2]".into(),],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "mysql".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"DELETE FROM `db`.`t011__test_tab` "#,
+                        r#"WHERE ((`t011__test_tab`.`id`) = (?))"#,
+                    ]
+                    .join(""),
+                    vec!["LoggedParam [index=1, method=setInt, value=2]".into(),],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -118,22 +122,26 @@ fn test_delete_where_remote_with_no_pk() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "mysql".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"DELETE FROM `db`.`t011__test_tab_no_pk` "#,
-                    r#"WHERE ((`t011__test_tab_no_pk`.`id`) = (?))"#,
-                ]
-                .join(""),
-                vec!["LoggedParam [index=1, method=setInt, value=2]".into(),],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "mysql".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"DELETE FROM `db`.`t011__test_tab_no_pk` "#,
+                        r#"WHERE ((`t011__test_tab_no_pk`.`id`) = (?))"#,
+                    ]
+                    .join(""),
+                    vec!["LoggedParam [index=1, method=setInt, value=2]".into(),],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -187,6 +195,7 @@ fn test_delete_where_local() {
     assert_eq!(
         query_log,
         vec![
+            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "mysql".to_string(),
                 LoggedQuery::new(
@@ -215,7 +224,8 @@ fn test_delete_where_local() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

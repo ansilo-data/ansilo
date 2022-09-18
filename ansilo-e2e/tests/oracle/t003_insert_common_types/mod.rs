@@ -172,46 +172,50 @@ fn test() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "oracle".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "ANSILO_ADMIN"."T003__TEST_TAB" "#,
-                    r#"("COL_CHAR", "COL_NCHAR", "COL_VARCHAR2", "COL_NVARCHAR2", "COL_NUMBER", "COL_FLOAT", "COL_INT8", "COL_INT16", "COL_INT32", "COL_INT64", "COL_BINARY_FLOAT", "COL_BINARY_DOUBLE", "COL_RAW", "COL_LONG_RAW", "COL_BLOB", "COL_CLOB", "COL_NCLOB", "COL_JSON", "COL_DATE", "COL_TIMESTAMP", "COL_TIMESTAMP_TZ", "COL_TIMESTAMP_LTZ", "COL_NULL")"#,
-                    r#" VALUES "#,
-                    r#"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
-                ].join(""),
-                vec![
-                    "LoggedParam [index=1, method=setNString, value=A]".into(),
-                    "LoggedParam [index=2, method=setNString, value=🔥]".into(),
-                    "LoggedParam [index=3, method=setNString, value=foobar]".into(),
-                    "LoggedParam [index=4, method=setNString, value=🚀]".into(),
-                    "LoggedParam [index=5, method=setBigDecimal, value=123.456]".into(),
-                    "LoggedParam [index=6, method=setBigDecimal, value=567.89]".into(),
-                    "LoggedParam [index=7, method=setShort, value=88]".into(),
-                    "LoggedParam [index=8, method=setShort, value=5432]".into(),
-                    "LoggedParam [index=9, method=setInt, value=123456]".into(),
-                    "LoggedParam [index=10, method=setLong, value=-9876543210]".into(),
-                    "LoggedParam [index=11, method=setFloat, value=11.22]".into(),
-                    "LoggedParam [index=12, method=setDouble, value=33.44]".into(),
-                    "LoggedParam [index=13, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
-                    "LoggedParam [index=14, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
-                    "LoggedParam [index=15, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
-                    "LoggedParam [index=16, method=setNString, value=CLOB]".into(),
-                    "LoggedParam [index=17, method=setNString, value=🥑NCLOB]".into(),
-                    "LoggedParam [index=18, method=setNString, value={\"foo\": \"bar\"}]".into(),
-                    "LoggedParam [index=19, method=setDate, value=2020-12-23]".into(),
-                    "LoggedParam [index=20, method=setTimestamp, value=2018-02-01 01:02:03.0]".into(),
-                    "LoggedParam [index=21, method=setTimestamp, value=1999-01-15 16:00:00.0]".into(),
-                    "LoggedParam [index=22, method=setTimestamp, value=1997-01-31 07:26:56.888]".into(),
-                    "LoggedParam [index=23, method=setNull, value=null]".into(),
-                ],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "oracle".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "ANSILO_ADMIN"."T003__TEST_TAB" "#,
+                        r#"("COL_CHAR", "COL_NCHAR", "COL_VARCHAR2", "COL_NVARCHAR2", "COL_NUMBER", "COL_FLOAT", "COL_INT8", "COL_INT16", "COL_INT32", "COL_INT64", "COL_BINARY_FLOAT", "COL_BINARY_DOUBLE", "COL_RAW", "COL_LONG_RAW", "COL_BLOB", "COL_CLOB", "COL_NCLOB", "COL_JSON", "COL_DATE", "COL_TIMESTAMP", "COL_TIMESTAMP_TZ", "COL_TIMESTAMP_LTZ", "COL_NULL")"#,
+                        r#" VALUES "#,
+                        r#"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
+                    ].join(""),
+                    vec![
+                        "LoggedParam [index=1, method=setNString, value=A]".into(),
+                        "LoggedParam [index=2, method=setNString, value=🔥]".into(),
+                        "LoggedParam [index=3, method=setNString, value=foobar]".into(),
+                        "LoggedParam [index=4, method=setNString, value=🚀]".into(),
+                        "LoggedParam [index=5, method=setBigDecimal, value=123.456]".into(),
+                        "LoggedParam [index=6, method=setBigDecimal, value=567.89]".into(),
+                        "LoggedParam [index=7, method=setShort, value=88]".into(),
+                        "LoggedParam [index=8, method=setShort, value=5432]".into(),
+                        "LoggedParam [index=9, method=setInt, value=123456]".into(),
+                        "LoggedParam [index=10, method=setLong, value=-9876543210]".into(),
+                        "LoggedParam [index=11, method=setFloat, value=11.22]".into(),
+                        "LoggedParam [index=12, method=setDouble, value=33.44]".into(),
+                        "LoggedParam [index=13, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
+                        "LoggedParam [index=14, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
+                        "LoggedParam [index=15, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
+                        "LoggedParam [index=16, method=setNString, value=CLOB]".into(),
+                        "LoggedParam [index=17, method=setNString, value=🥑NCLOB]".into(),
+                        "LoggedParam [index=18, method=setNString, value={\"foo\": \"bar\"}]".into(),
+                        "LoggedParam [index=19, method=setDate, value=2020-12-23]".into(),
+                        "LoggedParam [index=20, method=setTimestamp, value=2018-02-01 01:02:03.0]".into(),
+                        "LoggedParam [index=21, method=setTimestamp, value=1999-01-15 16:00:00.0]".into(),
+                        "LoggedParam [index=22, method=setTimestamp, value=1997-01-31 07:26:56.888]".into(),
+                        "LoggedParam [index=23, method=setNull, value=null]".into(),
+                    ],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

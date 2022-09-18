@@ -86,6 +86,7 @@ fn test_insert_select_local_values() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "oracle".to_string(),
                 LoggedQuery::new(
@@ -114,7 +115,8 @@ fn test_insert_select_local_values() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }
@@ -206,6 +208,7 @@ fn test_insert_select_from_remote_table() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "oracle".to_string(),
                 LoggedQuery::new(
@@ -252,7 +255,8 @@ fn test_insert_select_from_remote_table() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

@@ -61,25 +61,29 @@ fn test_auto_increment() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "mysql".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO `db`.`t006__auto_increment` "#,
-                    r#"(`data`) VALUES (?), (?)"#
-                ]
-                .join(""),
-                vec![
-                    "LoggedParam [index=1, method=setString, value=value]".into(),
-                    "LoggedParam [index=2, method=setString, value=another]".into()
-                ],
-                Some(
-                    [("affected".into(), "Some(2)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "mysql".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO `db`.`t006__auto_increment` "#,
+                        r#"(`data`) VALUES (?), (?)"#
+                    ]
+                    .join(""),
+                    vec![
+                        "LoggedParam [index=1, method=setString, value=value]".into(),
+                        "LoggedParam [index=2, method=setString, value=another]".into()
+                    ],
+                    Some(
+                        [("affected".into(), "Some(2)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -137,6 +141,7 @@ fn test_default() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "mysql".to_string(),
                 LoggedQuery::new(
@@ -171,7 +176,8 @@ fn test_default() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

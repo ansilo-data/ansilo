@@ -148,43 +148,47 @@ fn test() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "mysql".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO `db`.`t002__test_tab` "#,
-                    r#"(`col_char`, `col_nchar`, `col_varchar`, `col_nvarchar`, `col_decimal`, `col_int8`, `col_int16`, `col_int32`, `col_int64`, `col_uint8`, `col_uint16`, `col_uint32`, `col_uint64`, `col_float`, `col_double`, `col_blob`, `col_json`, `col_date`, `col_time`, `col_datetime`, `col_timestamp`, `col_null`)"#,
-                    r#" VALUES "#,
-                    r#"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
-                ].join(""),
-                vec![
-                    "LoggedParam [index=1, method=setString, value=A]".into(),
-                    "LoggedParam [index=2, method=setString, value=🔥]".into(),
-                    "LoggedParam [index=3, method=setString, value=foobar]".into(),
-                    "LoggedParam [index=4, method=setString, value=🥑🚀]".into(),
-                    "LoggedParam [index=5, method=setBigDecimal, value=123.456]".into(),
-                    "LoggedParam [index=6, method=setShort, value=88]".into(),
-                    "LoggedParam [index=7, method=setShort, value=5432]".into(),
-                    "LoggedParam [index=8, method=setInt, value=123456]".into(),
-                    "LoggedParam [index=9, method=setLong, value=-9876543210]".into(),
-                    "LoggedParam [index=10, method=setShort, value=188]".into(),
-                    "LoggedParam [index=11, method=setInt, value=55432]".into(),
-                    "LoggedParam [index=12, method=setLong, value=1123456]".into(),
-                    "LoggedParam [index=13, method=setBigDecimal, value=19876543210]".into(),
-                    "LoggedParam [index=14, method=setFloat, value=11.22]".into(),
-                    "LoggedParam [index=15, method=setDouble, value=33.44]".into(),
-                    "LoggedParam [index=16, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
-                    "LoggedParam [index=17, method=setNString, value={\"foo\": \"bar\"}]".into(),
-                    "LoggedParam [index=18, method=setDate, value=2020-12-23]".into(),
-                    "LoggedParam [index=19, method=setTime, value=01:02:03]".into(),
-                    "LoggedParam [index=20, method=setTimestamp, value=2018-02-01 01:02:03.0]".into(),
-                    "LoggedParam [index=21, method=setTimestamp, value=1999-01-15 11:00:00.0]".into(),
-                    "LoggedParam [index=22, method=setNull, value=null]".into(),
-                ],
-                Some([("affected".into(), "Some(1)".into())]
-                .into_iter()
-                .collect())
-            )
-        )]
+        vec![
+            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "mysql".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO `db`.`t002__test_tab` "#,
+                        r#"(`col_char`, `col_nchar`, `col_varchar`, `col_nvarchar`, `col_decimal`, `col_int8`, `col_int16`, `col_int32`, `col_int64`, `col_uint8`, `col_uint16`, `col_uint32`, `col_uint64`, `col_float`, `col_double`, `col_blob`, `col_json`, `col_date`, `col_time`, `col_datetime`, `col_timestamp`, `col_null`)"#,
+                        r#" VALUES "#,
+                        r#"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
+                    ].join(""),
+                    vec![
+                        "LoggedParam [index=1, method=setString, value=A]".into(),
+                        "LoggedParam [index=2, method=setString, value=🔥]".into(),
+                        "LoggedParam [index=3, method=setString, value=foobar]".into(),
+                        "LoggedParam [index=4, method=setString, value=🥑🚀]".into(),
+                        "LoggedParam [index=5, method=setBigDecimal, value=123.456]".into(),
+                        "LoggedParam [index=6, method=setShort, value=88]".into(),
+                        "LoggedParam [index=7, method=setShort, value=5432]".into(),
+                        "LoggedParam [index=8, method=setInt, value=123456]".into(),
+                        "LoggedParam [index=9, method=setLong, value=-9876543210]".into(),
+                        "LoggedParam [index=10, method=setShort, value=188]".into(),
+                        "LoggedParam [index=11, method=setInt, value=55432]".into(),
+                        "LoggedParam [index=12, method=setLong, value=1123456]".into(),
+                        "LoggedParam [index=13, method=setBigDecimal, value=19876543210]".into(),
+                        "LoggedParam [index=14, method=setFloat, value=11.22]".into(),
+                        "LoggedParam [index=15, method=setDouble, value=33.44]".into(),
+                        "LoggedParam [index=16, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
+                        "LoggedParam [index=17, method=setNString, value={\"foo\": \"bar\"}]".into(),
+                        "LoggedParam [index=18, method=setDate, value=2020-12-23]".into(),
+                        "LoggedParam [index=19, method=setTime, value=01:02:03]".into(),
+                        "LoggedParam [index=20, method=setTimestamp, value=2018-02-01 01:02:03.0]".into(),
+                        "LoggedParam [index=21, method=setTimestamp, value=1999-01-15 11:00:00.0]".into(),
+                        "LoggedParam [index=22, method=setNull, value=null]".into(),
+                    ],
+                    Some([("affected".into(), "Some(1)".into())]
+                    .into_iter()
+                    .collect())
+                )
+            ),
+            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

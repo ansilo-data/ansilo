@@ -62,25 +62,29 @@ fn test_auto_increment() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "sqlite".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "t006__auto_increment" "#,
-                    r#"("data") VALUES (?1), (?2)"#
-                ]
-                .join(""),
-                vec![
-                    "value=Utf8String(\"value\")".into(),
-                    "value=Utf8String(\"another\")".into()
-                ],
-                Some(
-                    [("affected".into(), "Some(2)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "sqlite".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "t006__auto_increment" "#,
+                        r#"("data") VALUES (?1), (?2)"#
+                    ]
+                    .join(""),
+                    vec![
+                        "value=Utf8String(\"value\")".into(),
+                        "value=Utf8String(\"another\")".into()
+                    ],
+                    Some(
+                        [("affected".into(), "Some(2)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -139,6 +143,7 @@ fn test_default() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "sqlite".to_string(),
                 LoggedQuery::new(
@@ -169,7 +174,8 @@ fn test_default() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

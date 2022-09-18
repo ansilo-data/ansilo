@@ -44,25 +44,29 @@ fn test() {
 
     assert_eq!(
         main_instance.log().get_from_memory().unwrap(),
-        vec![(
-            "peer".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"UPDATE "public"."people" "#,
-                    r#"SET "name" = $1 "#,
-                    r#"WHERE (("people"."id") = ($2))"#,
-                ]
-                .join(""),
-                vec![
-                    "value=Utf8String(\"Johhny\") type=varchar".into(),
-                    "value=Int32(1) type=int4".into(),
-                ],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("peer".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "peer".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"UPDATE "public"."people" "#,
+                        r#"SET "name" = $1 "#,
+                        r#"WHERE (("people"."id") = ($2))"#,
+                    ]
+                    .join(""),
+                    vec![
+                        "value=Utf8String(\"Johhny\") type=varchar".into(),
+                        "value=Int32(1) type=int4".into(),
+                    ],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("peer".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

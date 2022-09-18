@@ -13,7 +13,8 @@ fn test() {
     let mut oracle =
         ansilo_e2e::oracle::init_oracle_sql(&containers, current_dir!().join("oracle-sql/*.sql"));
 
-    let (instance, mut client) = ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
+    let (instance, mut client) =
+        ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let rows = client
         .execute(r#"DELETE FROM "T005__TEST_TAB""#, &[])
@@ -35,17 +36,21 @@ fn test() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "oracle".to_string(),
-            LoggedQuery::new(
-                r#"DELETE FROM "ANSILO_ADMIN"."T005__TEST_TAB""#,
-                vec![],
-                Some(
-                    [("affected".into(), "Some(2)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("oracle".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "oracle".to_string(),
+                LoggedQuery::new(
+                    r#"DELETE FROM "ANSILO_ADMIN"."T005__TEST_TAB""#,
+                    vec![],
+                    Some(
+                        [("affected".into(), "Some(2)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("oracle".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

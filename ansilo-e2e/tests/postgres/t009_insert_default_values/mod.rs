@@ -63,25 +63,29 @@ fn test_serial() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "public"."t009__serial" "#,
-                    r#"("data") VALUES ($1), ($2)"#
-                ]
-                .join(""),
-                vec![
-                    "value=Utf8String(\"value\") type=varchar".into(),
-                    "value=Utf8String(\"another\") type=varchar".into(),
-                ],
-                Some(
-                    [("affected".into(), "Some(2)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "public"."t009__serial" "#,
+                        r#"("data") VALUES ($1), ($2)"#
+                    ]
+                    .join(""),
+                    vec![
+                        "value=Utf8String(\"value\") type=varchar".into(),
+                        "value=Utf8String(\"another\") type=varchar".into(),
+                    ],
+                    Some(
+                        [("affected".into(), "Some(2)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -141,6 +145,7 @@ fn test_default() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "postgres".to_string(),
                 LoggedQuery::new(
@@ -175,7 +180,8 @@ fn test_default() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

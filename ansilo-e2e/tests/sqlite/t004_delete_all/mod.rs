@@ -38,17 +38,21 @@ fn test() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "sqlite".to_string(),
-            LoggedQuery::new(
-                r#"DELETE FROM "t004__test_tab""#,
-                vec![],
-                Some(
-                    [("affected".into(), "Some(2)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "sqlite".to_string(),
+                LoggedQuery::new(
+                    r#"DELETE FROM "t004__test_tab""#,
+                    vec![],
+                    Some(
+                        [("affected".into(), "Some(2)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

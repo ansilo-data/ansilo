@@ -101,51 +101,55 @@ fn test() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "sqlite".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"UPDATE "t003__test_tab" SET "#,
-                    r#""col_char" = ?1, "#,
-                    r#""col_varchar" = ?2, "#,
-                    r#""col_decimal" = ?3, "#,
-                    r#""col_int8" = ?4, "#,
-                    r#""col_int16" = ?5, "#,
-                    r#""col_int32" = ?6, "#,
-                    r#""col_int64" = ?7, "#,
-                    r#""col_float" = ?8, "#,
-                    r#""col_double" = ?9, "#,
-                    r#""col_blob" = ?10, "#,
-                    r#""col_date" = ?11, "#,
-                    r#""col_time" = ?12, "#,
-                    r#""col_timestamp" = ?13, "#,
-                    r#""col_timestamp_tz" = ?14, "#,
-                    r#""col_null" = ?15"#
-                ]
-                .join(""),
-                vec![
-                    "value=Utf8String(\"🔥\")".into(),
-                    "value=Utf8String(\"foobar\")".into(),
-                    "value=Utf8String(\"123.456\")".into(),
-                    "value=Int64(88)".into(),
-                    "value=Int64(5432)".into(),
-                    "value=Int64(123456)".into(),
-                    "value=Int64(-9876543210)".into(),
-                    "value=Float64(11.22)".into(),
-                    "value=Float64(33.44)".into(),
-                    "value=Binary([66, 76, 79, 66])".into(),
-                    "value=Utf8String(\"2020-12-23\")".into(),
-                    "value=Utf8String(\"01:02:03\")".into(),
-                    "value=Utf8String(\"2018-02-01T01:02:03\")".into(),
-                    "value=Utf8String(\"1999-01-14T19:00:00+00:00\")".into(),
-                    "value=Null".into(),
-                ],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "sqlite".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"UPDATE "t003__test_tab" SET "#,
+                        r#""col_char" = ?1, "#,
+                        r#""col_varchar" = ?2, "#,
+                        r#""col_decimal" = ?3, "#,
+                        r#""col_int8" = ?4, "#,
+                        r#""col_int16" = ?5, "#,
+                        r#""col_int32" = ?6, "#,
+                        r#""col_int64" = ?7, "#,
+                        r#""col_float" = ?8, "#,
+                        r#""col_double" = ?9, "#,
+                        r#""col_blob" = ?10, "#,
+                        r#""col_date" = ?11, "#,
+                        r#""col_time" = ?12, "#,
+                        r#""col_timestamp" = ?13, "#,
+                        r#""col_timestamp_tz" = ?14, "#,
+                        r#""col_null" = ?15"#
+                    ]
+                    .join(""),
+                    vec![
+                        "value=Utf8String(\"🔥\")".into(),
+                        "value=Utf8String(\"foobar\")".into(),
+                        "value=Utf8String(\"123.456\")".into(),
+                        "value=Int64(88)".into(),
+                        "value=Int64(5432)".into(),
+                        "value=Int64(123456)".into(),
+                        "value=Int64(-9876543210)".into(),
+                        "value=Float64(11.22)".into(),
+                        "value=Float64(33.44)".into(),
+                        "value=Binary([66, 76, 79, 66])".into(),
+                        "value=Utf8String(\"2020-12-23\")".into(),
+                        "value=Utf8String(\"01:02:03\")".into(),
+                        "value=Utf8String(\"2018-02-01T01:02:03\")".into(),
+                        "value=Utf8String(\"1999-01-14T19:00:00+00:00\")".into(),
+                        "value=Null".into(),
+                    ],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

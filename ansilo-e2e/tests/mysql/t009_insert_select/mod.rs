@@ -85,34 +85,38 @@ fn test_insert_select_local_values() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "mysql".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO `db`.`t009__test_target` "#,
-                    r#"(`id`, `name`, `source`, `created_at`) VALUES "#,
-                    r#"(?, ?, ?, ?), (?, ?, ?, ?)"#
-                ]
-                .join(""),
-                vec![
-                    "LoggedParam [index=1, method=setInt, value=1]".into(),
-                    "LoggedParam [index=2, method=setString, value=Jerry]".into(),
-                    "LoggedParam [index=3, method=setString, value=SELECT]".into(),
-                    "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 16:00:00.0]"
-                        .into(),
-                    "LoggedParam [index=5, method=setInt, value=2]".into(),
-                    "LoggedParam [index=6, method=setString, value=George]".into(),
-                    "LoggedParam [index=7, method=setString, value=SELECT]".into(),
-                    "LoggedParam [index=8, method=setTimestamp, value=2000-01-15 16:00:00.0]"
-                        .into(),
-                ],
-                Some(
-                    [("affected".into(), "Some(2)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "mysql".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO `db`.`t009__test_target` "#,
+                        r#"(`id`, `name`, `source`, `created_at`) VALUES "#,
+                        r#"(?, ?, ?, ?), (?, ?, ?, ?)"#
+                    ]
+                    .join(""),
+                    vec![
+                        "LoggedParam [index=1, method=setInt, value=1]".into(),
+                        "LoggedParam [index=2, method=setString, value=Jerry]".into(),
+                        "LoggedParam [index=3, method=setString, value=SELECT]".into(),
+                        "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 16:00:00.0]"
+                            .into(),
+                        "LoggedParam [index=5, method=setInt, value=2]".into(),
+                        "LoggedParam [index=6, method=setString, value=George]".into(),
+                        "LoggedParam [index=7, method=setString, value=SELECT]".into(),
+                        "LoggedParam [index=8, method=setTimestamp, value=2000-01-15 16:00:00.0]"
+                            .into(),
+                    ],
+                    Some(
+                        [("affected".into(), "Some(2)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -203,6 +207,7 @@ fn test_insert_select_from_remote_table() {
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
+            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "mysql".to_string(),
                 LoggedQuery::new(
@@ -247,7 +252,8 @@ fn test_insert_select_from_remote_table() {
                             .collect()
                     )
                 )
-            )
+            ),
+            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

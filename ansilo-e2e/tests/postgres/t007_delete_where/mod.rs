@@ -12,8 +12,10 @@ use serial_test::serial;
 fn test_delete_where_remote() {
     ansilo_logging::init_for_tests();
     let containers = ansilo_e2e::postgres::start_postgres();
-    let mut postgres =
-        ansilo_e2e::postgres::init_postgres_sql(&containers, current_dir!().join("postgres-sql/*.sql"));
+    let mut postgres = ansilo_e2e::postgres::init_postgres_sql(
+        &containers,
+        current_dir!().join("postgres-sql/*.sql"),
+    );
 
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
@@ -53,22 +55,26 @@ fn test_delete_where_remote() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"DELETE FROM "public"."t007__test_tab" "#,
-                    r#"WHERE (("t007__test_tab"."id") = ($1))"#,
-                ]
-                .join(""),
-                vec!["value=Int32(2) type=int4".into(),],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"DELETE FROM "public"."t007__test_tab" "#,
+                        r#"WHERE (("t007__test_tab"."id") = ($1))"#,
+                    ]
+                    .join(""),
+                    vec!["value=Int32(2) type=int4".into(),],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -77,8 +83,10 @@ fn test_delete_where_remote() {
 fn test_delete_where_local() {
     ansilo_logging::init_for_tests();
     let containers = ansilo_e2e::postgres::start_postgres();
-    let mut postgres =
-        ansilo_e2e::postgres::init_postgres_sql(&containers, current_dir!().join("postgres-sql/*.sql"));
+    let mut postgres = ansilo_e2e::postgres::init_postgres_sql(
+        &containers,
+        current_dir!().join("postgres-sql/*.sql"),
+    );
 
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
@@ -121,6 +129,10 @@ fn test_delete_where_local() {
     // Delete with local eval should lock remote rows using FOR UPDATE first
     assert_eq!(
         query_log[0],
+        ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+    );
+    assert_eq!(
+        query_log[1],
         (
             "postgres".to_string(),
             LoggedQuery::new(
@@ -135,9 +147,9 @@ fn test_delete_where_local() {
             )
         )
     );
-    assert_eq!(query_log[1].0, "postgres".to_string());
+    assert_eq!(query_log[2].0, "postgres".to_string());
     assert_eq!(
-        query_log[1].1.query(),
+        query_log[2].1.query(),
         [
             r#"DELETE FROM "public"."t007__test_tab" "#,
             r#"WHERE (("t007__test_tab"."ctid") = ($1))"#,
@@ -145,13 +157,17 @@ fn test_delete_where_local() {
         .join("")
         .as_str(),
     );
-    assert!(query_log[1].1.params()[0]
+    assert!(query_log[2].1.params()[0]
         .as_str()
         .starts_with("value=Binary("));
     assert_eq!(
-        query_log[1].1.other(),
+        query_log[2].1.other(),
         &[("affected".into(), "Some(1)".into())]
             .into_iter()
             .collect::<HashMap<String, String>>()
+    );
+    assert_eq!(
+        query_log[3],
+        ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
     );
 }

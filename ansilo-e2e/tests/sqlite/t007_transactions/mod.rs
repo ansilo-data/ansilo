@@ -51,22 +51,26 @@ fn test_transaction_commit() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "sqlite".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "t007__test_tab" "#,
-                    r#"("data") VALUES (?1)"#
-                ]
-                .join(""),
-                vec!["value=Utf8String(\"value\")".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "sqlite".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "t007__test_tab" "#,
+                        r#"("data") VALUES (?1)"#
+                    ]
+                    .join(""),
+                    vec!["value=Utf8String(\"value\")".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -106,22 +110,26 @@ fn test_transaction_rollback() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "sqlite".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "t007__test_tab" "#,
-                    r#"("data") VALUES (?1)"#
-                ]
-                .join(""),
-                vec!["value=Utf8String(\"value\")".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "sqlite".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "t007__test_tab" "#,
+                        r#"("data") VALUES (?1)"#
+                    ]
+                    .join(""),
+                    vec!["value=Utf8String(\"value\")".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("ROLLBACK")),
+        ]
     );
 }
 
@@ -165,21 +173,25 @@ fn test_transaction_rollback_due_to_error() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "sqlite".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "t007__test_tab" "#,
-                    r#"("data") VALUES (?1)"#
-                ]
-                .join(""),
-                vec!["value=Utf8String(\"value\")".into()],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("sqlite".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "sqlite".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "t007__test_tab" "#,
+                        r#"("data") VALUES (?1)"#
+                    ]
+                    .join(""),
+                    vec!["value=Utf8String(\"value\")".into()],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("sqlite".to_string(), LoggedQuery::new_query("ROLLBACK")),
+        ]
     );
 }

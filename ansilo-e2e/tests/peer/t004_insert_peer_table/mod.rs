@@ -43,25 +43,29 @@ fn test() {
 
     assert_eq!(
         main_instance.log().get_from_memory().unwrap(),
-        vec![(
-            "peer".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"INSERT INTO "public"."people" "#,
-                    r#"("id", "name") "#,
-                    r#"VALUES ($1, $2)"#,
-                ]
-                .join(""),
-                vec![
-                    "value=Int32(1) type=int4".into(),
-                    "value=Utf8String(\"Emma\") type=varchar".into()
-                ],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("peer".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "peer".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"INSERT INTO "public"."people" "#,
+                        r#"("id", "name") "#,
+                        r#"VALUES ($1, $2)"#,
+                    ]
+                    .join(""),
+                    vec![
+                        "value=Int32(1) type=int4".into(),
+                        "value=Utf8String(\"Emma\") type=varchar".into()
+                    ],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("peer".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }

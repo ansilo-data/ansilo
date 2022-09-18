@@ -60,25 +60,29 @@ fn test_update_where_remote() {
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
-        vec![(
-            "postgres".to_string(),
-            LoggedQuery::new(
-                [
-                    r#"UPDATE "public"."t006__test_tab" SET "name" = $1 "#,
-                    r#"WHERE (("t006__test_tab"."id") = ($2))"#,
-                ]
-                .join(""),
-                vec![
-                    "value=Utf8String(\"Jannet\") type=varchar".into(),
-                    "value=Int32(2) type=int4".into(),
-                ],
-                Some(
-                    [("affected".into(), "Some(1)".into())]
-                        .into_iter()
-                        .collect()
+        vec![
+            ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+            (
+                "postgres".to_string(),
+                LoggedQuery::new(
+                    [
+                        r#"UPDATE "public"."t006__test_tab" SET "name" = $1 "#,
+                        r#"WHERE (("t006__test_tab"."id") = ($2))"#,
+                    ]
+                    .join(""),
+                    vec![
+                        "value=Utf8String(\"Jannet\") type=varchar".into(),
+                        "value=Int32(2) type=int4".into(),
+                    ],
+                    Some(
+                        [("affected".into(), "Some(1)".into())]
+                            .into_iter()
+                            .collect()
+                    )
                 )
-            )
-        )]
+            ),
+            ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
+        ]
     );
 }
 
@@ -138,6 +142,10 @@ fn test_update_where_local() {
     // Update with local eval should lock remote rows using FOR UPDATE first
     assert_eq!(
         query_log[0],
+        ("postgres".to_string(), LoggedQuery::new_query("BEGIN")),
+    );
+    assert_eq!(
+        query_log[1],
         (
             "postgres".to_string(),
             LoggedQuery::new(
@@ -152,9 +160,9 @@ fn test_update_where_local() {
             )
         )
     );
-    assert_eq!(query_log[1].0, "postgres".to_string());
+    assert_eq!(query_log[2].0, "postgres".to_string());
     assert_eq!(
-        query_log[1].1.query(),
+        query_log[2].1.query(),
         [
             r#"UPDATE "public"."t006__test_tab" SET "name" = $1 "#,
             r#"WHERE (("t006__test_tab"."ctid") = ($2))"#,
@@ -163,16 +171,20 @@ fn test_update_where_local() {
         .as_str(),
     );
     assert_eq!(
-        query_log[1].1.params()[0].as_str(),
+        query_log[2].1.params()[0].as_str(),
         "value=Utf8String(\"Johnny\") type=varchar"
     );
-    assert!(query_log[1].1.params()[1]
+    assert!(query_log[2].1.params()[1]
         .as_str()
         .starts_with("value=Binary("));
     assert_eq!(
-        query_log[1].1.other(),
+        query_log[2].1.other(),
         &[("affected".into(), "Some(1)".into())]
             .into_iter()
             .collect::<HashMap<String, String>>()
+    );
+    assert_eq!(
+        query_log[3],
+        ("postgres".to_string(), LoggedQuery::new_query("COMMIT")),
     );
 }
