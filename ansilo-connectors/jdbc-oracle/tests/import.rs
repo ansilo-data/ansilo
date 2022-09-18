@@ -112,7 +112,7 @@ fn test_oracle_jdbc_discover_entities_with_filter_wildcard() {
     let entities = OracleJdbcEntitySearcher::discover(
         &mut con,
         &NodeConfig::default(),
-        EntityDiscoverOptions::schema("SYS.%"),
+        EntityDiscoverOptions::schema("SYS.ALL_TAB%"),
     )
     .unwrap();
 
