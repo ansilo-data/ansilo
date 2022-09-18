@@ -27,6 +27,18 @@ macro_rules! install_ansilo_pgx {
 }
 
 pub fn install_ansilo_pgx() {
+    println!("Granting access to postgres ext/lib dirs...");
+    let res = Command::new("bash")
+            .args(["-c", &format!("sudo setfacl -m u:$(id -u):rwx $(pg_config --sharedir)/extension/ $(pg_config --pkglibdir)")])
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
+    assert!(res.success());
+    
     println!("Installing ansilo-pgx extension... {}", workspace_dir!().display());
     // We build the extension to a separated target dir
     // as we conflict against the outer cargo build if we use
