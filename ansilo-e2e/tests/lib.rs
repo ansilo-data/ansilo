@@ -7,3 +7,4 @@ pub mod peer;
 pub mod postgres;
 pub mod sqlite;
 pub mod web;
+pub mod tls;
