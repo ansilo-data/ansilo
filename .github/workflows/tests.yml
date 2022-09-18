@@ -62,6 +62,8 @@ jobs:
           docker run \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
+            -v $HOME/.ecs:/home/build/.ecs \
+            -v $HOME/.pgx:/home/build/.pgx \
             -v $PWD:/build/ \
             -w /build/ \
             ansilo-build /build/.github/workflows/scripts/test-build.sh
@@ -74,6 +76,8 @@ jobs:
             -e GHA_RUN_ID=${{ github.run_id }} \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
+            -v $HOME/.ecs:/home/build/.ecs \
+            -v $HOME/.pgx:/home/build/.pgx \
             -v $PWD:/build/ \
             -w /build/ \
             ansilo-build /build/.github/workflows/scripts/test-setup.sh
@@ -86,6 +90,8 @@ jobs:
             -e GHA_RUN_ID=${{ github.run_id }} \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
+            -v $HOME/.ecs:/home/build/.ecs \
+            -v $HOME/.pgx:/home/build/.pgx \
             -v $PWD:/build/ \
             -w /build/ \
             ansilo-build /build/.github/workflows/scripts/test.sh
@@ -99,6 +105,8 @@ jobs:
             -e GHA_RUN_ID=${{ github.run_id }} \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \
+            -v $HOME/.ecs:/home/build/.ecs \
+            -v $HOME/.pgx:/home/build/.pgx \
             -v $PWD:/build/ \
             -w /build/ \
             ansilo-build /build/.github/workflows/scripts/test-teardown.sh
