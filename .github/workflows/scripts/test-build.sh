@@ -8,6 +8,4 @@ echo "----- Building debug -----"
 cargo build --locked --tests
 echo ""
 
-echo "----- Building release -----"
-cargo build --locked --release --tests
-echo ""
+rm -rf target/release

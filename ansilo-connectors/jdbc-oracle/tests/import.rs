@@ -16,7 +16,15 @@ mod common;
 
 #[test]
 #[serial]
+
 fn test_oracle_jdbc_discover_entities() {
+    // This test takes an enourmous amount of time over gha
+    // (i think due to the slow network link)
+    if std::env::var("ANSILO_GHA_TESTS").is_ok() {
+        return;
+    }
+
+    ansilo_logging::init_for_tests();
     let containers = common::start_oracle();
     let mut con = common::connect_to_oracle(&containers);
 
@@ -56,6 +64,7 @@ fn test_oracle_jdbc_discover_entities() {
 #[test]
 #[serial]
 fn test_oracle_jdbc_discover_entities_with_filter_for_single_table() {
+    ansilo_logging::init_for_tests();
     let containers = common::start_oracle();
     let mut con = common::connect_to_oracle(&containers);
 
@@ -96,6 +105,7 @@ fn test_oracle_jdbc_discover_entities_with_filter_for_single_table() {
 #[test]
 #[serial]
 fn test_oracle_jdbc_discover_entities_with_filter_wildcard() {
+    ansilo_logging::init_for_tests();
     let containers = common::start_oracle();
     let mut con = common::connect_to_oracle(&containers);
 

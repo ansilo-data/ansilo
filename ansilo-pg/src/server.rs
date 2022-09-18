@@ -48,6 +48,10 @@ impl PostgresServer {
                     .to_str()
                     .context("Failed to parse socket_dir_path as utf8")?
             ))
+            .arg("-c")
+            .arg("log_destination=stderr")
+            .arg("-c")
+            .arg("logging_collector=off")
             .env("ANSILO_PG_FDW_SOCKET_PATH", conf.fdw_socket_path.clone());
 
         let mut proc = ChildProc::new("[postgres]", Signal::SIGINT, Duration::from_secs(3), cmd)
