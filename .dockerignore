@@ -3,7 +3,6 @@
 target/*
 *.iml
 **/*.rs.bk
-.cargo/*
 .m2/*
 .vscode-server/*
 .devcontainer/*
@@ -12,7 +11,6 @@ target/*
 *.out
 old/*
 tmp/*
-.github
 perf.data*
 flamegraph.svg
 **/node_modules/*
