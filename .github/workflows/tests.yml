@@ -47,9 +47,9 @@ jobs:
         continue-on-error: false
         with:
           path: target
-          key: ansilo-test-target-dir-${{ runner.os }}-${{ github.run_id }}
+          key: ansilo-test-target-path-${{ runner.os }}-${{ github.run_id }}
           restore-keys: | 
-            ansilo-test-target-dir-${{ runner.os }}
+            ansilo-test-target-path-${{ runner.os }}
 
       - name: Build base image
         run: .github/workflows/scripts/build-build-image.sh
