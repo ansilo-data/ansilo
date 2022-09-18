@@ -38,24 +38,18 @@ jobs:
         continue-on-error: false
         with:
           path: |
-            m2.tgz
-            cargo.tgz
-          key: ansilo-release-pkg-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/pom.xml') }}
+            ~/.m2
+            ~/.cargo
+          key: ansilo-release-package-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/pom.xml') }}
 
       - name: Cache target dir
         uses: actions/cache@v3
         continue-on-error: false
         with:
-          path: target.tgz
-          key: ansilo-release-target-${{ runner.os }}-${{ github.run_id }}
+          path: target
+          key: ansilo-release-target-dir-${{ runner.os }}-${{ github.run_id }}
           restore-keys: | 
-            ansilo-release-target-${{ runner.os }}
-
-      - name: Extract caches
-        run: |
-          .github/workflows/scripts/cache-extract.sh m2.tgz ~/
-          .github/workflows/scripts/cache-extract.sh cargo.tgz ~/
-          .github/workflows/scripts/cache-extract.sh target.tgz .
+            ansilo-release-target-dir-${{ runner.os }}
 
       - name: Build base image
         run: .github/workflows/scripts/build-build-image.sh
@@ -96,9 +90,4 @@ jobs:
         run: |
           docker tag ansilo-release $REGISTRY/$REPOSITORY:$IMAGE_TAG
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
-      - name: Compress caches
-        run: |
-          .github/workflows/scripts/cache-compress.sh target target.tgz
-          .github/workflows/scripts/cache-compress.sh ~/.m2 m2.tgz
-          .github/workflows/scripts/cache-compress.sh ~/.cargo cargo.tgz
+          

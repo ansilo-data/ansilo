@@ -38,24 +38,18 @@ jobs:
         continue-on-error: false
         with:
           path: |
-            m2.tgz
-            cargo.tgz
-          key: ansilo-test-pkg-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/pom.xml') }}
+            ~/.m2
+            ~/.cargo
+          key: ansilo-test-package-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/pom.xml') }}
 
       - name: Cache target dir
         uses: actions/cache@v3
         continue-on-error: false
         with:
-          path: target.tgz
-          key: ansilo-test-target-${{ runner.os }}-${{ github.run_id }}
+          path: target
+          key: ansilo-test-target-dir-${{ runner.os }}-${{ github.run_id }}
           restore-keys: | 
-            ansilo-test-target-${{ runner.os }}
-
-      - name: Extract caches
-        run: |
-          .github/workflows/scripts/cache-extract.sh m2.tgz ~/
-          .github/workflows/scripts/cache-extract.sh cargo.tgz ~/
-          .github/workflows/scripts/cache-extract.sh target.tgz .
+            ansilo-test-target-dir-${{ runner.os }}
 
       - name: Build base image
         run: .github/workflows/scripts/build-build-image.sh
@@ -114,9 +108,3 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TESTS_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }}
-
-      - name: Compress caches
-        run: |
-          .github/workflows/scripts/cache-compress.sh target target.tgz
-          .github/workflows/scripts/cache-compress.sh ~/.m2 m2.tgz
-          .github/workflows/scripts/cache-compress.sh ~/.cargo cargo.tgz
