@@ -10,7 +10,7 @@ RUN echo "$JAVA_HOME/lib/server" | tee /etc/ld.so.conf.d/jdk.conf && \
 # Install postgres
 RUN yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm && \
     yum install -y postgresql14-server postgresql14-devel redhat-rpm-config
-RUN sudo sed -i 's/logging_collector = on/logging_collector = off/g' /usr/pgsql-14/share/postgresql.conf.sample
+RUN sed -i 's/logging_collector = on/logging_collector = off/g' /usr/pgsql-14/share/postgresql.conf.sample
 ENV PATH="${PATH}:/usr/pgsql-14/bin/"
 
 # Install node and npm
