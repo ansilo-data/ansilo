@@ -78,17 +78,17 @@ jobs:
             -w /build/ \
             ansilo-build /build/.github/workflows/scripts/test-setup.sh
 
-      # - name: Run tests
-      #   run: |
-      #     docker run \
-      #       -e AWS_ACCESS_KEY_ID=${{ secrets.TESTS_AWS_ACCESS_KEY_ID }} \
-      #       -e AWS_SECRET_ACCESS_KEY=${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }} \
-      #       -e GHA_RUN_ID=${{ github.run_id }} \
-      #       -v $HOME/.cargo:/home/build/.cargo \
-      #       -v $HOME/.m2:/home/build/.m2 \
-      #       -v $PWD:/build/ \
-      #       -w /build/ \
-      #       ansilo-build /build/.github/workflows/scripts/test.sh
+      - name: Run tests
+        run: |
+          docker run \
+            -e AWS_ACCESS_KEY_ID=${{ secrets.TESTS_AWS_ACCESS_KEY_ID }} \
+            -e AWS_SECRET_ACCESS_KEY=${{ secrets.TESTS_AWS_SECRET_ACCESS_KEY }} \
+            -e GHA_RUN_ID=${{ github.run_id }} \
+            -v $HOME/.cargo:/home/build/.cargo \
+            -v $HOME/.m2:/home/build/.m2 \
+            -v $PWD:/build/ \
+            -w /build/ \
+            ansilo-build /build/.github/workflows/scripts/test.sh
 
       - name: Post tests teardown
         if: always()
