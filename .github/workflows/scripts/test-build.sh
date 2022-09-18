@@ -5,9 +5,9 @@ set -e
 $(dirname $0)/build-setup.sh
 
 echo "----- Building debug -----"
-cargo build --frozen --locked
+cargo build --locked -vvv
 echo ""
 
 echo "----- Building release -----"
-cargo build --frozen --locked --release
+cargo build --locked --release
 echo ""
