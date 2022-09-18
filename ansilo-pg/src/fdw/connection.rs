@@ -1660,7 +1660,7 @@ mod tests {
             .unwrap();
 
         match res {
-            ServerMessage::error(msg) => assert!(msg.contains("Invalid query id")),
+            ServerMessage::Error(msg) => assert!(msg.contains("Invalid query id")),
             _ => panic!("Unexpected response: {:?}", res),
         }
 
