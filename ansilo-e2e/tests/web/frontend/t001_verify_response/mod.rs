@@ -15,7 +15,7 @@ fn test() {
     env::set_var(
         "ANSILO_FRONTEND_PATH",
         get_current_target_dir()
-            .join("frontend")
+            .join("frontend/out")
             .to_string_lossy()
             .to_string(),
     );
