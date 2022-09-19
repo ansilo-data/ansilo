@@ -1391,6 +1391,9 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         scan.row_structure.as_ref().unwrap()
     };
 
+    // Allow user to interrupt long running queries
+    pg_sys::ProcessInterrupts();
+
     let tupdesc = (*slot).tts_tupleDescriptor;
     let nattrs = (*tupdesc).natts as usize;
 

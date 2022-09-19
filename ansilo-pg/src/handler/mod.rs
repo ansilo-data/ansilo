@@ -1,6 +1,6 @@
 mod auth;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     low_level::{
@@ -9,6 +9,7 @@ use crate::{
     },
     proto::{
         be::PostgresBackendMessage,
+        common::CancelKey,
         fe::{PostgresFrontendMessage, PostgresFrontendStartupMessage},
     },
     PostgresConnectionPools,
@@ -21,12 +22,17 @@ use ansilo_util_pg::query::{pg_quote_identifier, pg_str_literal};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use rand::distributions::{Alphanumeric, DistString};
-use tokio::io::{AsyncWriteExt, ReadHalf, WriteHalf};
+use tokio::{
+    io::{AsyncWriteExt, ReadHalf, WriteHalf},
+    net::UnixStream,
+    sync::Mutex,
+};
 
 /// Request handler for postgres-wire-protocol connections
 pub struct PostgresConnectionHandler {
     authenticator: Authenticator,
     pool: PostgresConnectionPools,
+    cancel_keys: Mutex<HashMap<CancelKey, CancelKey>>,
 }
 
 impl PostgresConnectionHandler {
@@ -34,6 +40,7 @@ impl PostgresConnectionHandler {
         Self {
             authenticator,
             pool,
+            cancel_keys: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -41,8 +48,32 @@ impl PostgresConnectionHandler {
 #[async_trait]
 impl ConnectionHandler for PostgresConnectionHandler {
     async fn handle(&self, mut client: Box<dyn IOStream>) -> Result<()> {
+        // Get the initial request
+        let request = PostgresFrontendMessage::read_initial(&mut client)
+            .await
+            .context("Failed to read initial request")?;
+
+        match request {
+            PostgresFrontendMessage::StartupMessage(startup) => {
+                self.handle_connection(client, startup).await
+            }
+            PostgresFrontendMessage::CancelRequest(cancel) => {
+                self.handle_cancel(client, cancel).await
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl PostgresConnectionHandler {
+    /// Handles a connection from a client
+    async fn handle_connection(
+        &self,
+        mut client: Box<dyn IOStream>,
+        startup: PostgresFrontendStartupMessage,
+    ) -> Result<()> {
         // Authenticate the client
-        let (auth, startup) = Self::authenticate_postgres(&self.authenticator, &mut client).await?;
+        let auth = Self::authenticate_postgres(&self.authenticator, &mut client, &startup).await?;
 
         // Now that we have authenticated, we acquire a connection to to postgres
         let mut con = self.pool.app(&auth.username).await?;
@@ -69,6 +100,20 @@ impl ConnectionHandler for PostgresConnectionHandler {
             // Clean any other temporary state
             "DISCARD ALL".into(),
         ]);
+
+        // Generate a new cancel key and send it to the client
+        // Record it against the connection's key to support cancelling
+        // requests
+        let client_key = Self::random_cancel_key()?;
+        if let Some(con_key) = con.backend_key_data().as_ref() {
+            PostgresBackendMessage::BackendKeyData(client_key.clone())
+                .write(&mut client)
+                .await
+                .context("Failed to send backend key data")?;
+            let mut sessions = self.cancel_keys.lock().await;
+            // TODO[low]: ensure this is removed on return
+            sessions.insert(client_key.clone(), con_key.clone());
+        }
 
         // Forward startup parameters from the client connection
         Self::set_client_parameters(&mut con, &mut client, startup)
@@ -106,6 +151,12 @@ impl ConnectionHandler for PostgresConnectionHandler {
             }
         }
 
+        // Remove the client key from the map
+        {
+            let mut sessions = self.cancel_keys.lock().await;
+            sessions.remove(&client_key);
+        }
+
         // Now that the session has finished, we attempt to clean the connection
         // to free up any temporary tables, transactions or other state.
         if let Err(err) = con.execute("DISCARD ALL").await {
@@ -116,71 +167,32 @@ impl ConnectionHandler for PostgresConnectionHandler {
         // The session is complete, we drop the connection which should return it to the pool
         Ok(())
     }
-}
 
-lazy_static! {
-    /// @see https://www.postgresql.org/docs/current/libpq-status.html#LIBPQ-PQPARAMETERSTATUS
-    static ref ALLOWED_SERVER_PARAMS: HashSet<&'static str> = HashSet::from([
-        "client_encoding",
-        "DateStyle",
-        "default_transaction_read_only",
-        "integer_datetimes",
-        "IntervalStyle",
-        "server_encoding",
-        "server_version",
-        "standard_conforming_strings",
-        "TimeZone"
-    ]);
+    /// Handles a cancel request from a client
+    async fn handle_cancel(&self, _client: Box<dyn IOStream>, client_key: CancelKey) -> Result<()> {
+        // Remove the key from the sessions map
+        // If it is not present abort early
+        let con_key = {
+            let mut sessions = self.cancel_keys.lock().await;
+            match sessions.remove(&client_key) {
+                Some(k) => k,
+                None => return Ok(()),
+            }
+        };
 
-    /// @see https://www.postgresql.org/docs/current/runtime-config-client.html
-    static ref ALLOWED_CLIENT_PARAMS: HashSet<&'static str> = HashSet::from([
-        "application_name",
-        "client_min_messages",
-        "search_path",
-        "row_security",
-        "default_table_access_method",
-        "default_tablespace",
-        "default_toast_compression",
-        "temp_tablespaces",
-        "check_function_bodies",
-        "default_transaction_isolation",
-        "default_transaction_read_only",
-        "default_transaction_deferrable",
-        "transaction_isolation",
-        "transaction_read_only",
-        "transaction_deferrable",
-        "session_replication_role",
-        "statement_timeout",
-        "log_min_error_statement",
-        "statement_timeout",
-        "lock_timeout",
-        "statement_timeout",
-        "lock_timeout",
-        "log_min_error_statement",
-        "idle_in_transaction_session_timeout",
-        "idle_session_timeout",
-        "bytea_output",
-        "xmlbinary",
-        "xmloption",
-        "gin_pending_list_limit",
-        "DateStyle",
-        "lc_time",
-        "IntervalStyle",
-        "DateStyle",
-        "IntervalStyle",
-        "TimeZone",
-        "timezone_abbreviations",
-        "extra_float_digits",
-        "client_encoding",
-        "lc_messages",
-        "lc_monetary",
-        "lc_numeric",
-        "default_text_search_config",
-        "lc_ctype",
-    ]);
-}
+        // The key is valid, try cancel the query
+        let mut con = UnixStream::connect(self.pool.conf().pg_socket_path())
+            .await
+            .context("Failed to cancel request")?;
 
-impl PostgresConnectionHandler {
+        PostgresFrontendMessage::CancelRequest(con_key)
+            .write(&mut con)
+            .await
+            .context("Failed to cancel request")?;
+
+        Ok(())
+    }
+
     /// Forwards the session local connection parameters from the client to the server.
     ///
     /// The parameters are reset by "DISCARD ALL" when the connection is recycled.
@@ -290,6 +302,79 @@ impl PostgresConnectionHandler {
 
         Ok(())
     }
+
+    /// Generate a random cancel key for each client
+    /// We dont want to expose the real cancel keys as these
+    /// are reused across clients, and we dont want one client
+    /// attempting to cancel a request of another.
+    fn random_cancel_key() -> Result<CancelKey> {
+        let pid = rand::random();
+        let key = rand::random();
+
+        Ok(CancelKey { pid, key })
+    }
+}
+
+lazy_static! {
+    /// @see https://www.postgresql.org/docs/current/libpq-status.html#LIBPQ-PQPARAMETERSTATUS
+    static ref ALLOWED_SERVER_PARAMS: HashSet<&'static str> = HashSet::from([
+        "client_encoding",
+        "DateStyle",
+        "default_transaction_read_only",
+        "integer_datetimes",
+        "IntervalStyle",
+        "server_encoding",
+        "server_version",
+        "standard_conforming_strings",
+        "TimeZone"
+    ]);
+
+    /// @see https://www.postgresql.org/docs/current/runtime-config-client.html
+    static ref ALLOWED_CLIENT_PARAMS: HashSet<&'static str> = HashSet::from([
+        "application_name",
+        "client_min_messages",
+        "search_path",
+        "row_security",
+        "default_table_access_method",
+        "default_tablespace",
+        "default_toast_compression",
+        "temp_tablespaces",
+        "check_function_bodies",
+        "default_transaction_isolation",
+        "default_transaction_read_only",
+        "default_transaction_deferrable",
+        "transaction_isolation",
+        "transaction_read_only",
+        "transaction_deferrable",
+        "session_replication_role",
+        "statement_timeout",
+        "log_min_error_statement",
+        "statement_timeout",
+        "lock_timeout",
+        "statement_timeout",
+        "lock_timeout",
+        "log_min_error_statement",
+        "idle_in_transaction_session_timeout",
+        "idle_session_timeout",
+        "bytea_output",
+        "xmlbinary",
+        "xmloption",
+        "gin_pending_list_limit",
+        "DateStyle",
+        "lc_time",
+        "IntervalStyle",
+        "DateStyle",
+        "IntervalStyle",
+        "TimeZone",
+        "timezone_abbreviations",
+        "extra_float_digits",
+        "client_encoding",
+        "lc_messages",
+        "lc_monetary",
+        "lc_numeric",
+        "default_text_search_config",
+        "lc_ctype",
+    ]);
 }
 
 #[cfg(test)]
@@ -338,7 +423,9 @@ mod tests {
     async fn init_pg(test_name: &'static str) -> PostgresInstance {
         // This runs blocking code and contains a runtime
         let conf = Box::leak(Box::new(PostgresConf {
-            install_dir: PathBuf::from(std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into())),
+            install_dir: PathBuf::from(
+                std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
+            ),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/main-pg-handler/{}", test_name)),
             socket_dir_path: PathBuf::from(format!(
@@ -571,5 +658,53 @@ mod tests {
 
         res_handler.unwrap();
         assert_eq!(res_client.unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_cancel_query() {
+        ansilo_logging::init_for_tests();
+        let auth = mock_password_auth();
+        let (_pg, handler) = init_handler("cancel-query", auth).await;
+
+        let (client, stream) = init_client_stream();
+        let (cancel_client, cancel_stream) = init_client_stream();
+
+        let fut_client = async move {
+            let (client, con) = tokio_postgres::Config::new()
+                .user("test_user")
+                .password("pass123")
+                .application_name("my_custom_app")
+                .connect_raw(client, NoTls)
+                .await?;
+            tokio::spawn(con);
+
+            let cancel_token = client.cancel_token();
+
+            tokio::join!(
+                async move {
+                    cancel_token
+                        .cancel_query_raw(cancel_client, NoTls)
+                        .await
+                        .unwrap();
+                },
+                async move {
+                    let err = client
+                        .batch_execute("SELECT pg_sleep(10)")
+                        .await
+                        .unwrap_err();
+
+                    dbg!(err.to_string());
+                    assert!(err
+                        .to_string()
+                        .contains("canceling statement due to user request"));
+                }
+            );
+
+            Result::<_, Error>::Ok(())
+        };
+        let fut_handler = handler.handle(stream);
+        let fut_handler_cancel = handler.handle(cancel_stream);
+
+        tokio::try_join!(fut_client, fut_handler, fut_handler_cancel).unwrap();
     }
 }

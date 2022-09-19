@@ -150,6 +150,15 @@ impl PostgresMessage {
     }
 }
 
+/// Postgres cancel request message
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CancelKey {
+    /// Pid of the backend process
+    pub pid: u32,
+    /// Secret key used to authenticate the request
+    pub key: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Write;

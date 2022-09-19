@@ -1,13 +1,14 @@
 // @see https://www.postgresql.org/docs/current/protocol-message-formats.html
 
-use std::{collections::HashMap, ffi::CString};
+use std::{collections::HashMap, convert::TryInto, ffi::CString};
 
 use ansilo_core::err::{bail, ensure, Context, Error, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use super::common::PostgresMessage;
+use super::common::{PostgresMessage, CancelKey};
 
 const PG_PROTO_VERSION: i32 = 196608;
+const PG_CANCEL_CODE: i32 = 80877102;
 
 /// Messages recieved from the postgres frontend.
 /// We only care about authentication, query and terminate messages, the rest we treat as opaque
@@ -17,6 +18,7 @@ pub enum PostgresFrontendMessage {
     PasswordMessage(Vec<u8>),
     Query(String),
     Terminate,
+    CancelRequest(CancelKey),
     Other(PostgresMessage),
 }
 
@@ -82,20 +84,29 @@ impl PostgresFrontendStartupMessage {
 }
 
 impl PostgresFrontendMessage {
-    /// Reads a postgres startup message from the supplied stream
-    pub async fn read_startup(
+    /// Reads the initial untagged message from the supplied stream
+    /// This could be StartupMessage or CancelRequest
+    /// (SSLRequest is handled by ansilo-proxy)
+    pub async fn read_initial(
         stream: &mut (impl AsyncRead + Unpin),
-    ) -> Result<PostgresFrontendStartupMessage> {
+    ) -> Result<PostgresFrontendMessage> {
         let message = PostgresMessage::read_untagged(stream).await?;
 
-        ensure!(message.body_length() >= 4, "Invalid startup message length");
+        ensure!(message.body_length() >= 4, "Invalid inital message length");
 
-        let protocol_version = i32::from_be_bytes(message.body()[..4].try_into().unwrap());
-        ensure!(
-            protocol_version == PG_PROTO_VERSION,
-            "Unexpected protocol version"
-        );
+        let specifier = i32::from_be_bytes(message.body()[..4].try_into().unwrap());
 
+        // Check the message type
+        if specifier == PG_PROTO_VERSION {
+            Ok(Self::StartupMessage(Self::read_startup(message)?))
+        } else if specifier == PG_CANCEL_CODE {
+            Ok(Self::CancelRequest(Self::read_cancel_request(message)?))
+        } else {
+            bail!("Unexpected initial message specifier: {:?}", specifier);
+        }
+    }
+
+    fn read_startup(message: PostgresMessage) -> Result<PostgresFrontendStartupMessage> {
         let body = message.body();
 
         // Remove last null terminator
@@ -122,9 +133,20 @@ impl PostgresFrontendMessage {
             .collect();
 
         Ok(PostgresFrontendStartupMessage {
-            protocol_version,
+            protocol_version: PG_PROTO_VERSION,
             params,
         })
+    }
+
+    fn read_cancel_request(message: PostgresMessage) -> Result<CancelKey> {
+        let body = message.body();
+
+        ensure!(body.len() == 12, "Invalid cancel request message length");
+
+        let pid = u32::from_be_bytes(body[4..8].try_into().unwrap());
+        let key = u32::from_be_bytes(body[8..12].try_into().unwrap());
+
+        Ok(CancelKey { pid, key })
     }
 
     /// Reads a postgres frontend message from the supplied stream
@@ -189,6 +211,13 @@ impl PostgresFrontendMessage {
                     Ok(())
                 })?
             }
+            Self::CancelRequest(req) => PostgresMessage::build_untagged(|body| {
+                body.write_all(PG_CANCEL_CODE.to_be_bytes().as_slice())?;
+                body.write_all(req.pid.to_be_bytes().as_slice())?;
+                body.write_all(req.key.to_be_bytes().as_slice())?;
+
+                Ok(())
+            })?,
             Self::Terminate => {
                 PostgresMessage::build(PostgresFrontendMessageTag::Terminate as _, |_| Ok(()))?
             }
@@ -200,6 +229,9 @@ impl PostgresFrontendMessage {
         Ok(match self {
             Self::StartupMessage(_) => {
                 bail!("Startup message does not have a tag")
+            }
+            Self::CancelRequest(_) => {
+                bail!("Cancel request message does not have a tag")
             }
             Self::PasswordMessage(_) => PostgresFrontendMessageTag::AuthenticationData,
             Self::Query(_) => PostgresFrontendMessageTag::Query,
@@ -220,9 +252,9 @@ mod tests {
         PostgresFrontendMessage::read(&mut stream).await
     }
 
-    async fn parse_startup(buf: &[u8]) -> Result<PostgresFrontendStartupMessage> {
+    async fn parse_initial(buf: &[u8]) -> Result<PostgresFrontendMessage> {
         let mut stream = Builder::new().read(buf).build();
-        PostgresFrontendMessage::read_startup(&mut stream).await
+        PostgresFrontendMessage::read_initial(&mut stream).await
     }
 
     fn to_buff(msg: PostgresFrontendMessage) -> Vec<u8> {
@@ -231,7 +263,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_proto_fe_message_parse_startup_message() {
-        let parsed = parse_startup(&[
+        let parsed = parse_initial(&[
             0, 0, 0, 21, //len
             0, 3, 0, 0, // protocol version
             b'k', b'1', 0, // key 1
@@ -245,12 +277,32 @@ mod tests {
 
         assert_eq!(
             parsed,
-            PostgresFrontendStartupMessage {
+            PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage {
                 protocol_version: 196608,
                 params: [("k1".into(), "v1".into()), ("k2".into(), "v2".into()),]
                     .into_iter()
                     .collect()
-            }
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_fe_message_parse_cancel_request() {
+        let parsed = parse_initial(&[
+            0, 0, 0, 16, //len
+            4, 210, 22, 46, // cancel request code
+            0, 0, 0, 123, // pid
+            0, 0, 0, 234, // key
+        ])
+        .await
+        .unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresFrontendMessage::CancelRequest(CancelKey {
+                pid: 123,
+                key: 234
+            })
         );
     }
 
@@ -367,5 +419,23 @@ mod tests {
                 ]
             );
         }
+    }
+
+    #[test]
+    fn test_proto_fe_message_serialise_cancel_request() {
+        let buff = to_buff(PostgresFrontendMessage::CancelRequest(
+            CancelKey { pid: 123, key: 234 },
+        ));
+
+        assert_eq!(
+            buff,
+            [
+                [0, 0, 0, 16].to_vec(),                //len
+                PG_CANCEL_CODE.to_be_bytes().to_vec(), // cancel code
+                123u32.to_be_bytes().to_vec(),         // pid
+                234u32.to_be_bytes().to_vec(),         // key
+            ]
+            .concat()
+        );
     }
 }

@@ -1,11 +1,11 @@
 // @see https://www.postgresql.org/docs/current/protocol-message-formats.html
 
-use std::{ffi::CString, io::Cursor};
+use std::{convert::TryInto, ffi::CString, io::Cursor};
 
 use ansilo_core::err::{bail, ensure, Context, Error, Result};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use super::common::PostgresMessage;
+use super::common::{CancelKey, PostgresMessage};
 
 /// Postgres messages that are sent from the backend.
 /// We only care about authentication, query and error messages, we treat the rest as opaque.
@@ -20,6 +20,7 @@ pub enum PostgresBackendMessage {
     ParameterStatus(String, String),
     ErrorResponse(Vec<(u8, String)>),
     ReadyForQuery(u8),
+    BackendKeyData(CancelKey),
     Other(PostgresMessage),
 }
 
@@ -149,6 +150,15 @@ impl PostgresBackendMessage {
 
                 Self::ErrorResponse(fields)
             }
+            PostgresBackendMessageTag::BackendKeyData => {
+                ensure!(
+                    message.body_length() == 8,
+                    "Invalid backend key data length"
+                );
+                let pid = u32::from_be_bytes(message.body()[..4].try_into().unwrap());
+                let key = u32::from_be_bytes(message.body()[4..8].try_into().unwrap());
+                Self::BackendKeyData(CancelKey { pid, key })
+            }
             _ => Self::Other(message),
         })
     }
@@ -264,6 +274,14 @@ impl PostgresBackendMessage {
                     Ok(())
                 })?
             }
+            Self::BackendKeyData(key) => {
+                PostgresMessage::build(PostgresBackendMessageTag::BackendKeyData as _, |body| {
+                    body.write_all(&key.pid.to_be_bytes())?;
+                    body.write_all(&key.key.to_be_bytes())?;
+
+                    Ok(())
+                })?
+            }
         })
     }
 
@@ -279,6 +297,7 @@ impl PostgresBackendMessage {
             Self::ParameterStatus(_, _) => PostgresBackendMessageTag::ParameterStatus,
             Self::ErrorResponse(_) => PostgresBackendMessageTag::ErrorResponse,
             Self::ReadyForQuery(_) => PostgresBackendMessageTag::ReadyForQuery,
+            Self::BackendKeyData(_) => PostgresBackendMessageTag::BackendKeyData,
             Self::Other(msg) => msg.tag().context("Untagged message")?.try_into()?,
         })
     }
@@ -460,6 +479,22 @@ mod tests {
         )
     }
 
+    #[test]
+    fn test_proto_be_serialise_backend_key_data() {
+        assert_eq!(
+            to_buff(PostgresBackendMessage::BackendKeyData(CancelKey {
+                pid: 123,
+                key: 156
+            })),
+            vec![
+                b'K', // tag
+                0, 0, 0, 12, // len
+                0, 0, 0, 123, // pid
+                0, 0, 0, 156, // key
+            ]
+        )
+    }
+
     #[tokio::test]
     async fn test_proto_be_read_ready_for_query() {
         let parsed = parse(&[b'Z', 0, 0, 0, 5, b'I']).await.unwrap();
@@ -595,6 +630,22 @@ mod tests {
         assert_eq!(
             parsed.tag().unwrap(),
             PostgresBackendMessageTag::ErrorResponse
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proto_be_read_backend_key_data() {
+        let parsed = parse(&[b'K', 0, 0, 0, 12, 0, 0, 1, 0, 0, 0, 0, 234])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            parsed,
+            PostgresBackendMessage::BackendKeyData(CancelKey { pid: 256, key: 234 })
+        );
+        assert_eq!(
+            parsed.tag().unwrap(),
+            PostgresBackendMessageTag::BackendKeyData
         );
     }
 

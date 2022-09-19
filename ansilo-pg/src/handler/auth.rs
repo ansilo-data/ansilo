@@ -34,8 +34,9 @@ impl PostgresConnectionHandler {
     pub(crate) async fn authenticate_postgres(
         auth: &Authenticator,
         client: &mut Box<dyn IOStream>,
-    ) -> Result<(AuthContext, PostgresFrontendStartupMessage)> {
-        match Self::do_postgres_authenticate(auth, client).await {
+        startup: &PostgresFrontendStartupMessage,
+    ) -> Result<AuthContext> {
+        match Self::do_postgres_authenticate(auth, client, startup).await {
             Ok(ctx) => Ok(ctx),
             Err(err) => {
                 warn!("Error while authenticating postgres connection: {:?}", err);
@@ -52,12 +53,8 @@ impl PostgresConnectionHandler {
     async fn do_postgres_authenticate(
         auth: &Authenticator,
         client: &mut Box<dyn IOStream>,
-    ) -> Result<(AuthContext, PostgresFrontendStartupMessage)> {
-        // Recieve startup message
-        let startup = PostgresFrontendMessage::read_startup(client)
-            .await
-            .context("Failed to read startup message")?;
-
+        startup: &PostgresFrontendStartupMessage,
+    ) -> Result<AuthContext> {
         let username = startup
             .params
             .get("user")
@@ -101,7 +98,7 @@ impl PostgresConnectionHandler {
             .await
             .context("Failed to send authentication success message")?;
 
-        Ok((AuthContext::new(&user.username, &provider_id, ctx), startup))
+        Ok(AuthContext::new(&user.username, &provider_id, ctx))
     }
 
     async fn do_postgres_password_auth(
@@ -289,17 +286,13 @@ mod tests {
         let (mut client, mut output) = mock_client_stream();
         let auth = mock_password_authentictor();
 
-        let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output),
-            async move {
-                // send startup
-                PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
-                    [("user".into(), "invalid".into())].into_iter().collect(),
-                ))
-                .write(&mut client)
-                .await
-                .unwrap();
+        let startup = PostgresFrontendStartupMessage::new(
+            [("user".into(), "invalid".into())].into_iter().collect(),
+        );
 
+        let (auth_res, _) = tokio::join!(
+            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            async move {
                 // should error
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
                 assert_eq!(
@@ -317,17 +310,13 @@ mod tests {
         let (mut client, mut output) = mock_client_stream();
         let auth = mock_password_authentictor();
 
-        let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output),
-            async move {
-                // send startup
-                PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
-                    [("user".into(), "john".into())].into_iter().collect(),
-                ))
-                .write(&mut client)
-                .await
-                .unwrap();
+        let startup = PostgresFrontendStartupMessage::new(
+            [("user".into(), "john".into())].into_iter().collect(),
+        );
 
+        let (auth_res, _) = tokio::join!(
+            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            async move {
                 // should receive password hash request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
                 let salt = match res {
@@ -369,18 +358,13 @@ mod tests {
         let (mut client, mut output) = mock_client_stream();
         let auth = mock_password_authentictor();
 
-        let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output),
-            async move {
-                // send startup
-                PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
-                    [("user".into(), "john".into())].into_iter().collect(),
-                ))
-                .clone()
-                .write(&mut client)
-                .await
-                .unwrap();
+        let startup = PostgresFrontendStartupMessage::new(
+            [("user".into(), "john".into())].into_iter().collect(),
+        );
 
+        let (auth_res, _) = tokio::join!(
+            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            async move {
                 // should receive password hash request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
                 let salt = match res {
@@ -414,7 +398,7 @@ mod tests {
             }
         );
 
-        let (ctx, startup) = auth_res.unwrap();
+        let ctx = auth_res.unwrap();
 
         assert_eq!(ctx.username, "john".to_string());
         assert_eq!(ctx.provider, "password".to_string());
@@ -435,17 +419,13 @@ mod tests {
         let (mut client, mut output) = mock_client_stream();
         let (auth, _encoding_key) = mock_jwt_authentictor();
 
-        let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output),
-            async move {
-                // send startup
-                PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
-                    [("user".into(), "mary".into())].into_iter().collect(),
-                ))
-                .write(&mut client)
-                .await
-                .unwrap();
+        let startup = PostgresFrontendStartupMessage::new(
+            [("user".into(), "mary".into())].into_iter().collect(),
+        );
 
+        let (auth_res, _) = tokio::join!(
+            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            async move {
                 // should receive password token request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
                 assert_eq!(res, PostgresBackendMessage::AuthenticationCleartextPassword);
@@ -473,18 +453,13 @@ mod tests {
         let (mut client, mut output) = mock_client_stream();
         let (auth, encoding_key) = mock_jwt_authentictor();
 
-        let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output),
-            async move {
-                // send startup
-                PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
-                    [("user".into(), "mary".into())].into_iter().collect(),
-                ))
-                .clone()
-                .write(&mut client)
-                .await
-                .unwrap();
+        let startup = PostgresFrontendStartupMessage::new(
+            [("user".into(), "mary".into())].into_iter().collect(),
+        );
 
+        let (auth_res, _) = tokio::join!(
+            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            async move {
                 // should receive password token request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
                 assert_eq!(res, PostgresBackendMessage::AuthenticationCleartextPassword);
@@ -521,18 +496,13 @@ mod tests {
         let (mut client, mut output) = mock_client_stream();
         let (auth, encoding_key) = mock_jwt_authentictor();
 
-        let (auth_res, (raw_token, exp)) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output),
-            async move {
-                // send startup
-                PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
-                    [("user".into(), "mary".into())].into_iter().collect(),
-                ))
-                .clone()
-                .write(&mut client)
-                .await
-                .unwrap();
+        let startup = PostgresFrontendStartupMessage::new(
+            [("user".into(), "mary".into())].into_iter().collect(),
+        );
 
+        let (auth_res, (raw_token, exp)) = tokio::join!(
+            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            async move {
                 // should receive password token request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
                 assert_eq!(res, PostgresBackendMessage::AuthenticationCleartextPassword);
@@ -560,7 +530,7 @@ mod tests {
             }
         );
 
-        let (ctx, startup) = auth_res.unwrap();
+        let ctx = auth_res.unwrap();
 
         assert_eq!(ctx.username, "mary".to_string());
         assert_eq!(ctx.provider, "jwt".to_string());

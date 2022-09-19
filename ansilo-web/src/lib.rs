@@ -251,6 +251,7 @@ mod tests {
         HttpApiState::new(
             conf,
             PostgresConnectionPools::new(
+                pg,
                 PostgresConnectionPool::new(pg, "unused", "unused", 0, Duration::from_secs(1))
                     .unwrap(),
                 MultiUserPostgresConnectionPool::new(MultiUserPostgresConnectionPoolConfig {

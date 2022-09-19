@@ -21,13 +21,13 @@ use manager::PostgresServerManager;
 pub mod conf;
 pub mod connection;
 pub mod fdw;
+pub mod handler;
 pub mod initdb;
 pub mod low_level;
 pub mod manager;
 pub mod proc;
 pub mod proto;
 pub mod server;
-pub mod handler;
 
 mod configure;
 #[cfg(test)]
@@ -59,6 +59,8 @@ pub struct PostgresInstance {
 /// Thread-safe connection pools to access postgres
 #[derive(Clone)]
 pub struct PostgresConnectionPools {
+    /// The postgres configuration
+    conf: &'static PostgresConf,
     /// The admin user connection pool
     admin: PostgresConnectionPool,
     /// The app user connection pool
@@ -119,10 +121,7 @@ impl PostgresInstance {
         Ok(Self {
             conf,
             server,
-            pools: PostgresConnectionPools {
-                admin: admin_pool,
-                app: app_pool,
-            },
+            pools: PostgresConnectionPools::new(conf, admin_pool, app_pool),
         })
     }
 
@@ -143,8 +142,17 @@ impl PostgresInstance {
 }
 
 impl PostgresConnectionPools {
-    pub fn new(admin: PostgresConnectionPool, app: MultiUserPostgresConnectionPool) -> Self {
-        Self { admin, app }
+    pub fn new(
+        conf: &'static PostgresConf,
+        admin: PostgresConnectionPool,
+        app: MultiUserPostgresConnectionPool,
+    ) -> Self {
+        Self { conf, admin, app }
+    }
+
+    /// Gets the pg config
+    pub fn conf(&self) -> &PostgresConf {
+        self.conf
     }
 
     /// Gets a connection with admin privileges to the database
@@ -168,7 +176,9 @@ mod tests {
 
     fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
         let conf = PostgresConf {
-            install_dir: PathBuf::from(std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into())),
+            install_dir: PathBuf::from(
+                std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
+            ),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}/data/", test_name)),
             socket_dir_path: PathBuf::from(format!("/tmp/ansilo-tests/pg-instance/{}", test_name)),

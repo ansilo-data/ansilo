@@ -5,7 +5,7 @@ use std::{
 };
 
 use ansilo_core::err::{Context, Error, Result};
-use ansilo_logging::{debug, error, info, warn};
+use ansilo_logging::{debug, error, info, warn, trace};
 use socket2::{Domain, Socket};
 use tokio::{
     net::TcpListener,
@@ -160,6 +160,8 @@ impl ProxyListener {
                     return Ok(());
                 }
             };
+
+            trace!("Received connection from {:?}", con.peer_addr().ok());
 
             let conf = self.conf;
             tokio::spawn(async move {

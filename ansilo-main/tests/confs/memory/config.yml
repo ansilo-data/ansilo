@@ -33,6 +33,7 @@ sources:
 
 
 postgres:
+    install_dir: /home/vscode/.pgx/14.5/pgx-install/
     config_path: ${dir}/postgres.conf
     data_dir: /tmp/ansilo/pg-main/memory/data/
     listen_socket_dir_path: /tmp/ansilo/pg-main/memory/

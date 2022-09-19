@@ -19,6 +19,7 @@ use tokio_postgres::Config;
 
 use crate::proto::{
     be::{PostgresBackendMessage, PostgresBackendMessageTag},
+    common::CancelKey,
     fe::{PostgresFrontendMessage, PostgresFrontendStartupMessage},
 };
 
@@ -34,6 +35,7 @@ pub struct LlPostgresConnection {
 #[derive(Default)]
 struct OwnedState {
     initial_parameters: Vec<(String, String)>,
+    backend_key_data: Option<CancelKey>,
     recycle_queries: Vec<String>,
 }
 
@@ -128,13 +130,11 @@ impl LlPostgresConnection {
                     self.owned_mut().initial_parameters.push((k, v));
                     continue;
                 }
-                _ if [
-                    PostgresBackendMessageTag::ParameterStatus,
-                    PostgresBackendMessageTag::BackendKeyData,
-                    PostgresBackendMessageTag::NoticeResponse,
-                ]
-                .contains(&msg.tag()?) =>
-                {
+                PostgresBackendMessage::BackendKeyData(key) => {
+                    let _ = self.owned_mut().backend_key_data.insert(key);
+                    continue;
+                }
+                _ if [PostgresBackendMessageTag::NoticeResponse].contains(&msg.tag()?) => {
                     continue;
                 }
                 msg => bail!("Unexpected response from postgres: {:?}", msg),
@@ -221,6 +221,11 @@ impl LlPostgresConnection {
     /// These can be relayed to any client connections as they come in
     pub fn initial_parameters(&self) -> &Vec<(String, String)> {
         &self.owned().initial_parameters
+    }
+
+    /// Gets the backend key data associated with this connection
+    pub fn backend_key_data(&self) -> &Option<CancelKey> {
+        &self.owned().backend_key_data
     }
 
     /// Splits the connection into a reader and writer which can be used concurrently
@@ -335,12 +340,13 @@ mod tests {
         Box::leak(Box::new(conf))
     }
 
-    fn startup_postgres(conf: &'static PostgresConf) {
+    fn startup_postgres(conf: &'static PostgresConf) -> u32 {
         ansilo_logging::init_for_tests();
         PostgresInitDb::reset(conf).unwrap();
         PostgresInitDb::run(conf).unwrap().complete().unwrap();
-        let mut _server = PostgresServer::boot(conf).unwrap();
-        thread::spawn(move || _server.wait());
+        let server = PostgresServer::boot(conf).unwrap();
+        let pid = server.pid;
+        thread::spawn(move || server.wait());
         let mut i = 0;
 
         while !conf.pg_socket_path().exists() {
@@ -351,6 +357,8 @@ mod tests {
             thread::sleep(Duration::from_secs(1));
             i += 1;
         }
+
+        pid
     }
 
     async fn create_connection(
@@ -375,13 +383,13 @@ mod tests {
         pg_conf.dbname("db");
 
         tokio::try_join!(con.authenticate(pg_conf), async move {
-            let msg = PostgresFrontendMessage::read_startup(&mut server)
+            let msg = PostgresFrontendMessage::read_initial(&mut server)
                 .await
                 .unwrap();
 
             assert_eq!(
                 msg,
-                PostgresFrontendStartupMessage::new(
+                PostgresFrontendMessage::StartupMessage(PostgresFrontendStartupMessage::new(
                     [
                         ("client_encoding".into(), "UTF8".into()),
                         ("user".into(), "username".into()),
@@ -389,7 +397,7 @@ mod tests {
                     ]
                     .into_iter()
                     .collect()
-                )
+                ))
             );
 
             PostgresBackendMessage::AuthenticationOk
@@ -561,5 +569,20 @@ mod tests {
         assert_eq!(params.get("client_encoding"), Some(&"UTF8".into()));
         assert_eq!(params.get("server_encoding"), Some(&"UTF8".into()));
         assert_eq!(params.get("TimeZone"), Some(&"Etc/UTC".into()));
+    }
+
+    #[tokio::test]
+    async fn test_low_level_postgres_connection_captures_backend_key_data() {
+        let conf = test_pg_config("connect_capture_backend_key_data");
+        startup_postgres(conf);
+
+        let mut pg_conf = Config::new();
+        pg_conf.user(PG_SUPER_USER);
+        pg_conf.dbname("postgres");
+
+        let con = create_connection(conf, pg_conf).await;
+
+        assert_ne!(con.backend_key_data().clone().unwrap().pid, 0);
+        assert_ne!(con.backend_key_data().clone().unwrap().key, 0);
     }
 }

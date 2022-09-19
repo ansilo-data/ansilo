@@ -18,6 +18,7 @@ impl PostgresProtocol {
 
 const PG_SSL_REQUEST: [u8; 8] = [0x00, 0x00, 0x00, 0x08, 0x04, 0xd2, 0x16, 0x2f];
 const PG_PROTOCOL_VERSION: [u8; 4] = [0x00, 0x03, 0x00, 0x00];
+const PG_CANCEL_CODE: [u8; 4] = [4, 210, 22, 46];
 const PG_SSL_REQUIRED_ERROR: [u8; 19] = [
     b'E', // Byte1('E') (type)
     0x00, 0x00, 0x00, 0x19, // Int32 (length)
@@ -47,6 +48,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static> Protocol<S> for 
 
         // Second, check if this is a StartupRequest
         if &buf[4..] == &PG_PROTOCOL_VERSION {
+            return Ok(true);
+        }
+
+        // Finally check if it is a CancelRequest
+        if &buf[4..] == &PG_CANCEL_CODE {
             return Ok(true);
         }
 
@@ -171,6 +177,16 @@ mod tests {
                     &mut [0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00]
                         .to_vec()
                         .into()
+                )
+                .await
+                .unwrap(),
+            true
+        );
+        assert_eq!(
+            proto
+                .matches(
+                    // CancelRequest
+                    &mut [0x00, 0x00, 0x00, 0x00, 4, 210, 22, 46].to_vec().into()
                 )
                 .await
                 .unwrap(),

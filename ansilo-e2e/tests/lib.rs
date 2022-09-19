@@ -8,3 +8,4 @@ pub mod postgres;
 pub mod sqlite;
 pub mod web;
 pub mod tls;
+pub mod misc;
