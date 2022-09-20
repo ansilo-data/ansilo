@@ -69,14 +69,97 @@ impl PostgresConnectionHandler {
     /// Handles a connection from a client
     async fn handle_connection(
         &self,
-        mut client: Box<dyn IOStream>,
+        client: Box<dyn IOStream>,
         startup: PostgresFrontendStartupMessage,
     ) -> Result<()> {
+        let mut session = ProxySession::new(&self, client, startup);
+
+        // Process the session, and regardless of the result
+        // run the clean up procedures
+        let sess_res = session.process().await;
+        let term_res = session.terminate().await;
+
+        sess_res.and(term_res)
+    }
+
+    /// Handles a cancel request from a client
+    async fn handle_cancel(&self, _client: Box<dyn IOStream>, client_key: CancelKey) -> Result<()> {
+        // Remove the key from the sessions map
+        // If it is not present abort early
+        let con_key = {
+            let mut sessions = self.cancel_keys.lock().await;
+            match sessions.remove(&client_key) {
+                Some(k) => k,
+                None => return Ok(()),
+            }
+        };
+
+        // The key is valid, try cancel the query
+        let mut con = UnixStream::connect(self.pool.conf().pg_socket_path())
+            .await
+            .context("Failed to cancel request")?;
+
+        PostgresFrontendMessage::CancelRequest(con_key)
+            .write(&mut con)
+            .await
+            .context("Failed to cancel request")?;
+
+        Ok(())
+    }
+}
+
+/// A session where were proxy between the client and postgres
+pub(crate) struct ProxySession<'a> {
+    /// Reference to the main handler
+    handler: &'a PostgresConnectionHandler,
+    /// The connection to the client
+    client: Option<Box<dyn IOStream>>,
+    /// The initial startup message from the client
+    startup: PostgresFrontendStartupMessage,
+    /// The connection to postgres
+    con: Option<AppPostgresConnection>,
+    /// The auth context reset token
+    auth_reset_token: Option<String>,
+    /// The cancel key given to this client
+    cancel_key: Option<CancelKey>,
+    /// Terminated
+    terminated: bool,
+}
+
+impl<'a> ProxySession<'a> {
+    fn new(
+        handler: &'a PostgresConnectionHandler,
+        client: Box<dyn IOStream>,
+        startup: PostgresFrontendStartupMessage,
+    ) -> Self {
+        Self {
+            handler,
+            client: Some(client),
+            startup,
+            con: None,
+            auth_reset_token: None,
+            cancel_key: None,
+            terminated: false,
+        }
+    }
+
+    /// Runs the session
+    async fn process(&mut self) -> Result<()> {
+        let mut client = self.client.take().context("Session already processed")?;
+
         // Authenticate the client
-        let auth = Self::authenticate_postgres(&self.authenticator, &mut client, &startup).await?;
+        let auth =
+            Self::authenticate_postgres(&self.handler.authenticator, &mut client, &self.startup)
+                .await?;
+
+        // Generate reset tokens and cancel keys
+        let reset_token = self.auth_reset_token()?.clone();
+        let cancel_key = self.cancel_key()?.clone();
+        let startup = self.startup.clone();
 
         // Now that we have authenticated, we acquire a connection to to postgres
-        let mut con = self.pool.app(&auth.username).await?;
+        self.con = Some(self.handler.pool.app(&auth.username).await?);
+        let mut con = self.con.as_mut().unwrap();
 
         // Set the authentication context with a new reset token
         // TODO[SEC]: The reset token cannot be made available to the client,
@@ -84,7 +167,7 @@ impl PostgresConnectionHandler {
         // escalate their privileges.
         // Ideally, in future we should set the auth context "out-of-band" of the main connection
         // through some form of IPC to eliminate this possibility categorically.
-        let reset_token = pg_str_literal(&Alphanumeric.sample_string(&mut rand::thread_rng(), 32));
+        let reset_token = pg_str_literal(&reset_token);
         let auth_context = pg_str_literal(
             &serde_json::to_string(&auth).context("Failed to serialise auth context")?,
         );
@@ -93,26 +176,21 @@ impl PostgresConnectionHandler {
         ))
         .await?;
 
-        // We ensure the connection is clean when it is next recycled
-        con.add_recycle_queries(vec![
-            // Ensure the auth context is appropriately reset
-            format!("SELECT __ansilo_auth.ansilo_reset_auth_context({reset_token})"),
-            // Clean any other temporary state
-            "DISCARD ALL".into(),
-        ]);
-
         // Generate a new cancel key and send it to the client
         // Record it against the connection's key to support cancelling
         // requests
-        let client_key = Self::random_cancel_key()?;
         if let Some(con_key) = con.backend_key_data().as_ref() {
-            PostgresBackendMessage::BackendKeyData(client_key.clone())
+            PostgresBackendMessage::BackendKeyData(cancel_key.clone())
                 .write(&mut client)
                 .await
                 .context("Failed to send backend key data")?;
-            let mut sessions = self.cancel_keys.lock().await;
-            // TODO[low]: ensure this is removed on return
-            sessions.insert(client_key.clone(), con_key.clone());
+            client
+                .flush()
+                .await
+                .context("Failed to send backend key data")?;
+
+            let mut sessions = self.handler.cancel_keys.lock().await;
+            sessions.insert(cancel_key.clone(), con_key.clone());
         }
 
         // Forward startup parameters from the client connection
@@ -151,45 +229,7 @@ impl PostgresConnectionHandler {
             }
         }
 
-        // Remove the client key from the map
-        {
-            let mut sessions = self.cancel_keys.lock().await;
-            sessions.remove(&client_key);
-        }
-
-        // Now that the session has finished, we attempt to clean the connection
-        // to free up any temporary tables, transactions or other state.
-        if let Err(err) = con.execute("DISCARD ALL").await {
-            warn!("Error while cleaning connection: {:?}", err);
-            con.set_broken();
-        }
-
         // The session is complete, we drop the connection which should return it to the pool
-        Ok(())
-    }
-
-    /// Handles a cancel request from a client
-    async fn handle_cancel(&self, _client: Box<dyn IOStream>, client_key: CancelKey) -> Result<()> {
-        // Remove the key from the sessions map
-        // If it is not present abort early
-        let con_key = {
-            let mut sessions = self.cancel_keys.lock().await;
-            match sessions.remove(&client_key) {
-                Some(k) => k,
-                None => return Ok(()),
-            }
-        };
-
-        // The key is valid, try cancel the query
-        let mut con = UnixStream::connect(self.pool.conf().pg_socket_path())
-            .await
-            .context("Failed to cancel request")?;
-
-        PostgresFrontendMessage::CancelRequest(con_key)
-            .write(&mut con)
-            .await
-            .context("Failed to cancel request")?;
-
         Ok(())
     }
 
@@ -303,15 +343,82 @@ impl PostgresConnectionHandler {
         Ok(())
     }
 
+    /// Generate a random auth reset token.
+    /// The reset token cannot be made available to the client,
+    /// otherwise they could potentially change their auth context and hence
+    /// escalate their privileges.
+    fn auth_reset_token(&mut self) -> Result<&String> {
+        Ok(self
+            .auth_reset_token
+            .get_or_insert_with(|| Alphanumeric.sample_string(&mut rand::thread_rng(), 32)))
+    }
+
     /// Generate a random cancel key for each client
     /// We dont want to expose the real cancel keys as these
     /// are reused across clients, and we dont want one client
     /// attempting to cancel a request of another.
-    fn random_cancel_key() -> Result<CancelKey> {
-        let pid = rand::random();
-        let key = rand::random();
+    fn cancel_key(&mut self) -> Result<&CancelKey> {
+        Ok(self.cancel_key.get_or_insert_with(|| {
+            let pid = rand::random();
+            let key = rand::random();
 
-        Ok(CancelKey { pid, key })
+            CancelKey { pid, key }
+        }))
+    }
+
+    /// Terminate the session and clean up.
+    /// IMPORTANT: This must be run after the session completes
+    /// as we perform clean up tasks that need to run for security.
+    async fn terminate(&mut self) -> Result<()> {
+        // Get the postgres connection, if any
+        // If none we return as we were never able to acquire a connection.
+        let con = match self.con.as_mut() {
+            Some(c) => c,
+            None => {
+                self.terminated = true;
+                return Ok(());
+            }
+        };
+
+        // Remove the session's cancel key from the map
+        // This must be done in order to prevent the cancel key
+        // being misused against
+        if let Some(cancel_key) = self.cancel_key.as_ref() {
+            let mut sessions = self.handler.cancel_keys.lock().await;
+            sessions.remove(cancel_key);
+        }
+
+        // Reset the auth context so the connection be recycled with a new client.
+        if let Some(reset_token) = self.auth_reset_token.as_ref() {
+            let reset_token = pg_str_literal(reset_token);
+            if let Err(err) = con
+                .execute(format!(
+                    "SELECT __ansilo_auth.ansilo_reset_auth_context({reset_token})"
+                ))
+                .await
+            {
+                warn!("Error while resetting auth context: {:?}", err);
+                con.set_broken();
+            }
+        }
+
+        // Now that the session has finished, we attempt to clean the connection
+        // to free up any temporary tables, transactions or other state.
+        if let Err(err) = con.execute("DISCARD ALL").await {
+            warn!("Error while cleaning conneciton: {:?}", err);
+            con.set_broken();
+        }
+
+        self.terminated = true;
+        Ok(())
+    }
+}
+
+impl<'a> Drop for ProxySession<'a> {
+    fn drop(&mut self) {
+        if !self.terminated {
+            panic!("Session dropped without calling terminate")
+        }
     }
 }
 
@@ -379,7 +486,7 @@ lazy_static! {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{path::PathBuf, time::Duration};
 
     use crate::{conf::PostgresConf, PostgresInstance};
     use ansilo_core::{
@@ -706,5 +813,52 @@ mod tests {
         let fut_handler_cancel = handler.handle(cancel_stream);
 
         tokio::try_join!(fut_client, fut_handler, fut_handler_cancel).unwrap();
+
+        // Ensure cancel keys get cleaned up
+        let cancel_keys = handler.cancel_keys.lock().await;
+        assert_eq!(cancel_keys.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_connection_clean_up_after_session_error() {
+        ansilo_logging::init_for_tests();
+        let auth = mock_password_auth();
+        let (_pg, handler) = init_handler("clean-up-error", auth).await;
+
+        let (client, stream) = init_client_stream();
+
+        let fut_client = async move {
+            let (_client, con) = tokio_postgres::Config::new()
+                .user("test_user")
+                .password("pass123")
+                .connect_raw(client, NoTls)
+                .await?;
+            // Trigger error by dropping the connection after one second
+            let _ = tokio::time::timeout(Duration::from_secs(1), con).await;
+
+            Result::<_, Error>::Ok(())
+        };
+        let fut_handler = handler.handle(stream);
+
+        tokio::try_join!(fut_client, fut_handler).unwrap();
+
+        // Ensure auth context cleaned up
+        handler
+            .pool
+            .app("test_user")
+            .await
+            .unwrap()
+            .execute(
+                r#"
+                DO $$BEGIN
+                    ASSERT auth_context() IS NULL;
+                END$$;
+                "#,
+            )
+            .await
+            .unwrap();
+        // Ensure cancel keys get cleaned up
+        let cancel_keys = handler.cancel_keys.lock().await;
+        assert_eq!(cancel_keys.len(), 0);
     }
 }

@@ -24,9 +24,9 @@ use ansilo_auth::{
     Authenticator,
 };
 
-use super::PostgresConnectionHandler;
+use super::ProxySession;
 
-impl PostgresConnectionHandler {
+impl<'a> ProxySession<'a> {
     /// Perform authentication on the supplied client postgres connection
     ///
     /// This assumes a new connection that expects to receive a StartupMessage.
@@ -291,7 +291,7 @@ mod tests {
         );
 
         let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            ProxySession::authenticate_postgres(&auth, &mut output, &startup),
             async move {
                 // should error
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
@@ -315,7 +315,7 @@ mod tests {
         );
 
         let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            ProxySession::authenticate_postgres(&auth, &mut output, &startup),
             async move {
                 // should receive password hash request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
@@ -363,7 +363,7 @@ mod tests {
         );
 
         let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            ProxySession::authenticate_postgres(&auth, &mut output, &startup),
             async move {
                 // should receive password hash request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
@@ -424,7 +424,7 @@ mod tests {
         );
 
         let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            ProxySession::authenticate_postgres(&auth, &mut output, &startup),
             async move {
                 // should receive password token request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
@@ -458,7 +458,7 @@ mod tests {
         );
 
         let (auth_res, _) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            ProxySession::authenticate_postgres(&auth, &mut output, &startup),
             async move {
                 // should receive password token request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
@@ -501,7 +501,7 @@ mod tests {
         );
 
         let (auth_res, (raw_token, exp)) = tokio::join!(
-            PostgresConnectionHandler::authenticate_postgres(&auth, &mut output, &startup),
+            ProxySession::authenticate_postgres(&auth, &mut output, &startup),
             async move {
                 // should receive password token request
                 let res = PostgresBackendMessage::read(&mut client).await.unwrap();
