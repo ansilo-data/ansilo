@@ -57,9 +57,7 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
         //
         postgres_conf_path: pg_conf.config_path,
         //
-        data_dir: pg_conf
-            .data_dir
-            .unwrap_or("/var/run/ansilo/data".into()),
+        data_dir: pg_conf.data_dir.unwrap_or("/var/run/ansilo/data".into()),
         //
         socket_dir_path: pg_conf
             .listen_socket_dir_path
@@ -149,7 +147,9 @@ pub fn init_proxy_conf(conf: &AppConf, handlers: HandlerConf) -> ProxyConf {
 
     ProxyConf {
         addrs: vec![(
-            networking.bind.unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            networking
+                .bind
+                .unwrap_or(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))),
             networking.port,
         )
             .into()],
