@@ -60,5 +60,9 @@ export const hasJwtTokenInUrl = () => {
 }
 
 const getRedirectUri = (method: AuthMethod) => {
+  for (const key in method.options!.params || {}) {
+    method.options!.params![key] = method.options!.params![key].replace('{{origin}}', window.location.origin)
+  }
+
   return `${method.options!.authorize_endpoint}?${qs.stringify(method.options!.params)}`
 }
