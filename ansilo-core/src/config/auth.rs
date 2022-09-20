@@ -181,7 +181,8 @@ pub enum TokenClaimCheck {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct ServiceUserConfig {
     /// The id of the service user
-    pub id: String,
+    /// If not provided, the id is assumed to be the same as "username"
+    id: Option<String>,
     /// The username to authenticate as
     pub username: String,
     /// A description of the user
@@ -189,4 +190,20 @@ pub struct ServiceUserConfig {
     /// The shell script to invoke used to retrieve the token
     /// used to authenticate as this user
     pub shell: String,
+}
+
+impl ServiceUserConfig {
+    pub fn new(id: String, username: String, description: Option<String>, shell: String) -> Self {
+        Self {
+            id: Some(id),
+            username,
+            description,
+            shell,
+        }
+    }
+
+    /// Gets the id of the service user
+    pub fn id(&self) -> &str {
+        self.id.as_ref().unwrap_or(&self.username)
+    }
 }

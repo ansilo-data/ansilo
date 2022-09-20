@@ -1,10 +1,9 @@
-use ansilo_auth::Authenticator;
 use ansilo_core::{
     config::NodeConfig,
     data::chrono::{DateTime, Utc},
 };
-use ansilo_pg::PostgresConnectionPools;
-use serde::{Serialize, Deserialize};
+use ansilo_pg::{handler::PostgresConnectionHandler, PostgresConnectionPools};
+use serde::{Deserialize, Serialize};
 
 /// Required state and dependencies for the http api
 #[derive(Clone)]
@@ -13,8 +12,8 @@ pub struct HttpApiState {
     conf: &'static NodeConfig,
     /// Connection pools to postgres
     pools: PostgresConnectionPools,
-    /// The authentication system
-    auth: Authenticator,
+    /// Handler for connections to postgres
+    pg_handler: PostgresConnectionHandler,
     /// Version info
     version_info: VersionInfo,
 }
@@ -23,13 +22,13 @@ impl HttpApiState {
     pub fn new(
         conf: &'static NodeConfig,
         pools: PostgresConnectionPools,
-        auth: Authenticator,
+        pg_handler: PostgresConnectionHandler,
         version_info: VersionInfo,
     ) -> Self {
         Self {
             conf,
             pools,
-            auth,
+            pg_handler,
             version_info,
         }
     }
@@ -42,8 +41,8 @@ impl HttpApiState {
         &self.pools
     }
 
-    pub fn auth(&self) -> &Authenticator {
-        &self.auth
+    pub fn pg_handler(&self) -> &PostgresConnectionHandler {
+        &self.pg_handler
     }
 
     pub fn version_info(&self) -> &VersionInfo {

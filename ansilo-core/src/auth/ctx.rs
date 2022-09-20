@@ -13,6 +13,8 @@ pub struct AuthContext {
     pub username: String,
     /// The authentication provider
     pub provider: String,
+    /// If authenticated as a service user, the id of that service user
+    pub service_user_id: Option<String>,
     /// Unix timestamp of when the authentication took place
     pub authenticated_at: u64,
     /// Provider specific context
@@ -24,11 +26,13 @@ impl AuthContext {
     pub fn new(
         username: impl Into<String>,
         provider: impl Into<String>,
+        service_user_id: Option<String>,
         more: ProviderAuthContext,
     ) -> Self {
         Self {
             username: username.into(),
             provider: provider.into(),
+            service_user_id,
             authenticated_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

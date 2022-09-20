@@ -138,11 +138,14 @@ impl Ansilo {
         info!("Starting authenticator...");
         let authenticator = Authenticator::init(&conf.node.auth)?;
 
+        let pg_con_handler =
+            PostgresConnectionHandler::new(authenticator.clone(), postgres.connections().clone());
+
         info!("Starting http api...");
         let http = runtime.block_on(HttpApi::start(HttpApiState::new(
             &conf.node,
             postgres.connections().clone(),
-            authenticator.clone(),
+            pg_con_handler.clone(),
             (&build_info).into(),
         )))?;
 
@@ -150,10 +153,7 @@ impl Ansilo {
         let proxy_conf = Box::leak(Box::new(init_proxy_conf(
             conf,
             HandlerConf::new(
-                PostgresConnectionHandler::new(
-                    authenticator.clone(),
-                    postgres.connections().clone(),
-                ),
+                pg_con_handler,
                 Http2ConnectionHandler::new(http.handler()),
                 Http1ConnectionHandler::new(http.handler()),
             ),

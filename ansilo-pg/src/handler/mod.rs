@@ -1,6 +1,12 @@
 mod auth;
+mod service_user;
+#[cfg(test)]
+mod test;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::{
     low_level::{
@@ -29,10 +35,11 @@ use tokio::{
 };
 
 /// Request handler for postgres-wire-protocol connections
+#[derive(Clone)]
 pub struct PostgresConnectionHandler {
     authenticator: Authenticator,
     pool: PostgresConnectionPools,
-    cancel_keys: Mutex<HashMap<CancelKey, CancelKey>>,
+    cancel_keys: Arc<Mutex<HashMap<CancelKey, CancelKey>>>,
 }
 
 impl PostgresConnectionHandler {
@@ -40,7 +47,7 @@ impl PostgresConnectionHandler {
         Self {
             authenticator,
             pool,
-            cancel_keys: Mutex::new(HashMap::new()),
+            cancel_keys: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -55,7 +62,7 @@ impl ConnectionHandler for PostgresConnectionHandler {
 
         match request {
             PostgresFrontendMessage::StartupMessage(startup) => {
-                self.handle_connection(client, startup).await
+                self.handle_connection(client, startup, None).await
             }
             PostgresFrontendMessage::CancelRequest(cancel) => {
                 self.handle_cancel(client, cancel).await
@@ -71,8 +78,9 @@ impl PostgresConnectionHandler {
         &self,
         client: Box<dyn IOStream>,
         startup: PostgresFrontendStartupMessage,
+        service_user_id: Option<String>,
     ) -> Result<()> {
-        let mut session = ProxySession::new(&self, client, startup);
+        let mut session = ProxySession::new(&self, client, startup, service_user_id);
 
         // Process the session, and regardless of the result
         // run the clean up procedures
@@ -85,7 +93,7 @@ impl PostgresConnectionHandler {
     /// Handles a cancel request from a client
     async fn handle_cancel(&self, _client: Box<dyn IOStream>, client_key: CancelKey) -> Result<()> {
         // Remove the key from the sessions map
-        // If it is not present abort early
+        // If it is not present we dont need to do anything
         let con_key = {
             let mut sessions = self.cancel_keys.lock().await;
             match sessions.remove(&client_key) {
@@ -108,7 +116,7 @@ impl PostgresConnectionHandler {
     }
 }
 
-/// A session where were proxy between the client and postgres
+/// A session where we proxy between the client and postgres
 pub(crate) struct ProxySession<'a> {
     /// Reference to the main handler
     handler: &'a PostgresConnectionHandler,
@@ -122,6 +130,8 @@ pub(crate) struct ProxySession<'a> {
     auth_reset_token: Option<String>,
     /// The cancel key given to this client
     cancel_key: Option<CancelKey>,
+    /// The authenticating service user id, if any
+    service_user_id: Option<String>,
     /// Terminated
     terminated: bool,
 }
@@ -131,6 +141,7 @@ impl<'a> ProxySession<'a> {
         handler: &'a PostgresConnectionHandler,
         client: Box<dyn IOStream>,
         startup: PostgresFrontendStartupMessage,
+        service_user_id: Option<String>,
     ) -> Self {
         Self {
             handler,
@@ -139,6 +150,7 @@ impl<'a> ProxySession<'a> {
             con: None,
             auth_reset_token: None,
             cancel_key: None,
+            service_user_id,
             terminated: false,
         }
     }
@@ -148,16 +160,20 @@ impl<'a> ProxySession<'a> {
         let mut client = self.client.take().context("Session already processed")?;
 
         // Authenticate the client
-        let auth =
-            Self::authenticate_postgres(&self.handler.authenticator, &mut client, &self.startup)
-                .await?;
+        let auth = Self::authenticate_postgres(
+            &self.handler.authenticator,
+            &mut client,
+            &self.startup,
+            self.service_user_id.clone(),
+        )
+        .await?;
 
         // Generate reset tokens and cancel keys
         let reset_token = self.auth_reset_token()?.clone();
         let cancel_key = self.cancel_key()?.clone();
         let startup = self.startup.clone();
 
-        // Now that we have authenticated, we acquire a connection to to postgres
+        // Now that we have authenticated, we acquire a connection to postgres
         self.con = Some(self.handler.pool.app(&auth.username).await?);
         let mut con = self.con.as_mut().unwrap();
 
@@ -177,8 +193,7 @@ impl<'a> ProxySession<'a> {
         .await?;
 
         // Generate a new cancel key and send it to the client
-        // Record it against the connection's key to support cancelling
-        // requests
+        // Record it against the connection's key to support cancel requests
         if let Some(con_key) = con.backend_key_data().as_ref() {
             PostgresBackendMessage::BackendKeyData(cancel_key.clone())
                 .write(&mut client)
@@ -229,7 +244,7 @@ impl<'a> ProxySession<'a> {
             }
         }
 
-        // The session is complete, we drop the connection which should return it to the pool
+        // The session is complete
         Ok(())
     }
 
@@ -490,83 +505,16 @@ lazy_static! {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, time::Duration};
+    use std::time::Duration;
 
-    use crate::{conf::PostgresConf, PostgresInstance};
     use ansilo_core::{
         auth::{AuthContext, PasswordAuthContext, ProviderAuthContext},
-        config::{AuthConfig, PasswordUserConfig, UserConfig, UserTypeOptions},
         err::Error,
     };
-    use ansilo_proxy::stream::Stream;
-    use tokio::net::UnixStream;
     use tokio_postgres::NoTls;
 
+    use super::test::*;
     use super::*;
-
-    fn mock_password_auth() -> Authenticator {
-        let conf = Box::leak(Box::new(AuthConfig {
-            providers: vec![],
-            users: vec![
-                UserConfig {
-                    username: "test_user".into(),
-                    description: None,
-                    provider: None,
-                    r#type: UserTypeOptions::Password(PasswordUserConfig {
-                        password: "pass123".into(),
-                    }),
-                },
-                UserConfig {
-                    username: "another_user".into(),
-                    description: None,
-                    provider: None,
-                    r#type: UserTypeOptions::Password(PasswordUserConfig {
-                        password: "luna456".into(),
-                    }),
-                },
-            ],
-            service_users: vec![],
-        }));
-
-        Authenticator::init(conf).unwrap()
-    }
-
-    async fn init_pg(test_name: &'static str) -> PostgresInstance {
-        // This runs blocking code and contains a runtime
-        let conf = Box::leak(Box::new(PostgresConf {
-            install_dir: PathBuf::from(
-                std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
-            ),
-            postgres_conf_path: None,
-            data_dir: PathBuf::from(format!("/tmp/ansilo-tests/main-pg-handler/{}", test_name)),
-            socket_dir_path: PathBuf::from(format!(
-                "/tmp/ansilo-tests/main-pg-handler/{}",
-                test_name
-            )),
-            fdw_socket_path: PathBuf::from("not-used"),
-            app_users: vec!["test_user".into(), "another_user".into()],
-            init_db_sql: vec![],
-        }));
-
-        PostgresInstance::configure(conf).await.unwrap()
-    }
-
-    fn init_client_stream() -> (UnixStream, Box<dyn IOStream>) {
-        let (a, b) = UnixStream::pair().unwrap();
-
-        (a, Box::new(Stream(b)))
-    }
-
-    async fn init_handler(
-        test_name: &'static str,
-        auth: Authenticator,
-    ) -> (PostgresInstance, PostgresConnectionHandler) {
-        let mut pg = init_pg(test_name).await;
-
-        let handler = PostgresConnectionHandler::new(auth, pg.connections().clone());
-
-        (pg, handler)
-    }
 
     #[tokio::test]
     async fn test_basic_query() {

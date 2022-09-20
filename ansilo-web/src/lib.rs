@@ -226,6 +226,7 @@ mod tests {
     use ansilo_pg::{
         conf::PostgresConf,
         connection::PostgresConnectionPool,
+        handler::PostgresConnectionHandler,
         low_level::multi_pool::{
             MultiUserPostgresConnectionPool, MultiUserPostgresConnectionPoolConfig,
         },
@@ -248,22 +249,24 @@ mod tests {
             init_db_sql: vec![],
         }));
 
+        let pools = PostgresConnectionPools::new(
+            pg,
+            PostgresConnectionPool::new(pg, "unused", "unused", 0, Duration::from_secs(1)).unwrap(),
+            MultiUserPostgresConnectionPool::new(MultiUserPostgresConnectionPoolConfig {
+                pg,
+                users: vec![],
+                database: "unused".into(),
+                max_cons_per_user: 10,
+                connect_timeout: Duration::from_secs(1),
+            })
+            .unwrap(),
+        );
+        let authenticator = Authenticator::init(&conf.auth).unwrap();
+
         HttpApiState::new(
             conf,
-            PostgresConnectionPools::new(
-                pg,
-                PostgresConnectionPool::new(pg, "unused", "unused", 0, Duration::from_secs(1))
-                    .unwrap(),
-                MultiUserPostgresConnectionPool::new(MultiUserPostgresConnectionPoolConfig {
-                    pg,
-                    users: vec![],
-                    database: "unused".into(),
-                    max_cons_per_user: 10,
-                    connect_timeout: Duration::from_secs(1),
-                })
-                .unwrap(),
-            ),
-            Authenticator::init(&conf.auth).unwrap(),
+            pools.clone(),
+            PostgresConnectionHandler::new(authenticator, pools),
             VersionInfo::new("test", DateTime::<Utc>::MIN_UTC),
         )
     }
