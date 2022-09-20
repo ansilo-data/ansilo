@@ -13,7 +13,7 @@ auth:
         authorize_endpoint: https://test-ansilo-demo.auth.ap-southeast-2.amazoncognito.com/login
         params:
           client_id: 21iais50jj7blc3rkr6paqbrqd
-          redirect_uri: http://localhost:5000
+          redirect_uri: ${origin}
           response_type: token
 
   users:
