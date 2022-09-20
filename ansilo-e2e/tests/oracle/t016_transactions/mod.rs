@@ -156,6 +156,11 @@ fn test_transaction_rollback_due_to_error() {
         )
         .unwrap_err();
 
+    // After the error the rollback occurs asynchronously from this thread
+    // drop the client to ensure we wait for the connection to finish
+    // processing and the rollback to be issued
+    drop(client);
+
     // Check rolled back on oracle side
     let results = oracle
         .execute("SELECT * FROM T016__TEST_TAB", vec![])

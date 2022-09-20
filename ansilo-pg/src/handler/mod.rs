@@ -389,24 +389,28 @@ impl<'a> ProxySession<'a> {
         }
 
         // Reset the auth context so the connection be recycled with a new client.
-        if let Some(reset_token) = self.auth_reset_token.as_ref() {
-            let reset_token = pg_str_literal(reset_token);
-            if let Err(err) = con
-                .execute(format!(
-                    "SELECT __ansilo_auth.ansilo_reset_auth_context({reset_token})"
-                ))
-                .await
-            {
-                warn!("Error while resetting auth context: {:?}", err);
-                con.set_broken();
+        if !con.broken() {
+            if let Some(reset_token) = self.auth_reset_token.as_ref() {
+                let reset_token = pg_str_literal(reset_token);
+                if let Err(err) = con
+                    .execute(format!(
+                        "SELECT __ansilo_auth.ansilo_reset_auth_context({reset_token})"
+                    ))
+                    .await
+                {
+                    warn!("Error while resetting auth context: {:?}", err);
+                    con.set_broken();
+                }
             }
         }
 
         // Now that the session has finished, we attempt to clean the connection
         // to free up any temporary tables, transactions or other state.
-        if let Err(err) = con.execute("DISCARD ALL").await {
-            warn!("Error while cleaning conneciton: {:?}", err);
-            con.set_broken();
+        if !con.broken() {
+            if let Err(err) = con.execute("DISCARD ALL").await {
+                warn!("Error while cleaning conneciton: {:?}", err);
+                con.set_broken();
+            }
         }
 
         self.terminated = true;
