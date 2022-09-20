@@ -54,7 +54,7 @@ export const fetchNodes = async (): Promise<Node[]> => {
 
     nodes.push({
       id: `n-${nodeUrl}`,
-      name: nodeInfo?.name || nodeUrl,
+      name: nodeInfo?.name || getNodeNameFallback(nodeUrl),
       url: nodeUrl,
       tags: allTags,
       schema: {
@@ -77,11 +77,21 @@ const getNodeUrl = (entity: any): string => {
 
   let source = entity.source;
 
-  while (source.source && source.url) {
+  while (source.source && source.source.url) {
     source = source.source;
   }
 
   return source.url;
+};
+
+const getNodeNameFallback = (url: string): string => {
+  try {
+    return new URL(url).hostname;
+  } catch (e) {
+    console.warn(`Error while parsing url`, url, e);
+  }
+
+  return url;
 };
 
 const fetchNodeInfo = async (url: string): Promise<any> => {
