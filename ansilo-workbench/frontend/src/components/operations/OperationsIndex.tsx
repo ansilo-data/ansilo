@@ -23,7 +23,7 @@ export const OperationsIndex = () => {
         }}
       >
         <Paper sx={{ display: "flex", p: 4, alignItems: 'center' }} elevation={8}>
-          Select an menu item from the panel to the left.
+          Select a menu item from the panel to the left.
         </Paper>
       </Container>
     </Box>
