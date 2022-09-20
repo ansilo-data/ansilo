@@ -83,7 +83,7 @@ export const Status = () => {
           {status !== undefined ?
             <Alert severity={status.error ? 'error' : 'success'} sx={{ mb: 4 }}>
               <AlertTitle>System Status</AlertTitle>
-              {status.error ? status.error : 'System is operating nominally'}
+              {status.error ? status.error : 'System operation is nominal'}
             </Alert>
             : <CircularProgress sx={{ mh: 'auto', mb: 4 }} />}
           <Typography sx={{ mb: 2 }} variant="h6">
