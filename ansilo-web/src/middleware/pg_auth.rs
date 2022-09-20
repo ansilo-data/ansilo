@@ -21,6 +21,11 @@ pub struct ClientAuthenticatedPostgresConnection(
     pub Arc<Mutex<PostgresConnection<UnpooledClient>>>,
 );
 
+/// This middleware authenticates the client's credentials.
+/// We extract the credentials from the request and attempt
+/// to authenticate against postgres.
+/// Authentication of the credentials occurs within
+/// @see ansilo-pg/src/handler/auth.rs
 pub(crate) async fn auth<B>(
     mut req: Request<B>,
     next: Next<B>,

@@ -93,7 +93,7 @@ pub struct SamlLoginConfig {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct CustomAuthProviderConfig {
     /// Shell script to invoke to validate authentication
-    pub shell: Option<String>,
+    pub shell: String,
 }
 
 /// Defines a user
@@ -160,10 +160,10 @@ pub struct SamlUserConfig {
 }
 
 /// Defines options used for custom user authentication
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub struct CustomUserConfig {
     /// Any custom value
-    pub custom: serde_yaml::Value,
+    pub custom: Option<serde_yaml::Value>,
 }
 
 /// Defines a claim validation for a token

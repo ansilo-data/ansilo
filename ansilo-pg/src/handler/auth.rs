@@ -78,9 +78,13 @@ impl<'a> ProxySession<'a> {
                     Self::do_postgres_saml_auth(auth, client, provider, conf).await?,
                 )
             }
-            (AuthProvider::Custom(provider), UserTypeOptions::Custom(conf)) => {
+            (AuthProvider::Custom(provider), conf) => {
+                let conf = match conf {
+                    UserTypeOptions::Custom(c) => c.clone(),
+                    _ => CustomUserConfig::default(),
+                };
                 ProviderAuthContext::Custom(
-                    Self::do_postgres_custom_auth(auth, client, provider, conf).await?,
+                    Self::do_postgres_custom_auth(auth, client, username, provider, &conf).await?,
                 )
             }
             // Shouldnt happen
@@ -159,7 +163,7 @@ impl<'a> ProxySession<'a> {
             {
                 msg.body().to_vec()
             }
-            _ => bail!("Unexpected response message to hash request: {:?}", res),
+            _ => bail!("Unexpected response message to jwt request: {:?}", res),
         };
 
         // Trim trailing null byte if present
@@ -183,11 +187,37 @@ impl<'a> ProxySession<'a> {
 
     async fn do_postgres_custom_auth(
         _auth: &Authenticator,
-        _client: &mut Box<dyn IOStream>,
-        _provider: &CustomAuthProvider,
-        _conf: &CustomUserConfig,
+        client: &mut Box<dyn IOStream>,
+        username: &str,
+        provider: &CustomAuthProvider,
+        conf: &CustomUserConfig,
     ) -> Result<CustomAuthContext> {
-        todo!()
+        PostgresBackendMessage::AuthenticationCleartextPassword
+            .write(client)
+            .await
+            .context("Failed to send password request")?;
+
+        let res = PostgresFrontendMessage::read(client)
+            .await
+            .context("Failed to read response from password request")?;
+
+        let mut password = match res {
+            PostgresFrontendMessage::Other(msg)
+                if msg.tag() == Some(PostgresFrontendMessageTag::AuthenticationData as _) =>
+            {
+                msg.body().to_vec()
+            }
+            _ => bail!("Unexpected response message to password request: {:?}", res),
+        };
+
+        // Trim trailing null byte if present
+        if password.last().cloned() == Some(0) {
+            password.remove(password.len() - 1);
+        }
+
+        let password = String::from_utf8(password).context("Supplied jwt is invalid")?;
+
+        provider.authenticate(conf, username, &password)
     }
 }
 
@@ -196,9 +226,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use ansilo_auth::Authenticator;
-    use ansilo_core::config::{
-        AuthConfig, AuthProviderConfig, JwtAuthProviderConfig, TokenClaimCheck, UserConfig,
-    };
+    use ansilo_core::config::*;
     use ansilo_proxy::stream::Stream;
     use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
     use pretty_assertions::assert_eq;
@@ -231,7 +259,7 @@ mod tests {
         let conf = Box::leak(Box::new(AuthConfig {
             providers: vec![AuthProviderConfig {
                 id: "jwt".into(),
-                r#type: ansilo_core::config::AuthProviderTypeConfig::Jwt(JwtAuthProviderConfig {
+                r#type: AuthProviderTypeConfig::Jwt(JwtAuthProviderConfig {
                     jwk: None,
                     rsa_public_key: Some(format!(
                         "file://{}",
@@ -259,6 +287,26 @@ mod tests {
         }));
 
         (Authenticator::init(conf).unwrap(), encoding_key)
+    }
+
+    fn mock_custom_authentictor(script: &str) -> Authenticator {
+        let conf = Box::leak(Box::new(AuthConfig {
+            providers: vec![AuthProviderConfig {
+                id: "custom".into(),
+                r#type: AuthProviderTypeConfig::Custom(CustomAuthProviderConfig {
+                    shell: script.into(),
+                }),
+            }],
+            users: vec![UserConfig {
+                username: "john".into(),
+                description: None,
+                provider: Some("custom".into()),
+                r#type: UserTypeOptions::Custom(CustomUserConfig { custom: None }),
+            }],
+            service_users: vec![],
+        }));
+
+        Authenticator::init(conf).unwrap()
     }
 
     fn mock_client_stream() -> (Box<dyn IOStream>, Box<dyn IOStream>) {
@@ -565,5 +613,88 @@ mod tests {
                 [("user".into(), "mary".into())].into_iter().collect(),
             )
         );
+    }
+
+    #[tokio::test]
+    async fn test_postgres_auth_custom_auth_success() {
+        let (mut client, mut output) = mock_client_stream();
+        let auth = mock_custom_authentictor(r#"echo '{"result": "success", "context": "ctx"}'"#);
+
+        let startup = PostgresFrontendStartupMessage::new(
+            [("user".into(), "john".into())].into_iter().collect(),
+        );
+
+        let (auth_res, _) = tokio::join!(
+            ProxySession::authenticate_postgres(&auth, &mut output, &startup),
+            async move {
+                // should receive password request
+                let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+                match res {
+                    PostgresBackendMessage::AuthenticationCleartextPassword => {}
+                    _ => panic!("Unexpected response {:?}", res),
+                };
+
+                // send pw
+                PostgresFrontendMessage::PasswordMessage(vec![1, 2, 3])
+                    .write(&mut client)
+                    .await
+                    .unwrap();
+
+                // should authenticate
+                let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+                assert_eq!(res, PostgresBackendMessage::AuthenticationOk)
+            }
+        );
+
+        let ctx = auth_res.unwrap();
+
+        assert_eq!(ctx.username, "john".to_string());
+        assert_eq!(ctx.provider, "custom".to_string());
+        assert_eq!(
+            ctx.more,
+            ProviderAuthContext::Custom(CustomAuthContext {
+                data: serde_json::Value::String("ctx".into())
+            })
+        );
+        assert_eq!(
+            startup,
+            PostgresFrontendStartupMessage::new(
+                [("user".into(), "john".into())].into_iter().collect(),
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn test_postgres_auth_custom_auth_failure() {
+        let (mut client, mut output) = mock_client_stream();
+        let auth = mock_custom_authentictor(r#"echo '{"result": "failure", "message": "msg"}'"#);
+
+        let startup = PostgresFrontendStartupMessage::new(
+            [("user".into(), "john".into())].into_iter().collect(),
+        );
+
+        let (auth_res, _) = tokio::join!(
+            ProxySession::authenticate_postgres(&auth, &mut output, &startup),
+            async move {
+                // should receive password request
+                let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+                match res {
+                    PostgresBackendMessage::AuthenticationCleartextPassword => {}
+                    _ => panic!("Unexpected response {:?}", res),
+                };
+
+                // send pw
+                PostgresFrontendMessage::PasswordMessage(vec![1, 2, 3])
+                    .write(&mut client)
+                    .await
+                    .unwrap();
+
+                // should error
+                let res = PostgresBackendMessage::read(&mut client).await.unwrap();
+                assert_eq!(res, PostgresBackendMessage::error_msg("msg"))
+            }
+        );
+
+        auth_res.unwrap_err();
     }
 }
