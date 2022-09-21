@@ -7,7 +7,7 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import GroupIcon from '@mui/icons-material/Group';
+import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import GppGoodIcon from '@mui/icons-material/GppGood';
 import BadgeIcon from '@mui/icons-material/Badge';
 
@@ -40,6 +40,16 @@ export default function GovernanceMenu(props: Props) {
               <BadgeIcon />
             </ListItemIcon>
             <ListItemText primary="Roles" />
+          </ListItemButton>
+        </Link>
+        <Link href="/governance/service-users">
+          <ListItemButton
+            selected={router.asPath.startsWith("/governance/service-users")}
+          >
+            <ListItemIcon>
+              <PrecisionManufacturingIcon />
+            </ListItemIcon>
+            <ListItemText primary="Service Users" />
           </ListItemButton>
         </Link>
       </List>

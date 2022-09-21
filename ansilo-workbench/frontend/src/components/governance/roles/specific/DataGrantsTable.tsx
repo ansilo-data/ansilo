@@ -18,6 +18,7 @@ import { executeQuery } from "../../../sql/sql.api";
 import qs from 'qs';
 
 export interface Grant {
+  schema: string,
   table: string,
   grants: string
 }
@@ -38,16 +39,17 @@ export const DataGrantsTable = () => {
       let res = await executeQuery(
         dispatch, auth.creds!, {
         sql: `
-        SELECT table_name, string_agg(privilege_type, ', ') as grants
+        SELECT table_schema, table_name, string_agg(privilege_type, ', ') as grants
         FROM information_schema.role_table_grants
         WHERE grantee = $1
-        GROUP BY grantee, table_name;
+        AND table_schema != 'ansilo_catalog'
+        GROUP BY grantee, table_schema, table_name;
         `,
         params: [String(username)]
       }
       );
 
-      setGrants(res.values.map(v => ({ table: v[0], grants: v[1] }) as Grant))
+      setGrants(res.values.map(v => ({ schema: v[0], table: v[1], grants: v[2] }) as Grant))
     })();
   }, [auth.creds, dispatch])
 
@@ -56,13 +58,15 @@ export const DataGrantsTable = () => {
       <Table stickyHeader>
         <TableHead>
           <TableRow>
+            <TableCell>Schema</TableCell>
             <TableCell>Table</TableCell>
             <TableCell width="50%">Operations</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {grants?.length ?
-            grants.map(grant => <TableRow key={grant.table}>
+            grants.map(grant => <TableRow key={grant.schema + '.' + grant.table}>
+              <TableCell>{grant.schema}</TableCell>
               <TableCell>{grant.table}</TableCell>
               <TableCell>{grant.grants}</TableCell>
             </TableRow>)

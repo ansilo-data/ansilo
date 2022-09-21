@@ -97,7 +97,7 @@ impl QueryPlanner for InternalQueryPlanner {
                 select.cols.push((alias, sql::Expr::Attribute(att)));
                 Ok(QueryOperationResult::Ok(OperationCost::default()))
             }
-            _ => bail!("Unsupported"),
+            _ => Ok(QueryOperationResult::Unsupported),
         }
     }
 
@@ -115,7 +115,7 @@ impl QueryPlanner for InternalQueryPlanner {
         _insert: &mut sql::Insert,
         _op: InsertQueryOperation,
     ) -> Result<QueryOperationResult> {
-        bail!("Unsupported")
+        Ok(QueryOperationResult::Unsupported)
     }
 
     fn apply_bulk_insert_operation(
@@ -124,7 +124,7 @@ impl QueryPlanner for InternalQueryPlanner {
         _bulk_insert: &mut sql::BulkInsert,
         _op: BulkInsertQueryOperation,
     ) -> Result<QueryOperationResult> {
-        bail!("Unsupported")
+        Ok(QueryOperationResult::Unsupported)
     }
 
     fn apply_update_operation(
@@ -133,7 +133,7 @@ impl QueryPlanner for InternalQueryPlanner {
         _update: &mut sql::Update,
         _op: UpdateQueryOperation,
     ) -> Result<QueryOperationResult> {
-        bail!("Unsupported")
+        Ok(QueryOperationResult::Unsupported)
     }
 
     fn apply_delete_operation(
@@ -142,7 +142,7 @@ impl QueryPlanner for InternalQueryPlanner {
         _delete: &mut sql::Delete,
         _op: DeleteQueryOperation,
     ) -> Result<QueryOperationResult> {
-        bail!("Unsupported")
+        Ok(QueryOperationResult::Unsupported)
     }
 
     fn explain_query(

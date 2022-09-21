@@ -1,23 +1,21 @@
 import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import type { AppState, AppThunk } from "../../store/store";
+import { selectCredentials } from "../auth/auth.slice";
 import { selectAuthoritativeNode } from "../catalog/catalog.slice";
+import { fetchJobs } from "./jobs.api";
 
 export interface Job {
   name: string;
   description: string;
+  serviceUserId: string;
   id: Id;
   query: JobQuery;
-  trigger: JobTrigger; // todo: multiple
+  trigger: string;
   runs: JobResult[];
 }
 
 export interface JobQuery {
   sql: string;
-}
-
-export interface JobTrigger {
-  type: "schedule" | "manual" | "after";
-  options: any;
 }
 
 export interface JobResult {
@@ -29,25 +27,43 @@ export interface JobResult {
 export type Id = string;
 
 export interface JobState {
-  newJobs: Job[];
+  status: "idle" | "loading" | "failed";
+  jobs: Job[];
 }
 
-const initialState: JobState = { newJobs: [] };
+export const fetchJobsAsync = createAsyncThunk(
+  "job/fetch",
+  async (_, { getState, dispatch }) => {
+    const state = getState() as AppState;
+    const creds = selectCredentials(state);
+    const response = await fetchJobs(dispatch as any, creds!);
+    return {
+      jobs: response,
+    };
+  }
+);
+
+const initialState: JobState = { status: "idle", jobs: [] };
 
 export const jobSlice = createSlice({
   name: "job",
   initialState,
-  reducers: {
-    createJob: (state, action: PayloadAction<Job>) => {
-      state.newJobs.push(action.payload);
-    },
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchJobsAsync.pending, (state) => {
+        state.status = "loading";
+      })
+      .addCase(fetchJobsAsync.fulfilled, (state, action) => {
+        state.status = "idle";
+        state.jobs = action.payload.jobs;
+      })
+      .addCase(fetchJobsAsync.rejected, (state, action) => {
+        state.status = "failed";
+      });
   },
-  extraReducers: (builder) => {},
 });
 
-export const { createJob } = jobSlice.actions;
-
-export const selectJobs = (state: AppState) =>
-  (selectAuthoritativeNode(state)?.jobs || []).concat(state.jobs.newJobs);
+export const selectJobs = (state: AppState) => state.jobs.jobs;
 
 export default jobSlice.reducer;

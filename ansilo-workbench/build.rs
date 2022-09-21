@@ -5,6 +5,10 @@ use std::{
 };
 
 fn main() {
+    if env::var("ANSILO_SKIP_COMPILE_FRONTEND").is_ok() {
+        return;
+    }
+
     // Build the next.js frontend app
     println!("cargo:rerun-if-changed=./frontend/src");
     println!("cargo:rerun-if-changed=./frontend/styles");

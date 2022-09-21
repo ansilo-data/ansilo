@@ -12,10 +12,16 @@ use serde::Serialize;
 use crate::InternalResultSet;
 
 #[derive(Clone, Debug, Serialize)]
-pub enum InternalQuery {
-    Job(&'static NodeConfig, Vec<(String, JobColumn)>),
-    JobTrigger(&'static NodeConfig, Vec<(String, JobTriggerColumn)>),
-    ServiceUser(&'static NodeConfig, Vec<(String, ServiceUserColumn)>),
+pub struct InternalQuery {
+    pub nc: &'static NodeConfig,
+    pub query: InternalQueryType,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub enum InternalQueryType {
+    Job(Vec<(String, JobColumn)>),
+    JobTrigger(Vec<(String, JobTriggerColumn)>),
+    ServiceUser(Vec<(String, ServiceUserColumn)>),
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -96,8 +102,9 @@ impl QueryHandle for InternalQuery {
     }
 
     fn execute_query(&mut self) -> Result<Self::TResultSet> {
-        let data: Vec<Option<String>> = match self {
-            InternalQuery::Job(nc, cols) => nc
+        let data: Vec<Option<String>> = match &self.query {
+            InternalQueryType::Job(cols) => self
+                .nc
                 .jobs
                 .iter()
                 .flat_map(|job| {
@@ -110,7 +117,8 @@ impl QueryHandle for InternalQuery {
                     })
                 })
                 .collect(),
-            InternalQuery::JobTrigger(nc, cols) => nc
+            InternalQueryType::JobTrigger(cols) => self
+                .nc
                 .jobs
                 .iter()
                 .flat_map(|job| {
@@ -126,7 +134,8 @@ impl QueryHandle for InternalQuery {
                     })
                 })
                 .collect(),
-            InternalQuery::ServiceUser(nc, cols) => nc
+            InternalQueryType::ServiceUser(cols) => self
+                .nc
                 .auth
                 .service_users
                 .iter()
@@ -140,16 +149,16 @@ impl QueryHandle for InternalQuery {
                 .collect(),
         };
 
-        let cols: Vec<_> = match self {
-            InternalQuery::Job(_, cols) => cols
+        let cols: Vec<_> = match &self.query {
+            InternalQueryType::Job(cols) => cols
                 .iter()
                 .map(|(a, _)| (a.clone(), DataType::rust_string()))
                 .collect(),
-            InternalQuery::JobTrigger(_, cols) => cols
+            InternalQueryType::JobTrigger(cols) => cols
                 .iter()
                 .map(|(a, _)| (a.clone(), DataType::rust_string()))
                 .collect(),
-            InternalQuery::ServiceUser(_, cols) => cols
+            InternalQueryType::ServiceUser(cols) => cols
                 .iter()
                 .map(|(a, _)| (a.clone(), DataType::rust_string()))
                 .collect(),
@@ -171,6 +180,6 @@ impl QueryHandle for InternalQuery {
     }
 
     fn logged(&self) -> Result<LoggedQuery> {
-        Ok(LoggedQuery::new_query(serde_json::to_string(self)?))
+        Ok(LoggedQuery::new_query(serde_json::to_string(&self.query)?))
     }
 }

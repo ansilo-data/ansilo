@@ -7,7 +7,7 @@ use ansilo_core::{
 
 use ansilo_connectors_base::{common::entity::ConnectorEntityConfig, interface::QueryCompiler};
 
-use crate::{InternalConnection, InternalQuery};
+use crate::{InternalConnection, InternalQuery, InternalQueryType};
 
 pub struct InternalQueryCompiler;
 
@@ -27,11 +27,13 @@ impl QueryCompiler for InternalQueryCompiler {
         };
 
         let query = match select.from.entity.entity_id.as_str() {
-            "jobs" => InternalQuery::Job(con.0, parse_cols(select.cols)?),
-            "job_triggers" => InternalQuery::JobTrigger(con.0, parse_cols(select.cols)?),
-            "service_users" => InternalQuery::ServiceUser(con.0, parse_cols(select.cols)?),
+            "jobs" => InternalQueryType::Job(parse_cols(select.cols)?),
+            "job_triggers" => InternalQueryType::JobTrigger(parse_cols(select.cols)?),
+            "service_users" => InternalQueryType::ServiceUser(parse_cols(select.cols)?),
             _ => bail!("Unsupported"),
         };
+
+        let query = InternalQuery { nc: con.0, query };
 
         Ok(query)
     }

@@ -182,12 +182,12 @@ impl FdwQueryContext {
     pub fn apply(&mut self, query_op: QueryOperation) -> Result<QueryOperationResult> {
         let result = self
             .connection
-            .send(ClientQueryMessage::Apply(query_op))
+            .send(ClientQueryMessage::Apply(query_op.clone()))
             .and_then(|res| match res {
                 ServerQueryMessage::OperationResult(result) => Ok(result),
                 _ => Err(unexpected_response(res)),
             })
-            .context("Applying query op")?;
+            .with_context(|| format!("Applying query op: {:?}", query_op))?;
 
         Ok(result)
     }

@@ -8,11 +8,10 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
-import { Job } from "../jobs.slice";
-
-interface Props {
-  jobs: Job[];
-}
+import { fetchJobsAsync, Job, selectJobs } from "../jobs.slice";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { useEffect } from "react";
+import { selectAuth } from "../../auth/auth.slice";
 
 const MessageBox = styled(
   Box,
@@ -29,7 +28,15 @@ const MessageBox = styled(
   },
 }));
 
-export const JobsTable = ({ jobs }: Props) => {
+export const JobsTable = () => {
+  const dispatch = useAppDispatch();
+  const jobs = useAppSelector(selectJobs);
+  const auth = useAppSelector(selectAuth);
+
+  useEffect(() => {
+    dispatch(fetchJobsAsync());
+  }, [dispatch, auth]);
+
   if (jobs.length === 0) {
     return (
       <MessageBox>
@@ -55,7 +62,7 @@ export const JobsTable = ({ jobs }: Props) => {
               <TableRow key={j.id}>
                 <TableCell>{j.name}</TableCell>
                 <TableCell>{j.description}</TableCell>
-                <TableCell>{j.trigger.type}</TableCell>
+                <TableCell>{j.trigger}</TableCell>
                 <TableCell>{j.query.sql.substring(0, 30)}...</TableCell>
               </TableRow>
             ))}
