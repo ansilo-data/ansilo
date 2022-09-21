@@ -50,7 +50,11 @@ impl JobScheduler {
     }
 
     /// Terminate the job scheduler
-    pub fn terminate_mut(&mut self) -> Result<()> {
+    pub fn terminate(mut self) -> Result<()> {
+        self.terminate_mut()
+    }
+
+    fn terminate_mut(&mut self) -> Result<()> {
         self.runtime.block_on(self.inner.terminate_mut())
     }
 }
@@ -144,7 +148,7 @@ mod tests {
 
         tokio::task::spawn_blocking(move || {
             scheduler.start().unwrap();
-            scheduler.terminate_mut().unwrap();
+            scheduler.terminate().unwrap();
         })
         .await
         .unwrap();
@@ -181,7 +185,7 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             scheduler.start().unwrap();
             std::thread::sleep(Duration::from_secs(5));
-            scheduler.terminate_mut().unwrap();
+            scheduler.terminate().unwrap();
         })
         .await
         .unwrap();

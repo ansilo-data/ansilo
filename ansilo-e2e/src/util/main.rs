@@ -1,6 +1,6 @@
 use std::{path::PathBuf, thread, time::Duration};
 
-use ansilo_core::err::Result;
+use ansilo_core::{data::uuid::Uuid, err::Result};
 use ansilo_logging::info;
 use ansilo_main::{
     args::{Args, Command},
@@ -47,7 +47,11 @@ pub fn run_instance_without_connect(config_path: PathBuf) -> (Ansilo, u16) {
 }
 
 /// Runs an instance of ansilo using the supplied args
-pub fn run_instance_without_connect_args(args: Args) -> (Ansilo, u16) {
+pub fn run_instance_without_connect_args(mut args: Args) -> (Ansilo, u16) {
+    args.config_args.push((
+        "TEMP_DIR".into(),
+        format!("/tmp/ansilo-e2e/{}", Uuid::new_v4()),
+    ));
     let instance =
         Ansilo::start(Command::Run(args), Some(RemoteQueryLog::store_in_memory())).unwrap();
 

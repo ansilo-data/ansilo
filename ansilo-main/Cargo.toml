@@ -14,6 +14,7 @@ ansilo-pg = { path = "../ansilo-pg" }
 ansilo-proxy = { path = "../ansilo-proxy" }
 ansilo-auth = { path = "../ansilo-auth" }
 ansilo-web = { path = "../ansilo-web" }
+ansilo-jobs = { path = "../ansilo-jobs" }
 ansilo-util-pg = { path = "../ansilo-util/pg" }
 chrono = "0.4"
 clap = { version = "3.2", features = ["derive"] }

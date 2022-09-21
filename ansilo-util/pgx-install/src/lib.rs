@@ -27,6 +27,10 @@ macro_rules! install_ansilo_pgx {
 }
 
 pub fn install_ansilo_pgx() {
+    if env::var("ANSILO_SKIP_PGX_INSTALL").is_ok() {
+        return;
+    }
+
     println!("Granting access to postgres ext/lib dirs...");
     let res = Command::new("bash")
             .args(["-c", &format!("sudo setfacl -m u:$(id -u):rwx $(pg_config --sharedir)/extension/ $(pg_config --pkglibdir)")])

@@ -343,6 +343,7 @@ dependencies = [
  "ansilo-config",
  "ansilo-connectors-all",
  "ansilo-core",
+ "ansilo-jobs",
  "ansilo-logging",
  "ansilo-pg",
  "ansilo-proxy",

@@ -4,6 +4,7 @@ use crate::{args::Command, build::BuildInfo};
 use ansilo_auth::Authenticator;
 use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs, Connectors};
 use ansilo_core::err::{Context, Result};
+use ansilo_jobs::JobScheduler;
 use ansilo_logging::{error, info, warn};
 use ansilo_pg::{fdw::server::FdwServer, handler::PostgresConnectionHandler, PostgresInstance};
 use ansilo_proxy::{conf::HandlerConf, server::ProxyServer};
@@ -53,6 +54,8 @@ pub struct Subsystems {
     authenticator: Authenticator,
     /// The http api
     http: HttpApi,
+    /// The job scheduler
+    scheduler: JobScheduler,
 }
 
 impl Ansilo {
@@ -153,7 +156,7 @@ impl Ansilo {
         let proxy_conf = Box::leak(Box::new(init_proxy_conf(
             conf,
             HandlerConf::new(
-                pg_con_handler,
+                pg_con_handler.clone(),
                 Http2ConnectionHandler::new(http.handler()),
                 Http1ConnectionHandler::new(http.handler()),
             ),
@@ -163,6 +166,11 @@ impl Ansilo {
         runtime
             .block_on(proxy.start())
             .context("Failed to start proxy server")?;
+
+        info!("Staring job scheduler...");
+        let mut scheduler =
+            JobScheduler::new(&conf.node.jobs, runtime.handle().clone(), pg_con_handler);
+        scheduler.start().context("Failed to start job scheduler")?;
 
         info!("Start up complete...");
         Ok(Self {
@@ -175,6 +183,7 @@ impl Ansilo {
                 proxy,
                 authenticator,
                 http,
+                scheduler,
             }),
             log,
         })
@@ -219,6 +228,9 @@ impl Ansilo {
         };
 
         info!("Terminating...");
+        if let Err(err) = subsystems.scheduler.terminate() {
+            warn!("Failed to terminate job scheduler: {:?}", err);
+        }
         if let Err(err) = subsystems.http.terminate() {
             warn!("Failed to terminate http api: {:?}", err);
         }

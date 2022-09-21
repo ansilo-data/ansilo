@@ -64,8 +64,12 @@ impl Authenticator {
 
                 // Read the result from stdout
                 let output: ServiceUserCredentials =
-                    serde_json::from_slice(output.stdout.as_slice())
-                        .context("Failed to parse output from service user program as JSON")?;
+                    serde_json::from_slice(output.stdout.as_slice()).with_context(|| {
+                        format!(
+                            "Failed to parse output from service user program as JSON: {}",
+                            String::from_utf8_lossy(output.stdout.as_slice())
+                        )
+                    })?;
 
                 output
             }
@@ -81,7 +85,9 @@ impl Authenticator {
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::config::{AuthConfig, ServiceUserConfig, ShellServiceUserPassword, ConstantServiceUserPassword};
+    use ansilo_core::config::{
+        AuthConfig, ConstantServiceUserPassword, ServiceUserConfig, ShellServiceUserPassword,
+    };
 
     use super::*;
 
@@ -95,7 +101,7 @@ mod tests {
                 "svc_user".into(),
                 None,
                 ServiceUserPasswordMethod::Constant(ConstantServiceUserPassword {
-                    password: "pass123".into()
+                    password: "pass123".into(),
                 }),
             )],
         }));

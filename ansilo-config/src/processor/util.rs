@@ -505,7 +505,7 @@ d!:
     }
 
     #[test]
-    fn test_parse_expression_standalone_brackets() {
+    fn test_parse_expression_standalone_braces() {
         assert_eq!(
             parse_expression("{abc}").unwrap(),
             X::Constant("{abc}".to_owned())
