@@ -105,7 +105,8 @@ pub(crate) fn parse_expression(str: &str) -> Result<X> {
                         State::Break
                     };
                 } else {
-                    bail!("Failed to parse ${{...}} expression, could not match closing bracket in string \"{}\"", str);
+                    append_char(&mut exp, c);
+                    state = State::Consume;
                 }
             }
             // handle ':' seperator in ${...} expressions
@@ -500,6 +501,22 @@ d!:
                 &["${a}"]
             ),
             Some(vec!["${a}".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_parse_expression_standalone_brackets() {
+        assert_eq!(
+            parse_expression("{abc}").unwrap(),
+            X::Constant("{abc}".to_owned())
+        );
+        assert_eq!(
+            parse_expression("a{abc}b").unwrap(),
+            X::Constant("a{abc}b".to_owned())
+        );
+        assert_eq!(
+            parse_expression("a{b}c{d}e").unwrap(),
+            X::Constant("a{b}c{d}e".to_owned())
         );
     }
 }
