@@ -26,6 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Init runner
+        run: .github/workflows/scripts/runner-init.sh
+
       - name: Cache build image
         uses: actions/cache@v3
         continue-on-error: false

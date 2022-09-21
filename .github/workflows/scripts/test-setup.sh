@@ -27,15 +27,3 @@ ecs-cli configure profile \
         --access-key ${AWS_ACCESS_KEY_ID} \
         --secret-key ${AWS_SECRET_ACCESS_KEY}
 echo ""
-
-echo "----- Freeing disk space -----"
-df -h
-# Workaround to provide additional free space for testing.
-#   https://github.com/actions/virtual-environments/issues/2840
-sudo rm -rf /usr/share/dotnet
-sudo rm -rf /usr/local/lib/android
-sudo rm -rf /opt/ghc
-sudo rm -rf "/usr/local/share/boost"
-sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-df -h
-echo ""
