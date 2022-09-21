@@ -31,6 +31,10 @@ RUN ln -s /ansilo/ansilo-main /usr/bin/ansilo
 RUN mkdir /app/ && \
     chown -R ansilo:ansilo /app/
 
+# Set up default app folders
+RUN mkdir -p /var/run/ansilo/ && \
+    chown -R ansilo:ansilo /var/run/ansilo/
+
 # Clean up
 RUN yum clean all && \
     rpm -q java-17-openjdk-headless postgresql14-server openssl && \
