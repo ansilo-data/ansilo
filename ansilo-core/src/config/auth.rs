@@ -187,18 +187,46 @@ pub struct ServiceUserConfig {
     pub username: String,
     /// A description of the user
     pub description: Option<String>,
+    /// The method used to get the password
+    #[serde(flatten)]
+    pub password: ServiceUserPasswordMethod,
+}
+
+/// Method to get the service user password
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ServiceUserPasswordMethod {
+    Constant(ConstantServiceUserPassword),
+    Shell(ShellServiceUserPassword),
+}
+
+/// Constant service user password
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ConstantServiceUserPassword {
+    /// The password
+    pub password: String,
+}
+
+/// Retrieve the password from a shell script
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct ShellServiceUserPassword {
     /// The shell script to invoke used to retrieve the token
     /// used to authenticate as this user
     pub shell: String,
 }
 
 impl ServiceUserConfig {
-    pub fn new(id: String, username: String, description: Option<String>, shell: String) -> Self {
+    pub fn new(
+        id: String,
+        username: String,
+        description: Option<String>,
+        password: ServiceUserPasswordMethod,
+    ) -> Self {
         Self {
             id: Some(id),
             username,
             description,
-            shell,
+            password,
         }
     }
 

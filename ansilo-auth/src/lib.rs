@@ -7,8 +7,8 @@ use ansilo_core::{
 use ansilo_logging::info;
 use provider::{password::PasswordAuthProvider, AuthProvider};
 
-pub mod service_user;
 pub mod provider;
+pub mod service_user;
 
 /// The entrypoint to the authentication functionality.
 ///
@@ -57,6 +57,11 @@ impl Authenticator {
             conf,
             providers: Arc::new(providers),
         })
+    }
+
+    /// Gets the auth config
+    pub fn conf(&self) -> &AuthConfig {
+        &self.conf
     }
 
     /// Gets the requested user from the auth configuration
@@ -122,9 +127,6 @@ mod tests {
         }));
         let authenticator = Authenticator::init(conf).unwrap();
 
-        assert_eq!(
-            authenticator.get_user("mary").unwrap(),
-            &conf.users[0]
-        );
+        assert_eq!(authenticator.get_user("mary").unwrap(), &conf.users[0]);
     }
 }

@@ -1,6 +1,9 @@
 use std::process::{self, Stdio};
 
-use ansilo_core::err::{ensure, Context, Result};
+use ansilo_core::{
+    config::ServiceUserPasswordMethod,
+    err::{ensure, Context, Result},
+};
 use ansilo_logging::debug;
 use serde::{Deserialize, Serialize};
 
@@ -27,36 +30,46 @@ impl Authenticator {
 
         debug!("Authenticating as service user {service_user_id}");
 
-        // Start the child proc
-        let proc = process::Command::new("/bin/sh")
-            .args(["-c", &conf.shell])
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .with_context(|| {
-                format!(
-                    "Failed to run service user program '/bin/sh -c \"{}\"'",
-                    conf.shell
-                )
-            })?;
+        let mut output = match &conf.password {
+            ServiceUserPasswordMethod::Constant(pw) => ServiceUserCredentials {
+                username: conf.username.clone(),
+                password: pw.password.clone(),
+            },
+            ServiceUserPasswordMethod::Shell(shell) => {
+                // Start the child proc
+                let proc = process::Command::new("/bin/sh")
+                    .args(["-c", &shell.shell])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                    .with_context(|| {
+                        format!(
+                            "Failed to run service user program '/bin/sh -c \"{}\"'",
+                            shell.shell
+                        )
+                    })?;
 
-        // Wait for the child to complete
-        let output = proc
-            .wait_with_output()
-            .context("Failed to get output from child")?;
+                // Wait for the child to complete
+                let output = proc
+                    .wait_with_output()
+                    .context("Failed to get output from child")?;
 
-        ensure!(
-            output.status.success(),
-            "Service user process exited with non-zero code: {:?}, {}",
-            output.status,
-            String::from_utf8_lossy(output.stdout.as_slice())
-        );
+                ensure!(
+                    output.status.success(),
+                    "Service user process exited with non-zero code: {:?}, {}",
+                    output.status,
+                    String::from_utf8_lossy(output.stdout.as_slice())
+                );
 
-        // Read the result from stdout
-        let mut output: ServiceUserCredentials =
-            serde_json::from_slice(output.stdout.as_slice())
-                .context("Failed to parse output from service user program as JSON")?;
+                // Read the result from stdout
+                let output: ServiceUserCredentials =
+                    serde_json::from_slice(output.stdout.as_slice())
+                        .context("Failed to parse output from service user program as JSON")?;
+
+                output
+            }
+        };
 
         if output.username.is_empty() {
             output.username = conf.username.clone();
@@ -68,12 +81,12 @@ impl Authenticator {
 
 #[cfg(test)]
 mod tests {
-    use ansilo_core::config::{AuthConfig, ServiceUserConfig};
+    use ansilo_core::config::{AuthConfig, ServiceUserConfig, ShellServiceUserPassword, ConstantServiceUserPassword};
 
     use super::*;
 
     #[test]
-    fn test_authenticate_as_service_user_success() {
+    fn test_authenticate_as_service_user_success_with_constant() {
         let conf = Box::leak(Box::new(AuthConfig {
             providers: vec![],
             users: vec![],
@@ -81,7 +94,36 @@ mod tests {
                 "svc_user".into(),
                 "svc_user".into(),
                 None,
-                r#"echo '{"password": "some_secret_pass"}'"#.into(),
+                ServiceUserPasswordMethod::Constant(ConstantServiceUserPassword {
+                    password: "pass123".into()
+                }),
+            )],
+        }));
+        let authenticator = Authenticator::init(conf).unwrap();
+
+        let res = authenticator.get_service_user_creds("svc_user").unwrap();
+
+        assert_eq!(
+            res,
+            ServiceUserCredentials {
+                username: "svc_user".into(),
+                password: "pass123".into()
+            }
+        )
+    }
+
+    #[test]
+    fn test_authenticate_as_service_user_success_with_shell_script() {
+        let conf = Box::leak(Box::new(AuthConfig {
+            providers: vec![],
+            users: vec![],
+            service_users: vec![ServiceUserConfig::new(
+                "svc_user".into(),
+                "svc_user".into(),
+                None,
+                ServiceUserPasswordMethod::Shell(ShellServiceUserPassword {
+                    shell: r#"echo '{"password": "some_secret_pass"}'"#.into(),
+                }),
             )],
         }));
         let authenticator = Authenticator::init(conf).unwrap();
@@ -98,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn test_authenticate_as_service_user_with_error_proc() {
+    fn test_authenticate_as_service_user_with_shell_error() {
         let conf = Box::leak(Box::new(AuthConfig {
             providers: vec![],
             users: vec![],
@@ -106,7 +148,9 @@ mod tests {
                 "svc_user".into(),
                 "svc_user".into(),
                 None,
-                r#"exit 1"#.into(),
+                ServiceUserPasswordMethod::Shell(ShellServiceUserPassword {
+                    shell: r#"exit 1"#.into(),
+                }),
             )],
         }));
         let authenticator = Authenticator::init(conf).unwrap();

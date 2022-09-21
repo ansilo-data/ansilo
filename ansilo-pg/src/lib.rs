@@ -30,8 +30,9 @@ pub mod proto;
 pub mod server;
 
 mod configure;
-#[cfg(test)]
-mod test;
+#[cfg(any(test, feature = "test"))]
+#[allow(unused)]
+pub mod test;
 
 /// Use the default database created by initdb
 pub const PG_DATABASE: &str = "postgres";

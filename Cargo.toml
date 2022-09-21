@@ -8,15 +8,13 @@ members = [
     "ansilo-auth",
     "ansilo-proxy",
     "ansilo-web",
+    "ansilo-jobs",
     "ansilo-connectors/*",
     "ansilo-workbench",
     "ansilo-logging",
     "ansilo-util/*",
     "ansilo-e2e",
 ]
-
-[profile.bench]
-debug = true
 
 [profile.release]
 strip = "debuginfo"

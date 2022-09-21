@@ -6,25 +6,22 @@ pub struct JobConfig {
     /// The ID of the job
     pub id: String,
     /// The name of the job
-    pub name: String,
+    pub name: Option<String>,
     /// The description of the job
-    pub description: String,
-    /// The query that is executed by the job
-    pub query: JobQueryConfig,
+    pub description: Option<String>,
+    /// The ID of the service user to authenticate as
+    /// If not provided it will be executed as ansilo_admin
+    pub service_user_id: Option<String>,
+    /// The query/queries that are executed by the job
+    pub sql: String,
     /// The trigger conditions for the job
+    #[serde(default)]
     pub triggers: Vec<JobTriggerConfig>,
 }
 
-/// The query run by a job
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub struct JobQueryConfig {
-    /// The SQL query as a string
-    pub sql: String,
-}
-
 /// A trigger condition for a job
-/// TODO: Options for structuring DAG's
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum JobTriggerConfig {
     Cron(CronTriggerConfig),
 }
@@ -33,6 +30,6 @@ pub enum JobTriggerConfig {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct CronTriggerConfig {
     /// The cron expression
-    pub cron_expression: String
+    pub cron: String
 }
 

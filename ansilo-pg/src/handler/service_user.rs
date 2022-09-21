@@ -1,6 +1,6 @@
 use crate::proto::fe::PostgresFrontendMessage;
 use ansilo_core::err::{Context, Result};
-use ansilo_logging::{info, warn};
+use ansilo_logging::{debug, info, warn};
 use ansilo_proxy::stream::Stream;
 
 use tokio::net::UnixStream;
@@ -12,10 +12,12 @@ impl PostgresConnectionHandler {
     /// Authenticate to postgres as a service user.
     /// We return a tokio_postgres client that can be used to perform
     /// actions on behalf of the service user
-    pub(crate) async fn authenticate_as_service_user(
+    pub async fn authenticate_as_service_user(
         &self,
         service_user_id: String,
     ) -> Result<tokio_postgres::Client> {
+        debug!("Authenticating as service user '{service_user_id}'");
+
         // Get the credentials for the service user
         // (this could block)
         let creds = {
@@ -114,9 +116,11 @@ mod tests {
             "svc".into(),
             "test_user".into(),
             None,
-            r#"echo '{"password": "pass123"}'"#.into(),
+            ServiceUserPasswordMethod::Constant(ConstantServiceUserPassword {
+                password: "pass123".into(),
+            }),
         ));
-        let (_pg, handler) = init_handler("svc-user-success", auth).await;
+        let (_pg, handler) = init_pg_handler("svc-user-success", auth).await;
 
         let client = handler
             .authenticate_as_service_user("svc".into())
@@ -138,9 +142,11 @@ mod tests {
             "svc".into(),
             "test_user".into(),
             None,
-            r#"echo '{"password": "pass123"}'"#.into(),
+            ServiceUserPasswordMethod::Constant(ConstantServiceUserPassword {
+                password: "pass123".into(),
+            }),
         ));
-        let (_pg, handler) = init_handler("svc-user-invalid-user", auth).await;
+        let (_pg, handler) = init_pg_handler("svc-user-invalid-user", auth).await;
 
         handler
             .authenticate_as_service_user("invalid".into())
@@ -155,9 +161,11 @@ mod tests {
             "svc".into(),
             "test_user".into(),
             None,
-            r#"echo '{"password": "invalid"}'"#.into(),
+            ServiceUserPasswordMethod::Constant(ConstantServiceUserPassword {
+                password: "invalid".into(),
+            }),
         ));
-        let (_pg, handler) = init_handler("svc-user-invalid-pass", auth).await;
+        let (_pg, handler) = init_pg_handler("svc-user-invalid-pass", auth).await;
 
         handler
             .authenticate_as_service_user("svc".into())

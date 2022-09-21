@@ -3,7 +3,8 @@ name = "ansilo-pg"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+test = ["dep:ansilo-util-pgx-install"]
 
 [dependencies]
 ansilo-connectors-base = { path = "../ansilo-connectors/base" }
@@ -14,6 +15,7 @@ ansilo-auth = { path = "../ansilo-auth" }
 ansilo-proxy = { path = "../ansilo-proxy" }
 ansilo-util-r2d2 = { path = "../ansilo-util/r2d2" }
 ansilo-util-pg = { path = "../ansilo-util/pg" }
+ansilo-util-pgx-install = { path = "../ansilo-util/pgx-install", optional = true }
 bincode = { version = "2.0.0-rc.1" }
 serde_json = "1.0"
 nix = "^0.25"

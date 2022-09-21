@@ -1,7 +1,8 @@
 mod auth;
 mod service_user;
-#[cfg(test)]
-mod test;
+#[cfg(any(test, feature = "test"))]
+#[allow(unused)]
+pub mod test;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -49,6 +50,10 @@ impl PostgresConnectionHandler {
             pool,
             cancel_keys: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub fn pool(&self) -> &PostgresConnectionPools {
+        &self.pool
     }
 }
 
@@ -436,7 +441,10 @@ impl<'a> ProxySession<'a> {
 impl<'a> Drop for ProxySession<'a> {
     fn drop(&mut self) {
         if !self.terminated {
-            panic!("Session dropped without calling terminate")
+            warn!("Session dropped without calling terminate");
+            if let Some(con) = self.con.as_ref() {
+                con.set_broken();
+            }
         }
     }
 }
@@ -519,8 +527,8 @@ mod tests {
     #[tokio::test]
     async fn test_basic_query() {
         ansilo_logging::init_for_tests();
-        let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("basic-query", auth).await;
+        let auth = mock_password_auth_default();
+        let (_pg, handler) = init_pg_handler("basic-query", auth).await;
 
         let (client, stream) = init_client_stream();
 
@@ -548,8 +556,8 @@ mod tests {
     #[tokio::test]
     async fn test_auth_incorrect_password() {
         ansilo_logging::init_for_tests();
-        let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("invalid-pass", auth).await;
+        let auth = mock_password_auth_default();
+        let (_pg, handler) = init_pg_handler("invalid-pass", auth).await;
 
         let (client, stream) = init_client_stream();
 
@@ -579,8 +587,8 @@ mod tests {
     #[tokio::test]
     async fn test_auth_context() {
         ansilo_logging::init_for_tests();
-        let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("auth-context", auth).await;
+        let auth = mock_password_auth_default();
+        let (_pg, handler) = init_pg_handler("auth-context", auth).await;
 
         let (client, stream) = init_client_stream();
 
@@ -643,8 +651,8 @@ mod tests {
     #[tokio::test]
     async fn test_client_receives_initial_server_parameters() {
         ansilo_logging::init_for_tests();
-        let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("server-params", auth).await;
+        let auth = mock_password_auth_default();
+        let (_pg, handler) = init_pg_handler("server-params", auth).await;
 
         let (client, stream) = init_client_stream();
 
@@ -665,8 +673,8 @@ mod tests {
     #[tokio::test]
     async fn test_client_parameters_with_reset() {
         ansilo_logging::init_for_tests();
-        let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("client-params", auth).await;
+        let auth = mock_password_auth_default();
+        let (_pg, handler) = init_pg_handler("client-params", auth).await;
 
         let (client, stream) = init_client_stream();
 
@@ -722,8 +730,8 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_query() {
         ansilo_logging::init_for_tests();
-        let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("cancel-query", auth).await;
+        let auth = mock_password_auth_default();
+        let (_pg, handler) = init_pg_handler("cancel-query", auth).await;
 
         let (client, stream) = init_client_stream();
         let (cancel_client, cancel_stream) = init_client_stream();
@@ -774,8 +782,8 @@ mod tests {
     #[tokio::test]
     async fn test_connection_clean_up_after_session_error() {
         ansilo_logging::init_for_tests();
-        let auth = mock_password_auth();
-        let (_pg, handler) = init_handler("clean-up-error", auth).await;
+        let auth = mock_password_auth_default();
+        let (_pg, handler) = init_pg_handler("clean-up-error", auth).await;
 
         let (client, stream) = init_client_stream();
 

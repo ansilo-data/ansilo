@@ -1,0 +1,18 @@
+[package]
+name = "ansilo-jobs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansilo-core = { path = "../ansilo-core" }
+ansilo-logging = { path = "../ansilo-logging" }
+ansilo-pg = { path = "../ansilo-pg" }
+tokio = "^1.20"
+tokio-cron-scheduler = "^0.8"
+tokio-postgres = "0.7.7"
+
+[dev-dependencies]
+ansilo-pg = { path = "../ansilo-pg", features = ["test"] }
+ansilo-auth = { path = "../ansilo-auth", features = ["test"] }

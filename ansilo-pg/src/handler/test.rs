@@ -8,7 +8,7 @@ use tokio::net::UnixStream;
 
 use super::PostgresConnectionHandler;
 
-pub(crate) fn mock_password_auth() -> Authenticator {
+pub fn mock_password_auth_default() -> Authenticator {
     let conf = Box::leak(Box::new(AuthConfig {
         providers: vec![],
         users: vec![
@@ -35,7 +35,7 @@ pub(crate) fn mock_password_auth() -> Authenticator {
     Authenticator::init(conf).unwrap()
 }
 
-pub(crate) async fn init_pg(test_name: &'static str) -> PostgresInstance {
+pub async fn init_pg(test_name: &'static str, auth: &Authenticator) -> PostgresInstance {
     // This runs blocking code and contains a runtime
     let conf = Box::leak(Box::new(PostgresConf {
         install_dir: PathBuf::from(
@@ -45,24 +45,29 @@ pub(crate) async fn init_pg(test_name: &'static str) -> PostgresInstance {
         data_dir: PathBuf::from(format!("/tmp/ansilo-tests/main-pg-handler/{}", test_name)),
         socket_dir_path: PathBuf::from(format!("/tmp/ansilo-tests/main-pg-handler/{}", test_name)),
         fdw_socket_path: PathBuf::from("not-used"),
-        app_users: vec!["test_user".into(), "another_user".into()],
+        app_users: auth
+            .conf()
+            .users
+            .iter()
+            .map(|i| i.username.clone())
+            .collect(),
         init_db_sql: vec![],
     }));
 
     PostgresInstance::configure(conf).await.unwrap()
 }
 
-pub(crate) fn init_client_stream() -> (UnixStream, Box<dyn IOStream>) {
+pub fn init_client_stream() -> (UnixStream, Box<dyn IOStream>) {
     let (a, b) = UnixStream::pair().unwrap();
 
     (a, Box::new(Stream(b)))
 }
 
-pub(crate) async fn init_handler(
+pub async fn init_pg_handler(
     test_name: &'static str,
     auth: Authenticator,
 ) -> (PostgresInstance, PostgresConnectionHandler) {
-    let mut pg = init_pg(test_name).await;
+    let mut pg = init_pg(test_name, &auth).await;
 
     let handler = PostgresConnectionHandler::new(auth, pg.connections().clone());
 
