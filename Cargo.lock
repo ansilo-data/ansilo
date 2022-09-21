@@ -108,6 +108,7 @@ name = "ansilo-connectors-all"
 version = "0.1.0"
 dependencies = [
  "ansilo-connectors-base",
+ "ansilo-connectors-internal",
  "ansilo-connectors-jdbc-base",
  "ansilo-connectors-jdbc-mysql",
  "ansilo-connectors-jdbc-oracle",

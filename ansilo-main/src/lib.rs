@@ -2,7 +2,9 @@ use std::{collections::HashMap, os::raw::c_int, panic, thread, time::Duration};
 
 use crate::{args::Command, build::BuildInfo};
 use ansilo_auth::Authenticator;
-use ansilo_connectors_all::{ConnectionPools, ConnectorEntityConfigs, Connectors};
+use ansilo_connectors_all::{
+    ConnectionPools, ConnectorEntityConfigs, Connectors, InternalConnection,
+};
 use ansilo_core::err::{Context, Result};
 use ansilo_jobs::JobScheduler;
 use ansilo_logging::{error, info, warn};
@@ -141,7 +143,6 @@ impl Ansilo {
             });
         }
 
-
         let pg_con_handler =
             PostgresConnectionHandler::new(authenticator.clone(), postgres.connections().clone());
 
@@ -264,7 +265,7 @@ impl Ansilo {
         conf: &'static AppConf,
     ) -> Result<HashMap<String, (ConnectionPools, ConnectorEntityConfigs)>> {
         info!("Initializing connectors...");
-        let pools = conf
+        let mut pools: HashMap<_, _> = conf
             .node
             .sources
             .iter()
@@ -282,8 +283,17 @@ impl Ansilo {
 
                 Ok((i.id.clone(), pool))
             })
-            .collect();
-        pools
+            .collect::<Result<HashMap<_, _>>>()?;
+
+        pools.insert(
+            "internal".into(),
+            (
+                ConnectionPools::Internal(InternalConnection(&conf.node)),
+                ConnectorEntityConfigs::Internal,
+            ),
+        );
+
+        Ok(pools)
     }
 
     fn wait_for_signal() -> Result<i32> {

@@ -16,4 +16,5 @@ ansilo-connectors-jdbc-mysql = { path = "../jdbc-mysql" }
 ansilo-connectors-native-postgres = { path = "../native-postgres" }
 ansilo-connectors-native-sqlite = { path = "../native-sqlite" }
 ansilo-connectors-peer = { path = "../peer" }
+ansilo-connectors-internal = { path = "../internal" }
 

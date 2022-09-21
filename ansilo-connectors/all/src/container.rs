@@ -27,6 +27,7 @@ use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcEntity
 
 use ansilo_connectors_base::interface::{ConnectionPool, Connector};
 
+pub use ansilo_connectors_internal::{InternalConnection, InternalConnector};
 pub use ansilo_connectors_jdbc_mysql::MysqlJdbcConnector;
 pub use ansilo_connectors_jdbc_oracle::OracleJdbcConnector;
 pub use ansilo_connectors_memory::MemoryConnector;
@@ -41,6 +42,7 @@ pub enum Connectors {
     NativePostgres,
     NativeSqlite,
     Peer,
+    Internal,
     Memory,
 }
 
@@ -51,6 +53,7 @@ pub enum ConnectionConfigs {
     NativePostgres(PostgresConnectionConfig),
     NativeSqlite(SqliteConnectionConfig),
     Peer(PeerConfig),
+    Internal,
     Memory(MemoryDatabase),
 }
 
@@ -61,6 +64,7 @@ pub enum EntitySourceConfigs {
     NativePostgres(PostgresEntitySourceConfig),
     NativeSqlite(SqliteEntitySourceConfig),
     Peer(PostgresEntitySourceConfig),
+    Internal,
     Memory(MemoryConnectorEntitySourceConfig),
 }
 
@@ -70,6 +74,7 @@ pub enum ConnectionPools {
     NativePostgres(PostgresConnectionPool),
     NativeSqlite(SqliteConnectionUnpool),
     Peer(PeerConnectionUnpool),
+    Internal(InternalConnection),
     Memory(MemoryConnectionPool),
 }
 
@@ -80,6 +85,7 @@ pub enum ConnectorEntityConfigs {
     NativePostgres(ConnectorEntityConfig<PostgresEntitySourceConfig>),
     NativeSqlite(ConnectorEntityConfig<SqliteEntitySourceConfig>),
     Peer(ConnectorEntityConfig<PostgresEntitySourceConfig>),
+    Internal,
     Memory(ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>),
 }
 
@@ -88,6 +94,7 @@ pub enum Connections {
     NativePostgres(PostgresConnection<PooledClient>),
     NativeSqlite(SqliteConnection),
     Peer(PostgresConnection<UnpooledClient>),
+    Internal(InternalConnection),
     Memory(MemoryConnection),
 }
 
@@ -99,6 +106,7 @@ impl Connectors {
             PostgresConnector::TYPE => Connectors::NativePostgres,
             SqliteConnector::TYPE => Connectors::NativeSqlite,
             PeerConnector::TYPE => Connectors::Peer,
+            InternalConnector::TYPE => Connectors::Internal,
             MemoryConnector::TYPE => Connectors::Memory,
             _ => return None,
         })
@@ -111,6 +119,7 @@ impl Connectors {
             Connectors::NativePostgres => PostgresConnector::TYPE,
             Connectors::NativeSqlite => SqliteConnector::TYPE,
             Connectors::Peer => PeerConnector::TYPE,
+            Connectors::Internal => InternalConnector::TYPE,
             Connectors::Memory => MemoryConnector::TYPE,
         }
     }
@@ -130,6 +139,7 @@ impl Connectors {
                 ConnectionConfigs::NativeSqlite(SqliteConnector::parse_options(options)?)
             }
             Connectors::Peer => ConnectionConfigs::Peer(PeerConnector::parse_options(options)?),
+            Connectors::Internal => ConnectionConfigs::Internal,
             Connectors::Memory => {
                 ConnectionConfigs::Memory(MemoryConnector::parse_options(options)?)
             }
@@ -156,6 +166,7 @@ impl Connectors {
             Connectors::Peer => {
                 EntitySourceConfigs::Peer(PeerConnector::parse_entity_source_options(options)?)
             }
+            Connectors::Internal => EntitySourceConfigs::Internal,
             Connectors::Memory => {
                 EntitySourceConfigs::Memory(MemoryConnector::parse_entity_source_options(options)?)
             }
@@ -209,6 +220,13 @@ impl Connectors {
                     ConnectorEntityConfigs::Peer(entities),
                 )
             }
+            (Connectors::Internal, ConnectionConfigs::Internal) => {
+                let (pool, _) = Self::create_pool::<InternalConnector>((), nc, data_source_id)?;
+                (
+                    ConnectionPools::Internal(pool),
+                    ConnectorEntityConfigs::Internal,
+                )
+            }
             (Connectors::Memory, ConnectionConfigs::Memory(options)) => {
                 let (pool, entities) =
                     Self::create_pool::<MemoryConnector>(options, nc, data_source_id)?;
@@ -259,6 +277,7 @@ impl ConnectionPools {
             ConnectionPools::NativePostgres(p) => Connections::NativePostgres(p.acquire(auth)?),
             ConnectionPools::NativeSqlite(p) => Connections::NativeSqlite(p.acquire(auth)?),
             ConnectionPools::Peer(p) => Connections::Peer(p.acquire(auth)?),
+            ConnectionPools::Internal(p) => Connections::Internal(p.acquire(auth)?),
             ConnectionPools::Memory(p) => Connections::Memory(p.acquire(auth)?),
         })
     }

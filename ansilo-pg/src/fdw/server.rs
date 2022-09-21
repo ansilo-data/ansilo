@@ -216,6 +216,9 @@ impl FdwListener {
                 (ConnectionPools::Peer(pool), RwLockEntityConfigs::Peer(entities)) => {
                     Self::process::<PeerConnector>(auth, nc, chan, pool, entities, log)
                 }
+                (ConnectionPools::Internal(pool), RwLockEntityConfigs::Internal(entities)) => {
+                    Self::process::<InternalConnector>(auth, nc, chan, pool, entities, log)
+                }
                 (ConnectionPools::Memory(pool), RwLockEntityConfigs::Memory(entities)) => {
                     Self::process::<MemoryConnector>(auth, nc, chan, pool, entities, log)
                 }
@@ -304,6 +307,7 @@ pub enum RwLockEntityConfigs {
         RwLock<ConnectorEntityConfig<<SqliteConnector as Connector>::TEntitySourceConfig>>,
     ),
     Peer(RwLock<ConnectorEntityConfig<<PeerConnector as Connector>::TEntitySourceConfig>>),
+    Internal(RwLock<ConnectorEntityConfig<<InternalConnector as Connector>::TEntitySourceConfig>>),
     Memory(RwLock<ConnectorEntityConfig<<MemoryConnector as Connector>::TEntitySourceConfig>>),
 }
 
@@ -315,6 +319,9 @@ impl From<ConnectorEntityConfigs> for RwLockEntityConfigs {
             ConnectorEntityConfigs::NativePostgres(e) => Self::NativePostgres(RwLock::new(e)),
             ConnectorEntityConfigs::NativeSqlite(e) => Self::NativeSqlite(RwLock::new(e)),
             ConnectorEntityConfigs::Peer(e) => Self::Peer(RwLock::new(e)),
+            ConnectorEntityConfigs::Internal => {
+                Self::Internal(RwLock::new(ConnectorEntityConfig::new()))
+            }
             ConnectorEntityConfigs::Memory(e) => Self::Memory(RwLock::new(e)),
         }
     }
