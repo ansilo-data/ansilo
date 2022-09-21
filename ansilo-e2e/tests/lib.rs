@@ -1,5 +1,6 @@
 ansilo_util_pgx_install::install_ansilo_pgx!();
 
+pub mod build;
 pub mod auth;
 pub mod jobs;
 pub mod misc;

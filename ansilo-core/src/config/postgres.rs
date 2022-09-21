@@ -16,8 +16,6 @@ pub struct PostgresConfig {
     /// Path to the unix socket which ansilo listens on
     /// acting as the data source for the FDW
     pub fdw_socket_path: Option<PathBuf>,
-    /// The path which contains the postgres SQL init scripts
-    pub init_sql_path: Option<PathBuf>,
     /// The path used to mark the postgres instance as initialised
     pub build_info_path: Option<PathBuf>,
 }

@@ -4,12 +4,13 @@ use std::{
     time::{self, UNIX_EPOCH},
 };
 
+use ansilo_auth::Authenticator;
 use ansilo_core::{
     build::ansilo_version,
     err::{Context, Result},
 };
 use ansilo_logging::info;
-use ansilo_pg::PostgresInstance;
+use ansilo_pg::{handler::PostgresConnectionHandler, PostgresInstance};
 use ansilo_web::VersionInfo;
 use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,10 @@ use serde::{Deserialize, Serialize};
 use crate::conf::*;
 
 /// Initialises the postgres database
-pub async fn build(conf: &'static AppConf) -> Result<(PostgresInstance, BuildInfo)> {
+pub async fn build(
+    conf: &'static AppConf,
+    auth: Authenticator,
+) -> Result<(PostgresInstance, BuildInfo)> {
     info!("Running build...");
 
     // Initialize postgres via initdb
@@ -25,35 +29,53 @@ pub async fn build(conf: &'static AppConf) -> Result<(PostgresInstance, BuildInf
         .await
         .context("Failed to initialise postgres")?;
 
-    // Connect to it
-    let con = postgres
+    let handler = PostgresConnectionHandler::new(auth, postgres.connections().clone());
+
+    // Connect to postgres as the default admin user
+    let admin_con = postgres
         .connections()
         .admin()
         .await
         .context("Failed to connect to postgres")?;
 
-    // Run sql init scripts
-    let init_sql_path = conf
-        .node
-        .postgres
-        .clone()
-        .unwrap_or_default()
-        .init_sql_path
-        .unwrap_or("/etc/ansilo/sql.d/*.sql".into());
+    // Run build stages
+    for (idx, stage) in conf.node.build.stages.iter().enumerate() {
+        info!(
+            "Running build stage {}...",
+            stage.name.as_ref().unwrap_or(&(idx + 1).to_string())
+        );
 
-    info!("Running scripts {}", init_sql_path.display());
+        // If this stage is configured to run as a service user, authenticate
+        // as that service user
+        let service_user_con = if let Some(service_user_id) = stage.service_user.as_ref() {
+            Some(
+                handler
+                    .authenticate_as_service_user(service_user_id.clone())
+                    .await
+                    .context("Failed to connect to postgres")?,
+            )
+        } else {
+            None
+        };
 
-    for script in glob::glob(init_sql_path.to_str().context("Invalid init sql path")?)
-        .context("Failed to glob init sql path")?
-    {
-        let script = script.context("Failed to read sql file")?;
+        // Get a reference to the appropriate connection for this stage
+        let con = service_user_con.as_ref().unwrap_or(&admin_con);
 
-        info!("Running {}", script.display());
-        let sql = fs::read_to_string(&script)
-            .with_context(|| format!("Failed to read sql file: {}", script.display()))?;
-        con.batch_execute(&sql)
-            .await
-            .with_context(|| format!("Failed to execute sql script: {}", script.display()))?;
+        let init_sql_path = stage.sql.clone();
+        info!("Running scripts {}", init_sql_path.display());
+
+        for script in glob::glob(init_sql_path.to_str().context("Invalid init sql path")?)
+            .context("Failed to glob init sql path")?
+        {
+            let script = script.context("Failed to read sql file")?;
+
+            info!("Running {}", script.display());
+            let sql = fs::read_to_string(&script)
+                .with_context(|| format!("Failed to read sql file: {}", script.display()))?;
+            con.batch_execute(&sql)
+                .await
+                .with_context(|| format!("Failed to execute sql script: {}", script.display()))?;
+        }
     }
 
     let build_info = BuildInfo::new();

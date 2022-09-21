@@ -4,7 +4,6 @@ use ansilo_core::{
     config::ServiceUserPasswordMethod,
     err::{ensure, Context, Result},
 };
-use ansilo_logging::debug;
 use serde::{Deserialize, Serialize};
 
 use crate::Authenticator;
@@ -27,8 +26,6 @@ impl Authenticator {
             .iter()
             .find(|i| i.id() == service_user_id)
             .with_context(|| format!("No service user with id '{service_user_id}'"))?;
-
-        debug!("Authenticating as service user {service_user_id}");
 
         let mut output = match &conf.password {
             ServiceUserPasswordMethod::Constant(pw) => ServiceUserCredentials {

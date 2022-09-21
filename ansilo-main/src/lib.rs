@@ -117,6 +117,9 @@ impl Ansilo {
         )
         .context("Failed to start fdw server")?;
 
+        info!("Starting authenticator...");
+        let authenticator = Authenticator::init(&conf.node.auth)?;
+
         let (mut postgres, build_info) = if let (Command::Run(_), false, Some(build_info)) =
             (&command, args.force_build, BuildInfo::fetch(conf)?)
         {
@@ -125,7 +128,7 @@ impl Ansilo {
             let pg = runtime.block_on(PostgresInstance::start(&conf.pg))?;
             (pg, build_info)
         } else {
-            runtime.block_on(build(conf))?
+            runtime.block_on(build(conf, authenticator.clone()))?
         };
 
         if command.is_build() {
@@ -138,8 +141,6 @@ impl Ansilo {
             });
         }
 
-        info!("Starting authenticator...");
-        let authenticator = Authenticator::init(&conf.node.auth)?;
 
         let pg_con_handler =
             PostgresConnectionHandler::new(authenticator.clone(), postgres.connections().clone());

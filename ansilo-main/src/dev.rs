@@ -21,21 +21,13 @@ pub fn signal_on_config_update(conf: &AppConf) {
         .unwrap();
 
     // Watch for changes on sql files
-    if let Some(mut init_sql_path) = conf
-        .node
-        .postgres
-        .as_ref()
-        .and_then(|i| i.init_sql_path.as_ref().map(|i| i.as_path()))
-    {
+    for stage in conf.node.build.stages.iter() {
         // Watch on the parent dir to enable new files when using glob "/a/b/c/*.sql" etc
-        while init_sql_path.file_name().is_some()
-            && init_sql_path
-                .file_name()
-                .unwrap()
-                .to_string_lossy()
-                .contains("*")
+        let mut path = stage.sql.as_path();
+        while path.file_name().is_some()
+            && path.file_name().unwrap().to_string_lossy().contains("*")
         {
-            init_sql_path = if let Some(p) = init_sql_path.parent() {
+            path = if let Some(p) = path.parent() {
                 p
             } else {
                 break;
@@ -43,8 +35,8 @@ pub fn signal_on_config_update(conf: &AppConf) {
         }
 
         watcher
-            .watch(init_sql_path, RecursiveMode::Recursive)
-            .context(init_sql_path.clone().to_string_lossy().to_string())
+            .watch(path, RecursiveMode::Recursive)
+            .context(path.clone().to_string_lossy().to_string())
             .unwrap();
     }
 

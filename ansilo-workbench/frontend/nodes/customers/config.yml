@@ -26,7 +26,6 @@ auth:
       description: Coginto token user
 
 postgres:
-    init_sql_path: ${dir}/ansilo/*.sql
     install_dir: /usr/lib/postgresql/14/
     data_dir: /tmp/${dir}/data
     listen_socket_dir_path: /tmp/${dir}

@@ -1,0 +1,8 @@
+CREATE TABLE build (
+    file TEXT,
+    usr TEXT
+);
+
+INSERT INTO build VALUES ('001_init', current_user);
+
+GRANT SELECT ON build TO app;

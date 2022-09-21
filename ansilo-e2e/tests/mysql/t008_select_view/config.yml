@@ -17,9 +17,12 @@ sources:
         user: ansilo_admin
         password: ansilo_testing
         
+build:
+  stages:
+    - sql: ${dir}/ansilo-sql/*.sql
+
 postgres:
     install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
-    init_sql_path: ${dir}/ansilo-sql/*.sql
     data_dir: /tmp/${dir}/data
     listen_socket_dir_path: /tmp/${dir}
     fdw_socket_path: /tmp/${dir}/fdw.sock

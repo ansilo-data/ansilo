@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 
 pub use serde_yaml::{from_value, Mapping, Number, Sequence, Value};
 
-mod ari;
 mod bincode;
-pub use ari::*;
 mod networking;
 pub use networking::*;
 mod auth;
 pub use auth::*;
+mod build;
+pub use build::*;
 mod sources;
 pub use sources::*;
 mod entities;
@@ -33,6 +33,8 @@ pub struct NodeConfig {
     pub networking: NetworkingConfig,
     /// Auth options
     pub auth: AuthConfig,
+    /// The build configuration
+    pub build: BuildConfig,
     /// List of data source configurations for the node
     #[serde(default)]
     pub sources: Vec<DataSourceConfig>,
