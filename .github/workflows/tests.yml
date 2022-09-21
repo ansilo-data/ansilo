@@ -17,7 +17,7 @@ jobs:
   tests:
     name: tests
     runs-on: ${{ matrix.os }}
-    if: "!contains(github.event.head_commit.message, 'nogha')"
+    if: "!contains(github.event.head_commit.message, 'nogha') && !contains(github.event.head_commit.message, 'notests')"
 
     strategy:
       matrix:
