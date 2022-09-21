@@ -605,6 +605,10 @@ impl FdwSelectQuery {
         self.res_var_nos.insert(res_no, var_no);
     }
 
+    pub(crate) fn is_row_reference(&self, res_no: u32) -> bool {
+        self.res_var_nos.contains_key(&res_no)
+    }
+
     pub(crate) fn get_result_var_no(&self, res_no: u32) -> Option<u32> {
         self.res_var_nos.get(&res_no).cloned()
     }

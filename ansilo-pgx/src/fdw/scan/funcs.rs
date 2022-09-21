@@ -1413,7 +1413,11 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
     for (attr_idx, attr) in attrs.iter().enumerate() {
         // If it's a whole row reference we dont need to perform anything here.
         // We first materalize the whole tuple slot then populate the attrs with copies
-        if attr.atttypid == pg_sys::RECORDOID {
+        if query
+            .as_select()
+            .unwrap()
+            .is_row_reference(attr.attnum as _)
+        {
             has_row_reference = true;
             continue;
         }
@@ -1426,7 +1430,7 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         // Check if we have reached the last data value
         if data.is_none() {
             // If this is the first attribute we have reached the end so return an empty tuple
-            if attr_idx == 0 {
+            if col_idx == 0 {
                 return slot;
             }
 
@@ -1452,14 +1456,14 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
     if has_row_reference {
         let econtext = (*node).ss.ps.ps_ExprContext;
 
-        let query = query.as_select().unwrap();
+        let select = query.as_select().unwrap();
 
         for (attr_idx, attr) in attrs.iter().enumerate() {
-            if attr.atttypid == pg_sys::RECORDOID {
-                let var_no = query.get_result_var_no(attr.attnum as _).unwrap();
+            if select.is_row_reference(attr.attnum as _) {
+                let var_no = select.get_result_var_no(attr.attnum as _).unwrap();
                 *(*slot).tts_isnull.add(attr_idx) = false;
                 *(*slot).tts_values.add(attr_idx) =
-                    resconstruct_row_tuple_datum(node, slot, query, var_no);
+                    resconstruct_row_tuple_datum(node, slot, select, var_no);
             }
         }
     }
