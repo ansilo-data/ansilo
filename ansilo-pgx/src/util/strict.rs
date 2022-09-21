@@ -22,7 +22,7 @@ LANGUAGE c /* Rust */
 COST 1
 AS 'MODULE_PATHNAME', 'strict_wrapper';
 "#,
-    name = "string_function"
+    name = "strict_function"
 );
 
 #[pg_extern(sql = "")]

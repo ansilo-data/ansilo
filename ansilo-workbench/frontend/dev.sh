@@ -7,4 +7,4 @@ export ANSILO_CORS_ALLOWED_ORIGIN="http://localhost:5000"
 
 ./node_modules/.bin/concurrently \
     "./node_modules/.bin/next dev -p 5000" \
-    "cd ../../ansilo-main && cargo run -- dev -c $DIR/nodes/customers/config.yml"
+    "cd ../../ansilo-pgx && cargo pgx install && cd ../ansilo-main && cargo run -- dev -c $DIR/nodes/customers/config.yml"

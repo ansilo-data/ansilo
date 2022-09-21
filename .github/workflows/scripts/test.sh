@@ -11,6 +11,17 @@ export ANSILO_TEST_PG_DIR=/usr/pgsql-14/
 export ANSILO_TEST_ECS_TASK_PREFIX="gha-$GHA_RUN_ID"
 export ANSILO_GHA_TESTS=true
 
+function clean_old_tmp_files() {
+    while true;
+    do
+        echo "== Cleaning old /tmp files =="
+        find /tmp/ -type f -mmin +5 -delete
+        sleep 60
+    done
+}
+
+clean_old_tmp_files &
+
 echo "----- Running tests -----"
 cargo test
 echo ""
