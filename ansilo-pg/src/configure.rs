@@ -10,7 +10,6 @@ pub(crate) async fn configure(
 ) -> Result<()> {
     configure_roles(conf, &mut superuser_con).await?;
     configure_extension(conf, &mut superuser_con).await?;
-    configure_internal_catalog(conf, &mut superuser_con).await?;
 
     for sql in conf.init_db_sql.iter() {
         superuser_con
@@ -104,58 +103,6 @@ async fn configure_extension(
             )
             .await
             .context("Failed to initialise app user")?;
-    }
-
-    Ok(())
-}
-
-/// Configure the internal connector to expose ansilo-internal objects
-/// Currently this supports jobs and service users but may include more
-/// in future.
-///
-/// @see ansilo-connectors/internal/
-async fn configure_internal_catalog(
-    conf: &PostgresConf,
-    superuser_con: &mut PostgresConnection,
-) -> Result<()> {
-    superuser_con
-        .batch_execute(
-            format!(
-                r#"
-                CREATE SCHEMA ansilo_catalog;
-
-                CREATE SERVER ansilo_catalog_srv
-                FOREIGN DATA WRAPPER ansilo_fdw
-                OPTIONS (data_source 'internal');
-                
-                IMPORT FOREIGN SCHEMA "%"
-                FROM SERVER ansilo_catalog_srv
-                INTO ansilo_catalog;
-                
-                GRANT USAGE ON SCHEMA ansilo_catalog TO {PG_ADMIN_USER} WITH GRANT OPTION;
-                GRANT SELECT ON ALL TABLES IN SCHEMA ansilo_catalog TO {PG_ADMIN_USER} WITH GRANT OPTION;
-            "#
-            )
-            .as_str(),
-        )
-        .await
-        .context("Failed to initialise ansilo internal catalog")?;
-
-    // Allow users to read the catalog by default
-    for user in conf.app_users.iter() {
-        let user = pg_quote_identifier(user);
-        superuser_con
-            .batch_execute(
-                format!(
-                    r#"
-                GRANT USAGE ON SCHEMA ansilo_catalog TO {user};
-                GRANT SELECT ON ALL TABLES IN SCHEMA ansilo_catalog TO {user};
-                "#
-                )
-                .as_str(),
-            )
-            .await
-            .context("Failed to grant app user access to catalog")?;
     }
 
     Ok(())

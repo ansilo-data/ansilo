@@ -102,7 +102,9 @@ fn try_get_pg_install_dir() -> Option<PathBuf> {
 
 fn create_db_init_sql(node: &NodeConfig) -> Vec<String> {
     [
+        //
         // Run CREATE SERVER for each data source
+        //
         node.sources
             .iter()
             .map(|source| {
@@ -121,7 +123,9 @@ fn create_db_init_sql(node: &NodeConfig) -> Vec<String> {
                 )
             })
             .collect::<Vec<_>>(),
+        //
         // Add descriptions of users
+        //
         node.auth
             .users
             .iter()
@@ -137,6 +141,42 @@ fn create_db_init_sql(node: &NodeConfig) -> Vec<String> {
                 )
             })
             .collect::<Vec<_>>(),
+        //
+        // Configure the internal connector to expose ansilo-internal objects
+        // Currently this supports jobs and service users but may include more
+        // in future.
+        // @see ansilo-connectors/internal
+        //
+        vec![
+            format!(
+                r#"
+                CREATE SCHEMA ansilo_catalog;
+
+                CREATE SERVER ansilo_catalog_srv
+                FOREIGN DATA WRAPPER ansilo_fdw
+                OPTIONS (data_source 'internal');
+                
+                IMPORT FOREIGN SCHEMA "%"
+                FROM SERVER ansilo_catalog_srv
+                INTO ansilo_catalog;
+                
+                GRANT USAGE ON SCHEMA ansilo_catalog TO {PG_ADMIN_USER} WITH GRANT OPTION;
+                GRANT SELECT ON ALL TABLES IN SCHEMA ansilo_catalog TO {PG_ADMIN_USER} WITH GRANT OPTION;
+            "#
+            )
+        ],
+        //
+        // Grant app users read access to the catalog by default
+        //
+        node.auth.users.iter()
+            .map(|user| {
+                let username = pg_quote_identifier(&user.username);
+                format!(r#"
+                    GRANT USAGE ON SCHEMA ansilo_catalog TO {username};
+                    GRANT SELECT ON ALL TABLES IN SCHEMA ansilo_catalog TO {username};
+                "#)
+            })
+            .collect::<Vec<_>>()
     ]
     .concat()
 }

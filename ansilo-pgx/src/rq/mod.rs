@@ -396,6 +396,7 @@ pub fn clear_rq_prepared_queries() {
 }
 
 // Used for testing
+#[allow(unused)]
 pub(crate) fn get_prepared_queries_count() -> usize {
     PREPARED_QUERIES.lock().unwrap().len()
 }
