@@ -19,7 +19,7 @@ pub(crate) fn start_fdw_server(
     let server = FdwServer::start(
         &NODE_CONFIG,
         path.clone(),
-        [("memory".to_string(), pool)].into_iter().collect(),
+        [("mock".to_string(), pool)].into_iter().collect(),
         RemoteQueryLog::new(),
     )
     .unwrap();

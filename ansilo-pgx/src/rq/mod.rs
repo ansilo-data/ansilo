@@ -40,6 +40,9 @@ use crate::{
     sqlil::{from_datum, into_datum},
 };
 
+#[cfg(any(test, feature = "pg_test"))]
+mod tests;
+
 // We also will cache prepared remote queries so they can be reused cheaply
 //
 // The cache key structure is (server_name, query_sql, param_types)
@@ -390,6 +393,11 @@ pub fn clear_rq_prepared_queries() {
         .expect("Failed to lock active prepared queries mutext");
 
     cache.clear();
+}
+
+// Used for testing
+pub(crate) fn get_prepared_queries_count() -> usize {
+    PREPARED_QUERIES.lock().unwrap().len()
 }
 
 fn unexpected_outer_response(response: ServerMessage) -> Error {

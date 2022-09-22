@@ -14,6 +14,9 @@ pub struct SqliteConnectionConfig {
     /// Path to the database file.
     /// Set to ":memory:" for an in-memory db.
     pub path: String,
+    /// Extensions to load
+    #[serde(default)]
+    pub extensions: Vec<String>,
 }
 
 impl SqliteConnectionConfig {

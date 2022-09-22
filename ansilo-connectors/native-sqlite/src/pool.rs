@@ -28,6 +28,16 @@ impl ConnectionPool for SqliteConnectionUnpool {
             rusqlite::Connection::open_with_flags(self.conf.path.clone(), OpenFlags::default())
                 .context("Failed to connect to sqlite")?;
 
+        if !self.conf.extensions.is_empty() {
+            unsafe {
+                con.load_extension_enable()?;
+                for ext in self.conf.extensions.iter() {
+                    con.load_extension(ext, None)?;
+                }
+                con.load_extension_disable()?;
+            }
+        }
+
         Ok(SqliteConnection::new(con))
     }
 }

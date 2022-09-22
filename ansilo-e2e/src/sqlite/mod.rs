@@ -13,8 +13,11 @@ pub fn init_sqlite_sql(init_sql_path: PathBuf) -> (SqliteConnection, PathBuf) {
         .with_extension(".sqlite");
     let path = path.to_str().unwrap();
 
-    let mut connection =
-        SqliteConnector::connect(SqliteConnectionConfig { path: path.into() }).unwrap();
+    let mut connection = SqliteConnector::connect(SqliteConnectionConfig {
+        path: path.into(),
+        extensions: vec![],
+    })
+    .unwrap();
 
     for path in glob(init_sql_path.to_str().unwrap())
         .unwrap()

@@ -80,7 +80,7 @@ mod tests {
                 DROP SERVER IF EXISTS test_srv CASCADE;
                 CREATE SERVER "test_srv" FOREIGN DATA WRAPPER ansilo_fdw OPTIONS (
                     socket '{sock_path}',
-                    data_source 'memory'
+                    data_source 'mock'
                 );
                  "#
                 )
