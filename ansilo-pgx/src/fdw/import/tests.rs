@@ -121,7 +121,7 @@ mod tests {
                 EntityAttributeConfig::minimal("int64", DataType::Int64),
                 EntityAttributeConfig::minimal("uint64", DataType::UInt64),
             ],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -162,7 +162,7 @@ OPTIONS (
                     DataType::Utf8String(StringOptions::new(Some(255))),
                 ),
             ],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -188,7 +188,7 @@ OPTIONS (
         let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("binary", DataType::Binary)],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -213,7 +213,7 @@ OPTIONS (
         let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("bool", DataType::Boolean)],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -245,7 +245,7 @@ OPTIONS (
                     DataType::Decimal(DecimalOptions::default()),
                 ),
             ],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -277,7 +277,7 @@ OPTIONS (
                 EntityAttributeConfig::minimal("date_time", DataType::DateTime),
                 EntityAttributeConfig::minimal("date_time_tz", DataType::DateTimeWithTZ),
             ],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -305,7 +305,7 @@ OPTIONS (
         let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("json", DataType::JSON)],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -330,7 +330,7 @@ OPTIONS (
         let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("uuid", DataType::Uuid)],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -355,7 +355,7 @@ OPTIONS (
         let conf = EntityConfig::minimal(
             "some:name",
             vec![EntityAttributeConfig::minimal("foo:bar", DataType::Int8)],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -386,7 +386,7 @@ OPTIONS (
                 true,
                 false,
             )],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema(vec![conf.clone()]);
 
@@ -411,7 +411,7 @@ OPTIONS (
         let conf = EntityConfig::minimal(
             "tab",
             vec![EntityAttributeConfig::minimal("col", DataType::Int8)],
-            EntitySourceConfig::minimal("memory"),
+            EntitySourceConfig::minimal("mock"),
         );
         let stmts = run_import_foreign_schema_query(
             vec![conf.clone()],
