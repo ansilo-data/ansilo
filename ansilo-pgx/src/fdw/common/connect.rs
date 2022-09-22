@@ -20,6 +20,7 @@ use crate::{
     auth::ctx::AuthContextState,
     fdw::ctx::{FdwContext, FdwGlobalContext},
     sqlil::get_entity_id_from_foreign_table,
+    util::string::to_pg_cstr,
 };
 
 use super::{ServerOptions, TableOptions};
@@ -102,9 +103,27 @@ pub(crate) unsafe fn connect_table(foreign_table_oid: Oid) -> FdwContext {
     FdwContext::new(con, entity, foreign_table_oid, table_opts)
 }
 
+/// Returns a connection to the data source for the supplied foreign server by name
+#[allow(unused)]
+pub unsafe fn connect_server_by_name(server_name: &str) -> FdwGlobalContext {
+    try_connect_server_by_name(server_name).unwrap()
+}
+
+/// Returns a connection to the data source for the supplied foreign server by name
+pub unsafe fn try_connect_server_by_name(server_name: &str) -> Result<FdwGlobalContext> {
+    let server = pg_sys::GetForeignServerByName(to_pg_cstr(server_name).unwrap(), false);
+    try_connect_server((*server).serverid)
+}
+
 /// Returns a connection to the data source for the supplied foreign server
 pub unsafe fn connect_server(server_oid: Oid) -> FdwGlobalContext {
-    FdwGlobalContext::new(get_server_connection(server_oid).unwrap())
+    try_connect_server(server_oid).unwrap()
+}
+
+/// Returns a connection to the data source for the supplied foreign server
+pub unsafe fn try_connect_server(server_oid: Oid) -> Result<FdwGlobalContext> {
+    let con = get_server_connection(server_oid)?;
+    Ok(FdwGlobalContext::new(con))
 }
 
 /// Gets a connection to the data source for the supplied foreign server

@@ -52,7 +52,7 @@ pub struct FdwQueryContext {
 }
 
 #[derive(Clone)]
-struct QueryScopedConnection {
+pub(crate) struct QueryScopedConnection {
     /// The query id used by the IPC server to identify the query
     pub query_id: QueryId,
     /// The IPC connection
@@ -60,9 +60,9 @@ struct QueryScopedConnection {
 }
 
 #[derive(Clone)]
-pub struct FdwQueryHandle {
+pub(crate) struct FdwQueryHandle {
     /// The connection to ansilo
-    connection: QueryScopedConnection,
+    pub connection: QueryScopedConnection,
     /// The query input structure
     pub query_input: QueryInputStructure,
 }
@@ -204,10 +204,10 @@ impl FdwQueryContext {
             })
             .context("Preparing query")?;
 
-        self.query_writer = Some(QueryHandleWriter::new(FdwQueryHandle {
-            connection: self.connection.clone(),
-            query_input: query_input.clone(),
-        })?);
+        self.query_writer = Some(QueryHandleWriter::new(FdwQueryHandle::new(
+            self.connection.clone(),
+            query_input.clone(),
+        ))?);
 
         Ok(query_input)
     }
@@ -525,14 +525,14 @@ impl ResultSet for FdwResultSet {
 }
 
 impl QueryScopedConnection {
-    fn new(query_id: QueryId, connection: Arc<FdwIpcConnection>) -> Self {
+    pub fn new(query_id: QueryId, connection: Arc<FdwIpcConnection>) -> Self {
         Self {
             query_id,
             connection,
         }
     }
 
-    fn send(&self, message: ClientQueryMessage) -> Result<ServerQueryMessage> {
+    pub fn send(&self, message: ClientQueryMessage) -> Result<ServerQueryMessage> {
         let res = self
             .connection
             .send(ClientMessage::Query(self.query_id, message))?;
@@ -543,6 +543,15 @@ impl QueryScopedConnection {
         };
 
         Ok(res)
+    }
+}
+
+impl FdwQueryHandle {
+    pub(crate) fn new(connection: QueryScopedConnection, query_input: QueryInputStructure) -> Self {
+        Self {
+            connection,
+            query_input,
+        }
     }
 }
 

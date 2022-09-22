@@ -62,6 +62,7 @@ enum FdwConnectionState<TConnector: Connector> {
 enum FdwQueryState<TConnector: Connector> {
     New,
     Planning(sqlil::Query),
+    Compiled(TConnector::TQuery),
     Prepared(QueryHandleWrite<TConnector::TQueryHandle>),
     ExecutedQuery(
         QueryHandleWrite<TConnector::TQueryHandle>,
@@ -131,6 +132,10 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             }
             ClientMessage::CreateQuery(entity, query_type) => {
                 let (query_id, cost) = self.create_query(&entity, query_type)?;
+                ServerMessage::QueryCreated(query_id, cost)
+            }
+            ClientMessage::CreateStringQuery(query, params) => {
+                let (query_id, cost) = self.create_string_query(query, params)?;
                 ServerMessage::QueryCreated(query_id, cost)
             }
             ClientMessage::Query(query_id, message) => {
@@ -327,6 +332,23 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         Ok((query_id, cost))
     }
 
+    fn create_string_query(
+        &mut self,
+        query: String,
+        params: Vec<sqlil::Parameter>,
+    ) -> Result<(QueryId, OperationCost)> {
+        self.connect()?;
+        let query =
+            TConnector::TQueryCompiler::query_from_string(self.connection.get()?, query, params)?;
+
+        let query_id = self.query_id;
+        self.queries
+            .insert(query_id, FdwQueryState::Compiled(query));
+        self.query_id += 1;
+
+        Ok((query_id, OperationCost::default()))
+    }
+
     fn apply_query_operation(
         &mut self,
         query_id: QueryId,
@@ -448,14 +470,23 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     }
 
     fn prepare(&mut self, query_id: QueryId) -> Result<QueryInputStructure> {
-        let query = Self::query(&mut self.queries, query_id)?.current()?;
         let connection = self.connection.get()?;
 
-        let query = TConnector::TQueryCompiler::compile_query(
-            connection,
-            &*Self::entities(self.entities)?,
-            query.clone(),
-        )?;
+        let state = mem::replace(
+            Self::query(&mut self.queries, query_id)?,
+            FdwQueryState::New,
+        );
+
+        let query = match state {
+            FdwQueryState::Planning(query) => TConnector::TQueryCompiler::compile_query(
+                connection,
+                &*Self::entities(self.entities)?,
+                query.clone(),
+            )?,
+            FdwQueryState::Compiled(query) => query,
+            _ => bail!("Expected query to be in planning or compiled state"),
+        };
+
         let handle = connection.prepare(query)?;
 
         let structure = handle.get_structure()?;
@@ -720,6 +751,7 @@ impl<TConnector: Connector> Display for FdwQueryState<TConnector> {
         f.write_str(match self {
             FdwQueryState::New => "new",
             FdwQueryState::Planning(_) => "planning",
+            FdwQueryState::Compiled(_) => "compiled",
             FdwQueryState::Prepared(_) => "prepared",
             FdwQueryState::ExecutedQuery(_, _) => "executed-query",
             FdwQueryState::ExecutedModify(_) => "executed-modify",

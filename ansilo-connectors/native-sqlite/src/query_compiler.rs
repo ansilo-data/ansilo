@@ -31,6 +31,17 @@ impl QueryCompiler for SqliteQueryCompiler {
             sql::Query::Delete(delete) => Self::compile_delete_query(conf, &query, delete),
         }
     }
+
+    fn query_from_string(
+        _connection: &mut Self::TConnection,
+        query: String,
+        params: Vec<sql::Parameter>,
+    ) -> Result<Self::TQuery> {
+        Ok(SqliteQuery::new(
+            query,
+            params.into_iter().map(|p| QueryParam::dynamic(p)).collect(),
+        ))
+    }
 }
 
 impl SqliteQueryCompiler {
@@ -616,22 +627,14 @@ mod tests {
 
     fn compile_select(select: sql::Select, conf: SqliteConnectorEntityConfig) -> SqliteQuery {
         let query = sql::Query::Select(select);
-        SqliteQueryCompiler::compile_select_query(
-            &conf,
-            &query,
-            query.as_select().unwrap(),
-        )
-        .unwrap()
+        SqliteQueryCompiler::compile_select_query(&conf, &query, query.as_select().unwrap())
+            .unwrap()
     }
 
     fn compile_insert(insert: sql::Insert, conf: SqliteConnectorEntityConfig) -> SqliteQuery {
         let query = sql::Query::Insert(insert);
-        SqliteQueryCompiler::compile_insert_query(
-            &conf,
-            &query,
-            query.as_insert().unwrap(),
-        )
-        .unwrap()
+        SqliteQueryCompiler::compile_insert_query(&conf, &query, query.as_insert().unwrap())
+            .unwrap()
     }
 
     fn compile_bulk_insert(

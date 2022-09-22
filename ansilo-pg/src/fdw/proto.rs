@@ -29,6 +29,8 @@ pub enum ClientMessage {
     GetRowIds(sqlil::EntitySource),
     /// Creates a new query
     CreateQuery(sqlil::EntitySource, sqlil::QueryType),
+    /// Creates a new query from a string
+    CreateStringQuery(String, Vec<sqlil::Parameter>),
     /// Performs an action on the the specified query
     Query(QueryId, ClientQueryMessage),
     /// Begins a transaction on the remote connection
@@ -81,7 +83,7 @@ pub enum ClientQueryMessage {
 pub struct AuthDataSource {
     /// The authentication context
     ///
-    /// We store this as a JSON string as the structure
+    /// We store this as a JSON string as the struct
     /// is not compatible with bincode
     context: Option<String>,
     /// The data source id

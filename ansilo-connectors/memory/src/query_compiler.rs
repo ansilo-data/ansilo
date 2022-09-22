@@ -1,4 +1,4 @@
-use ansilo_core::{err::Result, sqlil as sql};
+use ansilo_core::{err::{Result, bail}, sqlil as sql};
 
 use ansilo_connectors_base::{common::entity::ConnectorEntityConfig, interface::QueryCompiler};
 
@@ -27,5 +27,13 @@ impl QueryCompiler for MemoryQueryCompiler {
         });
 
         Ok(MemoryQuery::new(query, params))
+    }
+
+    fn query_from_string(
+        _connection: &mut Self::TConnection,
+        _query: String,
+        _params: Vec<sql::Parameter>,
+    ) -> Result<Self::TQuery> {
+        bail!("Unsupported")
     }
 }

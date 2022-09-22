@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use super::DataValue;
 
 /// Data type of values
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode, EnumAsInner)]
+#[derive(
+    Debug, PartialEq, Eq, Clone, Serialize, Hash, Deserialize, Encode, Decode, EnumAsInner,
+)]
 pub enum DataType {
     Utf8String(StringOptions),
     Binary,
@@ -45,7 +47,7 @@ impl fmt::Display for DataType {
 }
 
 /// Options for the VARCHAR data type
-#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize, Encode, Decode)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Hash, Serialize, Deserialize, Encode, Decode)]
 pub struct StringOptions {
     /// Maximum length of the varchar data in bytes
     pub length: Option<u32>,
@@ -58,7 +60,7 @@ impl StringOptions {
 }
 
 /// Decimal options
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Encode, Decode, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize, Encode, Decode, Default)]
 pub struct DecimalOptions {
     /// The capacity of number of digits for the type
     pub precision: Option<u16>,

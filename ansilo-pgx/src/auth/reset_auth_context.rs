@@ -1,7 +1,7 @@
 use pgx::*;
 use subtle::ConstantTimeEq;
 
-use crate::fdw::common::clear_fdw_ipc_connections;
+use crate::{fdw::common::clear_fdw_ipc_connections, rq::clear_rq_prepared_queries};
 
 use super::ctx::AuthContextState;
 
@@ -43,6 +43,7 @@ fn ansilo_reset_auth_context(reset_nonce: String) -> String {
 
     AuthContextState::update(AuthContextState::None);
     clear_fdw_ipc_connections();
+    clear_rq_prepared_queries();
 
     info!("Auth context reset");
 

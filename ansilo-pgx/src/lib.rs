@@ -5,6 +5,7 @@ use pgx::{
 
 mod auth;
 mod fdw;
+mod rq;
 mod sqlil;
 mod util;
 

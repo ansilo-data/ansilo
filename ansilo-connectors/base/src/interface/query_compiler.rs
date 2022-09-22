@@ -16,4 +16,12 @@ pub trait QueryCompiler {
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         select: sql::Query,
     ) -> Result<Self::TQuery>;
+
+    /// If supported by the connector, convert the supplied string
+    /// into a query.
+    fn query_from_string(
+        connection: &mut Self::TConnection,
+        query: String,
+        params: Vec<sql::Parameter>,
+    ) -> Result<Self::TQuery>;
 }

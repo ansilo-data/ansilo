@@ -32,7 +32,7 @@ async fn configure_roles(
             format!(
                 r#"
             -- Important: remove default CREATE on public schema
-            REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+            REVOKE CREATE ON SCHEMA public FROM public;
 
             -- Create admin user
             CREATE USER {PG_ADMIN_USER} PASSWORD NULL;
@@ -77,6 +77,12 @@ async fn configure_extension(
                 GRANT USAGE ON FOREIGN DATA WRAPPER ansilo_fdw TO {PG_ADMIN_USER};
                 GRANT USAGE ON SCHEMA __ansilo_private TO {PG_ADMIN_USER};
                 GRANT USAGE ON SCHEMA __ansilo_auth TO {PG_ADMIN_USER};
+
+                -- Important: remove default EXECUTE on remote query functions
+                REVOKE EXECUTE ON FUNCTION remote_query(text, text), remote_query(text, text, variadic "any") FROM public;
+                REVOKE EXECUTE ON FUNCTION remote_execute(text, text), remote_execute(text, text, variadic "any") FROM public;
+                GRANT EXECUTE ON FUNCTION remote_query(text, text), remote_query(text, text, variadic "any") TO {PG_ADMIN_USER};
+                GRANT EXECUTE ON FUNCTION remote_execute(text, text), remote_execute(text, text, variadic "any") TO {PG_ADMIN_USER};
             "#
             )
             .as_str(),

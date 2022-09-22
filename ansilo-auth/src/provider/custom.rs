@@ -57,7 +57,9 @@ impl CustomAuthProvider {
 
         // Write input json to stdin
         let mut stdin = proc.stdin.take().unwrap();
-        stdin.write_all(input.as_slice())?;
+        stdin
+            .write_all(input.as_slice())
+            .context("Failed to write to stdin")?;
         // Ensure we drop the stdin to avoid the child blocking
         drop(stdin);
 

@@ -30,6 +30,17 @@ impl QueryCompiler for MysqlJdbcQueryCompiler {
             sql::Query::Delete(delete) => Self::compile_delete_query(conf, &query, delete),
         }
     }
+
+    fn query_from_string(
+        _connection: &mut Self::TConnection,
+        query: String,
+        params: Vec<sql::Parameter>,
+    ) -> Result<Self::TQuery> {
+        Ok(JdbcQuery::new(
+            query,
+            params.into_iter().map(|p| QueryParam::dynamic(p)).collect(),
+        ))
+    }
 }
 
 impl MysqlJdbcQueryCompiler {

@@ -37,6 +37,14 @@ impl QueryCompiler for InternalQueryCompiler {
 
         Ok(query)
     }
+
+    fn query_from_string(
+        _connection: &mut Self::TConnection,
+        _query: String,
+        _params: Vec<sql::Parameter>,
+    ) -> Result<Self::TQuery> {
+        bail!("Unsupported")
+    }
 }
 
 fn parse_cols<T: FromStr<Err = Error>>(cols: Vec<(String, sql::Expr)>) -> Result<Vec<(String, T)>> {
