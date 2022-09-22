@@ -80,8 +80,8 @@ async fn configure_extension(
                 -- Important: remove default EXECUTE on remote query functions
                 REVOKE EXECUTE ON FUNCTION remote_query(text, text), remote_query(text, text, variadic "any") FROM public;
                 REVOKE EXECUTE ON FUNCTION remote_execute(text, text), remote_execute(text, text, variadic "any") FROM public;
-                GRANT EXECUTE ON FUNCTION remote_query(text, text), remote_query(text, text, variadic "any") TO {PG_ADMIN_USER};
-                GRANT EXECUTE ON FUNCTION remote_execute(text, text), remote_execute(text, text, variadic "any") TO {PG_ADMIN_USER};
+                GRANT EXECUTE ON FUNCTION remote_query(text, text), remote_query(text, text, variadic "any") TO {PG_ADMIN_USER} WITH GRANT OPTION;
+                GRANT EXECUTE ON FUNCTION remote_execute(text, text), remote_execute(text, text, variadic "any") TO {PG_ADMIN_USER} WITH GRANT OPTION;
             "#
             )
             .as_str(),
