@@ -46,7 +46,6 @@ pub fn init_conf(config_path: &Path, args: &Args) -> AppConf {
 /// Gets the postgres configuration for this instance
 fn pg_conf(node: &NodeConfig) -> PostgresConf {
     let pg_conf = node.postgres.clone().unwrap_or_default();
-    ansilo_logging::error!("{:?}", create_db_init_sql(node));
 
     PostgresConf {
         install_dir: pg_conf
