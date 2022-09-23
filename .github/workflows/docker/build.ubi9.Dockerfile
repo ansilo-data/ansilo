@@ -29,6 +29,9 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     unzip awscliv2.zip && \
     ./aws/install --update
 
+# Install azure cli
+RUN curl -LSf https://aka.ms/InstallAzureCli | bash
+
 # Install utils
 RUN yum install -y procps jq lld
 

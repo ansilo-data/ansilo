@@ -1,0 +1,10 @@
+Teradata has been setup on an azure vm using this guide:
+
+https://quickstarts.teradata.com/run-vantage-express-on-aws.html
+
+See the td-init.sql script for how it has been configured.
+
+It is running lazyprox and the vm will auto-shutdown after 30 min of inactivity.
+Credentials to control the vm are stored in AWS Secrets Manager under this secret:
+arn:aws:secretsmanager:ap-southeast-2:635198228996:secret:test/azure/service-user-Fo94AC
+

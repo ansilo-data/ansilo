@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  oracle:
+    image: 635198228996.dkr.ecr.ap-southeast-2.amazonaws.com/oracle:enterprise-21.3.0.0
+    ports:
+      - "1522:1522"
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/ansilo-connectors
+        awslogs-region: ap-southeast-2
+        awslogs-stream-prefix: jdbc-oracle

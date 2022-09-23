@@ -65,6 +65,9 @@ RUN cd /tmp/ && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" 
     sudo ./aws/install && \
     rm -rf awscliv2.zip ./aws/
 
+# Install azure cli
+RUN curl -LSf https://aka.ms/InstallAzureCli | bash
+
 # Install netcat & socat
 RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     sudo apt-get -y install netcat socat

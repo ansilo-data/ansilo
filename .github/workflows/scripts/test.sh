@@ -17,7 +17,6 @@ function clean_old_tmp_files() {
         echo "== Cleaning old /tmp files =="
         find /tmp/ -type f -mmin +5 -delete >/dev/null 2>&1 || true
         sleep 60
-        df -h
     done
 }
 
