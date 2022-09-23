@@ -86,6 +86,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "serial_test",
  "subtle",
  "tempfile",
  "tokio",

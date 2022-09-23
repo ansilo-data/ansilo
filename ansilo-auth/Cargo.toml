@@ -22,6 +22,7 @@ subtle = "2.4"
 hex = "0.4"
 tempfile = { version = "3.3", optional = true }
 serde_yaml = "0.9"
+serial_test = "*"
 
 [dev-dependencies]
 pretty_assertions = "*"

@@ -117,6 +117,7 @@ struct CustomAuthFailure {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use serial_test::serial;
 
     use super::*;
 
@@ -133,6 +134,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_custom_auth_success() {
         let provider = mock_provider(r#"echo '{"result": "success", "context": {"foo": "bar"}}'"#);
 
@@ -149,6 +151,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_custom_auth_failure() {
         let provider =
             mock_provider(r#"echo '{"result": "failure", "message": "failed to auth"}'"#);
@@ -163,6 +166,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_custom_auth_stdin_json() {
         let provider = mock_provider(
             r#"
@@ -212,6 +216,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_custom_auth_non_zero_exit_code() {
         let provider = mock_provider(r#"exit 1"#);
 
@@ -226,6 +231,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_custom_auth_invalid_json_output() {
         let provider = mock_provider(r#"echo 'invalid json'"#);
 
