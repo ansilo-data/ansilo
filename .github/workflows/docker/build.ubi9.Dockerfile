@@ -52,4 +52,4 @@ WORKDIR /build
 # Install rust
 RUN curl --proto '=https' --tlsv1.3 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/home/build/.cargo/bin:${PATH}"
-
+ENV CARGO_INCREMENTAL="false"

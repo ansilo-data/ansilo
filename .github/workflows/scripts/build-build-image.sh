@@ -18,3 +18,9 @@ else
     docker save -o image-build.tgz ansilo-build
     echo ""
 fi;
+
+# for rust-cache action
+echo "----- Create rustc allias -----"
+echo "docker run --rm ansilo-build rustc" | tee /usr/local/bin/rustc
+sudo chmod +x /usr/local/bin/rustc
+echo ""

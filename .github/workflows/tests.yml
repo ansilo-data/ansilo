@@ -36,26 +36,18 @@ jobs:
           path: image-build.tgz
           key: ansilo-build-${{ runner.os }}-${{ hashFiles('.github/workflows/docker/build.ubi9.Dockerfile', '.github/workflows/scripts/build-build-image.sh') }}
 
-      - name: Cache cargo/maven registry
+      - name: Cache maven registry
         uses: actions/cache@v3
         continue-on-error: false
         with:
           path: |
             ~/.m2
-            ~/.cargo
-          key: ansilo-test-package-${{ runner.os }}-${{ hashFiles('**/Cargo.lock', '**/pom.xml') }}
-
-      - name: Cache target dir
-        uses: actions/cache@v3
-        continue-on-error: false
-        with:
-          path: target
-          key: ansilo-test-target-path-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: | 
-            ansilo-test-target-path-${{ runner.os }}
+          key: ansilo-test-package-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
 
       - name: Build base image
         run: .github/workflows/scripts/build-build-image.sh
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Create volume dirs
         run: .github/workflows/scripts/volumes.sh
