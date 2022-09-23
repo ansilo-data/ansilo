@@ -183,7 +183,6 @@ pub(crate) fn from_oracle_type(col: &HashMap<String, DataValue>) -> Result<DataT
                 _ => DataType::Decimal(DecimalOptions::new(precision, scale)),
             }
         }
-
         "BINARY_FLOAT" => DataType::Float32,
         "BINARY_DOUBLE" => DataType::Float64,
         "RAW" | "LONG RAW" | "LONG" | "BFILE" | "BLOB" => DataType::Binary,

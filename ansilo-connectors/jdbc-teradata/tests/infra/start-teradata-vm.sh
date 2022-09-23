@@ -18,25 +18,27 @@ az login --service-principal \
 echo "Starting teradata vm..."
 az vm start --resource-group Ansilo --name teradata-test
 
-# echo "Waiting for port..."
-# TRIES=0
-# while ((TRIES < 10));
-# do
-#     echo "Checking if port is open..."
-#     set +e
-#     nc -vz ansilo-teradata-test.japaneast.cloudapp.azure.com 1026
-#     set -e
+echo "Waiting for port..."
+TRIES=0
+while ((TRIES < 10));
+do
+    echo "Checking if port is open..."
+    set +e
+    nc -vz ansilo-teradata-test.japaneast.cloudapp.azure.com 1026
+    EXIT_CODE=$?
+    set -e
 
-#     if [[ $EXIT_CODE == 0 ]];
-#     then
-#         break
-#     fi
+
+    if [[ $EXIT_CODE == 0 ]];
+    then
+        break
+    fi
     
-#     sleep 5
-#     let "TRIES+=1"
-# done
+    sleep 5
+    let "TRIES+=1"
+done
 
 echo "Waiting for boot..."
-# sleep 30
+sleep 10
 
 echo "Done"

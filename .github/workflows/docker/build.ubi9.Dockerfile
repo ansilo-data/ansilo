@@ -30,7 +30,8 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     ./aws/install --update
 
 # Install azure cli
-RUN curl -LSf https://aka.ms/InstallAzureCli | bash
+RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
+    dnf install -y https://packages.microsoft.com/config/rhel/9.0/packages-microsoft-prod.rpm
 
 # Install utils
 RUN yum install -y procps jq lld

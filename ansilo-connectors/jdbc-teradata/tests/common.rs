@@ -1,8 +1,14 @@
-use std::{collections::HashMap, env, process};
+use std::{
+    collections::HashMap,
+    env, process,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use ansilo_connectors_base::test::ecs::get_current_target_dir;
 use ansilo_connectors_jdbc_base::JdbcConnection;
 use ansilo_connectors_jdbc_teradata::{TeradataJdbcConnectionConfig, TeradataJdbcConnector};
+
+static HAS_INIT: AtomicBool = AtomicBool::new(false);
 
 #[macro_export]
 macro_rules! current_dir {
@@ -20,6 +26,10 @@ macro_rules! current_dir {
 }
 
 pub fn start_teradata() {
+    if HAS_INIT.load(Ordering::SeqCst) {
+        return;
+    }
+
     let res = process::Command::new("bash")
         .arg(current_dir!().join("infra/start-teradata-vm.sh"))
         .spawn()
@@ -28,6 +38,8 @@ pub fn start_teradata() {
         .unwrap();
 
     assert!(res.success());
+
+    HAS_INIT.store(true, Ordering::SeqCst);
 }
 
 pub fn connect_to_teradata() -> JdbcConnection {

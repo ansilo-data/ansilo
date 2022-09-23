@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
-    data::{DataType, DataValue, StringOptions},
+    data::{DataType, DataValue, DecimalOptions, StringOptions},
     err::{bail, Context, Result},
 };
 
@@ -40,25 +40,35 @@ impl EntitySearcher for TeradataJdbcEntitySearcher {
         let cols = connection
             .prepare(JdbcQuery::new(
                 r#"
-                SELECT
-                    T.DatabaseName,
-                    T.TableName,
+                SELECT 
+                    C.DataBaseName AS DataBaseName,
+                    C.TableName AS TableName,
+                    C.ColumnName AS ColumnName,
                     T.CommentString AS TableComment,
-                    C.ColumnName,
-                    C.ColumnTitle,
-                    C.CommentString AS ColumnComment,
-                    C.ColumnType,
-                    C.Nullable,
-                    C.ColumnLength,
-                    C.DecimalTotalDigits,
-                    C.DecimalFractionalDigits,
-                    C.ColumnPosition,
-                    C.IdColType IS NOT NULL as PrimaryKey
-                FROM DBC.TablesV T
-                INNER JOIN DBC.ColumnsV C ON T.DatabaseName = C.DatabaseName AND T.TableName = C.TableName
-                WHERE (T.DatabaseName || '.' || T.TableName) LIKE ?
-                AND T.TableKind IN ('O', 'T', 'V')
-                ORDER BY T.DatabaseName, T.TableName, C.ColumnPosition
+                    E.ColumnTitle AS ColumnTitle,
+                    E.CommentString AS ColumnComment,
+                    E.ColumnType AS ColumnType,
+                    E.Nullable AS Nullable,
+                    E.ColumnLength AS ColumnLength,
+                    E.DecimalTotalDigits AS DecimalTotalDigits,
+                    E.DecimalFractionalDigits AS DecimalFractionalDigits,
+                    E.ColumnID AS ColumnID,
+                    C.PrimaryKey AS PrimaryKey
+                FROM (
+                    SELECT
+                        C.DataBaseName,
+                        C.TableName,
+                        C.ColumnName,
+                        SUM(CASE WHEN I.IndexType IS NULL THEN 0 ELSE 1 END) AS PrimaryKey
+                    FROM DBC.ColumnsV AS C
+                    LEFT JOIN DBC.IndicesV AS I ON I.IndexType = 'K' AND I.DataBaseName = C.DataBaseName AND I.TableName = C.TableName AND I.ColumnName = C.ColumnName
+                    WHERE (C.DataBaseName || '.' || C.TableName) LIKE ?
+                    GROUP BY C.DataBaseName, C.TableName, C.ColumnName
+                ) AS C
+                INNER JOIN DBC.TablesV AS T ON T.DataBaseName = C.DataBaseName AND T.TableName = C.TableName
+                INNER JOIN DBC.ColumnsV AS E ON E.DataBaseName = C.DataBaseName AND E.TableName = C.TableName AND E.ColumnName = C.ColumnName
+                WHERE T.TableKind IN ('O', 'T', 'V')
+                ORDER BY C.DataBaseName, C.TableName, E.ColumnID
             "#,
                 vec![QueryParam::constant(DataValue::Utf8String(
                     opts.remote_schema
@@ -73,7 +83,7 @@ impl EntitySearcher for TeradataJdbcEntitySearcher {
         let cols = cols.reader()?.iter_rows().collect::<Result<Vec<_>>>()?;
         let tables = cols.into_iter().group_by(|row| {
             (
-                row["DatabaseName"].as_utf8_string().unwrap().clone(),
+                row["DataBaseName"].as_utf8_string().unwrap().clone(),
                 row["TableName"].as_utf8_string().unwrap().clone(),
             )
         });
@@ -140,7 +150,13 @@ pub(crate) fn parse_column(
             .or_else(|| c["ColumnTitle"].as_utf8_string())
             .map(|s| s.clone()),
         col_type,
-        *c["PrimaryKey"].as_boolean().context("PrimaryKey")?,
+        *c["PrimaryKey"]
+            .clone()
+            .try_coerce_into(&DataType::Int32)
+            .unwrap_or(DataValue::Int32(0))
+            .as_int32()
+            .unwrap()
+            > 0,
         c["Nullable"].as_utf8_string().context("Nullable")? == "Y",
     ))
 }
@@ -149,7 +165,7 @@ pub(crate) fn from_teradata_col(col: &HashMap<String, DataValue>) -> Result<Data
     let td_type = col["ColumnType"].as_utf8_string().context("ColumnType")?;
 
     // @see https://docs.teradata.com/r/oiS9ixs2ypIQvjTUOJfgoA/fQ8NslP6DDESV0ZiODLlIw
-    Ok(match td_type.as_str() {
+    Ok(match td_type.trim() {
         "CF" | "CO" | "CV" | "LF" | "LV" | "UV" => {
             let length = col["ColumnLength"]
                 .clone()
@@ -159,6 +175,20 @@ pub(crate) fn from_teradata_col(col: &HashMap<String, DataValue>) -> Result<Data
                 .and_then(|i| if i >= 1 { Some(i) } else { None });
 
             DataType::Utf8String(StringOptions::new(length))
+        }
+        "D" => {
+            let precision = col["DecimalTotalDigits"]
+                .clone()
+                .try_coerce_into(&DataType::UInt16)
+                .ok()
+                .and_then(|i| i.as_u_int16().cloned());
+            let scale = col["DecimalFractionalDigits"]
+                .clone()
+                .try_coerce_into(&DataType::UInt16)
+                .ok()
+                .and_then(|i| i.as_u_int16().cloned());
+
+            DataType::Decimal(DecimalOptions::new(precision, scale))
         }
         "I1" => DataType::Int8,
         "I2" => DataType::Int16,
@@ -170,7 +200,7 @@ pub(crate) fn from_teradata_col(col: &HashMap<String, DataValue>) -> Result<Data
         "DA" => DataType::Date,
         "AT" => DataType::Time,
         "TS" => DataType::DateTime,
-        "TZ" => DataType::DateTimeWithTZ,
+        "TZ" | "SZ" => DataType::DateTimeWithTZ,
         _ => {
             bail!("Encountered unknown data type '{td_type}'");
         }

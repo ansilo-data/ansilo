@@ -1,195 +1,380 @@
-// use std::collections::HashMap;
+use std::collections::HashMap;
 
-// use ansilo_connectors_base::interface::{EntityDiscoverOptions, EntitySearcher};
+use ansilo_connectors_base::interface::{EntityDiscoverOptions, EntitySearcher};
 
-// use ansilo_connectors_jdbc_teradata::{
-//     TeradataJdbcEntitySearcher, TeradataJdbcEntitySourceConfig, TeradataJdbcTableOptions,
-// };
-// use ansilo_core::{
-//     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
-//     data::{DataType, DecimalOptions, StringOptions},
-// };
-// use pretty_assertions::assert_eq;
-// use serial_test::serial;
+use ansilo_connectors_jdbc_teradata::{
+    TeradataJdbcEntitySearcher, TeradataJdbcEntitySourceConfig, TeradataJdbcTableOptions,
+};
+use ansilo_core::{
+    config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
+    data::{DataType, DecimalOptions, StringOptions},
+};
+use pretty_assertions::assert_eq;
+use serial_test::serial;
 
-// mod common;
+mod common;
 
-// #[test]
-// #[serial]
+#[test]
+#[serial]
 
-// fn test_teradata_jdbc_discover_entities() {
-//     // This test takes an enourmous amount of time over gha
-//     // (i think due to the slow network link)
-//     if std::env::var("ANSILO_GHA_TESTS").is_ok() {
-//         return;
-//     }
+fn test_teradata_jdbc_discover_entities() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
 
-//     ansilo_logging::init_for_tests();
-//     let containers = common::start_teradata();
-//     let mut con = common::connect_to_teradata(&containers);
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::default(),
+    )
+    .unwrap();
 
-//     let entities = TeradataJdbcEntitySearcher::discover(
-//         &mut con,
-//         &NodeConfig::default(),
-//         EntityDiscoverOptions::default(),
-//     )
-//     .unwrap();
+    assert!(
+        entities.len() > 100,
+        "Teradata database should have many default tables"
+    );
+}
 
-//     assert!(
-//         entities.len() > 100,
-//         "Teradata database should have many default tables"
-//     );
+#[test]
+#[serial]
+fn test_teradata_jdbc_discover_entities_number_type_mapping() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
 
-//     let dual = entities.iter().find(|i| i.id == "DUAL").unwrap().clone();
+    con.execute(
+        "CALL testdb.DROP_IF_EXISTS('testdb', 'IMPORT_NUMBER_TYPES');",
+        vec![],
+    )
+    .unwrap();
 
-//     assert_eq!(
-//         dual,
-//         EntityConfig::minimal(
-//             "DUAL",
-//             vec![EntityAttributeConfig::new(
-//                 "DUMMY".into(),
-//                 None,
-//                 DataType::Utf8String(StringOptions::new(Some(1))),
-//                 false,
-//                 true
-//             )],
-//             EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
-//                 TeradataJdbcTableOptions::new(Some("SYS".into()), "DUAL".into(), HashMap::new())
-//             ))
-//             .unwrap()
-//         )
-//     )
-// }
+    con.execute(
+        "
+        CREATE TABLE IMPORT_NUMBER_TYPES (
+            INT8 BYTEINT,
+            INT16 SMALLINT,
+            INT32 INT,
+            INT64 BIGINT,
+            FLOAT64 FLOAT,
+            DEC1 DECIMAL(19),
+            DEC2 DECIMAL(5, 1)
+        ) 
+        ",
+        vec![],
+    )
+    .unwrap();
 
-// #[test]
-// #[serial]
-// fn test_teradata_jdbc_discover_entities_with_filter_for_single_table() {
-//     ansilo_logging::init_for_tests();
-//     let containers = common::start_teradata();
-//     let mut con = common::connect_to_teradata(&containers);
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_NUMBER_TYPES%"),
+    )
+    .unwrap();
 
-//     let entities = TeradataJdbcEntitySearcher::discover(
-//         &mut con,
-//         &NodeConfig::default(),
-//         EntityDiscoverOptions::schema("SYS.DUAL"),
-//     )
-//     .unwrap();
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "IMPORT_NUMBER_TYPES",
+            vec![
+                EntityAttributeConfig::nullable("INT8", DataType::Int8),
+                EntityAttributeConfig::nullable("INT16", DataType::Int16),
+                EntityAttributeConfig::nullable("INT32", DataType::Int32),
+                EntityAttributeConfig::nullable("INT64", DataType::Int64),
+                EntityAttributeConfig::nullable("FLOAT64", DataType::Float64),
+                EntityAttributeConfig::nullable(
+                    "DEC1",
+                    DataType::Decimal(DecimalOptions::new(Some(19), Some(0)),)
+                ),
+                EntityAttributeConfig::nullable(
+                    "DEC2",
+                    DataType::Decimal(DecimalOptions::new(Some(5), Some(1)),)
+                ),
+            ],
+            EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
+                TeradataJdbcTableOptions::new(
+                    "testdb".into(),
+                    "IMPORT_NUMBER_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}
 
-//     assert_eq!(
-//         entities.len(),
-//         1,
-//         "Remote schema filter should filter down to a specific table"
-//     );
+#[test]
+#[serial]
+fn test_teradata_jdbc_discover_entities_varchar_type_mapping() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
 
-//     let dual = entities[0].clone();
+    con.execute(
+        "CALL testdb.DROP_IF_EXISTS('testdb', 'IMPORT_VARCHAR_TYPES');",
+        vec![],
+    )
+    .unwrap();
 
-//     assert_eq!(
-//         dual,
-//         EntityConfig::minimal(
-//             "DUAL",
-//             vec![EntityAttributeConfig::new(
-//                 "DUMMY".into(),
-//                 None,
-//                 DataType::Utf8String(StringOptions::new(Some(1))),
-//                 false,
-//                 true
-//             )],
-//             EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
-//                 TeradataJdbcTableOptions::new(Some("SYS".into()), "DUAL".into(), HashMap::new())
-//             ))
-//             .unwrap()
-//         )
-//     )
-// }
+    con.execute(
+        "
+        CREATE TABLE IMPORT_VARCHAR_TYPES (
+            VC VARCHAR(255),
+            CH CHARACTER(5),
+            CL CLOB
+        ) 
+        ",
+        vec![],
+    )
+    .unwrap();
 
-// #[test]
-// #[serial]
-// fn test_teradata_jdbc_discover_entities_with_filter_wildcard() {
-//     ansilo_logging::init_for_tests();
-//     let containers = common::start_teradata();
-//     let mut con = common::connect_to_teradata(&containers);
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_VARCHAR_TYPES%"),
+    )
+    .unwrap();
 
-//     let entities = TeradataJdbcEntitySearcher::discover(
-//         &mut con,
-//         &NodeConfig::default(),
-//         EntityDiscoverOptions::schema("SYS.ALL_TAB%"),
-//     )
-//     .unwrap();
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "IMPORT_VARCHAR_TYPES",
+            vec![
+                EntityAttributeConfig::nullable(
+                    "VC",
+                    DataType::Utf8String(StringOptions::new(Some(255)))
+                ),
+                EntityAttributeConfig::nullable(
+                    "CH",
+                    DataType::Utf8String(StringOptions::new(Some(5)))
+                ),
+                EntityAttributeConfig::nullable(
+                    "CL",
+                    DataType::Utf8String(StringOptions::new(Some(2097088000)))
+                ),
+            ],
+            EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
+                TeradataJdbcTableOptions::new(
+                    "testdb".into(),
+                    "IMPORT_VARCHAR_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}
 
-//     assert!(entities.len() > 0);
+#[test]
+#[serial]
+fn test_teradata_jdbc_discover_entities_binary_type_mapping() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
 
-//     assert!(entities
-//         .iter()
-//         .all(|e| e.source.options.as_mapping().unwrap()["owner_name"]
-//             == ansilo_core::config::Value::String("SYS".into())));
-// }
+    con.execute(
+        "CALL testdb.DROP_IF_EXISTS('testdb', 'IMPORT_BINARY_TYPES');",
+        vec![],
+    )
+    .unwrap();
 
-// #[test]
-// #[serial]
-// fn test_teradata_jdbc_discover_entities_number_type_mapping() {
-//     let containers = common::start_teradata();
-//     let mut con = common::connect_to_teradata(&containers);
+    con.execute(
+        "
+        CREATE TABLE IMPORT_BINARY_TYPES (
+            BYT BYTE(255),
+            VBY VARBYTE(5),
+            BLO BLOB
+        ) 
+        ",
+        vec![],
+    )
+    .unwrap();
 
-//     con.execute(
-//         "
-//         BEGIN
-//         EXECUTE IMMEDIATE 'DROP TABLE IMPORT_NUMBER_TYPES';
-//         EXCEPTION
-//         WHEN OTHERS THEN NULL;
-//         END;
-//         ",
-//         vec![],
-//     )
-//     .unwrap();
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_BINARY_TYPES%"),
+    )
+    .unwrap();
 
-//     con.execute(
-//         "
-//         CREATE TABLE IMPORT_NUMBER_TYPES (
-//             INT8 NUMBER(2),
-//             INT16 NUMBER(4),
-//             INT32 NUMBER(9),
-//             INT64 NUMBER(18),
-//             DEC1 NUMBER(19),
-//             DEC2 NUMBER(5, 1)
-//         ) 
-//         ",
-//         vec![],
-//     )
-//     .unwrap();
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "IMPORT_BINARY_TYPES",
+            vec![
+                EntityAttributeConfig::nullable("BYT", DataType::Binary),
+                EntityAttributeConfig::nullable("VBY", DataType::Binary),
+                EntityAttributeConfig::nullable("BLO", DataType::Binary),
+            ],
+            EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
+                TeradataJdbcTableOptions::new(
+                    "testdb".into(),
+                    "IMPORT_BINARY_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}
 
-//     let entities = TeradataJdbcEntitySearcher::discover(
-//         &mut con,
-//         &NodeConfig::default(),
-//         EntityDiscoverOptions::schema("%IMPORT_NUMBER_TYPES%"),
-//     )
-//     .unwrap();
+#[test]
+#[serial]
+fn test_teradata_jdbc_discover_entities_date_time_type_mapping() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
 
-//     assert_eq!(
-//         entities[0].clone(),
-//         EntityConfig::minimal(
-//             "IMPORT_NUMBER_TYPES",
-//             vec![
-//                 EntityAttributeConfig::nullable("INT8", DataType::Int8),
-//                 EntityAttributeConfig::nullable("INT16", DataType::Int16),
-//                 EntityAttributeConfig::nullable("INT32", DataType::Int32),
-//                 EntityAttributeConfig::nullable("INT64", DataType::Int64),
-//                 EntityAttributeConfig::nullable(
-//                     "DEC1",
-//                     DataType::Decimal(DecimalOptions::new(Some(19), Some(0)),)
-//                 ),
-//                 EntityAttributeConfig::nullable(
-//                     "DEC2",
-//                     DataType::Decimal(DecimalOptions::new(Some(5), Some(1)),)
-//                 ),
-//             ],
-//             EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
-//                 TeradataJdbcTableOptions::new(
-//                     Some("ANSILO_ADMIN".into()),
-//                     "IMPORT_NUMBER_TYPES".into(),
-//                     HashMap::new()
-//                 )
-//             ))
-//             .unwrap()
-//         )
-//     )
-// }
+    con.execute(
+        "CALL testdb.DROP_IF_EXISTS('testdb', 'IMPORT_DATE_TIME_TYPES');",
+        vec![],
+    )
+    .unwrap();
+
+    con.execute(
+        "
+        CREATE TABLE IMPORT_DATE_TIME_TYPES (
+            DAT DATE,
+            TIM TIME,
+            TS TIMESTAMP,
+            TSZ TIMESTAMP WITH TIME ZONE
+        ) 
+        ",
+        vec![],
+    )
+    .unwrap();
+
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_DATE_TIME_TYPES%"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "IMPORT_DATE_TIME_TYPES",
+            vec![
+                EntityAttributeConfig::nullable("DAT", DataType::Date),
+                EntityAttributeConfig::nullable("TIM", DataType::Time),
+                EntityAttributeConfig::nullable("TS", DataType::DateTime),
+                EntityAttributeConfig::nullable("TSZ", DataType::DateTimeWithTZ),
+            ],
+            EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
+                TeradataJdbcTableOptions::new(
+                    "testdb".into(),
+                    "IMPORT_DATE_TIME_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}
+
+#[test]
+#[serial]
+fn test_teradata_jdbc_discover_entities_not_null_type_mapping() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
+
+    con.execute(
+        "CALL testdb.DROP_IF_EXISTS('testdb', 'IMPORT_NOT_NULL_TYPES');",
+        vec![],
+    )
+    .unwrap();
+
+    con.execute(
+        "
+        CREATE TABLE IMPORT_NOT_NULL_TYPES (
+            NN INT NOT NULL
+        ) 
+        ",
+        vec![],
+    )
+    .unwrap();
+
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_NOT_NULL_TYPES%"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "IMPORT_NOT_NULL_TYPES",
+            vec![EntityAttributeConfig::new(
+                "NN".into(),
+                None,
+                DataType::Int32,
+                false,
+                false
+            ),],
+            EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
+                TeradataJdbcTableOptions::new(
+                    "testdb".into(),
+                    "IMPORT_NOT_NULL_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}
+
+#[test]
+#[serial]
+fn test_teradata_jdbc_discover_entities_pk_type_mapping() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
+
+    con.execute(
+        "CALL testdb.DROP_IF_EXISTS('testdb', 'IMPORT_PK_TYPES');",
+        vec![],
+    )
+    .unwrap();
+
+    con.execute(
+        "
+        CREATE TABLE IMPORT_PK_TYPES (
+            PK1 INT NOT NULL,
+            PK2 INT NOT NULL,
+            COL3 INT,
+            PRIMARY KEY(PK1, PK2)
+        )
+        ",
+        vec![],
+    )
+    .unwrap();
+
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_PK_TYPES%"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "IMPORT_PK_TYPES",
+            vec![
+                EntityAttributeConfig::new("PK1".into(), None, DataType::Int32, true, false),
+                EntityAttributeConfig::new("PK2".into(), None, DataType::Int32, true, false),
+                EntityAttributeConfig::nullable("COL3", DataType::Int32)
+            ],
+            EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
+                TeradataJdbcTableOptions::new(
+                    "testdb".into(),
+                    "IMPORT_PK_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}
