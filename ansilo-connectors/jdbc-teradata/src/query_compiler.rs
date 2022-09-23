@@ -1,5 +1,5 @@
 use ansilo_core::{
-    data::{DataType, DataValue},
+    data::DataType,
     err::{bail, Context, Result},
     sqlil as sql,
 };
@@ -481,7 +481,7 @@ impl TeradataJdbcQueryCompiler {
         Ok(match op.r#type {
             sql::UnaryOpType::LogicalNot => format!("!({})", inner),
             sql::UnaryOpType::Negate => format!("-({})", inner),
-            sql::UnaryOpType::BitwiseNot => format!("UTL_RAW.BIT_COMPLEMENT({})", inner),
+            sql::UnaryOpType::BitwiseNot => format!("BITNOT({})", inner),
             sql::UnaryOpType::IsNull => format!("({}) IS NULL", inner),
             sql::UnaryOpType::IsNotNull => format!("({}) IS NOT NULL", inner),
         })
@@ -505,17 +505,15 @@ impl TeradataJdbcQueryCompiler {
             sql::BinaryOpType::LogicalOr => format!("({}) OR ({})", l, r),
             sql::BinaryOpType::Modulo => format!("MOD({}, {})", l, r),
             sql::BinaryOpType::Exponent => format!("POWER({}, {})", l, r),
-            sql::BinaryOpType::BitwiseAnd => format!("UTL_RAW.BIT_AND({}, {})", l, r),
-            sql::BinaryOpType::BitwiseOr => format!("UTL_RAW.BIT_OR({}, {})", l, r),
-            sql::BinaryOpType::BitwiseXor => format!("UTL_RAW.BIT_XOR({}, {})", l, r),
-            sql::BinaryOpType::BitwiseShiftLeft => unimplemented!(),
-            sql::BinaryOpType::BitwiseShiftRight => unimplemented!(),
+            sql::BinaryOpType::BitwiseAnd => format!("BITAND({}, {})", l, r),
+            sql::BinaryOpType::BitwiseOr => format!("BITOR({}, {})", l, r),
+            sql::BinaryOpType::BitwiseXor => format!("BITXOR({}, {})", l, r),
+            sql::BinaryOpType::BitwiseShiftLeft => format!("SHIFTLEFT({}, {})", l, r),
+            sql::BinaryOpType::BitwiseShiftRight => format!("SHIFTRIGHT({}, {})", l, r),
             sql::BinaryOpType::Concat => format!("({}) || ({})", l, r),
-            sql::BinaryOpType::Regexp => format!("REGEXP_LIKE({}, {})", l, r),
+            sql::BinaryOpType::Regexp => unimplemented!(),
             sql::BinaryOpType::Equal => format!("({}) = ({})", l, r),
-            sql::BinaryOpType::NullSafeEqual => {
-                format!("SYS_OP_MAP_NONNULL({}) = SYS_OP_MAP_NONNULL({})", l, r)
-            }
+            sql::BinaryOpType::NullSafeEqual => unimplemented!(),
             sql::BinaryOpType::NotEqual => format!("({}) != ({})", l, r),
             sql::BinaryOpType::GreaterThan => format!("({}) > ({})", l, r),
             sql::BinaryOpType::GreaterThanOrEqual => format!("({}) >= ({})", l, r),
@@ -533,27 +531,27 @@ impl TeradataJdbcQueryCompiler {
         let arg = Self::compile_expr(conf, query, &cast.expr, params)?;
 
         Ok(match &cast.r#type {
-            DataType::Utf8String(_) => format!("TO_NCHAR({})", arg),
-            DataType::Binary => format!("UTL_RAW.CAST_TO_RAW({})", arg),
+            DataType::Utf8String(_) => format!("TO_CHAR({})", arg),
+            DataType::Binary => unimplemented!(),
             DataType::Boolean => format!("CASE WHEN ({}) THEN TRUE ELSE FALSE END", arg),
-            DataType::Int8
-            | DataType::UInt8
-            | DataType::Int16
-            | DataType::UInt16
-            | DataType::Int32
-            | DataType::UInt32
-            | DataType::Int64
-            | DataType::UInt64
-            | DataType::Decimal(_) => format!("TO_NUMBER({})", arg),
-            DataType::Float32 => format!("TO_BINARY_FLOAT({})", arg),
-            DataType::Float64 => format!("TO_BINARY_DOUBLE({})", arg),
-            DataType::JSON => format!("JSON_SERIALIZE({})", arg),
-            DataType::Date => format!("TO_DATE({})", arg),
-            DataType::DateTime => format!("TO_TIMESTAMP({})", arg),
-            DataType::DateTimeWithTZ => format!("TO_TIMESTAMP_TZ({})", arg),
+            DataType::Int8 => format!("CAST({} AS BYTEINT)", arg),
+            DataType::Int16 => format!("CAST({} AS SMALLINT)", arg),
+            DataType::Int32 => format!("CAST({} AS INT)", arg),
+            DataType::Int64 => format!("CAST({} AS BIGINT)", arg),
+            DataType::Decimal(_) => format!("CAST({} AS DECIMAL)", arg),
+            DataType::Float64 => format!("CAST({} AS FLOAT)", arg),
+            DataType::Date => format!("CAST({} AS DATE)", arg),
+            DataType::DateTime => format!("CAST({} AS TIMESTAMP)", arg),
+            DataType::DateTimeWithTZ => format!("CAST({} AS TIMESTAMP WITH TIME ZONE)", arg),
             DataType::Null => format!("CASE WHEN ({}) THEN NULL ELSE NULL END", arg),
+            DataType::JSON => unimplemented!(),
+            DataType::Float32 => unimplemented!(),
             DataType::Uuid => unimplemented!(),
             DataType::Time => unimplemented!(),
+            DataType::UInt8 => unimplemented!(),
+            DataType::UInt16 => unimplemented!(),
+            DataType::UInt32 => unimplemented!(),
+            DataType::UInt64 => unimplemented!(),
         })
     }
 
@@ -585,7 +583,7 @@ impl TeradataJdbcQueryCompiler {
                 Self::compile_expr(conf, query, &*call.start, params)?,
                 Self::compile_expr(conf, query, &*call.len, params)?
             ),
-            sql::FunctionCall::Uuid => "SYS_GUID()".into(),
+            sql::FunctionCall::Uuid => unimplemented!(),
             sql::FunctionCall::Coalesce(args) => format!(
                 "COALECSE({})",
                 args.iter()
@@ -620,15 +618,7 @@ impl TeradataJdbcQueryCompiler {
             sql::AggregateCall::Average(arg) => {
                 format!("AVG({})", Self::compile_expr(conf, query, &*arg, params)?)
             }
-            sql::AggregateCall::StringAgg(call) => {
-                params.push(QueryParam::Constant(DataValue::Utf8String(
-                    call.separator.clone(),
-                )));
-                format!(
-                    "LISTAGG({}, ?) WITHIN GROUP (ORDER BY NULL)",
-                    Self::compile_expr(conf, query, &call.expr, params)?,
-                )
-            }
+            sql::AggregateCall::StringAgg(_) => unimplemented!(),
         })
     }
 }

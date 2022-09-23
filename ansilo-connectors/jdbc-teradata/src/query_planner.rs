@@ -1,7 +1,7 @@
 use ansilo_core::{
     data::{rust_decimal::prelude::ToPrimitive, DataType, DataValue},
     err::{bail, ensure, Context, Result},
-    sqlil as sql,
+    sqlil::{self as sql, AggregateCall},
 };
 
 use ansilo_connectors_base::{
@@ -419,13 +419,23 @@ impl TeradataJdbcQueryPlanner {
     fn expr_supported(expr: &sql::Expr) -> bool {
         expr.walk_all(|e| match e {
             sql::Expr::BinaryOp(op) => match &op.r#type {
-                sql::BinaryOpType::BitwiseShiftLeft => false,
-                sql::BinaryOpType::BitwiseShiftRight => false,
+                sql::BinaryOpType::Regexp => false,
+                sql::BinaryOpType::NullSafeEqual => false,
                 _ => true,
             },
             sql::Expr::Cast(cast) => match &cast.r#type {
+                DataType::JSON => false,
+                DataType::Float32 => false,
                 DataType::Uuid => false,
                 DataType::Time => false,
+                DataType::UInt8 => false,
+                DataType::UInt16 => false,
+                DataType::UInt32 => false,
+                DataType::UInt64 => false,
+                _ => true,
+            },
+            sql::Expr::AggregateCall(call) => match call {
+                AggregateCall::StringAgg(_) => false,
                 _ => true,
             },
             _ => true,
