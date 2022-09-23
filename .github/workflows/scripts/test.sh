@@ -23,5 +23,5 @@ function clean_old_tmp_files() {
 clean_old_tmp_files &
 
 echo "----- Running tests -----"
-cargo test
+cargo test -p ansilo-main
 echo ""
