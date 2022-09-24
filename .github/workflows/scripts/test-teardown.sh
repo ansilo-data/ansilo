@@ -25,18 +25,21 @@ TASK_ARNS=$(aws ecs list-tasks \
     --output text)
 echo "Running tasks: $TASK_ARNS"
 
-FILTERED_ARNS=$(aws ecs describe-tasks \
-    --cluster dev-cluster \
-    --tasks $TASK_ARNS \
-    --query "tasks[?starts_with(group, \`task:gha-$GHA_RUN_ID\`)].taskArn" \
-    --output text)
-echo "Tasks from current action: $FILTERED_ARNS"
-
-for TASK_ARN in $FILTERED_ARNS;
-do
-    echo "Stopping task $TASK_ARN"
-    aws ecs stop-task \
+if [[ ! -z $TASK_ARNS ]];
+then
+    FILTERED_ARNS=$(aws ecs describe-tasks \
         --cluster dev-cluster \
-        --task $TASK_ARN || true
-done
-echo ""
+        --tasks $TASK_ARNS \
+        --query "tasks[?starts_with(group, \`task:gha-$GHA_RUN_ID\`)].taskArn" \
+        --output text)
+    echo "Tasks from current action: $FILTERED_ARNS"
+
+    for TASK_ARN in $FILTERED_ARNS;
+    do
+        echo "Stopping task $TASK_ARN"
+        aws ecs stop-task \
+            --cluster dev-cluster \
+            --task $TASK_ARN || true
+    done
+    echo ""
+fi
