@@ -44,7 +44,7 @@
     <!-- Downloaded from https://downloads.teradata.com/download/connectivity/jdbc-driver -->
     <dependency>
         <groupId>com.teradata</groupId>
-        <artifactId>jdbc</artifactId>
+        <artifactId>teradata-jdbc</artifactId>
         <version>17.20.00.09</version>
         <scope>system</scope>
         <systemPath>${project.basedir}/terajdbc4.jar</systemPath>

@@ -5,7 +5,7 @@ use ansilo_core::{
     data::DataValue,
     err::{bail, Context, Result},
 };
-use ansilo_logging::warn;
+use ansilo_logging::{debug, warn};
 use ansilo_util_r2d2::manager::{OurManageConnection, R2d2Adaptor};
 use jni::objects::{GlobalRef, JValue};
 use r2d2::PooledConnection;
@@ -29,6 +29,7 @@ struct Manager {
     jvm: Arc<Jvm>,
     jdbc_url: String,
     jdbc_props: HashMap<String, String>,
+    init_queries: Vec<String>,
     connection_class: String,
     data_mapping_class: String,
 }
@@ -42,6 +43,7 @@ impl JdbcConnectionPool {
             jvm: Arc::new(jvm),
             jdbc_url: options.get_jdbc_url(),
             jdbc_props: options.get_jdbc_props(),
+            init_queries: options.get_initialisation_queries(),
             connection_class: options.get_java_connection().replace('.', "/"),
             data_mapping_class: options.get_java_jdbc_data_mapping().replace('.', "/"),
         }
@@ -118,10 +120,22 @@ impl OurManageConnection for Manager {
                 Ok(jdbc_con)
             })?;
 
-        Ok(JdbcConnectionState {
+        let state = JdbcConnectionState {
             jvm: Arc::clone(&self.jvm),
             jdbc_con,
-        })
+        };
+
+        if !self.init_queries.is_empty() {
+            for query in self.init_queries.iter() {
+                debug!("Running connection init query: {query}");
+
+                prepare_query(JdbcQuery::new(query, vec![]), &state)
+                    .and_then(|mut q| q.execute_modify())
+                    .with_context(|| format!("Failed to run initialisation query: '{query}'"))?;
+            }
+        }
+
+        Ok(state)
     }
 
     fn is_valid(&self, conn: &mut Self::Connection) -> Result<()> {
@@ -166,59 +180,62 @@ impl Connection for JdbcConnection {
 
     fn prepare(&mut self, query: JdbcQuery) -> Result<JdbcPreparedQuery> {
         let state = &*self.0;
-        let capacity = query.params.len() * 2 + 5;
-        let jdbc_prepared_query = state.jvm.with_local_frame(capacity as _, |env| {
-            let param_types = env
-                .new_object("java/util/ArrayList", "()V", &[])
-                .context("Failed to create ArrayList")?;
-
-            state.jvm.check_exceptions(env)?;
-
-            // TODO[minor]: use method id and unchecked call
-            for (idx, param) in query.params.iter().enumerate() {
-                let data_type_id = env.auto_local(
-                    to_java_jdbc_parameter(param, idx + 1, &state.jvm)?
-                );
-
-                env.call_method(
-                    param_types,
-                    "add",
-                    "(Ljava/lang/Object;)Z",
-                    &[JValue::Object(data_type_id.as_obj())],
-                )
-                .context("Failed to add Integer to array list")?;
-
-                state.jvm.check_exceptions(env)?;
-            }
-
-            let jdbc_prepared_query = env
-                .call_method(
-                    state.jdbc_con.as_obj(),
-                    "prepare",
-                    "(Ljava/lang/String;Ljava/util/List;)Lcom/ansilo/connectors/query/JdbcPreparedQuery;",
-                    &[JValue::Object(*env.new_string(query.query.clone())?), JValue::Object(param_types)],
-                )
-                .context("Failed to invoke JdbcConnection::prepare")?
-                .l()
-                .context("Failed to convert JdbcPreparedQuery into object")?;
-
-            state.jvm.check_exceptions(env)?;
-
-            let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query)?;
-
-            Ok(jdbc_prepared_query)
-        })?;
-
-        Ok(JdbcPreparedQuery::new(
-            Arc::clone(&state.jvm),
-            jdbc_prepared_query,
-            query,
-        ))
+        prepare_query(query, state)
     }
 
     fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager> {
         Some(&mut self.1)
     }
+}
+
+fn prepare_query(query: JdbcQuery, state: &JdbcConnectionState) -> Result<JdbcPreparedQuery> {
+    let capacity = query.params.len() * 2 + 5;
+    let jdbc_prepared_query = state.jvm.with_local_frame(capacity as _, |env| {
+        let param_types = env
+            .new_object("java/util/ArrayList", "()V", &[])
+            .context("Failed to create ArrayList")?;
+
+        state.jvm.check_exceptions(env)?;
+
+        // TODO[minor]: use method id and unchecked call
+        for (idx, param) in query.params.iter().enumerate() {
+            let data_type_id = env.auto_local(
+                to_java_jdbc_parameter(param, idx + 1, &state.jvm)?
+            );
+
+            env.call_method(
+                param_types,
+                "add",
+                "(Ljava/lang/Object;)Z",
+                &[JValue::Object(data_type_id.as_obj())],
+            )
+            .context("Failed to add Integer to array list")?;
+
+            state.jvm.check_exceptions(env)?;
+        }
+
+        let jdbc_prepared_query = env
+            .call_method(
+                state.jdbc_con.as_obj(),
+                "prepare",
+                "(Ljava/lang/String;Ljava/util/List;)Lcom/ansilo/connectors/query/JdbcPreparedQuery;",
+                &[JValue::Object(*env.new_string(query.query.clone())?), JValue::Object(param_types)],
+            )
+            .context("Failed to invoke JdbcConnection::prepare")?
+            .l()
+            .context("Failed to convert JdbcPreparedQuery into object")?;
+
+        state.jvm.check_exceptions(env)?;
+
+        let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query)?;
+
+        Ok(jdbc_prepared_query)
+    })?;
+    Ok(JdbcPreparedQuery::new(
+        Arc::clone(&state.jvm),
+        jdbc_prepared_query,
+        query,
+    ))
 }
 
 impl JdbcConnection {

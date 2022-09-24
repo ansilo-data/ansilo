@@ -12,3 +12,4 @@ pub mod sqlite;
 pub mod tls;
 pub mod web;
 pub mod internal;
+pub mod teradata;

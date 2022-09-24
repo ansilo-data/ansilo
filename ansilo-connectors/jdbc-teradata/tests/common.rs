@@ -49,8 +49,9 @@ pub fn connect_to_teradata() -> JdbcConnection {
     );
 
     let config = TeradataJdbcConnectionConfig::new(
-        "jdbc:teradata://ansilo-teradata-test.japaneast.cloudapp.azure.com/DBS_PORT=1026,USER=ansilo_admin,PASSWORD=ansilo_testing".into(),
+        "jdbc:teradata://ansilo-teradata-test.japaneast.cloudapp.azure.com/DBS_PORT=1026,USER=ansilo_admin,PASSWORD=ansilo_testing,CHARSET=UTF8".into(),
         HashMap::new(),
+        vec!["SET SESSION CHARACTER SET UNICODE PASS THROUGH ON;".into()],
         None,
     );
 

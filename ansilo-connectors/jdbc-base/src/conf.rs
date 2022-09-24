@@ -13,6 +13,11 @@ pub trait JdbcConnectionConfig: Send + Sync + Clone {
     /// Gets the connection pool config
     fn get_pool_config(&self) -> Option<JdbcConnectionPoolConfig>;
 
+    /// Gets queries to run on connection init
+    fn get_initialisation_queries(&self) -> Vec<String> {
+        vec![]
+    }
+
     /// Gets the java class name of the connection
     fn get_java_connection(&self) -> String {
         "com.ansilo.connectors.JdbcConnection".into()

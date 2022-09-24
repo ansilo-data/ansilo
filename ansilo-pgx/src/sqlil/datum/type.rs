@@ -83,7 +83,8 @@ pub fn to_pg_type_name(r#type: &DataType) -> Result<String> {
         DataType::Float32 => "REAL".into(),
         DataType::Float64 => "DOUBLE PRECISION".into(),
         DataType::Decimal(_) => "NUMERIC".into(),
-        DataType::Utf8String(opt) if opt.length.is_some() => {
+        // Varchar max length is 10485760
+        DataType::Utf8String(opt) if opt.length.is_some() && opt.length.unwrap() <= 10485760 => {
             format!("VARCHAR({})", opt.length.unwrap())
         }
         DataType::Utf8String(_) => "TEXT".into(),

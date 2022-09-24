@@ -72,7 +72,7 @@ RUN curl -sL https://packages.microsoft.com/keys/microsoft.asc | \
     echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $(lsb_release -cs) main" | \
     sudo tee /etc/apt/sources.list.d/azure-cli.list && \
     sudo apt-get update && \
-    sudo apt-get install azure-cli
+    sudo apt-get install -y azure-cli
 
 # Install netcat & socat
 RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \

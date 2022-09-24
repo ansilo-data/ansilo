@@ -5,7 +5,7 @@ use ansilo_core::{
 };
 
 use ansilo_connectors_base::{
-    common::{data::ResultSetReader, entity::EntitySource, query::QueryParam},
+    common::{entity::EntitySource, query::QueryParam},
     interface::{
         BulkInsertQueryOperation, Connection, DeleteQueryOperation, InsertQueryOperation,
         OperationCost, QueryCompiler, QueryHandle, QueryOperationResult, QueryPlanner, ResultSet,
@@ -13,7 +13,7 @@ use ansilo_connectors_base::{
     },
 };
 
-use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery, JdbcResultSet};
+use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 
 use crate::TeradataJdbcTableOptions;
 
@@ -40,16 +40,13 @@ impl QueryPlanner for TeradataJdbcQueryPlanner {
             TeradataJdbcEntitySourceConfig::Table(t) => t,
         };
 
-        let mut result_set = Self::estimate_row_size_using_table_stats(connection, table)
+        let value = Self::estimate_row_size_using_table_stats(connection, table)
             .or_else(|_| Self::estimate_row_size_using_count(connection, &entity.source))?;
-
-        let value = result_set
-            .read_data_value()?
-            .context("Unexpected empty result set")?;
 
         let num_rows = match value {
             DataValue::Float64(count) => count.ceil().to_u64().unwrap_or(0),
             DataValue::Int64(count) => count as _,
+            DataValue::Int32(count) => count as _,
             _ => bail!("Unexpected data value returned: {:?}", value),
         };
 
@@ -240,7 +237,7 @@ impl TeradataJdbcQueryPlanner {
     fn estimate_row_size_using_table_stats(
         connection: &mut JdbcConnection,
         table: &TeradataJdbcTableOptions,
-    ) -> Result<ResultSetReader<JdbcResultSet>> {
+    ) -> Result<DataValue> {
         let mut query = connection.prepare(JdbcQuery::new(
             r#"
             SELECT RowCount FROM DBC.TableStatsV
@@ -252,13 +249,19 @@ impl TeradataJdbcQueryPlanner {
             ],
         ))?;
 
-        query.execute_query()?.reader()
+        let mut result_set = query.execute_query()?.reader()?;
+
+        let value = result_set
+            .read_data_value()?
+            .context("Unexpected empty result set")?;
+
+        Ok(value)
     }
 
     fn estimate_row_size_using_count(
         connection: &mut JdbcConnection,
         source: &TeradataJdbcEntitySourceConfig,
-    ) -> Result<ResultSetReader<JdbcResultSet>> {
+    ) -> Result<DataValue> {
         let table = TeradataJdbcQueryCompiler::compile_source_identifier(source)?;
 
         let mut query = connection.prepare(JdbcQuery::new(
@@ -266,7 +269,13 @@ impl TeradataJdbcQueryPlanner {
             vec![],
         ))?;
 
-        query.execute_query()?.reader()
+        let mut result_set = query.execute_query()?.reader()?;
+
+        let value = result_set
+            .read_data_value()?
+            .context("Unexpected empty result set")?;
+
+        Ok(value)
     }
 
     fn select_add_col(

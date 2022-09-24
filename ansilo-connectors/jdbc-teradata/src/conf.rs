@@ -14,7 +14,11 @@ use ansilo_connectors_jdbc_base::{JdbcConnectionConfig, JdbcConnectionPoolConfig
 pub struct TeradataJdbcConnectionConfig {
     pub jdbc_url: String,
     /// @see https://docs.teradata.com/en/database/teradata/teradata-database/21/jajdb/teradata/jdbc/TeradataConnection.html
+    #[serde(default)]
     pub properties: HashMap<String, String>,
+    /// Queries to run on connection startup
+    #[serde(default)]
+    pub startup: Vec<String>,
     pub pool: Option<JdbcConnectionPoolConfig>,
 }
 
@@ -31,6 +35,10 @@ impl JdbcConnectionConfig for TeradataJdbcConnectionConfig {
         self.pool.clone()
     }
 
+    fn get_initialisation_queries(&self) -> Vec<String> {
+        self.startup.clone()
+    }
+
     fn get_java_jdbc_data_mapping(&self) -> String {
         "com.ansilo.connectors.teradata.mapping.TeradataJdbcDataMapping".into()
     }
@@ -40,11 +48,13 @@ impl TeradataJdbcConnectionConfig {
     pub fn new(
         jdbc_url: String,
         properties: HashMap<String, String>,
+        startup: Vec<String>,
         pool: Option<JdbcConnectionPoolConfig>,
     ) -> Self {
         Self {
             jdbc_url,
             properties,
+            startup,
             pool,
         }
     }
@@ -156,6 +166,7 @@ properties:
                     map.insert("TEST_PROP".to_string(), "TEST_PROP_VAL".to_string());
                     map
                 },
+                startup: vec![],
                 pool: None
             }
         );

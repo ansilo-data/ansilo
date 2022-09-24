@@ -2,8 +2,8 @@ package com.ansilo.connectors.teradata.mapping;
 
 import java.sql.*;
 import com.ansilo.connectors.data.DataType;
+import com.ansilo.connectors.data.DateTimeWithTzDataType;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
-import com.teradata.jdbc.jdbc_4.TDResultSet;
 
 /**
  * Teradata JDBC data mapping
@@ -19,6 +19,13 @@ public class TeradataJdbcDataMapping extends JdbcDataMapping {
 
     @Override
     public DataType getColumnDataType(ResultSet resultSet, int index) throws Exception {
+        var type = resultSet.getMetaData().getColumnType(index);
+        var typeName = resultSet.getMetaData().getColumnTypeName(index);
+
+        if (type == Types.TIMESTAMP && typeName.toUpperCase().contains("TIME ZONE")) {
+            return new DateTimeWithTzDataType();
+        }
+
         return super.getColumnDataType(resultSet, index);
     }
 

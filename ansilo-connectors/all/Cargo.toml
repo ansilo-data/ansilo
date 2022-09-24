@@ -13,6 +13,7 @@ ansilo-connectors-memory = { path = "../memory" }
 ansilo-connectors-jdbc-base = { path = "../jdbc-base" }
 ansilo-connectors-jdbc-oracle = { path = "../jdbc-oracle" }
 ansilo-connectors-jdbc-mysql = { path = "../jdbc-mysql" }
+ansilo-connectors-jdbc-teradata = { path = "../jdbc-teradata" }
 ansilo-connectors-native-postgres = { path = "../native-postgres" }
 ansilo-connectors-native-sqlite = { path = "../native-sqlite" }
 ansilo-connectors-peer = { path = "../peer" }

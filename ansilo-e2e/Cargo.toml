@@ -11,6 +11,7 @@ ansilo-connectors-base = { path = "../ansilo-connectors/base", features = ["test
 ansilo-connectors-jdbc-base = { path = "../ansilo-connectors/jdbc-base" }
 ansilo-connectors-jdbc-oracle = { path = "../ansilo-connectors/jdbc-oracle" }
 ansilo-connectors-jdbc-mysql = { path = "../ansilo-connectors/jdbc-mysql" }
+ansilo-connectors-jdbc-teradata = { path = "../ansilo-connectors/jdbc-teradata" }
 ansilo-connectors-native-postgres = { path = "../ansilo-connectors/native-postgres" }
 ansilo-connectors-native-sqlite = { path = "../ansilo-connectors/native-sqlite" }
 ansilo-logging = { path = "../ansilo-logging" }
