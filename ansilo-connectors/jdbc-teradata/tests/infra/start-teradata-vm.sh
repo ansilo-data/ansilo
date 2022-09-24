@@ -16,7 +16,7 @@ az login --service-principal \
     --tenant $(echo $AZURE_LOGIN | jq -r .tenantId) 
 
 echo "Starting teradata vm..."
-az vm start --resource-group Ansilo --name teradata-test
+az vm start --resource-group Ansilo --name teradata-test-2
 
 echo "Waiting for port..."
 TRIES=0

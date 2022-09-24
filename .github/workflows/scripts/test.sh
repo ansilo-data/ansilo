@@ -16,6 +16,9 @@ function clean_old_tmp_files() {
     do
         echo "== Cleaning old /tmp files =="
         find /tmp/ -type f -mmin +5 -delete >/dev/null 2>&1 || true
+        free -m | awk 'NR==2{printf "Memory Usage: %s/%sMB (%.2f%%)\n", $3,$2,$3*100/$2 }'
+        df -h | awk '$NF=="/"{printf "Disk Usage: %d/%dGB (%s)\n", $3,$2,$5}'
+        top -bn1 | grep load | awk '{printf "CPU Load: %.2f\n", $(NF-2)}' 
         sleep 60
     done
 }
@@ -23,5 +26,5 @@ function clean_old_tmp_files() {
 clean_old_tmp_files &
 
 echo "----- Running tests -----"
-cargo test -p ansilo-main
+cargo test
 echo ""
