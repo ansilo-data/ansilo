@@ -230,6 +230,10 @@ public class JdbcPreparedQuery {
         this.beforeExecute();
         var hasResultSet = this.preparedStatement.execute();
 
+        return this.getAffectedRows(hasResultSet);
+    }
+
+    protected Long getAffectedRows(boolean hasResultSet) throws SQLException {
         if (hasResultSet) {
             return null;
         }

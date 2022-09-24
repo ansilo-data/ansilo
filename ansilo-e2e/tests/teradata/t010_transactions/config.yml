@@ -1,0 +1,27 @@
+name: teradata
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+sources:
+  - id: teradata
+    type: jdbc.teradata
+    options:
+      jdbc_url: jdbc:teradata://ansilo-teradata-test.japaneast.cloudapp.azure.com/DBS_PORT=1026,USER=ansilo_admin,PASSWORD=ansilo_testing,CHARSET=UTF16
+      startup: ["SET SESSION CHARACTER SET UNICODE PASS THROUGH ON;"]
+         
+build:
+  stages:
+    - sql: ${dir}/ansilo-sql/*.sql
+
+postgres:
+    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json

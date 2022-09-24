@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Calendar;
+import java.util.TimeZone;
 import java.util.UUID;
 import com.ansilo.connectors.data.*;
 
@@ -229,7 +231,7 @@ public class JdbcDataMapping {
      * Reads the value from the result set.
      */
     public ZonedDateTime getDateTimeWithTz(ResultSet resultSet, int index) throws Exception {
-        var data = resultSet.getTimestamp(index);
+        var data = resultSet.getTimestamp(index, Calendar.getInstance(TimeZone.getTimeZone("UTC")));
         return data == null ? null : ZonedDateTime.ofInstant(data.toInstant(), ZoneId.of("UTC"));
     }
 
@@ -239,7 +241,8 @@ public class JdbcDataMapping {
     public void bindDateTimeWithTz(PreparedStatement statement, int index, ZonedDateTime data)
             throws Exception {
         statement.setTimestamp(index,
-                data == null ? null : java.sql.Timestamp.from(data.toInstant()));
+                data == null ? null : java.sql.Timestamp.from(data.toInstant()),
+                Calendar.getInstance(TimeZone.getTimeZone("UTC")));
     }
 
     /**

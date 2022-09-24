@@ -11,7 +11,7 @@ use ansilo_connectors_base::{
     interface::{Connection, EntityDiscoverOptions, EntitySearcher, QueryHandle, ResultSet},
 };
 use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
-use ansilo_logging::warn;
+use ansilo_logging::{debug, warn};
 use itertools::Itertools;
 
 use crate::TeradataJdbcTableOptions;
@@ -45,6 +45,7 @@ impl EntitySearcher for TeradataJdbcEntitySearcher {
                     C.TableName AS TableName,
                     C.ColumnName AS ColumnName,
                     T.CommentString AS TableComment,
+                    T.TableKind AS TableKind,
                     E.ColumnTitle AS ColumnTitle,
                     E.CommentString AS ColumnComment,
                     E.ColumnType AS ColumnType,
@@ -91,7 +92,7 @@ impl EntitySearcher for TeradataJdbcEntitySearcher {
         let entities = tables
             .into_iter()
             .filter_map(|((database, table), cols)| {
-                match parse_entity_config(&database, &table, cols.into_iter()) {
+                match parse_entity_config(connection, &database, &table, cols.into_iter()) {
                     Ok(conf) => Some(conf),
                     Err(err) => {
                         warn!(
@@ -109,11 +110,19 @@ impl EntitySearcher for TeradataJdbcEntitySearcher {
 }
 
 pub(crate) fn parse_entity_config(
+    connection: &mut JdbcConnection,
     database: &String,
     table: &String,
     cols: impl Iterator<Item = HashMap<String, DataValue>>,
 ) -> Result<EntityConfig> {
-    let cols = cols.collect::<Vec<_>>();
+    let mut cols = cols.collect::<Vec<_>>();
+
+    if cols.iter().any(|c| c["ColumnType"].is_null()) {
+        if let Err(e) = try_get_column_types_from_help(connection, database, table, &mut cols) {
+            warn!("Failed to get column types from help: {:?}", e);
+        }
+    }
+
     Ok(EntityConfig::new(
         table.clone(),
         None,
@@ -137,6 +146,64 @@ pub(crate) fn parse_entity_config(
     ))
 }
 
+fn try_get_column_types_from_help(
+    connection: &mut JdbcConnection,
+    database: &str,
+    table: &str,
+    cols: &mut [HashMap<String, DataValue>],
+) -> Result<()> {
+    debug!("Retreiving column types for {database}.{table} from HELP COLUMN");
+
+    let help_cols = connection
+        .prepare(JdbcQuery::new(
+            format!(
+                r#"HELP COLUMN "{}"."{}".*"#,
+                database.replace('"', "\"\""),
+                table.replace('"', "\"\"")
+            ),
+            vec![],
+        ))?
+        .execute_query()?;
+
+    let help_cols = help_cols
+        .reader()?
+        .iter_rows()
+        .collect::<Result<Vec<_>>>()?;
+    let help_cols = help_cols
+        .into_iter()
+        .map(|row| {
+            (
+                row["Column Name"]
+                    .as_utf8_string()
+                    .unwrap()
+                    .clone()
+                    .trim()
+                    .to_string(),
+                row,
+            )
+        })
+        .collect::<HashMap<String, _>>();
+
+    for col in cols.iter_mut() {
+        let name = col["ColumnName"]
+            .as_utf8_string()
+            .context("ColumnName")?
+            .clone();
+
+        if let Some(help) = help_cols.get(&name) {
+            if col["ColumnType"].is_null() {
+                col.insert("ColumnType".into(), help["Type"].clone());
+            }
+
+            if col["Nullable"].is_null() {
+                col.insert("Nullable".into(), help["Nullable"].clone());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub(crate) fn parse_column(
     name: &str,
     c: &HashMap<String, DataValue>,
@@ -157,7 +224,7 @@ pub(crate) fn parse_column(
             .as_int32()
             .unwrap()
             > 0,
-        c["Nullable"].as_utf8_string().context("Nullable")? == "Y",
+        c["Nullable"].as_utf8_string().context("Nullable")?.trim() == "Y",
     ))
 }
 
@@ -196,7 +263,7 @@ pub(crate) fn from_teradata_col(col: &HashMap<String, DataValue>) -> Result<Data
         "I8" => DataType::Int64,
         "F" => DataType::Float64,
         "BF" | "BO" | "BV" => DataType::Binary,
-        "JSON" => DataType::JSON,
+        "JN" => DataType::JSON,
         "DA" => DataType::Date,
         "AT" => DataType::Time,
         "TS" => DataType::DateTime,

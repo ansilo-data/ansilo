@@ -16,27 +16,6 @@ mod common;
 
 #[test]
 #[serial]
-
-fn test_teradata_jdbc_discover_entities() {
-    ansilo_logging::init_for_tests();
-    common::start_teradata();
-    let mut con = common::connect_to_teradata();
-
-    let entities = TeradataJdbcEntitySearcher::discover(
-        &mut con,
-        &NodeConfig::default(),
-        EntityDiscoverOptions::default(),
-    )
-    .unwrap();
-
-    assert!(
-        entities.len() > 100,
-        "Teradata database should have many default tables"
-    );
-}
-
-#[test]
-#[serial]
 fn test_teradata_jdbc_discover_entities_number_type_mapping() {
     ansilo_logging::init_for_tests();
     common::start_teradata();
@@ -371,6 +350,106 @@ fn test_teradata_jdbc_discover_entities_pk_type_mapping() {
                 TeradataJdbcTableOptions::new(
                     "testdb".into(),
                     "IMPORT_PK_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}
+
+#[test]
+#[serial]
+fn test_teradata_jdbc_discover_entities_json_type_mapping() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
+
+    con.execute(
+        "CALL testdb.DROP_IF_EXISTS('testdb', 'IMPORT_JSON_TYPES');",
+        vec![],
+    )
+    .unwrap();
+
+    con.execute(
+        "
+        CREATE TABLE IMPORT_JSON_TYPES (
+           ID INTEGER, 
+           JS JSON CHARACTER SET UNICODE, 
+           JSB JSON STORAGE FORMAT BSON
+        )
+        ",
+        vec![],
+    )
+    .unwrap();
+
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_JSON_TYPES%"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "IMPORT_JSON_TYPES",
+            vec![
+                EntityAttributeConfig::nullable("ID", DataType::Int32),
+                EntityAttributeConfig::nullable("JS", DataType::JSON),
+                EntityAttributeConfig::nullable("JSB", DataType::JSON)
+            ],
+            EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
+                TeradataJdbcTableOptions::new(
+                    "testdb".into(),
+                    "IMPORT_JSON_TYPES".into(),
+                    HashMap::new()
+                )
+            ))
+            .unwrap()
+        )
+    )
+}
+
+#[test]
+#[serial]
+fn test_teradata_jdbc_discover_entities_view_mapping() {
+    ansilo_logging::init_for_tests();
+    common::start_teradata();
+    let mut con = common::connect_to_teradata();
+
+    con.execute(
+        "
+        REPLACE VIEW IMPORT_TEST_VIEW AS
+        SELECT 1 as id, 'abc' as str, NEW JSON('{}') as js;
+        ",
+        vec![],
+    )
+    .unwrap();
+
+    let entities = TeradataJdbcEntitySearcher::discover(
+        &mut con,
+        &NodeConfig::default(),
+        EntityDiscoverOptions::schema("%IMPORT_TEST_VIEW%"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        entities[0].clone(),
+        EntityConfig::minimal(
+            "IMPORT_TEST_VIEW",
+            vec![
+                EntityAttributeConfig::minimal("id", DataType::Int8),
+                EntityAttributeConfig::minimal(
+                    "str",
+                    DataType::Utf8String(StringOptions::default())
+                ),
+                EntityAttributeConfig::nullable("js", DataType::JSON),
+            ],
+            EntitySourceConfig::from(TeradataJdbcEntitySourceConfig::Table(
+                TeradataJdbcTableOptions::new(
+                    "testdb".into(),
+                    "IMPORT_TEST_VIEW".into(),
                     HashMap::new()
                 )
             ))

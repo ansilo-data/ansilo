@@ -514,7 +514,7 @@ impl TeradataJdbcQueryCompiler {
             sql::BinaryOpType::Regexp => unimplemented!(),
             sql::BinaryOpType::Equal => format!("({}) = ({})", l, r),
             sql::BinaryOpType::NullSafeEqual => unimplemented!(),
-            sql::BinaryOpType::NotEqual => format!("({}) != ({})", l, r),
+            sql::BinaryOpType::NotEqual => format!("({}) <> ({})", l, r),
             sql::BinaryOpType::GreaterThan => format!("({}) > ({})", l, r),
             sql::BinaryOpType::GreaterThanOrEqual => format!("({}) >= ({})", l, r),
             sql::BinaryOpType::LessThan => format!("({}) < ({})", l, r),

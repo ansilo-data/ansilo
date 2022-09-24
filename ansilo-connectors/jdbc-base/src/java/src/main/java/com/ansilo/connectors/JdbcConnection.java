@@ -58,11 +58,11 @@ public class JdbcConnection {
             throws SQLException {
         var statement = this.connection.prepareStatement(query);
 
-        return this.newPreparedQuery(parameters, statement);
+        return this.newPreparedQuery(parameters, statement, query);
     }
 
     protected JdbcPreparedQuery newPreparedQuery(List<JdbcParameter> parameters,
-            PreparedStatement statement) {
+            PreparedStatement statement, String query) {
         return new JdbcPreparedQuery(this.mapping, statement, parameters);
     }
 

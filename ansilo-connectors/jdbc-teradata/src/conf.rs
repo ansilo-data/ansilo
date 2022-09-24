@@ -10,6 +10,9 @@ use ansilo_connectors_base::common::entity::ConnectorEntityConfig;
 use ansilo_connectors_jdbc_base::{JdbcConnectionConfig, JdbcConnectionPoolConfig};
 
 /// The connection config for the Teradata JDBC driver
+///
+/// We recommend connecting using the CHARSET=UTF16 param to workaround this gotcha:
+/// @see Character Export Width https://teradata-docs.s3.amazonaws.com/doc/connectivity/jdbc/reference/current/jdbcug_chapter_5.html
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TeradataJdbcConnectionConfig {
     pub jdbc_url: String,
@@ -37,6 +40,10 @@ impl JdbcConnectionConfig for TeradataJdbcConnectionConfig {
 
     fn get_initialisation_queries(&self) -> Vec<String> {
         self.startup.clone()
+    }
+
+    fn get_java_connection(&self) -> String {
+        "com.ansilo.connectors.teradata.TeradataConnection".into()
     }
 
     fn get_java_jdbc_data_mapping(&self) -> String {

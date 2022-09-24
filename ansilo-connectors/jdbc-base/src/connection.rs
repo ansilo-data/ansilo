@@ -123,6 +123,7 @@ impl OurManageConnection for Manager {
         let state = JdbcConnectionState {
             jvm: Arc::clone(&self.jvm),
             jdbc_con,
+            closed: false,
         };
 
         if !self.init_queries.is_empty() {
@@ -171,6 +172,7 @@ pub struct JdbcConnection(
 struct JdbcConnectionState {
     jvm: Arc<Jvm>,
     jdbc_con: GlobalRef,
+    closed: bool,
 }
 
 impl Connection for JdbcConnection {
@@ -189,6 +191,8 @@ impl Connection for JdbcConnection {
 }
 
 fn prepare_query(query: JdbcQuery, state: &JdbcConnectionState) -> Result<JdbcPreparedQuery> {
+    debug!("Preparing query: {}", query.query);
+
     let capacity = query.params.len() * 2 + 5;
     let jdbc_prepared_query = state.jvm.with_local_frame(capacity as _, |env| {
         let param_types = env
@@ -297,12 +301,17 @@ impl JdbcConnectionState {
     }
 
     fn close(&mut self) -> Result<()> {
+        if self.closed {
+            return Ok(());
+        }
+
         let env = self.jvm.env()?;
         env.call_method(self.jdbc_con.as_obj(), "close", "()V", &[])
             .context("Failed to call JdbcConnection::close")?;
 
         self.jvm.check_exceptions(&env)?;
 
+        self.closed = true;
         Ok(())
     }
 }
