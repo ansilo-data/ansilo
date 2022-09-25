@@ -4,7 +4,7 @@ set -e
     
 echo "Checking if already booted..."
 set +e
-nc -vz ansilo-teradata-test.japaneast.cloudapp.azure.com 1026
+nc -vzw5 ansilo-teradata-test.japaneast.cloudapp.azure.com 1026
 EXIT_CODE=$?
 set -e
 
@@ -38,7 +38,7 @@ while ((TRIES < 30));
 do
     echo "Checking if port is open..."
     set +e
-    nc -vz ansilo-teradata-test.japaneast.cloudapp.azure.com 1026
+    nc -vzw5 ansilo-teradata-test.japaneast.cloudapp.azure.com 1026
     EXIT_CODE=$?
     set -e
 

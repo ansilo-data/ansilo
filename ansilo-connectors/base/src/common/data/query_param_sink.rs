@@ -1,4 +1,7 @@
-use std::io::{self, Write};
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+};
 
 use ansilo_core::{
     data::DataValue,
@@ -26,7 +29,7 @@ pub struct QueryParamSink {
 
 impl QueryParamSink {
     pub fn new(params: Vec<QueryParam>) -> Self {
-        let input = QueryInputStructure::from(&params); 
+        let input = QueryInputStructure::from(&params);
 
         let sink = DataSink::new(input.types());
 
@@ -55,14 +58,7 @@ impl QueryParamSink {
 
     /// Returns the query parameter values, including both constants and dynamic parameters
     pub fn get_all(&self) -> Result<Vec<DataValue>> {
-        if !self.all_params_written() {
-            bail!(
-                "Only {}/{} query parameters written",
-                self.values.len(),
-                self.input.params.len()
-            );
-        }
-
+        self.validate_all_params_written()?;
         let mut res = vec![];
         let mut dyn_param_idx = 0;
 
@@ -77,6 +73,37 @@ impl QueryParamSink {
         }
 
         Ok(res)
+    }
+
+    /// Returns the dynamic query parameter values, keyed by their parameter id's
+    pub fn get_dyn(&self) -> Result<HashMap<u32, DataValue>> {
+        self.validate_all_params_written()?;
+        let mut res = HashMap::new();
+        let mut dyn_param_idx = 0;
+
+        for param in self.params.iter() {
+            match param {
+                QueryParam::Dynamic(p) => {
+                    res.insert(p.id, self.values[dyn_param_idx].clone());
+                    dyn_param_idx += 1;
+                }
+                QueryParam::Constant(_) => {}
+            }
+        }
+
+        Ok(res)
+    }
+
+    fn validate_all_params_written(&self) -> Result<()> {
+        if !self.all_params_written() {
+            bail!(
+                "Only {}/{} query parameters written",
+                self.values.len(),
+                self.input.params.len()
+            );
+        }
+
+        Ok(())
     }
 
     /// Clears the query parameter sink, clearing all current input
@@ -339,6 +366,48 @@ mod tests {
                 DataValue::UInt16(789),
                 DataValue::Utf8String("hello".into())
             ]
+        );
+    }
+
+    #[test]
+    fn test_query_param_sink_get_dyn() {
+        let mut sink = QueryParamSink::new(vec![
+            QueryParam::Dynamic(sqlil::Parameter::new(DataType::UInt16, 1)),
+            QueryParam::Constant(DataValue::Utf8String("hello".into())),
+            QueryParam::Dynamic(sqlil::Parameter::new(DataType::UInt32, 2)),
+            QueryParam::Constant(DataValue::Utf8String("world".into())),
+        ]);
+
+        assert_eq!(sink.all_params_written(), false);
+        sink.get_dyn().unwrap_err();
+
+        sink.write_all(
+            &[
+                vec![1u8],                     // not null
+                456u16.to_be_bytes().to_vec(), // data
+            ]
+            .concat(),
+        )
+        .unwrap();
+
+        assert_eq!(sink.all_params_written(), false);
+        sink.get_dyn().unwrap_err();
+
+        sink.write_all(
+            &[
+                vec![1u8],                     // not null
+                789u32.to_be_bytes().to_vec(), // data
+            ]
+            .concat(),
+        )
+        .unwrap();
+
+        assert_eq!(sink.all_params_written(), true);
+        assert_eq!(
+            sink.get_dyn().unwrap(),
+            [(1, DataValue::UInt16(456)), (2, DataValue::UInt32(789)),]
+                .into_iter()
+                .collect()
         );
     }
 }
