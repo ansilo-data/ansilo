@@ -84,6 +84,13 @@ impl Query {
             Query::BulkInsert(_) => unimplemented!(),
         }
     }
+
+    /// Walks all expressions within the query
+    pub fn walk_expr<T: FnMut(&Expr) -> ()>(&self, cb: &mut T) {
+        for expr in self.exprs() {
+            expr.walk(cb);
+        }
+    }
 }
 
 impl From<Select> for Query {

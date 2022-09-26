@@ -1,0 +1,13 @@
+version: "3"
+
+services:
+  mongo:
+    image: 635198228996.dkr.ecr.ap-southeast-2.amazonaws.com/mongo:6
+    ports:
+      - "27018:27018"
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/ansilo-connectors
+        awslogs-region: ap-southeast-2
+        awslogs-stream-prefix: native-mongo

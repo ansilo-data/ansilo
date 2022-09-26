@@ -519,6 +519,9 @@ impl TeradataJdbcQueryCompiler {
             sql::BinaryOpType::GreaterThanOrEqual => format!("({}) >= ({})", l, r),
             sql::BinaryOpType::LessThan => format!("({}) < ({})", l, r),
             sql::BinaryOpType::LessThanOrEqual => format!("({}) <= ({})", l, r),
+            sql::BinaryOpType::JsonExtract => {
+                format!("({}).JSONExtract('$.''' || ({}) || '''')", l, r)
+            }
         })
     }
 
@@ -544,7 +547,7 @@ impl TeradataJdbcQueryCompiler {
             DataType::DateTime => format!("CAST({} AS TIMESTAMP)", arg),
             DataType::DateTimeWithTZ => format!("CAST({} AS TIMESTAMP WITH TIME ZONE)", arg),
             DataType::Null => format!("CASE WHEN ({}) THEN NULL ELSE NULL END", arg),
-            DataType::JSON => unimplemented!(),
+            DataType::JSON => format!("NEW JSON({})", arg),
             DataType::Float32 => unimplemented!(),
             DataType::Uuid => unimplemented!(),
             DataType::Time => unimplemented!(),

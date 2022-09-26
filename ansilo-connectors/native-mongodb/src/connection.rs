@@ -1,16 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
-use ansilo_connectors_base::{
-    common::query::QueryParam,
-    interface::{Connection, QueryHandle, TransactionManager},
-};
-use ansilo_core::{
-    data::DataValue,
-    err::{ensure, Context, Result},
-};
+use ansilo_connectors_base::interface::{Connection, TransactionManager};
+use ansilo_core::err::{Context, Error, Result};
 use mongodb::sync::ClientSession;
 
-use crate::{MongodbPreparedQuery, MongodbQuery, MongodbResultSet, OwnedMongodbStatment};
+use crate::{MongodbPreparedQuery, MongodbQuery};
 
 /// Connection to a mongodb database
 pub struct MongodbConnection {
@@ -26,17 +20,13 @@ impl MongodbConnection {
     pub fn new(client: mongodb::sync::Client, sess: ClientSession) -> Self {
         Self {
             client,
-            sess,
+            sess: Arc::new(Mutex::new(sess)),
             trans: false,
         }
     }
 
-    pub(crate) fn client<'a>(&'a self) -> &'a mongodb::sync::Client {
-        &*self.client
-    }
-
-    pub(crate) fn sess<'a>(&'a self) -> &'a ClientSession {
-        &*self.sess
+    pub fn client<'a>(&'a self) -> &'a mongodb::sync::Client {
+        &self.client
     }
 }
 
@@ -64,7 +54,7 @@ impl TransactionManager for MongodbConnection {
     }
 
     fn begin_transaction(&mut self) -> Result<()> {
-        self.sess
+        self.lock_sess()?
             .start_transaction(None)
             .context("Failed to begin transaction")?;
         self.trans = true;
@@ -72,7 +62,7 @@ impl TransactionManager for MongodbConnection {
     }
 
     fn rollback_transaction(&mut self) -> Result<()> {
-        self.sess
+        self.lock_sess()?
             .abort_transaction()
             .context("Failed to abort transaction")?;
         self.trans = false;
@@ -80,10 +70,21 @@ impl TransactionManager for MongodbConnection {
     }
 
     fn commit_transaction(&mut self) -> Result<()> {
-        self.sess
+        self.lock_sess()?
             .commit_transaction()
             .context("Failed to commit transaction")?;
         self.trans = false;
         Ok(())
+    }
+}
+
+impl MongodbConnection {
+    fn lock_sess<'a>(&'a self) -> Result<MutexGuard<'a, ClientSession>> {
+        let sess = self
+            .sess
+            .lock()
+            .map_err(|_| Error::msg("Failed to lock sess"))?;
+
+        Ok(sess)
     }
 }

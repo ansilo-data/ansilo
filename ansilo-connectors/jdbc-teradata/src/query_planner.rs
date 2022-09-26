@@ -433,7 +433,6 @@ impl TeradataJdbcQueryPlanner {
                 _ => true,
             },
             sql::Expr::Cast(cast) => match &cast.r#type {
-                DataType::JSON => false,
                 DataType::Float32 => false,
                 DataType::Uuid => false,
                 DataType::Time => false,

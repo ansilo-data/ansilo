@@ -939,6 +939,49 @@ impl MemoryQueryExecutor {
                         }
                         (l, r) => bail!("Cannot compare pair ({:?}, {:?})", l, r),
                     },
+                    sqlil::BinaryOpType::JsonExtract => {
+                        let json = if let Some(json) = left.as_json() {
+                            json
+                        } else {
+                            bail!("Cannot json extract on {:?}", left);
+                        };
+                        let json: serde_json::Value =
+                            serde_json::from_str(json).context("Could not parse json")?;
+
+                        match json {
+                            serde_json::Value::Array(arr)
+                                if right.clone().try_coerce_into(&DataType::UInt32).is_ok() =>
+                            {
+                                let idx = *right
+                                    .try_coerce_into(&DataType::UInt32)
+                                    .unwrap()
+                                    .as_u_int32()
+                                    .unwrap();
+
+                                DataValue::Utf8String(serde_json::to_string(
+                                    arr.get(idx as usize).unwrap_or(&serde_json::Value::Null),
+                                )?)
+                            }
+                            serde_json::Value::Object(obj)
+                                if right
+                                    .clone()
+                                    .try_coerce_into(&DataType::rust_string())
+                                    .is_ok() =>
+                            {
+                                let idx = right
+                                    .try_coerce_into(&DataType::rust_string())
+                                    .unwrap()
+                                    .as_utf8_string()
+                                    .unwrap()
+                                    .clone();
+
+                                DataValue::Utf8String(serde_json::to_string(
+                                    obj.get(&idx).unwrap_or(&serde_json::Value::Null),
+                                )?)
+                            }
+                            _ => bail!("Could not extract json {:?} using key {:?}", left, right),
+                        }
+                    }
                 })
             }
             sqlil::Expr::Cast(cast) => {
@@ -1285,6 +1328,7 @@ impl MemoryQueryExecutor {
                     sqlil::BinaryOpType::GreaterThanOrEqual => DataType::Boolean,
                     sqlil::BinaryOpType::LessThan => DataType::Boolean,
                     sqlil::BinaryOpType::LessThanOrEqual => DataType::Boolean,
+                    sqlil::BinaryOpType::JsonExtract => DataType::JSON,
                 }
             }
             sqlil::Expr::Cast(cast) => cast.r#type.clone(),

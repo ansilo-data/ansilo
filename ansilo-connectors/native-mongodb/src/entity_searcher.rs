@@ -1,19 +1,15 @@
-use std::collections::HashMap;
-
 use ansilo_core::{
     config::{EntityAttributeConfig, EntityConfig, EntitySourceConfig, NodeConfig},
     data::DataType,
-    err::{Context, Error, Result},
+    err::{Context, Result},
 };
 
 use ansilo_connectors_base::interface::{EntityDiscoverOptions, EntitySearcher};
 use ansilo_logging::warn;
-use fallible_iterator::FallibleIterator;
 use mongodb::results::CollectionSpecification;
-use rumongodb::ToSql;
 use wildmatch::WildMatch;
 
-use crate::{from_mongodb_type, MongodbCollectionOptions, MongodbConnection};
+use crate::{MongodbCollectionOptions, MongodbConnection};
 
 use super::MongodbEntitySourceConfig;
 
@@ -32,8 +28,8 @@ impl EntitySearcher for MongodbEntitySearcher {
         let client = connection.client();
 
         // Parse the collection filters
-        let filter = opts.remote_schema.as_ref().unwrap_or_default().clone();
-        let filter = filter.split('.');
+        let filter = opts.remote_schema.as_ref().cloned().unwrap_or_default();
+        let mut filter = filter.split('.');
         let filter_db = WildMatch::new(filter.next().unwrap_or("*"));
         let filter_collection = WildMatch::new(filter.next().unwrap_or("*"));
 
@@ -73,7 +69,7 @@ impl EntitySearcher for MongodbEntitySearcher {
                 Err(err) => {
                     warn!(
                         "Failed to import schema for collection \"{}\": {:?}",
-                        col, err
+                        col.name, err
                     );
                     None
                 }
@@ -98,7 +94,7 @@ pub(crate) fn parse_entity_config(
         vec![EntityAttributeConfig::new(
             "doc".to_string(),
             None,
-            &DataType::JSON,
+            DataType::JSON,
             false,
             false,
         )],

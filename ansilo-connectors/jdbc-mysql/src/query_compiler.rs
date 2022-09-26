@@ -533,6 +533,9 @@ impl MysqlJdbcQueryCompiler {
             sql::BinaryOpType::GreaterThanOrEqual => format!("({}) >= ({})", l, r),
             sql::BinaryOpType::LessThan => format!("({}) < ({})", l, r),
             sql::BinaryOpType::LessThanOrEqual => format!("({}) <= ({})", l, r),
+            sql::BinaryOpType::JsonExtract => {
+                format!("JSON_EXTRACT({}, CONCAT('$.''', ({}), '''')", l, r)
+            }
         })
     }
 

@@ -1,11 +1,8 @@
-use std::collections::HashMap;
-
 use ansilo_connectors_base::common::entity::ConnectorEntityConfig;
 use ansilo_core::{
     config,
     err::{Context, Result},
 };
-use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 /// The connection config
@@ -26,7 +23,7 @@ impl MongodbConnectionConfig {
 pub type MongodbConnectorEntityConfig = ConnectorEntityConfig<MongodbEntitySourceConfig>;
 
 /// Entity source config for Mongodb driver
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumAsInner)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum MongodbEntitySourceConfig {
     Collection(MongodbCollectionOptions),

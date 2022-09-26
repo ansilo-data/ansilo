@@ -22,9 +22,6 @@ macro_rules! current_dir {
 }
 
 /// Starts an Mysql DB instance and waits for it to become ready to accept connections
-/// NOTE: The instance takes a long time to boot up due to the image size
-/// so it is not terminated at the end of each test, rather it has a
-/// script which will exit automatically after idleing for 30 min
 pub fn start_mysql() -> ContainerInstances {
     let infra_path = current_dir!().to_path_buf();
     let services = start_containers("mysql", infra_path.clone(), false, Duration::from_secs(120));

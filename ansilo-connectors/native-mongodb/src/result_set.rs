@@ -1,7 +1,5 @@
 use std::{
-    cmp, mem,
-    ops::{Deref, DerefMut},
-    pin::Pin,
+    cmp,
     sync::{Arc, Mutex},
 };
 
@@ -11,20 +9,19 @@ use ansilo_connectors_base::{
 };
 use ansilo_core::{
     data::{DataType, DataValue},
-    err::{Context, Result},
+    err::{Context, Error, Result},
 };
 use mongodb::{
-    bson::{Bson, Document},
+    bson::Document,
     sync::{ClientSession, SessionCursor},
 };
-use rumongodb::types::Value;
 
-use crate::{doc_to_json, from_mongodb, from_mongodb_type, OwnedMongodbStatment};
+use crate::doc_to_json;
 
 /// Mongodb result set
 pub struct MongodbResultSet {
     /// The cursor for the results
-    cursor: SessionCursor<Document>,
+    cursor: Option<SessionCursor<Document>>,
     /// The session
     sess: Arc<Mutex<ClientSession>>,
     /// Output buffer
@@ -34,7 +31,7 @@ pub struct MongodbResultSet {
 }
 
 impl MongodbResultSet {
-    pub fn new(cursor: SessionCursor<Document>, sess: Arc<Mutex<ClientSession>>) -> Self {
+    pub fn new(cursor: Option<SessionCursor<Document>>, sess: Arc<Mutex<ClientSession>>) -> Self {
         Self {
             cursor,
             sess,
@@ -54,6 +51,10 @@ impl ResultSet for MongodbResultSet {
             return Ok(0);
         }
 
+        if self.cursor.is_none() {
+            return Ok(0);
+        }
+
         let mut read = 0;
 
         loop {
@@ -69,22 +70,29 @@ impl ResultSet for MongodbResultSet {
                 return Ok(read);
             }
 
-            let mut sess = self.sess.lock().context("Failed to lock sess")?;
+            let mut sess = self
+                .sess
+                .lock()
+                .map_err(|_| Error::msg("Failed to lock sess mutex"))?;
 
-            if let Some(doc) = self
+            if self
                 .cursor
+                .as_mut()
+                .unwrap()
                 .advance(&mut sess)
                 .context("Failed to advance cursor")?
             {
                 let doc = self
                     .cursor
+                    .as_mut()
+                    .unwrap()
                     .deserialize_current()
                     .context("Failed to deserialize document")?;
 
                 let val = DataValue::JSON(serde_json::to_string(&doc_to_json(doc)?)?);
 
                 self.buf
-                    .extend_from_slice(DataWriter::to_vec(vals)?.as_slice());
+                    .extend_from_slice(DataWriter::to_vec_one(val)?.as_slice());
             } else {
                 self.done = true;
                 return Ok(read);

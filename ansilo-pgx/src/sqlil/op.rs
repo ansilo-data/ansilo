@@ -150,6 +150,7 @@ fn convert_binary_op(op: &str) -> Result<sqlil::BinaryOpType> {
         ">=" => sqlil::BinaryOpType::GreaterThanOrEqual,
         "<" => sqlil::BinaryOpType::LessThan,
         "<=" => sqlil::BinaryOpType::LessThanOrEqual,
+        "->" => sqlil::BinaryOpType::JsonExtract,
         _ => bail!("Unsupported binary operator: '{}'", op),
     })
 }
@@ -738,6 +739,50 @@ mod tests {
                     sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 1)),
                     sqlil::BinaryOpType::GreaterThan,
                     sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 3))
+                ))
+            ))
+        );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_op_json_extract_int() {
+        let expr = test::convert_simple_expr_with_context(
+            "SELECT $1 -> $2",
+            &mut ConversionContext::new(),
+            vec![DataType::JSON, DataType::Int32],
+        )
+        .unwrap();
+
+        assert_eq!(
+            expr,
+            sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::JSON, 1)),
+                sqlil::BinaryOpType::JsonExtract,
+                sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::Int32, 2))
+            ))
+        );
+    }
+
+    #[pg_test]
+    fn test_sqlil_convert_op_json_extract_string() {
+        let expr = test::convert_simple_expr_with_context(
+            "SELECT $1 -> $2",
+            &mut ConversionContext::new(),
+            vec![
+                DataType::JSON,
+                DataType::Utf8String(StringOptions::default()),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(
+            expr,
+            sqlil::Expr::BinaryOp(sqlil::BinaryOp::new(
+                sqlil::Expr::Parameter(sqlil::Parameter::new(DataType::JSON, 1)),
+                sqlil::BinaryOpType::JsonExtract,
+                sqlil::Expr::Parameter(sqlil::Parameter::new(
+                    DataType::Utf8String(StringOptions::default()),
+                    2
                 ))
             ))
         );

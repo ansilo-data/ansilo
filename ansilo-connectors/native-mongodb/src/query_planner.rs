@@ -1,22 +1,22 @@
 use ansilo_core::{
     data::{DataType, DataValue, StringOptions},
     err::{bail, ensure, Context, Result},
-    sqlil as sql,
+    sqlil::{self as sql, BinaryOpType},
 };
 
 use ansilo_connectors_base::{
     common::entity::EntitySource,
     interface::{
-        BulkInsertQueryOperation, Connection, DeleteQueryOperation, InsertQueryOperation,
-        OperationCost, QueryCompiler, QueryHandle, QueryOperationResult, QueryPlanner, ResultSet,
-        SelectQueryOperation, UpdateQueryOperation,
+        BulkInsertQueryOperation, DeleteQueryOperation, InsertQueryOperation, OperationCost,
+        QueryCompiler, QueryOperationResult, QueryPlanner, SelectQueryOperation,
+        UpdateQueryOperation,
     },
 };
 use ansilo_logging::warn;
 
 use crate::{
-    MongodbCollectionOptions, MongodbConnection, MongodbConnectorEntityConfig,
-    MongodbEntitySourceConfig, MongodbQuery, MongodbQueryCompiler,
+    MongodbConnection, MongodbConnectorEntityConfig, MongodbEntitySourceConfig, MongodbQuery,
+    MongodbQueryCompiler,
 };
 
 /// Query planner for Mongodb driver
@@ -36,7 +36,9 @@ impl QueryPlanner for MongodbQueryPlanner {
             MongodbEntitySourceConfig::Collection(col) => col,
         };
 
-        let col = client.database(&col.database_name).collection::<()>(name);
+        let col = client
+            .database(&col.database_name)
+            .collection::<()>(&col.collection_name);
 
         let count = col
             .estimated_document_count(None)
@@ -59,7 +61,11 @@ impl QueryPlanner for MongodbQueryPlanner {
         source: &sql::EntitySource,
     ) -> Result<Vec<(sql::Expr, DataType)>> {
         Ok(vec![(
-            sql::Expr::attr(source.alias.clone(), "_id"),
+            sql::Expr::BinaryOp(sql::BinaryOp::new(
+                sql::Expr::attr(source.alias.clone(), "doc"),
+                BinaryOpType::JsonExtract,
+                sql::Expr::constant(DataValue::Utf8String("_id".into())),
+            )),
             DataType::Utf8String(StringOptions::default()),
         )])
     }
@@ -138,20 +144,10 @@ impl QueryPlanner for MongodbQueryPlanner {
     fn get_insert_max_batch_size(
         _connection: &mut Self::TConnection,
         _conf: &MongodbConnectorEntityConfig,
-        insert: &sql::Insert,
+        _insert: &sql::Insert,
     ) -> Result<u32> {
-        // @see https://doxygen.mongodbql.org/libpq-fe_8h.html#afcd90c8ad3fd816d18282eb622678c25
-        let params: usize = insert
-            .cols
-            .iter()
-            .map(|row| row.1.walk_count(|e| e.as_parameter().is_some()))
-            .sum();
-
-        if params == 0 {
-            return Ok(u32::MAX);
-        }
-
-        Ok((MAX_PARAMS as f32 / params as f32).floor() as _)
+        // @see https://www.mongodb.com/docs/manual/reference/limits/#mongodb-limit-Write-Command-Batch-Limit-Size
+        Ok(100_000)
     }
 
     fn apply_insert_operation(
@@ -205,15 +201,11 @@ impl QueryPlanner for MongodbQueryPlanner {
         connection: &mut Self::TConnection,
         conf: &MongodbConnectorEntityConfig,
         query: &sql::Query,
-        verbose: bool,
+        _verbose: bool,
     ) -> Result<serde_json::Value> {
         let compiled = MongodbQueryCompiler::compile_query(connection, conf, query.clone())?;
 
-        Ok(if verbose {
-            serde_json::to_value(compiled)
-        } else {
-            serde_json::to_value(compiled.sql)
-        }?)
+        Ok(serde_json::to_value(compiled)?)
     }
 }
 
@@ -244,9 +236,7 @@ impl MongodbQueryPlanner {
         select: &mut sql::Select,
         ordering: sql::Ordering,
     ) -> Result<QueryOperationResult> {
-        if !Self::expr_supported(&ordering.expr) {
-            return Ok(QueryOperationResult::Unsupported);
-        }
+        MongodbQueryCompiler::compile_field(&ordering.expr)?;
 
         select.order_bys.push(ordering);
         Ok(QueryOperationResult::Ok(OperationCost::default()))
@@ -334,9 +324,7 @@ impl MongodbQueryPlanner {
     }
 
     fn expr_supported(expr: &sql::Expr) -> bool {
-        expr.walk_all(|e| match e {
-            _ => true,
-        })
+        MongodbQueryCompiler::compile_expr(expr).is_ok()
     }
 
     fn exprs_supported(expr: &[sql::Expr]) -> bool {

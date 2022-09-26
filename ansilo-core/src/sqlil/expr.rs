@@ -156,6 +156,7 @@ pub enum BinaryOpType {
     GreaterThanOrEqual,
     LessThan,
     LessThanOrEqual,
+    JsonExtract,
 }
 
 /// Supported type casts

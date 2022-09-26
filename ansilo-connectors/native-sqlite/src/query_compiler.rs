@@ -513,6 +513,7 @@ impl SqliteQueryCompiler {
             sql::BinaryOpType::GreaterThanOrEqual => format!("({}) >= ({})", l, r),
             sql::BinaryOpType::LessThan => format!("({}) < ({})", l, r),
             sql::BinaryOpType::LessThanOrEqual => format!("({}) <= ({})", l, r),
+            sql::BinaryOpType::JsonExtract => format!("({}) -> ({})", l, r),
         })
     }
 

@@ -4,7 +4,6 @@ use ansilo_core::{
     err::{Context, Result},
 };
 use mongodb::options::ClientOptions;
-use rumongodb::OpenFlags;
 
 use crate::{conf::MongodbConnectionConfig, MongodbConnection};
 
@@ -25,10 +24,10 @@ impl ConnectionPool for MongodbConnectionUnpool {
     type TConnection = MongodbConnection;
 
     fn acquire(&mut self, _auth: Option<&AuthContext>) -> Result<Self::TConnection> {
-        let opts = ClientOptions::parse_connection_string_sync(&self.conf.url)
-            .context("Failed to parse connection string")?;
+        let opts =
+            ClientOptions::parse(&self.conf.url).context("Failed to parse connection string")?;
         let con =
-            mongodb::sync::Client::with_options(options).context("Failed to connect to mongodb")?;
+            mongodb::sync::Client::with_options(opts).context("Failed to connect to mongodb")?;
 
         let sess = con.start_session(None).context("Failed to start sess")?;
 
