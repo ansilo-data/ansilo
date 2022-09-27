@@ -35,7 +35,7 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc && \
     dnf install -y azure-cli
 
 # Install utils
-RUN yum install -y procps jq lld
+RUN yum install -y procps jq lld nc
 
 # Add .cargo
 ADD .github/workflows/docker/.cargo /.cargo

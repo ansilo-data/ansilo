@@ -130,7 +130,7 @@ fn start_containers_ecs(
             )
         })
         .map(|((cluster, task_id, service), port)| {
-            let ip_addr = get_task_ip(cluster, task_id.clone());
+            let ip_addr = get_task_ip(cluster, task_id.clone(), &service);
             if let Some(port) = port {
                 println!("Waiting for {service} service to come online");
                 wait_for_port_open(ip_addr, port);
@@ -170,7 +170,7 @@ fn parse_service_port(port_mapping: String) -> Option<u16> {
     port.parse().ok()
 }
 
-fn get_task_ip(cluster: String, task_id: String) -> IpAddr {
+fn get_task_ip(cluster: String, task_id: String, service: &str) -> IpAddr {
     let cmd = if env::var("ANSILO_TESTS_ECS_USE_PUBLIC_IP").is_ok() {
         format!("
             ENI_ID=$(aws ecs describe-tasks --tasks {} --cluster {cluster} --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text); 
@@ -192,7 +192,21 @@ fn get_task_ip(cluster: String, task_id: String) -> IpAddr {
     let ip_str = String::from_utf8_lossy(&output.stdout[..])
         .trim()
         .to_string();
-    println!("Private IP from {}: {:?}", task_id, ip_str);
+
+    println!("Task IP from {}: {:?}", task_id, ip_str);
+
+    // Prepend task ip to /etc/hosts for services which use
+    let status = Command::new("bash")
+        .args(&[
+            "-c",
+            &format!("echo '{ip_str} {service}.ecs' > /tmp/hosts.new && cat /etc/hosts >> /tmp/hosts.new && cat /tmp/hosts.new | sudo tee /etc/hosts >/dev/null"),
+        ])
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
+    assert!(status.success());
+
     ip_str.parse().unwrap()
 }
 

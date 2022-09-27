@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-    
+
 echo "Checking if already booted..."
 set +e
 nc -vzw5 ansilo-teradata-test.japaneast.cloudapp.azure.com 1026

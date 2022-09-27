@@ -8,7 +8,7 @@ COPY ./init.d/* /docker-entrypoint-initdb.d/
 
 # Install https://github.com/TimeToogo/lazyprox
 RUN apt-get update && \
-    apt-get install -y curl netcat && \
+    apt-get install -y curl netcat jq && \
     curl --fail https://lazyprox.elliotlevin.dev/lazyprox-x86_64-unknown-linux-musl -o ~/lazyprox && \
         chmod +x ~/lazyprox && \
         mv ~/lazyprox /usr/local/bin/lazyprox

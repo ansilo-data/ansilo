@@ -18,6 +18,9 @@ function cleanup {
 
 trap cleanup EXIT INT TERM
 
+
+echo "Using $RS_HOST as replicat set host..."
+
 echo "Starting mongo..."
 echo -e "notsosecret" > /key
 chmod 400 /key
@@ -46,7 +49,9 @@ done
 
 sleep 10
 echo "Initialising replica set..."
-mongosh --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD --eval < <(echo "rs.initiate();")
+echo '127.0.0.1 mongo.ecs' | tee -a /etc/hosts
+mongosh --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD \
+    --eval < <(echo "rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo.ecs:27017\"}] });")
 echo "Mongo startup successful!"
 
 echo "Running lazyprox..."
