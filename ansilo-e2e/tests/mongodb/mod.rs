@@ -3,3 +3,7 @@ pub mod t002_insert_common_types;
 pub mod t003_update_common_types;
 pub mod t004_delete_all;
 pub mod t005_select_combined;
+pub mod t006_transactions;
+pub mod t007_insert_select;
+pub mod t008_update_where;
+pub mod t009_delete_where;

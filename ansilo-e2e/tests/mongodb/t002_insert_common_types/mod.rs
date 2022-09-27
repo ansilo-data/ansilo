@@ -103,12 +103,7 @@ fn test() {
                                 }
                             },
                             "params": [
-                                {
-                                    "Dynamic": {
-                                        "type": "JSON",
-                                        "id": 1
-                                    }
-                                }
+                                { "Dynamic": { "type": "JSON", "id": 1 } }
                             ]
                         }
                     ))

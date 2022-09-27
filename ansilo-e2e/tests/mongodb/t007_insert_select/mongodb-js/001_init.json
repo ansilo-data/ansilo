@@ -1,0 +1,33 @@
+[
+    {
+        "drop": "t007__test_source",
+        "ignore_error": true
+    },
+    {
+        "drop": "t007__test_target",
+        "ignore_error": true
+    },
+    {
+        "create": "t007__test_source"
+    },
+    {
+        "create": "t007__test_target"
+    },
+    {
+        "insert": "t007__test_source",
+        "documents": [
+            {
+                "_id": 1,
+                "name": "John"
+            },
+            {
+                "_id": 2,
+                "name": "Emma"
+            },
+            {
+                "_id": 3,
+                "name": "Jane"
+            }
+        ]
+    }
+]

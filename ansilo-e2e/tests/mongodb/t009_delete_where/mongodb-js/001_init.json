@@ -1,0 +1,26 @@
+[
+    {
+        "drop": "t009__test_col",
+        "ignore_error": true
+    },
+    {
+        "create": "t009__test_col"
+    },
+    {
+        "insert": "t009__test_col",
+        "documents": [
+            {
+                "_id": 1,
+                "name": "John"
+            },
+            {
+                "_id": 2,
+                "name": "Emma"
+            },
+            {
+                "_id": 3,
+                "name": "Jane"
+            }
+        ]
+    }
+]

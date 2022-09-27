@@ -1,0 +1,9 @@
+[
+    {
+        "drop": "t006__test_col",
+        "ignore_error": true
+    },
+    {
+        "create": "t006__test_col"
+    }
+]

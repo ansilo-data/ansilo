@@ -1,4 +1,4 @@
-name: mysql
+name: mongodb
 
 networking:
   port: 0 # use kernel-allocated port
