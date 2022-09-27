@@ -9,6 +9,7 @@ mod insert;
 mod query;
 mod select;
 mod update;
+mod eval;
 
 pub use bulk_insert::*;
 pub use delete::*;
@@ -17,3 +18,4 @@ pub use insert::*;
 pub use query::*;
 pub use select::*;
 pub use update::*;
+pub use eval::*;
