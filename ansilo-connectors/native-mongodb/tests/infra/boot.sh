@@ -47,16 +47,19 @@ do
     let "TRIES+=1"
 done
 
-sleep 10
-echo "Initialising replica set..."
-echo '127.0.0.1 mongo.ecs' | tee -a /etc/hosts
-mongosh --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD \
-    --eval < <(echo "rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo.ecs:27017\"}] });")
-echo "Mongo startup successful!"
-
 echo "Running lazyprox..."
 lazyprox \
     --listen 0.0.0.0:$LISTEN_PORT \
     --dest localhost:27017 \
-    --idle-timeout-secs $TIMEOUT_DURATION
+    --idle-timeout-secs $TIMEOUT_DURATION &
+LAZY_PROX_PID=$!
 
+sleep 10
+echo "Initialising replica set..."
+echo '127.0.0.1 mongo.ecs' | tee -a /etc/hosts
+mongosh --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD \
+    --eval < <(echo "rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo.ecs:27018\"}] });")
+echo "Mongo startup successful!"
+
+echo "Waiting on lazyprox..."
+wait $LAZY_PROX_PID
