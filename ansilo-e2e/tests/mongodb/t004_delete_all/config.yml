@@ -9,21 +9,18 @@ auth:
       password: pass
 
 sources:
-  - id: mysql
-    type: jdbc.mysql
+  - id: mongodb
+    type: native.mongodb
     options:
-      jdbc_url: jdbc:mysql://${env:MYSQL_IP}:3307/db
-      properties:
-        user: ansilo_admin
-        password: ansilo_testing
-        
+      url: mongodb://ansilo_admin:ansilo_testing@${env:MONGO_IP}:27018/db
+
 build:
   stages:
     - sql: ${dir}/ansilo-sql/*.sql
 
 postgres:
-    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
-    data_dir: /tmp/${dir}/data
-    listen_socket_dir_path: /tmp/${dir}
-    fdw_socket_path: /tmp/${dir}/fdw.sock
-    build_info_path: /tmp/${dir}/build-info.json
+  install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
+  data_dir: /tmp/${dir}/data
+  listen_socket_dir_path: /tmp/${dir}
+  fdw_socket_path: /tmp/${dir}/fdw.sock
+  build_info_path: /tmp/${dir}/build-info.json

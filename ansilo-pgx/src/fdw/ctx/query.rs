@@ -578,6 +578,12 @@ pub struct FdwSelectQuery {
     /// Mapping of output resno's which refer to whole-rows to the varno
     /// they refer to. The structure is HashMap<resno, varno>
     res_var_nos: HashMap<u32, u32>,
+    /// Mapping of output resno's which require evaluation of an expression.
+    /// The structure is HashMap<resno, expr>
+    res_local_exprs: HashMap<u32, sqlil::Expr>,
+    /// Mapping of var's to their original column names for use in local expresssions
+    /// The structure is HashMap<(varno, varattnum), String>
+    res_local_col_names: HashMap<(u32, u32), String>,
 }
 
 impl FdwSelectQuery {
@@ -620,6 +626,45 @@ impl FdwSelectQuery {
 
     pub(crate) fn get_result_var_no(&self, res_no: u32) -> Option<u32> {
         self.res_var_nos.get(&res_no).cloned()
+    }
+
+    pub(crate) unsafe fn record_result_local_eval(
+        &mut self,
+        res_no: u32,
+        expr: sqlil::Expr,
+        required_cols: Vec<(String, *mut pg_sys::Var)>,
+    ) {
+        self.res_local_exprs.insert(res_no, expr);
+
+        for (name, var) in required_cols {
+            self.res_local_col_names
+                .insert(((*var).varno as _, (*var).varattno as _), name);
+        }
+    }
+
+    pub(crate) fn needs_local_eval(&self) -> bool {
+        !self.res_local_exprs.is_empty()
+    }
+
+    pub(crate) fn is_local_eval(&self, res_no: u32) -> bool {
+        self.res_local_exprs.contains_key(&res_no)
+    }
+
+    pub(crate) fn get_local_eval_expr(&self, res_no: u32) -> Option<&sqlil::Expr> {
+        self.res_local_exprs.get(&res_no)
+    }
+
+    /// Returns a mapping of resno's to original column names
+    pub(crate) fn get_local_eval_cols(&self) -> HashMap<u32, String> {
+        self.res_local_col_names
+            .iter()
+            .filter_map(|((varno, attnum), name)| {
+                self.res_cols
+                    .get(varno)
+                    .and_then(|m| m.get(attnum))
+                    .map(|resno| (*resno, name.clone()))
+            })
+            .collect()
     }
 }
 

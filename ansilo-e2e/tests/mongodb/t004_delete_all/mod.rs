@@ -1,47 +1,57 @@
 use std::env;
 
-use ansilo_connectors_base::interface::{LoggedQuery, ResultSet};
-use ansilo_core::data::DataValue;
+use ansilo_connectors_base::interface::LoggedQuery;
 
+use ansilo_connectors_native_mongodb::bson::Document;
 use ansilo_e2e::current_dir;
 use pretty_assertions::assert_eq;
+use serde_json::json;
 
 #[test]
 fn test() {
     ansilo_logging::init_for_tests();
-    let containers = ansilo_e2e::mysql::start_mysql();
-    let mut mysql =
-        ansilo_e2e::mysql::init_mysql_sql(&containers, current_dir!().join("mysql-sql/*.sql"));
+    let containers = ansilo_e2e::mongodb::start_mongodb();
+    let mongodb =
+        ansilo_e2e::mongodb::init_mongodb(&containers, current_dir!().join("mongodb-js/*.json"));
 
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
     let rows = client
-        .execute(r#"DELETE FROM "t004__test_tab""#, &[])
+        .execute(r#"DELETE FROM "t004__test_col""#, &[])
         .unwrap();
 
     assert_eq!(rows, 2);
 
-    // Check data received on mysql end
-    let count = mysql
-        .execute("SELECT COUNT(*) FROM t004__test_tab", vec![])
+    // Check documents removed on mongodb end
+    let docs = mongodb
+        .client()
+        .default_database()
         .unwrap()
-        .reader()
-        .unwrap()
-        .read_data_value()
-        .unwrap()
+        .collection::<Document>("t004__test_col")
+        .count_documents(None, None)
         .unwrap();
 
-    assert_eq!(count, DataValue::Int64(0));
+    assert_eq!(docs, 0);
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
         vec![
-            ("mysql".to_string(), LoggedQuery::new_query("BEGIN")),
+            ("mongodb".to_string(), LoggedQuery::new_query("BEGIN")),
             (
-                "mysql".to_string(),
+                "mongodb".to_string(),
                 LoggedQuery::new(
-                    r#"DELETE FROM `db`.`t004__test_tab`"#,
+                    serde_json::to_string_pretty(&json!({
+                      "database": "db",
+                      "collection": "t004__test_col",
+                      "q": {
+                        "DeleteMany": {
+                          "filter": null
+                        }
+                      },
+                      "params": []
+                    }))
+                    .unwrap(),
                     vec![],
                     Some(
                         [("affected".into(), "Some(2)".into())]
@@ -50,7 +60,7 @@ fn test() {
                     )
                 )
             ),
-            ("mysql".to_string(), LoggedQuery::new_query("COMMIT")),
+            ("mongodb".to_string(), LoggedQuery::new_query("COMMIT")),
         ]
     );
 }

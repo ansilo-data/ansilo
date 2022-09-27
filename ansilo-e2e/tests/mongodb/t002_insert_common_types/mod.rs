@@ -83,12 +83,23 @@ fn test() {
                             "collection": "t002__test_col",
                             "q": {
                                 "InsertMany": {
-                                "docs": [
-                                    {
-                                        "$code": "__param::1",
-                                        "$scope": {}
-                                    }
-                                ]
+                                    "docs": [
+                                        {
+                                            "_id": {
+                                                "$oid": "63324fce9e5a26419f67a502"
+                                            },
+                                            "bin": {
+                                                "$binary": {
+                                                "base64": "aGVsbG8=",
+                                                "subType": "ff"
+                                                }
+                                            },
+                                            "num": 1234,
+                                            "str": "🥑🚀",
+                                            "bool": true,
+                                            "null": null
+                                        }
+                                    ]
                                 }
                             },
                             "params": [

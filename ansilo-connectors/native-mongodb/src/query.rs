@@ -202,8 +202,6 @@ pub struct MongodbPreparedQuery {
     sess: Arc<Mutex<ClientSession>>,
     /// The query details
     inner: MongodbQuery,
-    /// Logged params
-    logged_params: Vec<DataValue>,
     /// Buffer for storing query params
     sink: QueryParamSink,
 }
@@ -221,7 +219,6 @@ impl MongodbPreparedQuery {
             sess,
             inner,
             sink,
-            logged_params: vec![],
         })
     }
 
@@ -231,7 +228,7 @@ impl MongodbPreparedQuery {
         let params = self.sink.get_dyn()?;
 
         let mut query = self.inner.clone();
-        query.replace_query_params(params)?;
+        query.replace_query_params(params.clone())?;
 
         Ok(query)
     }
@@ -308,7 +305,6 @@ impl QueryHandle for MongodbPreparedQuery {
 
     fn restart(&mut self) -> Result<()> {
         self.sink.clear();
-        self.logged_params.clear();
         Ok(())
     }
 
@@ -338,11 +334,8 @@ impl QueryHandle for MongodbPreparedQuery {
 
     fn logged(&self) -> Result<LoggedQuery> {
         Ok(LoggedQuery::new(
-            &serde_json::to_string_pretty(&self.inner)?,
-            self.logged_params
-                .iter()
-                .map(|val| format!("value={:?}", val))
-                .collect(),
+            &serde_json::to_string_pretty(&self.with_query_params()?)?,
+            vec![],
             None,
         ))
     }

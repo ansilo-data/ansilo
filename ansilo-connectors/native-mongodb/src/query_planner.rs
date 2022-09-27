@@ -1,6 +1,6 @@
 use ansilo_core::{
-    data::{DataType, DataValue, StringOptions},
-    err::{bail, ensure, Context, Result},
+    data::{DataType, DataValue},
+    err::{ensure, Context, Result},
     sqlil::{self as sql, BinaryOpType},
 };
 
@@ -66,7 +66,7 @@ impl QueryPlanner for MongodbQueryPlanner {
                 BinaryOpType::JsonExtract,
                 sql::Expr::constant(DataValue::Utf8String("_id".into())),
             )),
-            DataType::Utf8String(StringOptions::default()),
+            DataType::JSON,
         )])
     }
 
@@ -98,7 +98,7 @@ impl QueryPlanner for MongodbQueryPlanner {
             SelectQueryOperation::SetRowOffset(offset) => {
                 Self::select_set_rows_to_skip(select, offset)
             }
-            _ => bail!("Unsupported"),
+            _ => Ok(QueryOperationResult::Unsupported),
         }
     }
 
@@ -284,7 +284,7 @@ impl MongodbQueryPlanner {
 
         // @see https://www.mongodb.com/docs/manual/reference/limits/#mongodb-limit-Write-Command-Batch-Limit-Size
         if values.len() / cols.len() > 100_000 {
-            bail!("Too many rows")
+            return Ok(QueryOperationResult::Unsupported);
         }
 
         bulk_insert.cols = cols;

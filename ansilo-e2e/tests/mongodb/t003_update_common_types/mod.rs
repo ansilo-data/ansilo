@@ -4,6 +4,7 @@ use ansilo_connectors_base::interface::LoggedQuery;
 use ansilo_connectors_native_mongodb::bson::{doc, Binary, Bson, Document};
 use ansilo_e2e::current_dir;
 use pretty_assertions::assert_eq;
+use serde_json::json;
 
 #[test]
 fn test() {
@@ -73,9 +74,82 @@ fn test() {
             ("mongodb".to_string(), LoggedQuery::new_query("BEGIN")),
             (
                 "mongodb".to_string(),
+                LoggedQuery::new_query(
+                    serde_json::to_string_pretty(&json!({
+                        "database": "db",
+                        "collection": "t003__test_col",
+                        "q": {
+                            "Find": {
+                                "filter": null,
+                                "sort": null,
+                                "skip": null,
+                                "limit": null
+                            }
+                        },
+                        "params": []
+                    }))
+                    .unwrap()
+                ),
+            ),
+            (
+                "mongodb".to_string(),
                 LoggedQuery::new(
-                    [r#"UPDATE `db`.`t003__test_col` SET "#,].join(""),
-                    vec!["LoggedParam [index=1, method=setString, value=A]".into(),],
+                    serde_json::to_string_pretty(&json!({
+                      "database": "db",
+                      "collection": "t003__test_col",
+                      "q": {
+                        "UpdateMany": {
+                          "pipeline": [
+                            {
+                              "$replaceRoot": {
+                                "newRoot": {
+                                  "_id": {
+                                    "$oid": "63324fce9e5a26419f67a502"
+                                  },
+                                  "bin": {
+                                    "$binary": {
+                                      "base64": "aGVsbG8=",
+                                      "subType": "ff"
+                                    }
+                                  },
+                                  "num": 1234,
+                                  "str": "🥑🚀",
+                                  "bool": true,
+                                  "null": null
+                                }
+                              }
+                            }
+                          ],
+                          "filter": {
+                            "$and": [
+                              {
+                                "_id": {
+                                  "$eq": {
+                                    "$oid": "63324fce9e5a26419f67a502"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "params": [
+                        {
+                          "Dynamic": {
+                            "type": "JSON",
+                            "id": 1
+                          }
+                        },
+                        {
+                          "Dynamic": {
+                            "type": "JSON",
+                            "id": 2
+                          }
+                        }
+                      ]
+                    }))
+                    .unwrap(),
+                    vec![],
                     Some(
                         [("affected".into(), "Some(1)".into())]
                             .into_iter()

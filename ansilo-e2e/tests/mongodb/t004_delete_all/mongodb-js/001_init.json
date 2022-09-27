@@ -1,0 +1,32 @@
+[
+    {
+        "drop": "t004__test_col",
+        "ignore_error": true
+    },
+    {
+        "create": "t004__test_col"
+    },
+    {
+        "insert": "t004__test_col",
+        "documents": [
+            {
+                "_id": {
+                    "$oid": "63324fce9e5a26419f67a502"
+                },
+                "str": "🥑🚀",
+                "num": 1234,
+                "null": null,
+                "bool": true,
+                "bin": {
+                    "$binary": {
+                        "base64": "aGVsbG8=",
+                        "subType": "FF"
+                    }
+                }
+            },
+            {
+                "str": "abc"
+            }
+        ]
+    }
+]

@@ -693,7 +693,7 @@ pub unsafe extern "C" fn exec_foreign_update(
 
     // Bail out if we did not update the expected number of rows
     if affected_rows.is_some() && affected_rows.unwrap() != 1 {
-        panic!("Error while performing update: unexpected number of rows updated when updating record with keys '{:?}', expected 1 row but {} were reported", query_input, affected_rows.unwrap());
+        panic!("Error while performing update: unexpected number of rows updated when updating record with input '{:?}', expected 1 row but {} were reported", query_input, affected_rows.unwrap());
     }
 
     slot

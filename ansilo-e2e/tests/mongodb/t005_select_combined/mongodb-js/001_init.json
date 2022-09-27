@@ -1,0 +1,44 @@
+[
+    {
+        "drop": "t005__test_col",
+        "ignore_error": true
+    },
+    {
+        "create": "t005__test_col"
+    },
+    {
+        "insert": "t005__test_col",
+        "documents": [
+            {
+                "row": 1
+            },
+            {
+                "row": 2
+            },
+            {
+                "row": 3
+            },
+            {
+                "row": 4
+            },
+            {
+                "row": 5
+            },
+            {
+                "row": 6
+            },
+            {
+                "row": 7
+            },
+            {
+                "row": 8
+            },
+            {
+                "row": 9
+            },
+            {
+                "row": 10
+            }
+        ]
+    }
+]

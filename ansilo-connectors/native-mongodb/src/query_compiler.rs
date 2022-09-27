@@ -1,4 +1,5 @@
 use ansilo_core::{
+    data::DataType,
     err::{bail, ensure, Context, Result},
     sqlil as sql,
 };
@@ -206,6 +207,7 @@ impl MongodbQueryCompiler {
             sql::Expr::Parameter(p) => Self::compile_param(p)?,
             sql::Expr::UnaryOp(o) => Self::compile_unary_op(o)?,
             sql::Expr::BinaryOp(b) => Self::compile_binary_op(b)?,
+            sql::Expr::Cast(c) => Self::compile_cast(c)?,
             _ => bail!("Unsupported expr: {:?}", expr),
         };
 
@@ -333,6 +335,19 @@ impl MongodbQueryCompiler {
             sql::BinaryOpType::LogicalAnd => Bson::Document(doc! { "$and": [l, r] }),
             sql::BinaryOpType::LogicalOr => Bson::Document(doc! { "$or": [l, r] }),
             _ => bail!("Unsupported expr: {:?}", op),
+        })
+    }
+
+    fn compile_cast(cast: &sql::Cast) -> Result<Bson> {
+        let inner = Self::compile_expr(&cast.expr)?;
+
+        Ok(match cast.r#type {
+            DataType::Utf8String(_) => Bson::Document(doc! { "$toString": inner }),
+            DataType::Int32 => Bson::Document(doc! { "$toInt": inner }),
+            DataType::Int64 => Bson::Document(doc! { "$toLong": inner }),
+            DataType::Float64 => Bson::Document(doc! { "$toDouble": inner }),
+            DataType::Decimal(_) => Bson::Document(doc! { "$toDecimal": inner }),
+            _ => bail!("Unsupported expr: {:?}", cast),
         })
     }
 

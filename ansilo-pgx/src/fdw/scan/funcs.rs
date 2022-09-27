@@ -3,7 +3,7 @@ use std::{cmp, collections::HashMap, ffi::c_void, mem, ops::ControlFlow, ptr};
 use ansilo_core::{
     data::DataValue,
     err::{bail, Context, Result},
-    sqlil::{self, JoinType, Ordering, OrderingType, QueryType},
+    sqlil::{self, ExprEvaluator, JoinType, Ordering, OrderingType, QueryType},
 };
 use ansilo_pg::fdw::{
     data::DataWriter,
@@ -1098,8 +1098,27 @@ pub unsafe extern "C" fn get_foreign_plan(
         for (idx, (expr, r#type)) in row_ids.into_iter().enumerate() {
             let col_alias = query.as_select_mut().unwrap().row_id_alias();
             let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr.clone()));
+            let tle_resno = fdw_scan_list.len() + 1;
 
-            if apply_query_operation(&mut query, query_op).is_none() {
+            // First try push down the whole rowid expression
+            if apply_query_operation(&mut query, query_op).is_some() {
+                // We pushed down the whole expression, so we can move on
+            }
+            // If we failed to push down the whole rowid expression, see if the expression
+            // can be evaluated locally and we can retrieve the required columns to do so
+            else if let Some(cols) = find_vars_required_for_local_eval(root, &expr, foreignrel) {
+                for (_, var) in cols.iter() {
+                    required_cols.push((*var) as *mut Node);
+                }
+
+                // We record which columns this var references so it can be reconstructed
+                // during the scan
+                query.as_select_mut().unwrap().record_result_local_eval(
+                    tle_resno as _,
+                    expr.clone(),
+                    cols,
+                );
+            } else {
                 panic!("Failed to push down column required for retrieving rowid: {:?} rejected by remote", expr);
             }
 
@@ -1109,13 +1128,7 @@ pub unsafe extern "C" fn get_foreign_plan(
             // the appropriate tle's in the subplan output tlist
             let res_name = to_pg_cstr(&format!("ctid_ansilo_{idx}")).unwrap();
 
-            let tle = pg_sys::makeTargetEntry(
-                vars[idx] as *mut _,
-                (fdw_scan_list.len() + 1) as _,
-                res_name,
-                true,
-            );
-
+            let tle = pg_sys::makeTargetEntry(vars[idx] as *mut _, tle_resno as _, res_name, true);
             fdw_scan_list.push(tle as *mut _);
         }
     }
@@ -1171,7 +1184,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         let expr = match convert(col as *mut _, &mut query.cvt, &planner, &ctx) {
             Ok(expr) => expr,
             Err(err) => {
-                panic!("Failed to push down column required for local condition evaluation: {err}");
+                panic!("Failed to push down column required for query: {err}");
             }
         };
 
@@ -1179,7 +1192,7 @@ pub unsafe extern "C" fn get_foreign_plan(
         let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
 
         if apply_query_operation(&mut query, query_op).is_none() {
-            panic!("Failed to push down column required for local condition evaluation: rejected by remote");
+            panic!("Failed to push down column required for query: rejected by remote");
         }
 
         let res_no = (fdw_scan_list.len() + 1) as _;
@@ -1288,6 +1301,61 @@ unsafe fn find_row_id_vars(required_cols: &Vec<*mut Node>) -> HashMap<u32, Vec<*
         .filter(|c| is_self_item_ptr(**c))
         .map(|r| (*r) as *mut pg_sys::Var)
         .into_group_map_by(|var| (**var).varno)
+}
+
+/// Retrieves vars required for the evaluating the expr locally
+unsafe fn find_vars_required_for_local_eval(
+    root: *mut PlannerInfo,
+    expr: &sqlil::Expr,
+    foreignrel: *mut RelOptInfo,
+) -> Option<Vec<(String, *mut pg_sys::Var)>> {
+    // We only support resolving attributes back to vars on base rels
+    if (*foreignrel).reloptkind != pg_sys::RelOptKind_RELOPT_BASEREL {
+        return None;
+    }
+
+    // Check if the expression can be evaluated
+    if !ExprEvaluator::can_eval(expr) {
+        return None;
+    }
+
+    // Get a list of column names required
+    let required_attrs = ExprEvaluator::required_attrs(expr)
+        .into_iter()
+        .map(|a| a.attribute_id)
+        .collect::<Vec<_>>();
+
+    if required_attrs.is_empty() {
+        return None;
+    }
+
+    // Find required vars by name
+    let mut required_vars = vec![];
+    let rte = pg_sys::planner_rt_fetch((*foreignrel).relid, root);
+    let rel = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
+
+    for att in rel.attrs() {
+        if required_attrs.contains(&att.name().to_string()) {
+            required_vars.push((
+                att.name().to_string(),
+                pg_sys::makeVar(
+                    (*foreignrel).relid,
+                    att.attnum,
+                    att.atttypid,
+                    att.atttypmod,
+                    att.attnum as _,
+                    0,
+                ),
+            ));
+        }
+    }
+
+    // Validate we could resolve all required attr's
+    if required_attrs.len() != required_vars.len() {
+        return None;
+    }
+
+    Some(required_vars)
 }
 
 /// Retrieves all vars (columns) and aggref's from the supplied node iterator
@@ -1410,6 +1478,17 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
     let mut col_idx = 0;
     let mut has_row_reference = false;
 
+    // If we require local expression evaluation for any attr's
+    // we need to collect the values of the columns they need
+    let (mut eval_names, mut eval_attrs) = if query.as_select().unwrap().needs_local_eval() {
+        (
+            Some(query.as_select().unwrap().get_local_eval_cols()),
+            Some(HashMap::new()),
+        )
+    } else {
+        (None, None)
+    };
+
     for (attr_idx, attr) in attrs.iter().enumerate() {
         // If it's a whole row reference we dont need to perform anything here.
         // We first materalize the whole tuple slot then populate the attrs with copies
@@ -1419,6 +1498,12 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
             .is_row_reference(attr.attnum as _)
         {
             has_row_reference = true;
+            continue;
+        }
+
+        // If this attribute requires local evaluation, skip it for now
+        // We evaluate it after retreiving all other columns
+        if eval_names.is_some() && query.as_select().unwrap().is_local_eval(attr.attnum as _) {
             continue;
         }
 
@@ -1438,6 +1523,16 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
             panic!("Unexpected EOF reached while reading next row");
         }
 
+        // If any local expressions need this column for evaluation store a copy now
+        if eval_names.is_some() {
+            if let Some(name) = eval_names.as_ref().unwrap().get(&(attr.attnum as _)) {
+                eval_attrs
+                    .as_mut()
+                    .unwrap()
+                    .insert(name.clone(), data.as_ref().unwrap().clone());
+            }
+        }
+
         // Convert the retrieved value to a pg datum and store in the tuple
         into_datum(
             attr.atttypid,
@@ -1450,6 +1545,38 @@ pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *m
         .unwrap();
 
         col_idx += 1;
+    }
+
+    // If required, evaluation the local expressions
+    if let Some(eval_attrs) = eval_attrs.as_ref() {
+        for (attr_idx, attr) in attrs.iter().enumerate() {
+            if let Some(expr) = query
+                .as_select()
+                .unwrap()
+                .get_local_eval_expr(attr.attnum as _)
+            {
+                // Evaluate the expression
+                let result = ExprEvaluator::eval(expr, eval_attrs)
+                    .with_context(|| {
+                        format!(
+                            "Failed to evaluate expression {:?} for attnum {}",
+                            expr, attr.attnum
+                        )
+                    })
+                    .unwrap();
+
+                // Convert the retrieved value to a pg datum and store in the tuple
+                into_datum(
+                    attr.atttypid,
+                    &result.r#type(),
+                    result,
+                    (*slot).tts_isnull.add(attr_idx),
+                    (*slot).tts_values.add(attr_idx),
+                )
+                .with_context(|| format!("Reading column '{}'", attr.name()))
+                .unwrap();
+            }
+        }
     }
 
     // If there is a whole-row reference we materialise it here
@@ -1644,7 +1771,10 @@ fn apply_query_operation(
     query: &mut FdwQueryContext,
     query_op: SelectQueryOperation,
 ) -> Option<OperationCost> {
-    let result = query.apply(query_op.clone().into()).unwrap();
+    let result = query
+        .apply(query_op.clone().into())
+        .with_context(|| format!("Failed to push apply query op: {:?}", query_op))
+        .unwrap();
 
     match result {
         QueryOperationResult::Ok(cost) => {
