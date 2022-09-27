@@ -410,9 +410,9 @@ pub unsafe extern "C" fn begin_foreign_modify(
 /// We support 2 types of "batching":
 ///  1. A bulk insert query which inserts rows in single query, this is the preferred option
 ///     as it reduces network roundtrips to the data source but must be supported by the connector.
-///  2. Performing multiple executions of insert query, each inserting a single row. This reduces
+///  2. Performing multiple executions of an insert query, each inserting a single row. This reduces
 ///     the overhead of communicating with the FDW server over the unix socket but can be supported
-///     by connectors which dont support bulk inserts.
+///     by connectors which dont support bulk inserts natively.
 #[pg_guard]
 pub unsafe extern "C" fn get_foreign_modify_batch_size(
     rinfo: *mut ResultRelInfo,

@@ -19,9 +19,35 @@ function cleanup {
 trap cleanup EXIT INT TERM
 
 echo "Starting mongo..."
-docker-entrypoint.sh mongod &
+echo -e "notsosecret" > /key
+chmod 400 /key
+chown mongodb:mongodb /key
+docker-entrypoint.sh mongod --replSet rs0 --keyFile /key &
 MONGO_PID=$!
-echo "mongo started as pid $MONGO_PID"
+echo "Mongo started as pid $MONGO_PID"
+
+TRIES=0
+while ((TRIES < 10));
+do
+    echo "Checking if started up..."
+    set +e
+    EXIT_CODE=$(timeout 2 nc -vz localhost 27017; echo $?)
+    set -e
+
+    if [[ $EXIT_CODE == 0 ]];
+    then 
+        break
+    fi
+
+    echo "Failed to connect, sleeping..."
+    sleep 5
+    let "TRIES+=1"
+done
+
+sleep 10
+echo "Initialising replica set..."
+mongosh --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD --eval < <(echo "rs.initiate();")
+echo "Mongo startup successful!"
 
 echo "Running lazyprox..."
 lazyprox \

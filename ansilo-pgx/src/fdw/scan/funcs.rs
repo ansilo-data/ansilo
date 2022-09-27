@@ -1097,10 +1097,10 @@ pub unsafe extern "C" fn get_foreign_plan(
 
         for (idx, (expr, r#type)) in row_ids.into_iter().enumerate() {
             let col_alias = query.as_select_mut().unwrap().row_id_alias();
-            let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr));
+            let query_op = SelectQueryOperation::AddColumn((col_alias.clone(), expr.clone()));
 
             if apply_query_operation(&mut query, query_op).is_none() {
-                panic!("Failed to push down column required for local condition evaluation: rejected by remote");
+                panic!("Failed to push down column required for retrieving rowid: {:?} rejected by remote", expr);
             }
 
             // Append each rowid as a resjunk tle
@@ -1651,7 +1651,10 @@ fn apply_query_operation(
             query.as_select_mut().unwrap().remote_ops.push(query_op);
             Some(cost)
         }
-        QueryOperationResult::Unsupported => None,
+        QueryOperationResult::Unsupported => {
+            debug1!("Unsupported query operation: {:?}", query_op);
+            None
+        }
     }
 }
 

@@ -28,7 +28,7 @@ pub fn start_mongo() -> ContainerInstances {
     wait_for_log(
         infra_path.clone(),
         services.get("mongo").unwrap(),
-        "Waiting for connections",
+        "Mongo startup successful!",
         Duration::from_secs(60),
     );
 
@@ -41,6 +41,7 @@ pub fn connect_to_mongo(containers: &ContainerInstances) -> MongodbConnection {
             "mongodb://ansilo_admin:ansilo_testing@{}:27018/db",
             containers.get("mongo").unwrap().ip
         ),
+        disable_transactions: false,
     };
 
     MongodbConnector::connect(config).unwrap()

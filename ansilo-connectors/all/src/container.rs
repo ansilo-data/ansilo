@@ -4,6 +4,9 @@ use ansilo_connectors_jdbc_mysql::{MysqlJdbcConnectionConfig, MysqlJdbcEntitySou
 use ansilo_connectors_jdbc_teradata::{
     TeradataJdbcConnectionConfig, TeradataJdbcEntitySourceConfig,
 };
+use ansilo_connectors_native_mongodb::{
+    MongodbConnection, MongodbConnectionConfig, MongodbConnectionUnpool, MongodbEntitySourceConfig,
+};
 use ansilo_connectors_native_postgres::{
     PooledClient, PostgresConnection, PostgresConnectionConfig, PostgresConnectionPool,
     PostgresEntitySourceConfig, UnpooledClient,
@@ -35,6 +38,7 @@ pub use ansilo_connectors_jdbc_mysql::MysqlJdbcConnector;
 pub use ansilo_connectors_jdbc_oracle::OracleJdbcConnector;
 pub use ansilo_connectors_jdbc_teradata::TeradataJdbcConnector;
 pub use ansilo_connectors_memory::MemoryConnector;
+pub use ansilo_connectors_native_mongodb::MongodbConnector;
 pub use ansilo_connectors_native_postgres::PostgresConnector;
 pub use ansilo_connectors_native_sqlite::SqliteConnector;
 pub use ansilo_connectors_peer::PeerConnector;
@@ -46,6 +50,7 @@ pub enum Connectors {
     TeradataJdbc,
     NativePostgres,
     NativeSqlite,
+    NativeMongodb,
     Peer,
     Internal,
     Memory,
@@ -58,6 +63,7 @@ pub enum ConnectionConfigs {
     TeradataJdbc(TeradataJdbcConnectionConfig),
     NativePostgres(PostgresConnectionConfig),
     NativeSqlite(SqliteConnectionConfig),
+    NativeMongodb(MongodbConnectionConfig),
     Peer(PeerConfig),
     Internal,
     Memory(MemoryDatabase),
@@ -70,6 +76,7 @@ pub enum EntitySourceConfigs {
     TeradataJdbc(TeradataJdbcEntitySourceConfig),
     NativePostgres(PostgresEntitySourceConfig),
     NativeSqlite(SqliteEntitySourceConfig),
+    NativeMongodb(MongodbEntitySourceConfig),
     Peer(PostgresEntitySourceConfig),
     Internal,
     Memory(MemoryConnectorEntitySourceConfig),
@@ -80,6 +87,7 @@ pub enum ConnectionPools {
     Jdbc(JdbcConnectionPool),
     NativePostgres(PostgresConnectionPool),
     NativeSqlite(SqliteConnectionUnpool),
+    NativeMongodb(MongodbConnectionUnpool),
     Peer(PeerConnectionUnpool),
     Internal(InternalConnection),
     Memory(MemoryConnectionPool),
@@ -92,6 +100,7 @@ pub enum ConnectorEntityConfigs {
     TeradataJdbc(ConnectorEntityConfig<TeradataJdbcEntitySourceConfig>),
     NativePostgres(ConnectorEntityConfig<PostgresEntitySourceConfig>),
     NativeSqlite(ConnectorEntityConfig<SqliteEntitySourceConfig>),
+    NativeMongodb(ConnectorEntityConfig<MongodbEntitySourceConfig>),
     Peer(ConnectorEntityConfig<PostgresEntitySourceConfig>),
     Internal,
     Memory(ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>),
@@ -101,6 +110,7 @@ pub enum Connections {
     Jdbc(JdbcConnection),
     NativePostgres(PostgresConnection<PooledClient>),
     NativeSqlite(SqliteConnection),
+    NativeMongodb(MongodbConnection),
     Peer(PostgresConnection<UnpooledClient>),
     Internal(InternalConnection),
     Memory(MemoryConnection),
@@ -114,6 +124,7 @@ impl Connectors {
             TeradataJdbcConnector::TYPE => Connectors::TeradataJdbc,
             PostgresConnector::TYPE => Connectors::NativePostgres,
             SqliteConnector::TYPE => Connectors::NativeSqlite,
+            MongodbConnector::TYPE => Connectors::NativeMongodb,
             PeerConnector::TYPE => Connectors::Peer,
             InternalConnector::TYPE => Connectors::Internal,
             MemoryConnector::TYPE => Connectors::Memory,
@@ -128,6 +139,7 @@ impl Connectors {
             Connectors::TeradataJdbc => TeradataJdbcConnector::TYPE,
             Connectors::NativePostgres => PostgresConnector::TYPE,
             Connectors::NativeSqlite => SqliteConnector::TYPE,
+            Connectors::NativeMongodb => MongodbConnector::TYPE,
             Connectors::Peer => PeerConnector::TYPE,
             Connectors::Internal => InternalConnector::TYPE,
             Connectors::Memory => MemoryConnector::TYPE,
@@ -150,6 +162,9 @@ impl Connectors {
             }
             Connectors::NativeSqlite => {
                 ConnectionConfigs::NativeSqlite(SqliteConnector::parse_options(options)?)
+            }
+            Connectors::NativeMongodb => {
+                ConnectionConfigs::NativeMongodb(MongodbConnector::parse_options(options)?)
             }
             Connectors::Peer => ConnectionConfigs::Peer(PeerConnector::parse_options(options)?),
             Connectors::Internal => ConnectionConfigs::Internal,
@@ -178,6 +193,9 @@ impl Connectors {
             ),
             Connectors::NativeSqlite => EntitySourceConfigs::NativeSqlite(
                 SqliteConnector::parse_entity_source_options(options)?,
+            ),
+            Connectors::NativeMongodb => EntitySourceConfigs::NativeMongodb(
+                MongodbConnector::parse_entity_source_options(options)?,
             ),
             Connectors::Peer => {
                 EntitySourceConfigs::Peer(PeerConnector::parse_entity_source_options(options)?)
@@ -234,6 +252,14 @@ impl Connectors {
                 (
                     ConnectionPools::NativeSqlite(pool),
                     ConnectorEntityConfigs::NativeSqlite(entities),
+                )
+            }
+            (Connectors::NativeMongodb, ConnectionConfigs::NativeMongodb(options)) => {
+                let (pool, entities) =
+                    Self::create_pool::<MongodbConnector>(options, nc, data_source_id)?;
+                (
+                    ConnectionPools::NativeMongodb(pool),
+                    ConnectorEntityConfigs::NativeMongodb(entities),
                 )
             }
             (Connectors::Peer, ConnectionConfigs::Peer(options)) => {
@@ -300,6 +326,7 @@ impl ConnectionPools {
             ConnectionPools::Jdbc(p) => Connections::Jdbc(p.acquire(auth)?),
             ConnectionPools::NativePostgres(p) => Connections::NativePostgres(p.acquire(auth)?),
             ConnectionPools::NativeSqlite(p) => Connections::NativeSqlite(p.acquire(auth)?),
+            ConnectionPools::NativeMongodb(p) => Connections::NativeMongodb(p.acquire(auth)?),
             ConnectionPools::Peer(p) => Connections::Peer(p.acquire(auth)?),
             ConnectionPools::Internal(p) => Connections::Internal(p.acquire(auth)?),
             ConnectionPools::Memory(p) => Connections::Memory(p.acquire(auth)?),

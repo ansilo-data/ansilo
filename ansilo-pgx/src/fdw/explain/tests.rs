@@ -36,6 +36,7 @@ mod tests {
     };
     use ansilo_pg::fdw::server::FdwServer;
     use assert_json_diff::*;
+    use itertools::Itertools;
     use serde::{de::DeserializeOwned, Serialize};
     use serde_json::json;
 
@@ -57,7 +58,10 @@ mod tests {
         let pool = MemoryConnector::create_connection_pool(conf, &NodeConfig::default(), &entities)
             .unwrap();
 
-        (ConnectionPools::Memory(pool), ConnectorEntityConfigs::Memory(entities))
+        (
+            ConnectionPools::Memory(pool),
+            ConnectorEntityConfigs::Memory(entities),
+        )
     }
 
     fn setup_db(socket_path: impl Into<String>) {
@@ -103,8 +107,9 @@ mod tests {
                 .unwrap()
                 .keys()
                 .map(|i| i.as_str())
-                .collect::<Vec<&str>>(),
-            vec![
+                .sorted()
+                .collect_vec(),
+            [
                 "cols",
                 "from",
                 "group_bys",
@@ -115,6 +120,9 @@ mod tests {
                 "row_skip",
                 "where"
             ]
+            .into_iter()
+            .sorted()
+            .collect_vec()
         );
     }
 
@@ -130,8 +138,9 @@ mod tests {
                 .unwrap()
                 .keys()
                 .map(|i| i.as_str())
-                .collect::<Vec<&str>>(),
-            vec!["params", "query"]
+                .sorted()
+                .collect_vec(),
+            ["params", "query"].into_iter().sorted().collect_vec()
         );
     }
 }

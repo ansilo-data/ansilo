@@ -4,10 +4,12 @@ use ansilo_connectors_base::interface::{Connection, TransactionManager};
 use ansilo_core::err::{Context, Error, Result};
 use mongodb::sync::ClientSession;
 
-use crate::{MongodbPreparedQuery, MongodbQuery};
+use crate::{MongodbConnectionConfig, MongodbPreparedQuery, MongodbQuery};
 
 /// Connection to a mongodb database
 pub struct MongodbConnection {
+    /// The connection config
+    conf: MongodbConnectionConfig,
     /// The inner connection
     client: mongodb::sync::Client,
     /// The client session
@@ -17,8 +19,13 @@ pub struct MongodbConnection {
 }
 
 impl MongodbConnection {
-    pub fn new(client: mongodb::sync::Client, sess: ClientSession) -> Self {
+    pub fn new(
+        conf: MongodbConnectionConfig,
+        client: mongodb::sync::Client,
+        sess: ClientSession,
+    ) -> Self {
         Self {
+            conf,
             client,
             sess: Arc::new(Mutex::new(sess)),
             trans: false,
@@ -44,7 +51,11 @@ impl Connection for MongodbConnection {
     }
 
     fn transaction_manager(&mut self) -> Option<&mut Self::TTransactionManager> {
-        Some(self)
+        if self.conf.disable_transactions {
+            None
+        } else {
+            Some(self)
+        }
     }
 }
 

@@ -215,7 +215,7 @@ impl MongodbQueryPlanner {
         expr: sql::Expr,
         alias: String,
     ) -> Result<QueryOperationResult> {
-        if !Self::expr_supported(&expr) {
+        if expr.as_attribute().is_none() {
             return Ok(QueryOperationResult::Unsupported);
         }
 

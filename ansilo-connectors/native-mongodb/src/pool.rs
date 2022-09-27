@@ -31,6 +31,6 @@ impl ConnectionPool for MongodbConnectionUnpool {
 
         let sess = con.start_session(None).context("Failed to start sess")?;
 
-        Ok(MongodbConnection::new(con, sess))
+        Ok(MongodbConnection::new(self.conf.clone(), con, sess))
     }
 }

@@ -27,6 +27,8 @@ pub use query_planner::*;
 mod result_set;
 pub use result_set::*;
 
+pub use mongodb::bson;
+
 /// The connector for Mongodb built on rumongodb
 #[derive(Default)]
 pub struct MongodbConnector;

@@ -57,7 +57,7 @@ pub fn into_pg_type(r#type: &DataType) -> Result<pg_sys::Oid> {
         //
         DataType::Boolean => Ok(pg_sys::BOOLOID),
         //
-        DataType::JSON => Ok(pg_sys::JSONOID),
+        DataType::JSON => Ok(pg_sys::JSONBOID),
         //
         DataType::Date => Ok(pg_sys::DATEOID),
         DataType::Time => Ok(pg_sys::TIMEOID),
@@ -93,7 +93,7 @@ pub fn to_pg_type_name(r#type: &DataType) -> Result<String> {
         //
         DataType::Boolean => "BOOLEAN".into(),
         //
-        DataType::JSON => "JSON".into(),
+        DataType::JSON => "JSONB".into(),
         //
         DataType::Date => "DATE".into(),
         DataType::Time => "TIME".into(),

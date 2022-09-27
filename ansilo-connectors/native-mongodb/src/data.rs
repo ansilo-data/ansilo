@@ -9,13 +9,6 @@ pub fn doc_to_json(doc: Document) -> Result<serde_json::Value> {
     Ok(Bson::Document(doc).into_relaxed_extjson())
 }
 
-/// Converts the supplied extjson to mongodb bson
-// pub fn json_to_doc(json: serde_json::Value) -> Result<Document> {
-//     Bson::try_from(json.clone())
-//         .with_context(|| format!("Failed to convert json to bson: {:?}", json))?
-//         .in
-// }
-
 /// Converts a DataValue to a bson
 pub fn val_to_bson(val: DataValue) -> Result<Bson> {
     let res = match val {

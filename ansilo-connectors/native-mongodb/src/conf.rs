@@ -11,6 +11,9 @@ pub struct MongodbConnectionConfig {
     /// The connection string
     /// @see https://www.mongodb.com/docs/manual/reference/connection-string/
     pub url: String,
+    /// Disables transactions (which aren't supported in standalone deployments)
+    #[serde(default)]
+    pub disable_transactions: bool,
 }
 
 impl MongodbConnectionConfig {

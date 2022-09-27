@@ -313,7 +313,7 @@ OPTIONS (
             stmts,
             vec![format!(
                 r#"CREATE FOREIGN TABLE "tab" (
-    "json" JSON NOT NULL
+    "json" JSONB NOT NULL
 )
 SERVER "test_srv"
 OPTIONS (

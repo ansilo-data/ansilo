@@ -1,0 +1,24 @@
+[
+    {
+        "drop": "t003__test_col",
+        "ignore_error": true
+    },
+    {
+        "create": "t003__test_col"
+    },
+    {
+        "insert": "t003__test_col",
+        "documents": [
+            {
+                "_id": {
+                    "$oid": "63324fce9e5a26419f67a502"
+                },
+                "str": null,
+                "num": null,
+                "null": null,
+                "bool": null,
+                "bin": null
+            }
+        ]
+    }
+]

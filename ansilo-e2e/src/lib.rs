@@ -7,3 +7,4 @@ pub mod util;
 pub mod web;
 pub mod sqlite;
 pub mod teradata;
+pub mod mongodb;
