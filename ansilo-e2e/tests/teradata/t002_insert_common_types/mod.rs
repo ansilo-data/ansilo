@@ -102,7 +102,7 @@ fn test_values() {
             ("col_blob".to_string(), DataValue::Binary(b"BLOB".to_vec())),
             (
                 "col_json".to_string(),
-                DataValue::JSON("{\"foo\": \"bar\"}".into()),
+                DataValue::JSON("{\"foo\":\"bar\"}".into()),
             ),
             (
                 "col_jsonb".to_string(),
@@ -157,8 +157,8 @@ fn test_values() {
                         "LoggedParam [index=8, method=setLong, value=-9876543210]".into(),
                         "LoggedParam [index=9, method=setDouble, value=33.44]".into(),
                         "LoggedParam [index=10, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
-                        "LoggedParam [index=11, method=setString, value={\"foo\": \"bar\"}]".into(),
-                        "LoggedParam [index=12, method=setString, value={\"hello\": \"world\"}]".into(),
+                        "LoggedParam [index=11, method=setString, value={\"foo\":\"bar\"}]".into(),
+                        "LoggedParam [index=12, method=setString, value={\"hello\":\"world\"}]".into(),
                         "LoggedParam [index=13, method=setDate, value=2020-12-23]".into(),
                         "LoggedParam [index=14, method=setTime, value=01:02:03]".into(),
                         "LoggedParam [index=15, method=setTimestamp, value=2018-02-01 01:02:03.0]".into(),

@@ -201,7 +201,7 @@ fn test() {
                         "LoggedParam [index=15, method=setBinaryStream, value=java.io.ByteArrayInputStream]".into(),
                         "LoggedParam [index=16, method=setNString, value=CLOB]".into(),
                         "LoggedParam [index=17, method=setNString, value=🥑NCLOB]".into(),
-                        "LoggedParam [index=18, method=setNString, value={\"foo\": \"bar\"}]".into(),
+                        "LoggedParam [index=18, method=setNString, value={\"foo\":\"bar\"}]".into(),
                         "LoggedParam [index=19, method=setDate, value=2020-12-23]".into(),
                         "LoggedParam [index=20, method=setTimestamp, value=2018-02-01 01:02:03.0]".into(),
                         "LoggedParam [index=21, method=setTimestamp, value=1999-01-15 16:00:00.0]".into(),

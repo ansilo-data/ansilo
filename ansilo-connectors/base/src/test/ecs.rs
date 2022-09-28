@@ -109,7 +109,7 @@ fn start_containers_ecs(
     let tasks = Command::new("bash")
         .args(&[
             "-c",
-            "ecs-cli compose ps | grep -E '(PROVISIONING|PENDING|RUNNING)' | awk '{print $1 \" \" $3}'",
+            "ecs-cli compose ps | grep -E '(PROVISIONING|PENDING|RUNNING)' | awk '{print $1 \" \" $3}' | head -n1",
         ])
         .env("COMPOSE_PROJECT_NAME", project_name)
         .current_dir(infra_path.clone())

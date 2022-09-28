@@ -41,5 +41,22 @@ then
             --cluster dev-cluster \
             --task $TASK_ARN || true
     done
-    echo ""
 fi
+echo ""
+
+echo "----- Cleaning up task definitions gha-$GHA_RUN_ID -----"
+TASK_DEF_ARNS=$(aws ecs list-task-definitions \
+    --query "taskDefinitionArns[?contains(@, \`gha-$GHA_RUN_ID\`)]" \
+    --output text)
+echo "Task definitions from action: $TASK_DEF_ARNS"
+
+if [[ ! -z $TASK_DEF_ARNS ]];
+then
+    for TASK_DEF_ARN in $TASK_DEF_ARNS;
+    do
+        echo "Deregistering task def $TASK_DEF_ARN"
+        aws ecs deregister-task-definition  \
+            --task-definition $TASK_DEF_ARN || true
+    done
+fi
+echo ""
