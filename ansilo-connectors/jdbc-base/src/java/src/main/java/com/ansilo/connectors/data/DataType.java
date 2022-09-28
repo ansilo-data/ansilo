@@ -112,6 +112,9 @@ public interface DataType {
             case TYPE_JSON:
                 return new JsonDataType();
 
+            case TYPE_UUID:
+                return new UuidDataType();
+
             case TYPE_NULL:
                 return new NullDataType();
 

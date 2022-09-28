@@ -58,12 +58,12 @@ impl MssqlJdbcQueryCompiler {
                 "FROM {}",
                 Self::compile_entity_source(conf, &select.from, true)?
             ),
+            Self::compile_select_lock_clause(select.row_lock)?,
             Self::compile_select_joins(conf, query, &select.joins, &mut params)?,
             Self::compile_where(conf, query, &select.r#where, &mut params)?,
             Self::compile_select_group_by(conf, query, &select.group_bys, &mut params)?,
             Self::compile_order_by(conf, query, &select.order_bys, &mut params)?,
             Self::compile_offet_limit(&select.order_bys, select.row_skip, select.row_limit)?,
-            Self::compile_select_lock_clause(select.row_lock)?,
         ]
         .into_iter()
         .filter(|i| !i.is_empty())
@@ -370,7 +370,7 @@ impl MssqlJdbcQueryCompiler {
     fn compile_select_lock_clause(mode: sql::SelectRowLockMode) -> Result<String> {
         Ok(match mode {
             sql::SelectRowLockMode::None => "",
-            sql::SelectRowLockMode::ForUpdate => "FOR UPDATE",
+            sql::SelectRowLockMode::ForUpdate => "WITH (UPDLOCK)",
         }
         .into())
     }
@@ -1054,7 +1054,7 @@ mod tests {
         assert_eq!(
             compiled,
             JdbcQuery::new(
-                r#"SELECT SUM([entity].[col1]) AS [COL] FROM [db].[table] AS [entity] FOR UPDATE"#,
+                r#"SELECT SUM([entity].[col1]) AS [COL] FROM [db].[table] AS [entity] WITH (UPDLOCK)"#,
                 vec![]
             )
         );

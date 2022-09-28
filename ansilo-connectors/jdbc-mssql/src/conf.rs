@@ -14,6 +14,7 @@ use ansilo_connectors_jdbc_base::{JdbcConnectionConfig, JdbcConnectionPoolConfig
 pub struct MssqlJdbcConnectionConfig {
     pub jdbc_url: String,
     /// @see https://dev.mssql.com/doc/connector-j/8.0/en/connector-j-reference-configuration-properties.html
+    #[serde(default)]
     pub properties: HashMap<String, String>,
     pub pool: Option<JdbcConnectionPoolConfig>,
 }

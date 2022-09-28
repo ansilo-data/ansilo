@@ -12,6 +12,24 @@ public class MssqlJdbcDataMapping extends JdbcDataMapping {
     @Override
     public DataType getColumnDataType(ResultSet resultSet, int index) throws Exception {
         var colType = resultSet.getMetaData().getColumnType(index);
+        var typeName = resultSet.getMetaData().getColumnTypeName(index);
+
+        if (colType == microsoft.sql.Types.GUID || typeName.equalsIgnoreCase("uniqueidentifier")) {
+            return new UuidDataType();
+        }
+
+        if (colType == microsoft.sql.Types.DATETIME
+                || colType == microsoft.sql.Types.SMALLDATETIME) {
+            return new DateTimeDataType();
+        }
+
+        if (colType == microsoft.sql.Types.DATETIMEOFFSET) {
+            return new DateTimeWithTzDataType();
+        }
+
+        if (colType == Types.TINYINT) {
+            return new MssqlUInt8DataType();
+        }
 
         if (colType == Types.VARCHAR || colType == Types.CHAR) {
             return new MssqlStringDataType();

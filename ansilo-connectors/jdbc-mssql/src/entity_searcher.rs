@@ -181,6 +181,7 @@ pub(crate) fn from_mssql_type(col: &HashMap<String, DataValue>) -> Result<DataTy
         "TIME" => DataType::Time,
         "SMALLDATETIME" | "TIMESTAMP" | "DATETIME" | "DATETIME2" => DataType::DateTime,
         "DATETIMEOFFSET" => DataType::DateTimeWithTZ,
+        "UNIQUEIDENTIFIER" => DataType::Uuid,
         _ => {
             bail!("Encountered unknown data type '{data_type}'");
         }

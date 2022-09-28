@@ -1,0 +1,26 @@
+name: mssql
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+sources:
+  - id: mssql
+    type: jdbc.mssql
+    options:
+      jdbc_url: jdbc:sqlserver://${env:MSSQL_IP}:1435;database=testdb;user=ansilo_admin;password=Ansilo_testing!;loginTimeout=60;encrypt=false
+        
+build:
+  stages:
+    - sql: ${dir}/ansilo-sql/*.sql
+
+postgres:
+    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json
