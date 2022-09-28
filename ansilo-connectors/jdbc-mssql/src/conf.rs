@@ -9,24 +9,22 @@ use serde::{Deserialize, Serialize};
 use ansilo_connectors_base::common::entity::ConnectorEntityConfig;
 use ansilo_connectors_jdbc_base::{JdbcConnectionConfig, JdbcConnectionPoolConfig};
 
-/// The connection config for the Mysql JDBC driver
+/// The connection config for the Mssql JDBC driver
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MysqlJdbcConnectionConfig {
+pub struct MssqlJdbcConnectionConfig {
     pub jdbc_url: String,
-    /// @see https://dev.mysql.com/doc/connector-j/8.0/en/connector-j-reference-configuration-properties.html
+    /// @see https://dev.mssql.com/doc/connector-j/8.0/en/connector-j-reference-configuration-properties.html
     pub properties: HashMap<String, String>,
     pub pool: Option<JdbcConnectionPoolConfig>,
 }
 
-impl JdbcConnectionConfig for MysqlJdbcConnectionConfig {
+impl JdbcConnectionConfig for MssqlJdbcConnectionConfig {
     fn get_jdbc_url(&self) -> String {
         self.jdbc_url.clone()
     }
 
     fn get_jdbc_props(&self) -> HashMap<String, String> {
-        let mut props = self.properties.clone();
-        props.insert("characterEncoding".into(), "utf8".into());
-        props.insert("characterSetResults".into(), "utf8mb4".into());
+        let props = self.properties.clone();
 
         props
     }
@@ -36,11 +34,11 @@ impl JdbcConnectionConfig for MysqlJdbcConnectionConfig {
     }
 
     fn get_java_jdbc_data_mapping(&self) -> String {
-        "com.ansilo.connectors.mysql.mapping.MysqlJdbcDataMapping".into()
+        "com.ansilo.connectors.mssql.mapping.MssqlJdbcDataMapping".into()
     }
 }
 
-impl MysqlJdbcConnectionConfig {
+impl MssqlJdbcConnectionConfig {
     pub fn new(
         jdbc_url: String,
         properties: HashMap<String, String>,
@@ -59,14 +57,14 @@ impl MysqlJdbcConnectionConfig {
     }
 }
 
-/// Entity source config for Mysql JDBC driver
+/// Entity source config for Mssql JDBC driver
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum MysqlJdbcEntitySourceConfig {
-    Table(MysqlJdbcTableOptions),
+pub enum MssqlJdbcEntitySourceConfig {
+    Table(MssqlJdbcTableOptions),
 }
 
-impl MysqlJdbcEntitySourceConfig {
+impl MssqlJdbcEntitySourceConfig {
     pub fn parse(options: config::Value) -> Result<Self> {
         config::from_value::<Self>(options)
             .context("Failed to parse entity source configuration options")
@@ -75,30 +73,30 @@ impl MysqlJdbcEntitySourceConfig {
 
 /// Entity source configuration for mapping an entity to a table
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MysqlJdbcTableOptions {
-    /// The database name
-    pub database_name: Option<String>,
+pub struct MssqlJdbcTableOptions {
+    /// The schema name
+    pub schema_name: String,
     /// The table name
     pub table_name: String,
     /// Mapping of attributes to their respective column names
     pub attribute_column_map: HashMap<String, String>,
 }
 
-impl MysqlJdbcTableOptions {
+impl MssqlJdbcTableOptions {
     pub fn new(
-        database_name: Option<String>,
+        schema_name: String,
         table_name: String,
         attribute_column_map: HashMap<String, String>,
     ) -> Self {
         Self {
-            database_name,
+            schema_name,
             table_name,
             attribute_column_map,
         }
     }
 }
 
-pub type MysqlJdbcConnectorEntityConfig = ConnectorEntityConfig<MysqlJdbcEntitySourceConfig>;
+pub type MssqlJdbcConnectorEntityConfig = ConnectorEntityConfig<MssqlJdbcEntitySourceConfig>;
 
 #[cfg(test)]
 mod tests {
@@ -115,11 +113,11 @@ properties:
         )
         .unwrap();
 
-        let parsed = MysqlJdbcConnectionConfig::parse(conf).unwrap();
+        let parsed = MssqlJdbcConnectionConfig::parse(conf).unwrap();
 
         assert_eq!(
             parsed,
-            MysqlJdbcConnectionConfig {
+            MssqlJdbcConnectionConfig {
                 jdbc_url: "JDBC_URL".to_string(),
                 properties: {
                     let mut map = HashMap::new();
@@ -132,11 +130,11 @@ properties:
     }
 
     #[test]
-    fn test_mysql_jdbc_parse_entity_table_options() {
+    fn test_mssql_jdbc_parse_entity_table_options() {
         let conf = config::parse_config(
             r#"
 type: "Table"
-database_name: "db"
+schema_name: "db"
 table_name: "table"
 attribute_column_map:
   a: b
@@ -145,12 +143,12 @@ attribute_column_map:
         )
         .unwrap();
 
-        let parsed = MysqlJdbcEntitySourceConfig::parse(conf).unwrap();
+        let parsed = MssqlJdbcEntitySourceConfig::parse(conf).unwrap();
 
         assert_eq!(
             parsed,
-            MysqlJdbcEntitySourceConfig::Table(MysqlJdbcTableOptions {
-                database_name: Some("db".to_string()),
+            MssqlJdbcEntitySourceConfig::Table(MssqlJdbcTableOptions {
+                schema_name: "db".to_string(),
                 table_name: "table".to_string(),
                 attribute_column_map: [
                     ("a".to_string(), "b".to_string()),

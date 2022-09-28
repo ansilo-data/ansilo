@@ -1,0 +1,18 @@
+version: 1
+task_definition:
+  ecs_network_mode: awsvpc
+  task_execution_role: arn:aws:iam::635198228996:role/ECSTaskExecutionRoleForPullingECR
+  task_size:
+    cpu_limit: 1024
+    mem_limit: 2GB
+  services:
+    mssql:
+      essential: true
+run_params:
+  network_configuration:
+    awsvpc_configuration:
+      subnets:
+        - subnet-044878cdd1f4b0d3d
+      security_groups:
+        - sg-080dc71fb99e4fcb5 # allow local vpc access
+      assign_public_ip: ENABLED # needed for pulling image from ECR

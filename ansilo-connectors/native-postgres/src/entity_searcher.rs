@@ -215,7 +215,6 @@ pub(crate) fn from_postgres_type(col: &Row) -> Result<DataType> {
         "TIMESTAMP" | "TIMESTAMP WITHOUT TIME ZONE" => DataType::DateTime,
         "TIMESTAMP WITH TIME ZONE" => DataType::DateTimeWithTZ,
         "UUID" => DataType::Uuid,
-        // Default unknown data types to json
         _ => {
             bail!("Encountered unsupported data type '{data_type}'");
         }

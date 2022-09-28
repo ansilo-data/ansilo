@@ -173,6 +173,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ansilo-connectors-jdbc-mssql"
+version = "0.1.0"
+dependencies = [
+ "ansilo-connectors-base",
+ "ansilo-connectors-jdbc-base",
+ "ansilo-core",
+ "ansilo-logging",
+ "itertools",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "serial_test",
+]
+
+[[package]]
 name = "ansilo-connectors-jdbc-mysql"
 version = "0.1.0"
 dependencies = [

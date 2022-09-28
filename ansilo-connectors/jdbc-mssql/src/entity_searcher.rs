@@ -14,25 +14,25 @@ use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 use ansilo_logging::warn;
 use itertools::Itertools;
 
-use crate::MysqlJdbcTableOptions;
+use crate::MssqlJdbcTableOptions;
 
-use super::MysqlJdbcEntitySourceConfig;
+use super::MssqlJdbcEntitySourceConfig;
 
-/// The entity searcher for Mysql JDBC
-pub struct MysqlJdbcEntitySearcher {}
+/// The entity searcher for Mssql JDBC
+pub struct MssqlJdbcEntitySearcher {}
 
-impl EntitySearcher for MysqlJdbcEntitySearcher {
+impl EntitySearcher for MssqlJdbcEntitySearcher {
     type TConnection = JdbcConnection;
-    type TEntitySourceConfig = MysqlJdbcEntitySourceConfig;
+    type TEntitySourceConfig = MssqlJdbcEntitySourceConfig;
 
     fn discover(
         connection: &mut Self::TConnection,
         _nc: &NodeConfig,
         opts: EntityDiscoverOptions,
     ) -> Result<Vec<EntityConfig>> {
-        // Query mysql's information schema tables to retrieve all column definitions
+        // Query mssql's information schema tables to retrieve all column definitions
         // Importantly we order the results by table and then by column position
-        // when lets us efficiently group the result by table using `group_by` below.
+        // when lets us efficiently group the result by table using [group_by] below.
         // Additionally, we the results to be deterministic and return the columns
         // the user-defined order on the oracle side.
         let cols = connection
@@ -42,14 +42,20 @@ impl EntitySearcher for MysqlJdbcEntitySearcher {
                     T.TABLE_SCHEMA,
                     T.TABLE_NAME,
                     C.COLUMN_NAME,
-                    C.COLUMN_KEY,
                     C.DATA_TYPE,
-                    C.COLUMN_TYPE,
                     C.IS_NULLABLE,
                     C.CHARACTER_MAXIMUM_LENGTH,
                     C.NUMERIC_PRECISION,
                     C.NUMERIC_SCALE,
-                    C.ORDINAL_POSITION
+                    C.ORDINAL_POSITION,
+                    (
+                        SELECT COUNT(1)
+                        FROM INFORMATION_SCHEMA.CONSTRAINT_COLUMN_USAGE U
+                        INNER JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS S ON U.CONSTRAINT_NAME = S.CONSTRAINT_NAME AND U.TABLE_NAME = S.TABLE_NAME
+                        WHERE S.CONSTRAINT_TYPE = 'Primary Key'
+                        AND S.TABLE_NAME = T.TABLE_NAME
+                        AND U.COLUMN_NAME = C.COLUMN_NAME
+                    ) AS COLUMN_PK
                 FROM INFORMATION_SCHEMA.TABLES T
                 INNER JOIN INFORMATION_SCHEMA.COLUMNS C ON T.TABLE_SCHEMA = C.TABLE_SCHEMA AND T.TABLE_NAME = C.TABLE_NAME
                 WHERE 1=1
@@ -76,13 +82,13 @@ impl EntitySearcher for MysqlJdbcEntitySearcher {
 
         let entities = tables
             .into_iter()
-            .filter_map(|((db, table), cols)| {
-                match parse_entity_config(&db, &table, cols.into_iter()) {
+            .filter_map(|((schema, table), cols)| {
+                match parse_entity_config(&schema, &table, cols.into_iter()) {
                     Ok(conf) => Some(conf),
                     Err(err) => {
                         warn!(
                             "Failed to import schema for table \"{}.{}\": {:?}",
-                            db, table, err
+                            schema, table, err
                         );
                         None
                     }
@@ -95,7 +101,7 @@ impl EntitySearcher for MysqlJdbcEntitySearcher {
 }
 
 pub(crate) fn parse_entity_config(
-    db: &String,
+    schema: &String,
     table: &String,
     cols: impl Iterator<Item = HashMap<String, DataValue>>,
 ) -> Result<EntityConfig> {
@@ -111,8 +117,8 @@ pub(crate) fn parse_entity_config(
                 .ok()
         })
         .collect(),
-        EntitySourceConfig::from(MysqlJdbcEntitySourceConfig::Table(
-            MysqlJdbcTableOptions::new(Some(db.clone()), table.clone(), HashMap::new()),
+        EntitySourceConfig::from(MssqlJdbcEntitySourceConfig::Table(
+            MssqlJdbcTableOptions::new(schema.clone(), table.clone(), HashMap::new()),
         ))?,
     ))
 }
@@ -121,30 +127,30 @@ pub(crate) fn parse_column(
     name: &str,
     c: &HashMap<String, DataValue>,
 ) -> Result<EntityAttributeConfig> {
-    let data_type = from_mysql_type(&c)?;
+    let data_type = from_mssql_type(&c)?;
 
     Ok(EntityAttributeConfig::new(
         name.to_string(),
         None,
         data_type,
-        c["COLUMN_KEY"].as_utf8_string().context("COLUMN_KEY")? == "PRI",
+        *c["COLUMN_PK"].as_int32().context("COLUMN_PK")? > 0,
         c["IS_NULLABLE"].as_utf8_string().context("IS_NULLABLE")? == "YES",
     ))
 }
 
-pub(crate) fn from_mysql_type(col: &HashMap<String, DataValue>) -> Result<DataType> {
+pub(crate) fn from_mssql_type(col: &HashMap<String, DataValue>) -> Result<DataType> {
     let data_type = &col["DATA_TYPE"]
         .as_utf8_string()
         .context("DATA_TYPE")?
         .to_uppercase();
-    let col_type = &col["COLUMN_TYPE"]
-        .as_utf8_string()
-        .context("COLUMN_TYPE")?
-        .to_uppercase();
+    let precision = col["NUMERIC_PRECISION"]
+        .clone()
+        .try_coerce_into(&DataType::UInt16)
+        .ok()
+        .and_then(|i| i.as_u_int16().cloned());
 
     Ok(match data_type.as_str() {
-        "CHAR" | "NCHAR" | "VARCHAR" | "NVARCHAR" | "TINYTEXT" | "TEXT" | "MEDIUMTEXT"
-        | "LONGTEXT" => {
+        "CHAR" | "NCHAR" | "VARCHAR" | "NVARCHAR" | "TEXT" | "NTEXT" => {
             let length = col["CHARACTER_MAXIMUM_LENGTH"]
                 .clone()
                 .try_coerce_into(&DataType::UInt32)
@@ -154,21 +160,12 @@ pub(crate) fn from_mysql_type(col: &HashMap<String, DataValue>) -> Result<DataTy
 
             DataType::Utf8String(StringOptions::new(length))
         }
-        "BIT" if col_type == "BIT(1)" => DataType::Boolean,
-        "TINYINT" if col_type.contains("UNSIGNED") => DataType::UInt8,
-        "SMALLINT" if col_type.contains("UNSIGNED") => DataType::UInt16,
-        "INT" if col_type.contains("UNSIGNED") => DataType::UInt32,
-        "BIGINT" if col_type.contains("UNSIGNED") => DataType::UInt64,
-        "TINYINT" => DataType::Int8,
+        "BIT" => DataType::Boolean,
+        "TINYINT" => DataType::UInt8,
         "SMALLINT" => DataType::Int16,
         "INT" => DataType::Int32,
         "BIGINT" => DataType::Int64,
-        "DECIMAL" => {
-            let precision = col["NUMERIC_PRECISION"]
-                .clone()
-                .try_coerce_into(&DataType::UInt16)
-                .ok()
-                .and_then(|i| i.as_u_int16().cloned());
+        "DECIMAL" | "NUMERIC" => {
             let scale = col["NUMERIC_SCALE"]
                 .clone()
                 .try_coerce_into(&DataType::UInt16)
@@ -177,22 +174,15 @@ pub(crate) fn from_mysql_type(col: &HashMap<String, DataValue>) -> Result<DataTy
 
             DataType::Decimal(DecimalOptions::new(precision, scale))
         }
-
-        "FLOAT" => DataType::Float32,
-        "DOUBLE" => DataType::Float64,
-        "BINARY" | "VARBINARY" | "BIT" | "TINYBLOB" | "MEDIUMBLOB" | "BLOB" | "LONGBLOB" => {
-            DataType::Binary
-        }
-        "JSON" => DataType::JSON,
-        // Just map ENUM/SET to strings
-        "ENUM" | "SET" => DataType::Utf8String(StringOptions::default()),
+        "FLOAT" | "REAL" if precision.is_some() && precision.unwrap() <= 24 => DataType::Float32,
+        "FLOAT" | "REAL" => DataType::Float64,
+        "BINARY" | "VARBINARY" => DataType::Binary,
         "DATE" => DataType::Date,
         "TIME" => DataType::Time,
-        "DATETIME" => DataType::DateTime,
-        "TIMESTAMP" => DataType::DateTimeWithTZ,
-        "YEAR" => DataType::UInt16,
+        "SMALLDATETIME" | "TIMESTAMP" | "DATETIME" | "DATETIME2" => DataType::DateTime,
+        "DATETIMEOFFSET" => DataType::DateTimeWithTZ,
         _ => {
-            bail!("Encountered unknown data type '{col_type}'");
+            bail!("Encountered unknown data type '{data_type}'");
         }
     })
 }

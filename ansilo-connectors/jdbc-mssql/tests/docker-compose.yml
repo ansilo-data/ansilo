@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  mssql:
+    image: 635198228996.dkr.ecr.ap-southeast-2.amazonaws.com/mssql:2022
+    ports:
+      - "1435:1435"
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/ansilo-connectors
+        awslogs-region: ap-southeast-2
+        awslogs-stream-prefix: jdbc-mssql
