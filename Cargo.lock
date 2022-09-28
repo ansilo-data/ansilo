@@ -111,6 +111,7 @@ dependencies = [
  "ansilo-connectors-base",
  "ansilo-connectors-internal",
  "ansilo-connectors-jdbc-base",
+ "ansilo-connectors-jdbc-mssql",
  "ansilo-connectors-jdbc-mysql",
  "ansilo-connectors-jdbc-oracle",
  "ansilo-connectors-jdbc-teradata",

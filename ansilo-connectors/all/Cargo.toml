@@ -14,6 +14,7 @@ ansilo-connectors-jdbc-base = { path = "../jdbc-base" }
 ansilo-connectors-jdbc-oracle = { path = "../jdbc-oracle" }
 ansilo-connectors-jdbc-mysql = { path = "../jdbc-mysql" }
 ansilo-connectors-jdbc-teradata = { path = "../jdbc-teradata" }
+ansilo-connectors-jdbc-mssql = { path = "../jdbc-mssql" }
 ansilo-connectors-native-postgres = { path = "../native-postgres" }
 ansilo-connectors-native-sqlite = { path = "../native-sqlite" }
 ansilo-connectors-native-mongodb = { path = "../native-mongodb" }

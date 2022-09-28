@@ -208,6 +208,9 @@ impl FdwListener {
                 (ConnectionPools::Jdbc(pool), RwLockEntityConfigs::TeradataJdbc(entities)) => {
                     Self::process::<TeradataJdbcConnector>(auth, nc, chan, pool, entities, log)
                 }
+                (ConnectionPools::Jdbc(pool), RwLockEntityConfigs::MssqlJdbc(entities)) => {
+                    Self::process::<MssqlJdbcConnector>(auth, nc, chan, pool, entities, log)
+                }
                 (
                     ConnectionPools::NativePostgres(pool),
                     RwLockEntityConfigs::NativePostgres(entities),
@@ -310,6 +313,9 @@ pub enum RwLockEntityConfigs {
     TeradataJdbc(
         RwLock<ConnectorEntityConfig<<TeradataJdbcConnector as Connector>::TEntitySourceConfig>>,
     ),
+    MssqlJdbc(
+        RwLock<ConnectorEntityConfig<<MssqlJdbcConnector as Connector>::TEntitySourceConfig>>,
+    ),
     NativePostgres(
         RwLock<ConnectorEntityConfig<<PostgresConnector as Connector>::TEntitySourceConfig>>,
     ),
@@ -330,6 +336,7 @@ impl From<ConnectorEntityConfigs> for RwLockEntityConfigs {
             ConnectorEntityConfigs::OracleJdbc(e) => Self::OracleJdbc(RwLock::new(e)),
             ConnectorEntityConfigs::MysqlJdbc(e) => Self::MysqlJdbc(RwLock::new(e)),
             ConnectorEntityConfigs::TeradataJdbc(e) => Self::TeradataJdbc(RwLock::new(e)),
+            ConnectorEntityConfigs::MssqlJdbc(e) => Self::MssqlJdbc(RwLock::new(e)),
             ConnectorEntityConfigs::NativePostgres(e) => Self::NativePostgres(RwLock::new(e)),
             ConnectorEntityConfigs::NativeSqlite(e) => Self::NativeSqlite(RwLock::new(e)),
             ConnectorEntityConfigs::NativeMongodb(e) => Self::NativeMongodb(RwLock::new(e)),

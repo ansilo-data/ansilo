@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use ansilo_connectors_jdbc_mssql::{MssqlJdbcConnectionConfig, MssqlJdbcEntitySourceConfig};
 use ansilo_connectors_jdbc_mysql::{MysqlJdbcConnectionConfig, MysqlJdbcEntitySourceConfig};
 use ansilo_connectors_jdbc_teradata::{
     TeradataJdbcConnectionConfig, TeradataJdbcEntitySourceConfig,
@@ -16,7 +17,6 @@ use ansilo_connectors_native_sqlite::{
 };
 use ansilo_connectors_peer::{conf::PeerConfig, pool::PeerConnectionUnpool};
 use ansilo_core::{
-    auth::AuthContext,
     config::{self, NodeConfig},
     err::{bail, Context, Result},
 };
@@ -31,9 +31,10 @@ use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcConnectionPool};
 
 use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcEntitySourceConfig};
 
-use ansilo_connectors_base::interface::{ConnectionPool, Connector};
+use ansilo_connectors_base::interface::Connector;
 
 pub use ansilo_connectors_internal::{InternalConnection, InternalConnector};
+pub use ansilo_connectors_jdbc_mssql::MssqlJdbcConnector;
 pub use ansilo_connectors_jdbc_mysql::MysqlJdbcConnector;
 pub use ansilo_connectors_jdbc_oracle::OracleJdbcConnector;
 pub use ansilo_connectors_jdbc_teradata::TeradataJdbcConnector;
@@ -48,6 +49,7 @@ pub enum Connectors {
     OracleJdbc,
     MysqlJdbc,
     TeradataJdbc,
+    MssqlJdbc,
     NativePostgres,
     NativeSqlite,
     NativeMongodb,
@@ -61,6 +63,7 @@ pub enum ConnectionConfigs {
     OracleJdbc(OracleJdbcConnectionConfig),
     MysqlJdbc(MysqlJdbcConnectionConfig),
     TeradataJdbc(TeradataJdbcConnectionConfig),
+    MssqlJdbc(MssqlJdbcConnectionConfig),
     NativePostgres(PostgresConnectionConfig),
     NativeSqlite(SqliteConnectionConfig),
     NativeMongodb(MongodbConnectionConfig),
@@ -74,12 +77,27 @@ pub enum EntitySourceConfigs {
     OracleJdbc(OracleJdbcEntitySourceConfig),
     MysqlJdbc(MysqlJdbcEntitySourceConfig),
     TeradataJdbc(TeradataJdbcEntitySourceConfig),
+    MssqlJdbc(MssqlJdbcEntitySourceConfig),
     NativePostgres(PostgresEntitySourceConfig),
     NativeSqlite(SqliteEntitySourceConfig),
     NativeMongodb(MongodbEntitySourceConfig),
     Peer(PostgresEntitySourceConfig),
     Internal,
     Memory(MemoryConnectorEntitySourceConfig),
+}
+
+#[derive(Clone)]
+pub enum ConnectorEntityConfigs {
+    OracleJdbc(ConnectorEntityConfig<OracleJdbcEntitySourceConfig>),
+    MysqlJdbc(ConnectorEntityConfig<MysqlJdbcEntitySourceConfig>),
+    TeradataJdbc(ConnectorEntityConfig<TeradataJdbcEntitySourceConfig>),
+    MssqlJdbc(ConnectorEntityConfig<MssqlJdbcEntitySourceConfig>),
+    NativePostgres(ConnectorEntityConfig<PostgresEntitySourceConfig>),
+    NativeSqlite(ConnectorEntityConfig<SqliteEntitySourceConfig>),
+    NativeMongodb(ConnectorEntityConfig<MongodbEntitySourceConfig>),
+    Peer(ConnectorEntityConfig<PostgresEntitySourceConfig>),
+    Internal,
+    Memory(ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>),
 }
 
 #[derive(Clone)]
@@ -91,19 +109,6 @@ pub enum ConnectionPools {
     Peer(PeerConnectionUnpool),
     Internal(InternalConnection),
     Memory(MemoryConnectionPool),
-}
-
-#[derive(Clone)]
-pub enum ConnectorEntityConfigs {
-    OracleJdbc(ConnectorEntityConfig<OracleJdbcEntitySourceConfig>),
-    MysqlJdbc(ConnectorEntityConfig<MysqlJdbcEntitySourceConfig>),
-    TeradataJdbc(ConnectorEntityConfig<TeradataJdbcEntitySourceConfig>),
-    NativePostgres(ConnectorEntityConfig<PostgresEntitySourceConfig>),
-    NativeSqlite(ConnectorEntityConfig<SqliteEntitySourceConfig>),
-    NativeMongodb(ConnectorEntityConfig<MongodbEntitySourceConfig>),
-    Peer(ConnectorEntityConfig<PostgresEntitySourceConfig>),
-    Internal,
-    Memory(ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>),
 }
 
 pub enum Connections {
@@ -122,6 +127,7 @@ impl Connectors {
             OracleJdbcConnector::TYPE => Connectors::OracleJdbc,
             MysqlJdbcConnector::TYPE => Connectors::MysqlJdbc,
             TeradataJdbcConnector::TYPE => Connectors::TeradataJdbc,
+            MssqlJdbcConnector::TYPE => Connectors::MssqlJdbc,
             PostgresConnector::TYPE => Connectors::NativePostgres,
             SqliteConnector::TYPE => Connectors::NativeSqlite,
             MongodbConnector::TYPE => Connectors::NativeMongodb,
@@ -137,6 +143,7 @@ impl Connectors {
             Connectors::OracleJdbc => OracleJdbcConnector::TYPE,
             Connectors::MysqlJdbc => MysqlJdbcConnector::TYPE,
             Connectors::TeradataJdbc => TeradataJdbcConnector::TYPE,
+            Connectors::MssqlJdbc => MssqlJdbcConnector::TYPE,
             Connectors::NativePostgres => PostgresConnector::TYPE,
             Connectors::NativeSqlite => SqliteConnector::TYPE,
             Connectors::NativeMongodb => MongodbConnector::TYPE,
@@ -156,6 +163,9 @@ impl Connectors {
             }
             Connectors::TeradataJdbc => {
                 ConnectionConfigs::TeradataJdbc(TeradataJdbcConnector::parse_options(options)?)
+            }
+            Connectors::MssqlJdbc => {
+                ConnectionConfigs::MssqlJdbc(MssqlJdbcConnector::parse_options(options)?)
             }
             Connectors::NativePostgres => {
                 ConnectionConfigs::NativePostgres(PostgresConnector::parse_options(options)?)
@@ -187,6 +197,9 @@ impl Connectors {
             ),
             Connectors::TeradataJdbc => EntitySourceConfigs::TeradataJdbc(
                 TeradataJdbcConnector::parse_entity_source_options(options)?,
+            ),
+            Connectors::MssqlJdbc => EntitySourceConfigs::MssqlJdbc(
+                MssqlJdbcConnector::parse_entity_source_options(options)?,
             ),
             Connectors::NativePostgres => EntitySourceConfigs::NativePostgres(
                 PostgresConnector::parse_entity_source_options(options)?,
@@ -236,6 +249,14 @@ impl Connectors {
                 (
                     ConnectionPools::Jdbc(pool),
                     ConnectorEntityConfigs::TeradataJdbc(entities),
+                )
+            }
+            (Connectors::MssqlJdbc, ConnectionConfigs::MssqlJdbc(options)) => {
+                let (pool, entities) =
+                    Self::create_pool::<MssqlJdbcConnector>(options, nc, data_source_id)?;
+                (
+                    ConnectionPools::Jdbc(pool),
+                    ConnectorEntityConfigs::MssqlJdbc(entities),
                 )
             }
             (Connectors::NativePostgres, ConnectionConfigs::NativePostgres(options)) => {
@@ -317,19 +338,5 @@ impl FromStr for Connectors {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Connectors::from_type(s).with_context(|| format!("Unknown connector type: {}", s))
-    }
-}
-
-impl ConnectionPools {
-    pub fn acquire(&mut self, auth: Option<&AuthContext>) -> Result<Connections> {
-        Ok(match self {
-            ConnectionPools::Jdbc(p) => Connections::Jdbc(p.acquire(auth)?),
-            ConnectionPools::NativePostgres(p) => Connections::NativePostgres(p.acquire(auth)?),
-            ConnectionPools::NativeSqlite(p) => Connections::NativeSqlite(p.acquire(auth)?),
-            ConnectionPools::NativeMongodb(p) => Connections::NativeMongodb(p.acquire(auth)?),
-            ConnectionPools::Peer(p) => Connections::Peer(p.acquire(auth)?),
-            ConnectionPools::Internal(p) => Connections::Internal(p.acquire(auth)?),
-            ConnectionPools::Memory(p) => Connections::Memory(p.acquire(auth)?),
-        })
     }
 }
