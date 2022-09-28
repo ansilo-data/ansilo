@@ -14,13 +14,16 @@ impl EntityValidator for ArvoEntityValidator {
     type TEntitySourceConfig = ArvoFile;
 
     fn validate(
-        _con: &mut ArvoConnection,
+        con: &mut ArvoConnection,
         entity: &EntityConfig,
         _nc: &NodeConfig,
     ) -> Result<EntitySource<ArvoFile>> {
         Ok(EntitySource::new(
             entity.clone(),
-            ArvoFile::parse(entity.source.options.clone())?,
+            ArvoFile::new(
+                con.conf().path().join(entity.id).with_extension(".arvo"),
+                None,
+            ),
         ))
     }
 }
