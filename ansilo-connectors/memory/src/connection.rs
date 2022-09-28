@@ -12,7 +12,7 @@ use ansilo_connectors_base::{
 
 use super::{MemoryConnectorEntitySourceConfig, MemoryDatabase, MemoryQuery, MemoryQueryHandle};
 
-/// Implementation for opening JDBC connections
+/// Implementation for connections to the in-memory db
 #[derive(Clone)]
 pub struct MemoryConnectionPool {
     conf: Arc<MemoryDatabase>,

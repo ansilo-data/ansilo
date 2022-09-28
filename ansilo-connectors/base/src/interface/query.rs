@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ansilo_core::{data::DataType, err::Result};
+use ansilo_core::{data::DataType, err::Result, sqlil};
 use bincode::{Decode, Encode};
 
 use super::ResultSet;
@@ -42,6 +42,12 @@ pub struct QueryInputStructure {
 impl QueryInputStructure {
     pub fn new(params: Vec<(u32, DataType)>) -> Self {
         Self { params }
+    }
+
+    pub fn params(params: Vec<sqlil::Parameter>) -> Self {
+        Self {
+            params: params.into_iter().map(|i| (i.id, i.r#type)).collect(),
+        }
     }
 
     pub fn types(&self) -> Vec<DataType> {
