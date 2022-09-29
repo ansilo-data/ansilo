@@ -223,6 +223,9 @@ impl FdwListener {
                     ConnectionPools::NativeMongodb(pool),
                     RwLockEntityConfigs::NativeMongodb(entities),
                 ) => Self::process::<MongodbConnector>(auth, nc, chan, pool, entities, log),
+                (ConnectionPools::FileAvro(pool), RwLockEntityConfigs::File(entities)) => {
+                    Self::process::<AvroConnector>(auth, nc, chan, pool, entities, log)
+                }
                 (ConnectionPools::Peer(pool), RwLockEntityConfigs::Peer(entities)) => {
                     Self::process::<PeerConnector>(auth, nc, chan, pool, entities, log)
                 }
@@ -325,6 +328,7 @@ pub enum RwLockEntityConfigs {
     NativeMongodb(
         RwLock<ConnectorEntityConfig<<MongodbConnector as Connector>::TEntitySourceConfig>>,
     ),
+    File(RwLock<ConnectorEntityConfig<FileSourceConfig>>),
     Peer(RwLock<ConnectorEntityConfig<<PeerConnector as Connector>::TEntitySourceConfig>>),
     Internal(RwLock<ConnectorEntityConfig<<InternalConnector as Connector>::TEntitySourceConfig>>),
     Memory(RwLock<ConnectorEntityConfig<<MemoryConnector as Connector>::TEntitySourceConfig>>),
@@ -340,6 +344,7 @@ impl From<ConnectorEntityConfigs> for RwLockEntityConfigs {
             ConnectorEntityConfigs::NativePostgres(e) => Self::NativePostgres(RwLock::new(e)),
             ConnectorEntityConfigs::NativeSqlite(e) => Self::NativeSqlite(RwLock::new(e)),
             ConnectorEntityConfigs::NativeMongodb(e) => Self::NativeMongodb(RwLock::new(e)),
+            ConnectorEntityConfigs::File(e) => Self::File(RwLock::new(e)),
             ConnectorEntityConfigs::Peer(e) => Self::Peer(RwLock::new(e)),
             ConnectorEntityConfigs::Internal => {
                 Self::Internal(RwLock::new(ConnectorEntityConfig::new()))

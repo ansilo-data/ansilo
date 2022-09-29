@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use ansilo_connectors_file_avro::{AvroConfig, AvroIO};
+use ansilo_connectors_file_base::{FileConnection, FileConnectionUnpool};
 use ansilo_connectors_jdbc_mssql::{MssqlJdbcConnectionConfig, MssqlJdbcEntitySourceConfig};
 use ansilo_connectors_jdbc_mysql::{MysqlJdbcConnectionConfig, MysqlJdbcEntitySourceConfig};
 use ansilo_connectors_jdbc_teradata::{
@@ -33,6 +35,8 @@ use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcEntity
 
 use ansilo_connectors_base::interface::Connector;
 
+pub use ansilo_connectors_file_avro::AvroConnector;
+pub use ansilo_connectors_file_base::FileSourceConfig;
 pub use ansilo_connectors_internal::{InternalConnection, InternalConnector};
 pub use ansilo_connectors_jdbc_mssql::MssqlJdbcConnector;
 pub use ansilo_connectors_jdbc_mysql::MysqlJdbcConnector;
@@ -53,6 +57,7 @@ pub enum Connectors {
     NativePostgres,
     NativeSqlite,
     NativeMongodb,
+    FileAvro,
     Peer,
     Internal,
     Memory,
@@ -67,6 +72,7 @@ pub enum ConnectionConfigs {
     NativePostgres(PostgresConnectionConfig),
     NativeSqlite(SqliteConnectionConfig),
     NativeMongodb(MongodbConnectionConfig),
+    FileAvro(AvroConfig),
     Peer(PeerConfig),
     Internal,
     Memory(MemoryDatabase),
@@ -81,6 +87,7 @@ pub enum EntitySourceConfigs {
     NativePostgres(PostgresEntitySourceConfig),
     NativeSqlite(SqliteEntitySourceConfig),
     NativeMongodb(MongodbEntitySourceConfig),
+    File(FileSourceConfig),
     Peer(PostgresEntitySourceConfig),
     Internal,
     Memory(MemoryConnectorEntitySourceConfig),
@@ -95,6 +102,7 @@ pub enum ConnectorEntityConfigs {
     NativePostgres(ConnectorEntityConfig<PostgresEntitySourceConfig>),
     NativeSqlite(ConnectorEntityConfig<SqliteEntitySourceConfig>),
     NativeMongodb(ConnectorEntityConfig<MongodbEntitySourceConfig>),
+    File(ConnectorEntityConfig<FileSourceConfig>),
     Peer(ConnectorEntityConfig<PostgresEntitySourceConfig>),
     Internal,
     Memory(ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>),
@@ -106,6 +114,7 @@ pub enum ConnectionPools {
     NativePostgres(PostgresConnectionPool),
     NativeSqlite(SqliteConnectionUnpool),
     NativeMongodb(MongodbConnectionUnpool),
+    FileAvro(FileConnectionUnpool<AvroIO>),
     Peer(PeerConnectionUnpool),
     Internal(InternalConnection),
     Memory(MemoryConnectionPool),
@@ -116,6 +125,7 @@ pub enum Connections {
     NativePostgres(PostgresConnection<PooledClient>),
     NativeSqlite(SqliteConnection),
     NativeMongodb(MongodbConnection),
+    FileAvro(FileConnection<AvroIO>),
     Peer(PostgresConnection<UnpooledClient>),
     Internal(InternalConnection),
     Memory(MemoryConnection),
@@ -131,6 +141,7 @@ impl Connectors {
             PostgresConnector::TYPE => Connectors::NativePostgres,
             SqliteConnector::TYPE => Connectors::NativeSqlite,
             MongodbConnector::TYPE => Connectors::NativeMongodb,
+            AvroConnector::TYPE => Connectors::FileAvro,
             PeerConnector::TYPE => Connectors::Peer,
             InternalConnector::TYPE => Connectors::Internal,
             MemoryConnector::TYPE => Connectors::Memory,
@@ -147,6 +158,7 @@ impl Connectors {
             Connectors::NativePostgres => PostgresConnector::TYPE,
             Connectors::NativeSqlite => SqliteConnector::TYPE,
             Connectors::NativeMongodb => MongodbConnector::TYPE,
+            Connectors::FileAvro => AvroConnector::TYPE,
             Connectors::Peer => PeerConnector::TYPE,
             Connectors::Internal => InternalConnector::TYPE,
             Connectors::Memory => MemoryConnector::TYPE,
@@ -175,6 +187,9 @@ impl Connectors {
             }
             Connectors::NativeMongodb => {
                 ConnectionConfigs::NativeMongodb(MongodbConnector::parse_options(options)?)
+            }
+            Connectors::FileAvro => {
+                ConnectionConfigs::FileAvro(AvroConnector::parse_options(options)?)
             }
             Connectors::Peer => ConnectionConfigs::Peer(PeerConnector::parse_options(options)?),
             Connectors::Internal => ConnectionConfigs::Internal,
@@ -210,6 +225,9 @@ impl Connectors {
             Connectors::NativeMongodb => EntitySourceConfigs::NativeMongodb(
                 MongodbConnector::parse_entity_source_options(options)?,
             ),
+            Connectors::FileAvro => {
+                EntitySourceConfigs::File(AvroConnector::parse_entity_source_options(options)?)
+            }
             Connectors::Peer => {
                 EntitySourceConfigs::Peer(PeerConnector::parse_entity_source_options(options)?)
             }
@@ -281,6 +299,14 @@ impl Connectors {
                 (
                     ConnectionPools::NativeMongodb(pool),
                     ConnectorEntityConfigs::NativeMongodb(entities),
+                )
+            }
+            (Connectors::FileAvro, ConnectionConfigs::FileAvro(options)) => {
+                let (pool, entities) =
+                    Self::create_pool::<AvroConnector>(options, nc, data_source_id)?;
+                (
+                    ConnectionPools::FileAvro(pool),
+                    ConnectorEntityConfigs::File(entities),
                 )
             }
             (Connectors::Peer, ConnectionConfigs::Peer(options)) => {

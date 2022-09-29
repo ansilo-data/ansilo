@@ -18,6 +18,8 @@ ansilo-connectors-jdbc-mssql = { path = "../jdbc-mssql" }
 ansilo-connectors-native-postgres = { path = "../native-postgres" }
 ansilo-connectors-native-sqlite = { path = "../native-sqlite" }
 ansilo-connectors-native-mongodb = { path = "../native-mongodb" }
+ansilo-connectors-file-base = { path = "../file-base" }
+ansilo-connectors-file-avro = { path = "../file-avro" }
 ansilo-connectors-peer = { path = "../peer" }
 ansilo-connectors-internal = { path = "../internal" }
 
