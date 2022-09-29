@@ -1,5 +1,9 @@
 use std::path::{Path, PathBuf};
 
+use ansilo_core::{
+    config,
+    err::{Context, Result},
+};
 use serde::{Deserialize, Serialize};
 
 pub trait FileConfig: Clone + Send + Sync {
@@ -16,6 +20,11 @@ pub struct FileSourceConfig {
 impl FileSourceConfig {
     pub fn new(file_name: String) -> Self {
         Self { file_name }
+    }
+
+    pub fn parse(options: config::Value) -> Result<Self> {
+        config::from_value::<Self>(options)
+            .context("Failed to parse file source configuration options")
     }
 
     pub fn file_name(&self) -> &str {

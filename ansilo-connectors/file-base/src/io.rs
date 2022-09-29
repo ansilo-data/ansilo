@@ -2,7 +2,7 @@ use std::path::Path;
 
 use ansilo_connectors_base::interface::RowStructure;
 use ansilo_core::{
-    config,
+    config::EntityConfig,
     data::{DataType, DataValue},
     err::Result,
 };
@@ -15,14 +15,11 @@ pub trait FileIO: Sized + Send + Sync + Clone + 'static {
     type Reader: FileReader;
     type Writer: FileWriter;
 
-    /// Parses the configuration
-    fn parse_config(conf: &config::Value) -> Result<Self::Conf>;
-
     /// Gets the structure of the file
     fn get_structure(conf: &Self::Conf, path: &Path) -> Result<FileStructure>;
 
     /// Estimates the number of rows in the file
-    fn estimate_row_count(conf: &Self::Conf, path: &Path) -> Result<u64>;
+    fn estimate_row_count(conf: &Self::Conf, path: &Path) -> Result<Option<u64>>;
 
     /// Gets the extension of the file
     fn get_extension(conf: &Self::Conf) -> Option<&'static str>;
@@ -34,7 +31,7 @@ pub trait FileIO: Sized + Send + Sync + Clone + 'static {
     }
 
     /// Gets a file reader
-    fn reader(conf: &Self::Conf, path: &Path) -> Result<Self::Reader>;
+    fn reader(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<Self::Reader>;
 
     /// Whether the file supports writing
     #[allow(unused)]
@@ -42,8 +39,9 @@ pub trait FileIO: Sized + Send + Sync + Clone + 'static {
         Ok(true)
     }
 
-    /// Gets a file writer
-    fn writer(conf: &Self::Conf, path: &Path) -> Result<Self::Writer>;
+    /// Gets a file writer, the structure is supplied
+    /// so the file can be created with the supplied structure if it does not exist
+    fn writer(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<Self::Writer>;
 }
 
 /// Trait for reading records from a file
@@ -68,6 +66,25 @@ pub struct FileStructure {
     pub cols: Vec<FileColumn>,
     /// The description of the file, if any
     pub desc: Option<String>,
+}
+
+impl From<&EntityConfig> for FileStructure {
+    fn from(e: &EntityConfig) -> Self {
+        Self::new(
+            e.attributes
+                .iter()
+                .map(|a| {
+                    FileColumn::new(
+                        a.id.clone(),
+                        a.r#type.clone(),
+                        a.nullable,
+                        a.description.clone(),
+                    )
+                })
+                .collect(),
+            e.description.clone(),
+        )
+    }
 }
 
 impl FileStructure {

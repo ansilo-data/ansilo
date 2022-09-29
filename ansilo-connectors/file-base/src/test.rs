@@ -39,10 +39,6 @@ impl FileIO for MockIO {
     type Reader = MockReader;
     type Writer = MockWriter;
 
-    fn parse_config(conf: &ansilo_core::config::Value) -> Result<Self::Conf> {
-        unimplemented!()
-    }
-
     fn get_structure(conf: &Self::Conf, path: &Path) -> Result<FileStructure> {
         conf.mock_structure
             .get(&path.to_path_buf())
@@ -50,7 +46,7 @@ impl FileIO for MockIO {
             .cloned()
     }
 
-    fn estimate_row_count(conf: &Self::Conf, path: &Path) -> Result<u64> {
+    fn estimate_row_count(conf: &Self::Conf, path: &Path) -> Result<Option<u64>> {
         unimplemented!()
     }
 
@@ -58,11 +54,11 @@ impl FileIO for MockIO {
         conf.extension.clone()
     }
 
-    fn reader(conf: &Self::Conf, path: &Path) -> Result<Self::Reader> {
+    fn reader(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<Self::Reader> {
         conf.reader.clone().context("reader")
     }
 
-    fn writer(conf: &Self::Conf, path: &Path) -> Result<Self::Writer> {
+    fn writer(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<Self::Writer> {
         conf.writer.clone().context("writer")
     }
 }

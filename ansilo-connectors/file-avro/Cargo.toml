@@ -1,5 +1,5 @@
 [package]
-name = "ansilo-connectors-file-arvo"
+name = "ansilo-connectors-file-avro"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,9 +9,9 @@ edition = "2021"
 ansilo-core = { path = "../../ansilo-core" }
 ansilo-logging = { path = "../../ansilo-logging" }
 ansilo-connectors-base = { path = "../base" }
+ansilo-connectors-file-base = { path = "../file-base" }
 # TODO: change to crates.io when next release happens
 apache-avro = { git = "https://github.com/apache/avro" }
-wildmatch = "2.1"
 itertools = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -19,3 +19,4 @@ serde_yaml = "0.9"
 
 [dev-dependencies]
 pretty_assertions = "*"
+serial_test = "*"

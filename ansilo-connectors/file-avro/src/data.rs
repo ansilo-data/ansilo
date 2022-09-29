@@ -6,9 +6,9 @@ use ansilo_core::{
     },
     err::{bail, Context, Result},
 };
-use apache_avro::{schema::UnionSchema, types::Value as ArvoValue, Schema};
+use apache_avro::{schema::UnionSchema, types::Value as AvroValue, Schema};
 
-pub fn from_arvo_type(schema: &Schema) -> Result<(DataType, bool)> {
+pub fn from_avro_type(schema: &Schema) -> Result<(DataType, bool)> {
     let (schema, nullable) = if let Schema::Union(union) = schema {
         if union.variants().len() == 2 && union.variants().contains(&Schema::Null) {
             (
@@ -35,21 +35,19 @@ pub fn from_arvo_type(schema: &Schema) -> Result<(DataType, bool)> {
         Schema::Double => DataType::Float64,
         Schema::Bytes => DataType::Binary,
         Schema::String => DataType::Utf8String(StringOptions::default()),
-        Schema::Fixed { .. } => DataType::Binary,
         Schema::Uuid => DataType::Uuid,
         Schema::Date => DataType::Date,
         Schema::TimeMillis => DataType::Time,
         Schema::TimeMicros => DataType::Time,
         Schema::TimestampMillis => DataType::DateTime,
         Schema::TimestampMicros => DataType::DateTime,
-        Schema::Enum { .. } => DataType::Utf8String(StringOptions::default()),
-        _ => bail!("Unsupported arvo type: {:?}", schema),
+        _ => bail!("Unsupported avro type: {:?}", schema),
     };
 
     Ok((r#type, nullable))
 }
 
-pub fn into_arvo_type(r#type: &DataType, nullable: bool) -> Result<Schema> {
+pub fn into_avro_type(r#type: &DataType, nullable: bool) -> Result<Schema> {
     let mut schema = match r#type {
         DataType::Utf8String(_) => Schema::String,
         DataType::Binary => Schema::Bytes,
@@ -58,7 +56,7 @@ pub fn into_arvo_type(r#type: &DataType, nullable: bool) -> Result<Schema> {
         DataType::UInt8 => Schema::Int,
         DataType::Int16 => Schema::Int,
         DataType::UInt16 => Schema::Int,
-        DataType::Int32 => Schema::Long,
+        DataType::Int32 => Schema::Int,
         DataType::UInt32 => Schema::Long,
         DataType::Int64 => Schema::Long,
         DataType::UInt64 => Schema::String,
@@ -81,71 +79,69 @@ pub fn into_arvo_type(r#type: &DataType, nullable: bool) -> Result<Schema> {
     Ok(schema)
 }
 
-pub fn from_arvo_value(val: ArvoValue) -> Result<DataValue> {
+pub fn from_avro_value(val: AvroValue) -> Result<DataValue> {
     let res = match val {
-        ArvoValue::Null => DataValue::Null,
-        ArvoValue::Boolean(b) => DataValue::Boolean(b),
-        ArvoValue::Int(i) => DataValue::Int32(i),
-        ArvoValue::Long(l) => DataValue::Int64(l),
-        ArvoValue::Float(f) => DataValue::Float32(f),
-        ArvoValue::Double(d) => DataValue::Float64(d),
-        ArvoValue::Bytes(b) => DataValue::Binary(b),
-        ArvoValue::String(s) => DataValue::Utf8String(s),
-        ArvoValue::Fixed(_, b) => DataValue::Binary(b),
-        ArvoValue::Enum(_, s) => DataValue::Utf8String(s),
-        ArvoValue::Union(_, b) => from_arvo_value(*b)?,
-        ArvoValue::Date(d) => {
+        AvroValue::Null => DataValue::Null,
+        AvroValue::Boolean(b) => DataValue::Boolean(b),
+        AvroValue::Int(i) => DataValue::Int32(i),
+        AvroValue::Long(l) => DataValue::Int64(l),
+        AvroValue::Float(f) => DataValue::Float32(f),
+        AvroValue::Double(d) => DataValue::Float64(d),
+        AvroValue::Bytes(b) => DataValue::Binary(b),
+        AvroValue::String(s) => DataValue::Utf8String(s),
+        AvroValue::Union(_, b) => from_avro_value(*b)?,
+        AvroValue::Date(d) => {
             DataValue::Date(NaiveDate::from_ymd(1970, 1, 1) + Duration::days(d as _))
         }
-        ArvoValue::TimeMillis(t) => DataValue::Time(NaiveTime::from_num_seconds_from_midnight(
+        AvroValue::TimeMillis(t) => DataValue::Time(NaiveTime::from_num_seconds_from_midnight(
             (t / 1000) as _,
             ((t % 1000) * 1000_000) as _,
         )),
-        ArvoValue::TimeMicros(t) => DataValue::Time(NaiveTime::from_num_seconds_from_midnight(
+        AvroValue::TimeMicros(t) => DataValue::Time(NaiveTime::from_num_seconds_from_midnight(
             (t / 1000_000) as _,
             ((t % 1000_000) * 1000) as _,
         )),
-        ArvoValue::TimestampMillis(t) => DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+        AvroValue::TimestampMillis(t) => DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
             NaiveDateTime::from_timestamp((t / 1000) as _, ((t % 1000) * 1000_000) as _),
             Tz::UTC,
         )),
-        ArvoValue::TimestampMicros(t) => DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
+        AvroValue::TimestampMicros(t) => DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
             NaiveDateTime::from_timestamp((t / 1000_000) as _, ((t % 1000_000) * 1000) as _),
             Tz::UTC,
         )),
-        ArvoValue::Uuid(u) => DataValue::Uuid(u),
-        _ => bail!("Unsupported arvo type: {:?}", val),
+        AvroValue::Uuid(u) => DataValue::Uuid(u),
+        _ => bail!("Unsupported avro type: {:?}", val),
     };
 
     Ok(res)
 }
 
-pub fn into_arvo_value(val: DataValue) -> ArvoValue {
+pub fn into_avro_value(val: DataValue) -> AvroValue {
     match val {
-        DataValue::Null => ArvoValue::Null,
-        DataValue::Utf8String(s) => ArvoValue::String(s),
-        DataValue::Binary(b) => ArvoValue::Bytes(b),
-        DataValue::Boolean(b) => ArvoValue::Boolean(b),
-        DataValue::Int8(i) => ArvoValue::Int(i as _),
-        DataValue::UInt8(i) => ArvoValue::Int(i as _),
-        DataValue::Int16(i) => ArvoValue::Int(i as _),
-        DataValue::UInt16(i) => ArvoValue::Int(i as _),
-        DataValue::Int32(i) => ArvoValue::Int(i as _),
-        DataValue::UInt32(i) => ArvoValue::Long(i as _),
-        DataValue::Int64(i) => ArvoValue::Long(i as _),
-        DataValue::UInt64(i) => ArvoValue::String(i.to_string()),
-        DataValue::Float32(f) => ArvoValue::Float(f),
-        DataValue::Float64(f) => ArvoValue::Double(f),
-        DataValue::Decimal(d) => ArvoValue::String(d.to_string()),
-        DataValue::JSON(j) => ArvoValue::String(j),
-        DataValue::Date(d) => ArvoValue::String(format!("{}", d.format("%Y-%m-%d"))),
-        DataValue::Time(t) => ArvoValue::TimeMicros(
+        DataValue::Null => AvroValue::Null,
+        DataValue::Utf8String(s) => AvroValue::String(s),
+        DataValue::Binary(b) => AvroValue::Bytes(b),
+        DataValue::Boolean(b) => AvroValue::Boolean(b),
+        DataValue::Int8(i) => AvroValue::Int(i as _),
+        DataValue::UInt8(i) => AvroValue::Int(i as _),
+        DataValue::Int16(i) => AvroValue::Int(i as _),
+        DataValue::UInt16(i) => AvroValue::Int(i as _),
+        DataValue::Int32(i) => AvroValue::Int(i as _),
+        DataValue::UInt32(i) => AvroValue::Long(i as _),
+        DataValue::Int64(i) => AvroValue::Long(i as _),
+        DataValue::UInt64(i) => AvroValue::String(i.to_string()),
+        DataValue::Float32(f) => AvroValue::Float(f),
+        DataValue::Float64(f) => AvroValue::Double(f),
+        DataValue::Decimal(d) => AvroValue::String(d.to_string()),
+        DataValue::JSON(j) => AvroValue::String(j),
+        DataValue::Date(d) => AvroValue::String(format!("{}", d.format("%Y-%m-%d"))),
+        DataValue::Time(t) => AvroValue::TimeMicros(
             t.num_seconds_from_midnight() as i64 * 1000_000 + t.nanosecond() as i64 / 1000,
         ),
-        DataValue::DateTime(d) => ArvoValue::TimestampMicros(d.timestamp_micros()),
+        DataValue::DateTime(d) => AvroValue::TimestampMicros(d.timestamp_micros()),
         DataValue::DateTimeWithTZ(d) => {
-            ArvoValue::TimestampMicros(d.zoned().unwrap().timestamp_micros())
+            AvroValue::TimestampMicros(d.zoned().unwrap().timestamp_micros())
         }
-        DataValue::Uuid(u) => ArvoValue::Uuid(u),
+        DataValue::Uuid(u) => AvroValue::Uuid(u),
     }
 }

@@ -1,8 +1,9 @@
 use std::{collections::HashMap, io::Write, marker::PhantomData, path::PathBuf, sync::Arc};
 
 use ansilo_core::{
+    config::EntityConfig,
     data::DataValue,
-    err::{bail, ensure, Result},
+    err::{bail, ensure, Context, Result},
     sqlil,
 };
 use serde::Serialize;
@@ -16,6 +17,8 @@ use crate::{FileIO, FileResultSet, FileStructure, FileWriter};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FileQuery {
+    /// The entity config
+    pub entity: EntityConfig,
     /// The path to the file
     pub file: PathBuf,
     /// The type of query
@@ -55,8 +58,8 @@ impl InsertRowsQuery {
 }
 
 impl FileQuery {
-    pub fn new(file: PathBuf, q: FileQueryType) -> Self {
-        Self { file, q }
+    pub fn new(entity: EntityConfig, file: PathBuf, q: FileQueryType) -> Self {
+        Self { entity, file, q }
     }
 }
 
@@ -96,14 +99,16 @@ impl<F: FileIO> FileQueryHandle<F> {
     fn execute(&mut self) -> Result<ExecuteResult<F>> {
         let res = match &self.query.q {
             FileQueryType::ReadColumns(q) => {
-                let reader = F::reader(&self.conf, self.query.file.as_path())?;
+                let reader = F::reader(&self.conf, &self.structure, self.query.file.as_path())
+                    .context("Failed to create reader")?;
                 let result_set = FileResultSet::new(self.structure.clone(), reader, q.clone())?;
 
                 ExecuteResult::ResultSet(result_set)
             }
             FileQueryType::InsertRows(insert) => {
                 let params = self.params.get_all()?;
-                let mut writer = F::writer(&self.conf, self.query.file.as_path())?;
+                let mut writer = F::writer(&self.conf, &self.structure, self.query.file.as_path())
+                    .context("Failed to create writer")?;
                 let mut rows_written = 0;
 
                 ensure!(
@@ -201,7 +206,7 @@ mod tests {
     use super::*;
 
     use ansilo_connectors_base::interface::{ResultSet, RowStructure};
-    use ansilo_core::data::DataType;
+    use ansilo_core::{config::EntitySourceConfig, data::DataType};
     use pretty_assertions::assert_eq;
 
     fn mock_conf(reader: Option<MockReader>, writer: Option<MockWriter>) -> Arc<MockConfig> {
@@ -224,6 +229,7 @@ mod tests {
                 None,
             ),
             FileQuery::new(
+                EntityConfig::minimal("unused", vec![], EntitySourceConfig::minimal("")),
                 "/unused".into(),
                 FileQueryType::ReadColumns(ReadColumnsQuery::new(vec![(
                     "alias".into(),
@@ -264,6 +270,7 @@ mod tests {
                 None,
             ),
             FileQuery::new(
+                EntityConfig::minimal("unused", vec![], EntitySourceConfig::minimal("")),
                 "/unused".into(),
                 FileQueryType::ReadColumns(ReadColumnsQuery::new(vec![(
                     "alias".into(),
@@ -314,6 +321,7 @@ mod tests {
                 None,
             ),
             FileQuery::new(
+                EntityConfig::minimal("unused", vec![], EntitySourceConfig::minimal("")),
                 "/unused".into(),
                 FileQueryType::ReadColumns(ReadColumnsQuery::new(vec![
                     ("alias1a".into(), "col1".into()),
@@ -359,6 +367,7 @@ mod tests {
                 None,
             ),
             FileQuery::new(
+                EntityConfig::minimal("unused", vec![], EntitySourceConfig::minimal("")),
                 "/unused".into(),
                 FileQueryType::InsertRows(InsertRowsQuery::new(
                     vec!["col1".into(), "col2".into()],
@@ -403,6 +412,7 @@ mod tests {
                 None,
             ),
             FileQuery::new(
+                EntityConfig::minimal("unused", vec![], EntitySourceConfig::minimal("")),
                 "/unused".into(),
                 FileQueryType::InsertRows(InsertRowsQuery::new(
                     vec!["col1".into(), "col2".into()],
@@ -465,6 +475,7 @@ mod tests {
                 None,
             ),
             FileQuery::new(
+                EntityConfig::minimal("unused", vec![], EntitySourceConfig::minimal("")),
                 "/unused".into(),
                 FileQueryType::InsertRows(InsertRowsQuery::new(
                     vec!["col1".into()],
@@ -505,6 +516,7 @@ mod tests {
                 None,
             ),
             FileQuery::new(
+                EntityConfig::minimal("unused", vec![], EntitySourceConfig::minimal("")),
                 "/unused".into(),
                 FileQueryType::InsertRows(InsertRowsQuery::new(
                     vec!["col1".into()],

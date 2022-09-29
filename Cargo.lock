@@ -148,10 +148,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "ansilo-connectors-file-arvo"
+name = "ansilo-connectors-file-avro"
 version = "0.1.0"
 dependencies = [
  "ansilo-connectors-base",
+ "ansilo-connectors-file-base",
  "ansilo-core",
  "ansilo-logging",
  "apache-avro",
@@ -160,7 +161,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "wildmatch",
+ "serial_test",
 ]
 
 [[package]]

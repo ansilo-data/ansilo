@@ -34,7 +34,7 @@ impl<F: FileIO> QueryPlanner for FileQueryPlanner<F> {
     ) -> Result<OperationCost> {
         let row_count = F::estimate_row_count(con.conf(), &entity.source.path(con.conf()))?;
 
-        Ok(OperationCost::new(Some(row_count), None, None, None))
+        Ok(OperationCost::new(row_count, None, None, None))
     }
 
     fn get_row_id_exprs(

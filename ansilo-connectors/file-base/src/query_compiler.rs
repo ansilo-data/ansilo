@@ -66,7 +66,11 @@ impl<F: FileIO> QueryCompiler for FileQueryCompiler<F> {
 
         let entity = conf.get(&e.entity)?;
 
-        Ok(FileQuery::new(entity.source.path(con.conf()), q))
+        Ok(FileQuery::new(
+            entity.conf.clone(),
+            entity.source.path(con.conf()),
+            q,
+        ))
     }
 
     fn query_from_string(

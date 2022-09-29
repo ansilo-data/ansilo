@@ -4,7 +4,7 @@ use ansilo_core::{auth::AuthContext, err::Result};
 
 use ansilo_connectors_base::interface::{Connection, ConnectionPool};
 
-use crate::{FileIO, FileQuery, FileQueryHandle};
+use crate::{FileIO, FileQuery, FileQueryHandle, FileStructure};
 
 #[derive(Clone)]
 pub struct FileConnectionUnpool<F: FileIO> {
@@ -52,7 +52,11 @@ impl<F: FileIO> Connection for FileConnection<F> {
     type TTransactionManager = ();
 
     fn prepare(&mut self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
-        let structure = F::get_structure(&self.conf, query.file.as_path())?;
+        let structure = if query.file.try_exists()? {
+            F::get_structure(&self.conf, query.file.as_path())?
+        } else {
+            FileStructure::from(&query.entity)
+        };
 
         FileQueryHandle::<F>::new(Arc::clone(&self.conf), structure, query)
     }
