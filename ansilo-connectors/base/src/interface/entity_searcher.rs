@@ -20,7 +20,9 @@ pub struct EntityDiscoverOptions {
 }
 
 impl EntityDiscoverOptions {
-    pub fn new(remote_schema: String, other: HashMap<String, String>) -> Self {
+    pub fn new(remote_schema: impl Into<String>, other: HashMap<String, String>) -> Self {
+        let remote_schema = remote_schema.into();
+
         Self {
             remote_schema: if remote_schema.is_empty() {
                 None

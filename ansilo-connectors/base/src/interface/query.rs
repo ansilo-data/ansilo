@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use ansilo_core::{data::DataType, err::Result, sqlil};
 use bincode::{Decode, Encode};
 
+use crate::common::data::QueryHandleWriter;
+
 use super::ResultSet;
 
 /// A query which is executing
@@ -27,6 +29,15 @@ pub trait QueryHandle {
 
     /// Returns a loggable representation of the query
     fn logged(&self) -> Result<LoggedQuery>;
+
+    /// Returns a writer for this query handle
+    /// Useful for writing input to this query.
+    fn writer(self) -> Result<QueryHandleWriter<Self>>
+    where
+        Self: Sized,
+    {
+        QueryHandleWriter::new(self)
+    }
 }
 
 /// The structure of data expected by a query
