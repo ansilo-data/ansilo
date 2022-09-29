@@ -16,6 +16,8 @@ ansilo-connectors-jdbc-mssql = { path = "../ansilo-connectors/jdbc-mssql" }
 ansilo-connectors-native-postgres = { path = "../ansilo-connectors/native-postgres" }
 ansilo-connectors-native-sqlite = { path = "../ansilo-connectors/native-sqlite" }
 ansilo-connectors-native-mongodb = { path = "../ansilo-connectors/native-mongodb" }
+ansilo-connectors-file-base = { path = "../ansilo-connectors/file-base" }
+ansilo-connectors-file-avro = { path = "../ansilo-connectors/file-avro" }
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-web = { path = "../ansilo-web" }
 ansilo-main = { path = "../ansilo-main" }

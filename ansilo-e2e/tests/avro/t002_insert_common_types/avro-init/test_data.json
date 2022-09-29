@@ -1,0 +1,61 @@
+{
+    "schema": {
+        "type": "record",
+        "name": "test",
+        "fields": [
+            {
+                "name": "int",
+                "type": "int"
+            },
+            {
+                "name": "long",
+                "type": "long"
+            },
+            {
+                "name": "string",
+                "type": "string"
+            },
+            {
+                "name": "bool",
+                "type": "boolean"
+            },
+            {
+                "name": "float",
+                "type": "float"
+            },
+            {
+                "name": "double",
+                "type": "double"
+            },
+            {
+                "name": "bytes",
+                "type": "bytes"
+            },
+            {
+                "name": "uuid",
+                "type": "string",
+                "logicalType": "uuid"
+            },
+            {
+                "name": "date",
+                "type": "int",
+                "logicalType": "date"
+            },
+            {
+                "name": "time_micros",
+                "type": "long",
+                "logicalType": "time-micros"
+            },
+            {
+                "name": "timestamp_micros",
+                "type": "long",
+                "logicalType": "timestamp-micros"
+            },
+            {
+                "name": "null",
+                "type": "null"
+            }
+        ]
+    },
+    "records": []
+}

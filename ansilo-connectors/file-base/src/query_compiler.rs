@@ -61,6 +61,7 @@ impl<F: FileIO> QueryCompiler for FileQueryCompiler<F> {
                         .collect(),
                 )),
             ),
+            Query::Delete(q) if q.r#where.is_empty() => (q.target, FileQueryType::Truncate),
             _ => bail!("Unsupported"),
         };
 

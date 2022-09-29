@@ -1,8 +1,7 @@
 use ansilo_core::{
     data::{
         chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime, Timelike},
-        chrono_tz::Tz,
-        DataType, DataValue, DateTimeWithTZ, StringOptions,
+        DataType, DataValue, StringOptions,
     },
     err::{bail, Context, Result},
 };
@@ -101,13 +100,13 @@ pub fn from_avro_value(val: AvroValue) -> Result<DataValue> {
             (t / 1000_000) as _,
             ((t % 1000_000) * 1000) as _,
         )),
-        AvroValue::TimestampMillis(t) => DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
-            NaiveDateTime::from_timestamp((t / 1000) as _, ((t % 1000) * 1000_000) as _),
-            Tz::UTC,
+        AvroValue::TimestampMillis(t) => DataValue::DateTime(NaiveDateTime::from_timestamp(
+            (t / 1000) as _,
+            ((t % 1000) * 1000_000) as _,
         )),
-        AvroValue::TimestampMicros(t) => DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
-            NaiveDateTime::from_timestamp((t / 1000_000) as _, ((t % 1000_000) * 1000) as _),
-            Tz::UTC,
+        AvroValue::TimestampMicros(t) => DataValue::DateTime(NaiveDateTime::from_timestamp(
+            (t / 1000_000) as _,
+            ((t % 1000_000) * 1000) as _,
         )),
         AvroValue::Uuid(u) => DataValue::Uuid(u),
         _ => bail!("Unsupported avro type: {:?}", val),
@@ -134,7 +133,10 @@ pub fn into_avro_value(val: DataValue) -> AvroValue {
         DataValue::Float64(f) => AvroValue::Double(f),
         DataValue::Decimal(d) => AvroValue::String(d.to_string()),
         DataValue::JSON(j) => AvroValue::String(j),
-        DataValue::Date(d) => AvroValue::String(format!("{}", d.format("%Y-%m-%d"))),
+        DataValue::Date(d) => AvroValue::Date(
+            d.signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
+                .num_days() as _,
+        ),
         DataValue::Time(t) => AvroValue::TimeMicros(
             t.num_seconds_from_midnight() as i64 * 1000_000 + t.nanosecond() as i64 / 1000,
         ),

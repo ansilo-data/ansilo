@@ -26,7 +26,7 @@ pub(super) async fn handler(
     // Then discover all the table schema's from the "public" schema
     let entities = PostgresEntitySearcher::<UnpooledClient>::discover_async(
         &mut con,
-        EntityDiscoverOptions::new("public.%".into(), Default::default()),
+        EntityDiscoverOptions::new("public.%", Default::default()),
     )
     .await
     .map_err(|e| {

@@ -1,0 +1,139 @@
+{
+    "schema": {
+        "type": "record",
+        "name": "test",
+        "fields": [
+            {
+                "name": "int",
+                "type": "int"
+            },
+            {
+                "name": "long",
+                "type": "long"
+            },
+            {
+                "name": "string",
+                "type": "string"
+            },
+            {
+                "name": "bool",
+                "type": "boolean"
+            },
+            {
+                "name": "float",
+                "type": "float"
+            },
+            {
+                "name": "double",
+                "type": "double"
+            },
+            {
+                "name": "bytes",
+                "type": "bytes"
+            },
+            {
+                "name": "uuid",
+                "type": "string",
+                "logicalType": "uuid"
+            },
+            {
+                "name": "date",
+                "type": "int",
+                "logicalType": "date"
+            },
+            {
+                "name": "time_micros",
+                "type": "long",
+                "logicalType": "time-micros"
+            },
+            {
+                "name": "timestamp_micros",
+                "type": "long",
+                "logicalType": "timestamp-micros"
+            },
+            {
+                "name": "null",
+                "type": "null"
+            }
+        ]
+    },
+    "records": [
+        [
+            [
+                "int",
+                {
+                    "Int32": 123
+                }
+            ],
+            [
+                "long",
+                {
+                    "Int64": 123456
+                }
+            ],
+            [
+                "string",
+                {
+                    "Utf8String": "hello"
+                }
+            ],
+            [
+                "bool",
+                {
+                    "Boolean": true
+                }
+            ],
+            [
+                "float",
+                {
+                    "Float32": 11.22
+                }
+            ],
+            [
+                "double",
+                {
+                    "Float64": 33.44
+                }
+            ],
+            [
+                "bytes",
+                {
+                    "Binary": [
+                        66,
+                        76,
+                        79,
+                        66
+                    ]
+                }
+            ],
+            [
+                "uuid",
+                {
+                    "Uuid": "8fba61eb-5c96-4e66-9aa5-0e32d094e3e7"
+                }
+            ],
+            [
+                "date",
+                {
+                    "Int32": 1234
+                }
+            ],
+            [
+                "time_micros",
+                {
+                    "Int64": 60000000001
+                }
+            ],
+            [
+                "timestamp_micros",
+                {
+                    "Int64": 1664510630000001
+                }
+            ],
+            [
+                "null",
+                "Null"
+            ]
+        ]
+    ]
+}

@@ -2,9 +2,9 @@ use std::{marker::PhantomData, sync::Arc};
 
 use ansilo_core::{auth::AuthContext, err::Result};
 
-use ansilo_connectors_base::interface::{Connection, ConnectionPool};
+use ansilo_connectors_base::interface::{Connection, ConnectionPool, QueryHandle};
 
-use crate::{FileIO, FileQuery, FileQueryHandle, FileStructure};
+use crate::{FileIO, FileQuery, FileQueryHandle, FileResultSet, FileStructure};
 
 #[derive(Clone)]
 pub struct FileConnectionUnpool<F: FileIO> {
@@ -44,6 +44,14 @@ impl<F: FileIO> FileConnection<F> {
     pub fn conf(&self) -> &F::Conf {
         self.conf.as_ref()
     }
+
+    pub fn execute_query(&mut self, query: FileQuery) -> Result<FileResultSet<F::Reader>> {
+        self.prepare(query)?.execute_query()
+    }
+
+    pub fn execute_modify(&mut self, query: FileQuery) -> Result<Option<u64>> {
+        self.prepare(query)?.execute_modify()
+    }
 }
 
 impl<F: FileIO> Connection for FileConnection<F> {
@@ -52,7 +60,7 @@ impl<F: FileIO> Connection for FileConnection<F> {
     type TTransactionManager = ();
 
     fn prepare(&mut self, query: Self::TQuery) -> Result<Self::TQueryHandle> {
-        let structure = if query.file.try_exists()? {
+        let structure = if query.file.try_exists()? && query.file.metadata()?.len() > 0 {
             F::get_structure(&self.conf, query.file.as_path())?
         } else {
             FileStructure::from(&query.entity)

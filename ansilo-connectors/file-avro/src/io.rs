@@ -9,7 +9,7 @@ use std::{
 use ansilo_connectors_file_base::{FileIO, FileReader, FileStructure, FileWriter};
 use ansilo_core::{
     data::DataValue,
-    err::{bail, Context, Result},
+    err::{bail, ensure, Context, Result},
 };
 use apache_avro::{schema::RecordField, types::Value as AvroValue, Schema};
 
@@ -65,7 +65,7 @@ pub struct AvroReader {
     structure: FileStructure,
     /// Workaround of lifetime restriction for apache_avro::Reader
     _schema: Pin<Box<Schema>>,
-    inner: apache_avro::Reader<'static, BufReader<File>>,
+    inner: Option<apache_avro::Reader<'static, BufReader<File>>>,
     fields: Vec<RecordField>,
 }
 
@@ -79,15 +79,26 @@ impl AvroReader {
             .create(true)
             .open(path)
             .with_context(|| format!("Failed to open file {}", path.display()))?;
+        let meta = file.metadata().context("Failed to get file metadata")?;
 
         // SAFETY: We transmute this reference into a 'static
         // which should be ok as we maintain the validity of this reference
         // for as long as the inner Reader is alive by owning the box in this struct
         let schema = Box::pin(schema);
-        let inner = apache_avro::Reader::with_schema(
-            unsafe { std::mem::transmute::<&Schema, &'static Schema>(&schema) },
-            BufReader::new(file),
-        )?;
+
+        let inner = if meta.len() > 0 {
+            // If this is a populated file, read the file
+            Some(
+                apache_avro::Reader::with_schema(
+                    unsafe { std::mem::transmute::<&Schema, &'static Schema>(&schema) },
+                    BufReader::new(file),
+                )
+                .context("Failed to initialise avro reader")?,
+            )
+        } else {
+            // If it is an empty file, we just return an empty result set
+            None
+        };
 
         let fields = match &*schema {
             Schema::Record { fields, .. } => fields.clone(),
@@ -105,7 +116,11 @@ impl AvroReader {
 
 impl FileReader for AvroReader {
     fn read_row(&mut self) -> Result<Option<Vec<DataValue>>> {
-        let row = match self.inner.next() {
+        if self.inner.is_none() {
+            return Ok(None);
+        }
+
+        let row = match self.inner.as_mut().unwrap().next() {
             Some(Ok(r)) => r,
             Some(Err(e)) => return Err(e)?,
             None => return Ok(None),
@@ -187,6 +202,8 @@ impl AvroWriter {
 
 impl FileWriter for AvroWriter {
     fn write_row(&mut self, row: Vec<DataValue>) -> Result<()> {
+        ensure!(row.len() == self.fields.len(), "Unexpected arvo row length");
+
         let row = row
             .iter()
             .enumerate()

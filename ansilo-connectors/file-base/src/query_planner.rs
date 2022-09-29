@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use ansilo_core::{
     data::DataType,
-    err::{bail, ensure, Result},
+    err::{bail, ensure, Context, Result},
     sqlil as sql,
 };
 
@@ -32,7 +32,16 @@ impl<F: FileIO> QueryPlanner for FileQueryPlanner<F> {
         con: &mut FileConnection<F>,
         entity: &EntitySource<FileSourceConfig>,
     ) -> Result<OperationCost> {
-        let row_count = F::estimate_row_count(con.conf(), &entity.source.path(con.conf()))?;
+        let path = entity.source.path(con.conf());
+
+        let row_count = if path
+            .try_exists()
+            .context("Failed to check if file exists")?
+        {
+            F::estimate_row_count(con.conf(), &path)?
+        } else {
+            Some(0)
+        };
 
         Ok(OperationCost::new(row_count, None, None, None))
     }

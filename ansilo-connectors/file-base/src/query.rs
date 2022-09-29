@@ -99,9 +99,11 @@ impl<F: FileIO> FileQueryHandle<F> {
     }
 
     fn execute(&mut self) -> Result<ExecuteResult<F>> {
+        let path = &self.query.file.as_path();
+
         let res = match &self.query.q {
             FileQueryType::ReadColumns(q) => {
-                let reader = F::reader(&self.conf, &self.structure, self.query.file.as_path())
+                let reader = F::reader(&self.conf, &self.structure, path)
                     .context("Failed to create reader")?;
                 let result_set = FileResultSet::new(self.structure.clone(), reader, q.clone())?;
 
@@ -109,7 +111,7 @@ impl<F: FileIO> FileQueryHandle<F> {
             }
             FileQueryType::InsertRows(insert) => {
                 let params = self.params.get_all()?;
-                let mut writer = F::writer(&self.conf, &self.structure, self.query.file.as_path())
+                let mut writer = F::writer(&self.conf, &self.structure, path)
                     .context("Failed to create writer")?;
                 let mut rows_written = 0;
 

@@ -9,11 +9,12 @@ use ansilo_core::{
 };
 
 mod conf;
-pub(crate) mod data;
+pub mod data;
 pub(crate) mod estimate;
 pub(crate) mod schema;
 pub use conf::*;
 mod io;
+pub use apache_avro;
 pub use io::*;
 
 /// The connector for avro files

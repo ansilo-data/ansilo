@@ -1,4 +1,4 @@
-name: sqlite
+name: avro
 
 networking:
   port: 0 # use kernel-allocated port
@@ -9,10 +9,10 @@ auth:
       password: pass
 
 sources:
-  - id: sqlite
-    type: native.sqlite
+  - id: avro
+    type: file.avro
     options:
-      path: ${arg:SQLITE_PATH}
+      path: ${arg:AVRO_PATH}
 
 build:
   stages:
