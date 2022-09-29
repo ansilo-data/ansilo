@@ -29,6 +29,7 @@ pub struct FileQuery {
 pub enum FileQueryType {
     ReadColumns(ReadColumnsQuery),
     InsertRows(InsertRowsQuery),
+    Truncate,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -72,6 +73,7 @@ pub struct FileQueryHandle<F: FileIO> {
 }
 
 enum ExecuteResult<F: FileIO> {
+    Ok,
     RowCount(u64),
     ResultSet(FileResultSet<F::Reader>),
 }
@@ -79,7 +81,7 @@ enum ExecuteResult<F: FileIO> {
 impl<F: FileIO> FileQueryHandle<F> {
     pub fn new(conf: Arc<F::Conf>, structure: FileStructure, query: FileQuery) -> Result<Self> {
         let params = match &query.q {
-            FileQueryType::ReadColumns(_) => vec![],
+            FileQueryType::ReadColumns(_) | FileQueryType::Truncate => vec![],
             FileQueryType::InsertRows(insert) => insert
                 .params
                 .iter()
@@ -146,6 +148,11 @@ impl<F: FileIO> FileQueryHandle<F> {
                 writer.flush()?;
                 ExecuteResult::RowCount(rows_written)
             }
+            FileQueryType::Truncate => {
+                F::truncate(&self.conf, &self.structure, self.query.file.as_path())
+                    .context("Failed to truncate file")?;
+                ExecuteResult::Ok
+            }
         };
 
         Ok(res)
@@ -171,8 +178,9 @@ impl<F: FileIO> QueryHandle for FileQueryHandle<F> {
 
     fn execute_query(&mut self) -> Result<FileResultSet<F::Reader>> {
         Ok(match self.execute()? {
-            ExecuteResult::RowCount(_) => FileResultSet::empty(),
             ExecuteResult::ResultSet(r) => r,
+            ExecuteResult::RowCount(_) => FileResultSet::empty(),
+            ExecuteResult::Ok => FileResultSet::empty(),
         })
     }
 
@@ -180,6 +188,7 @@ impl<F: FileIO> QueryHandle for FileQueryHandle<F> {
         Ok(match self.execute()? {
             ExecuteResult::RowCount(c) => Some(c),
             ExecuteResult::ResultSet(_) => None,
+            ExecuteResult::Ok => None,
         })
     }
 
@@ -529,5 +538,24 @@ mod tests {
         let mut writer = query.writer().unwrap();
         writer.write_all([DataValue::Int32(1)].into_iter()).unwrap();
         writer.inner().unwrap().execute_modify().unwrap_err();
+    }
+
+    #[test]
+    fn test_truncate() {
+        let mock = MockWriter::new();
+        let conf = mock_conf(None, Some(mock.clone()));
+
+        let mut query = FileQueryHandle::<MockIO>::new(
+            conf,
+            FileStructure::new(vec![], None),
+            FileQuery::new(
+                EntityConfig::minimal("unused", vec![], EntitySourceConfig::minimal("")),
+                "/unused".into(),
+                FileQueryType::Truncate,
+            ),
+        )
+        .unwrap();
+
+        assert_eq!(query.execute_modify().unwrap(), None);
     }
 }

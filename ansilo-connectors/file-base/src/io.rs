@@ -24,7 +24,7 @@ pub trait FileIO: Sized + Send + Sync + Clone + 'static {
     /// Gets the extension of the file
     fn get_extension(conf: &Self::Conf) -> Option<&'static str>;
 
-    /// Whether the file supports reading
+    /// Whether the connector supports reading
     #[allow(unused)]
     fn supports_reading(conf: &Self::Conf, path: &Path) -> Result<bool> {
         Ok(true)
@@ -33,7 +33,7 @@ pub trait FileIO: Sized + Send + Sync + Clone + 'static {
     /// Gets a file reader
     fn reader(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<Self::Reader>;
 
-    /// Whether the file supports writing
+    /// Whether the connector supports writing
     #[allow(unused)]
     fn supports_writing(conf: &Self::Conf, path: &Path) -> Result<bool> {
         Ok(true)
@@ -42,6 +42,15 @@ pub trait FileIO: Sized + Send + Sync + Clone + 'static {
     /// Gets a file writer, the structure is supplied
     /// so the file can be created with the supplied structure if it does not exist
     fn writer(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<Self::Writer>;
+
+    /// Whether the connector supports truncating the file
+    #[allow(unused)]
+    fn supports_truncating(conf: &Self::Conf, path: &Path) -> Result<bool> {
+        Ok(true)
+    }
+
+    /// Truncates the file at the supplied path
+    fn truncate(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<()>;
 }
 
 /// Trait for reading records from a file

@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{BufReader, BufWriter, Read, Seek, SeekFrom},
     path::Path,
     pin::Pin,
@@ -46,6 +46,17 @@ impl FileIO for AvroIO {
 
     fn writer(_conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<Self::Writer> {
         AvroWriter::new(structure, path)
+    }
+
+    fn truncate(_conf: &Self::Conf, _structure: &FileStructure, path: &Path) -> Result<()> {
+        OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(path)
+            .context("Failed to truncate file")?;
+
+        Ok(())
     }
 }
 

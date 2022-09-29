@@ -61,6 +61,10 @@ impl FileIO for MockIO {
     fn writer(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<Self::Writer> {
         conf.writer.clone().context("writer")
     }
+
+    fn truncate(conf: &Self::Conf, structure: &FileStructure, path: &Path) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl FileConfig for MockConfig {

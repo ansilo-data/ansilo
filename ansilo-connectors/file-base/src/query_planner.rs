@@ -102,12 +102,17 @@ impl<F: FileIO> QueryPlanner for FileQueryPlanner<F> {
     }
 
     fn create_base_delete(
-        _connection: &mut Self::TConnection,
+        con: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
-        _entity: &EntitySource<Self::TEntitySourceConfig>,
-        _source: &sql::EntitySource,
+        entity: &EntitySource<Self::TEntitySourceConfig>,
+        source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Delete)> {
-        bail!("Unsupported")
+        ensure!(
+            F::supports_truncating(con.conf(), &entity.source.path(con.conf()))?,
+            "Truncating is not supported"
+        );
+
+        Ok((OperationCost::default(), sql::Delete::new(source.clone())))
     }
 
     fn apply_select_operation(
