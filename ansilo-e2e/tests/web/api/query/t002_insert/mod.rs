@@ -28,8 +28,8 @@ fn test() {
     assert_eq!(
         res,
         QueryResponse::Success(QueryResults {
-            columns: vec![],
-            data: vec![]
+            columns: vec![("affected_rows".into(), "Int64".into())],
+            data: vec![vec!["1".into()]]
         })
     );
 

@@ -1,4 +1,6 @@
-use std::{collections::HashMap, env, fs, path::PathBuf, process::Command, time::Duration};
+use std::{
+    collections::HashMap, env, fs, path::PathBuf, process::Command, sync::Mutex, time::Duration,
+};
 
 use ansilo_connectors_base::{
     interface::{Connection, QueryHandle},
@@ -11,7 +13,10 @@ use glob::glob;
 
 use crate::util::{dir::workspace_dir, locking::FunctionCache};
 
+static TD_MUTEX: Mutex<()> = Mutex::new(());
+
 pub fn start_teradata() {
+    let _lock = TD_MUTEX.lock().unwrap();
     let mut cache = FunctionCache::<()>::new("teradata", Duration::from_secs(600));
 
     if cache.valid().is_some() {

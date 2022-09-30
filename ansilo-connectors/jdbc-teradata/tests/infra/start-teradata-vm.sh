@@ -47,6 +47,11 @@ do
     then
         break
     fi
+
+    if [[ $TRIES == 10 ]] || [[ $TRIES == 20 ]];
+    then
+        az vm start --resource-group Ansilo --name teradata-test-2
+    fi
     
     sleep 5
     let "TRIES+=1"
