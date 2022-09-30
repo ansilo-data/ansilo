@@ -1,4 +1,6 @@
-CREATE TABLE customers (
+CREATE SCHEMA private;
+
+CREATE TABLE private.customers (
     id VARCHAR(36),
     first_name VARCHAR(255),
     last_name VARCHAR(255),
@@ -7,7 +9,7 @@ CREATE TABLE customers (
     country CHAR(2)
 );
 
-INSERT INTO customers (id, first_name, last_name, email, gender, country) VALUES
+INSERT INTO private.customers (id, first_name, last_name, email, gender, country) VALUES
 ('c860ae04-7538-46e3-a2d8-d9313d5fd92b','Morgun','Steet','msteet0@photobucket.com','Male','ID'),
 ('c0a4c55d-1cf8-4755-bc92-02809fadc090','Sibyl','Janoch','sjanoch1@51.la','Female','SE'),
 ('941b66fc-6d9b-4766-982c-e66c7209a337','Jakie','Chester','jchester2@whitehouse.gov','Male','BA'),
@@ -105,6 +107,12 @@ INSERT INTO customers (id, first_name, last_name, email, gender, country) VALUES
 ('e8c1bf46-a808-438a-86e7-4179b9c183e8','Kelila','Burlay','kburlay2p@accuweather.com','Female','VN'),
 ('c3917a45-f5a2-4b68-8962-2ca0c959b993','Bernard','Bleibaum','bbleibaum2q@usatoday.com','Male','CN'),
 ('18085d67-ed78-4b1a-8d82-ce3dc049c138','Maddalena','OMullaney','momullaney2r@issuu.com','Female','MK');
+
+GRANT USAGE ON SCHEMA private TO app, token;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA private TO app, token;
+
+CREATE VIEW customers$v1 AS 
+SELECT * FROM private.customers;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app, token;
 

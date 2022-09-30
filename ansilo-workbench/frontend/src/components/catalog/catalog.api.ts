@@ -1,5 +1,8 @@
 import _ from "lodash";
 import { API_CONFIG } from "../../config/api";
+import { AppDispatch } from "../../store/store";
+import { authenticatedFetch } from "../auth/auth.api";
+import { AuthCredentials } from "../auth/auth.slice";
 import {
   Constraint,
   DataType,
@@ -10,10 +13,28 @@ import {
   Tag,
 } from "./catalog.slice";
 
-export const fetchNodes = async (): Promise<Node[]> => {
+export const fetchNodes = async (
+  dispatch: AppDispatch,
+  creds?: AuthCredentials
+): Promise<Node[]> => {
   let nodes = [] as Node[];
   let response = await fetch(`${API_CONFIG.origin}/api/v1/catalog`);
   let catalog = await response.json();
+
+  // If authenticated, retrieve the private schema too
+  if (creds) {
+    let privateResponse = await authenticatedFetch(
+      dispatch,
+      creds,
+      `/api/v1/catalog/private`,
+      { method: "get" }
+    )!;
+
+    if (privateResponse) {
+      let privateCatalog = await privateResponse.json();
+      catalog.entities = [...catalog.entities, ...privateCatalog.entities];
+    }
+  }
 
   let groupedByNode = _.groupBy(catalog.entities, getNodeUrl);
 

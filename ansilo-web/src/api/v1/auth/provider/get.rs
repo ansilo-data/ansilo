@@ -9,6 +9,8 @@ use hyper::StatusCode;
 
 use crate::HttpApiState;
 
+/// Retrieves authentication methods for this node.
+/// This is a public endpoint.
 pub(super) async fn handler(
     State(state): State<HttpApiState>,
 ) -> Result<Json<AuthMethods>, (StatusCode, &'static str)> {

@@ -24,12 +24,14 @@ import _ from "lodash";
 import { ErdDiagram } from "./visualisation/ErdDiagram";
 import Button from "@mui/material/Button";
 import Switch from "@mui/material/Switch";
+import { selectAuth } from "../auth/auth.slice";
 
 export const navigationWidth: number = 340;
 
 export const Catalog = () => {
   const dispatch = useAppDispatch();
   const catalog = useAppSelector(selectCatalog);
+  const auth = useAppSelector(selectAuth);
   const [categorisation, setCategorisation] = useState<"node" | string>("node");
   const [anchor, setAnchor] = useAnchor();
   const [viewMode, setViewMode] = useState<"erd" | "doc">("erd");
@@ -159,7 +161,7 @@ export const Catalog = () => {
                 </Typography>
               </Box>
             ))}
-          {viewMode === "erd" && catalog.nodes && (
+          {viewMode === "erd" && catalog.nodes && auth.hasInit && (
             <ErdDiagram
               nodes={catalog.nodes}
               categorisation={categorisation}

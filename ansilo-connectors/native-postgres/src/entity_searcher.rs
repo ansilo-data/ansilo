@@ -65,6 +65,7 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
                     WHERE 1=1
                     AND concat(t.table_schema, '.', t.table_name) LIKE $1
                     AND t.table_type != 'LOCAL TEMPORARY'
+                    AND NOT (t.table_schema = ANY($2))
                     UNION ALL
                     -- Include materialised views
                     SELECT 
@@ -88,14 +89,19 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
                     AND a.attnum > 0 
                     AND NOT a.attisdropped
                     AND concat(s.nspname, '.', t.relname) LIKE $1
+                    AND NOT (s.nspname = ANY($2))
                 ) AS a
                 ORDER BY a.table_schema, a.table_name, a.ordinal_position
             "#,
             &[
-               & opts.remote_schema
-                    .as_ref()
-                    .map(|i| i.as_str())
-                    .unwrap_or("%")
+                    &opts.remote_schema
+                        .as_ref()
+                        .map(|i| i.as_str())
+                        .unwrap_or("%"),
+                    &opts.other.get("exclude_internal").map_or_else(
+                        || vec![],
+                        |_| vec!["information_schema", "pg_catalog", "ansilo_catalog"]
+                    )
                 ],
             ).await?;
 
@@ -108,13 +114,13 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
 
         let entities = tables
             .into_iter()
-            .filter_map(|((db, table), cols)| {
-                match parse_entity_config(&db, &table, cols.collect_vec()) {
+            .filter_map(|((schema, table), cols)| {
+                match parse_entity_config(&schema, &table, cols.collect_vec(), &opts) {
                     Ok(conf) => Some(conf),
                     Err(err) => {
                         warn!(
                             "Failed to import schema for table \"{}.{}\": {:?}",
-                            db, table, err
+                            schema, table, err
                         );
                         None
                     }
@@ -127,12 +133,19 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
 }
 
 pub(crate) fn parse_entity_config(
-    db: &String,
+    schema: &String,
     table: &String,
     cols: Vec<Row>,
+    opts: &EntityDiscoverOptions,
 ) -> Result<EntityConfig> {
+    let id = if opts.other.contains_key("include_schema_in_id") {
+        format!("{}.{}", schema, table)
+    } else {
+        table.clone()
+    };
+
     Ok(EntityConfig::new(
-        table.clone(),
+        id,
         None,
         cols[0]
             .try_get("table_description")
@@ -151,7 +164,7 @@ pub(crate) fn parse_entity_config(
             .collect(),
         vec![],
         EntitySourceConfig::from(PostgresEntitySourceConfig::Table(
-            PostgresTableOptions::new(Some(db.clone()), table.clone(), HashMap::new()),
+            PostgresTableOptions::new(Some(schema.clone()), table.clone(), HashMap::new()),
         ))?,
     ))
 }

@@ -25,6 +25,13 @@ pub struct ClientAuthenticatedPostgresConnection(
 /// to authenticate against postgres.
 /// Authentication of the credentials occurs within
 /// @see ansilo-pg/src/handler/auth.rs
+// pub(crate) fn auth_middleware<F, T>(
+//     state: &Arc<HttpApiState>,
+// ) -> axum::middleware::FromFnLayer<F, (), T> {
+//     let state = state.clone();
+//     axum::middleware::from_fn::<F, T>(move |req, next| auth(req, next, state))
+// }
+
 pub(crate) async fn auth<B>(
     mut req: Request<B>,
     next: Next<B>,

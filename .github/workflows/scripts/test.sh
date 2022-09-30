@@ -24,6 +24,11 @@ function track_usage() {
 
 track_usage &
 
+echo "----- Installing pgx extension -----"
+cargo pgx install -p ansilo-pgx
+echo ""
+
 echo "----- Running tests -----"
-cargo test || (curl -sSf https://lets.tunshell.com/init.sh | sh -s -- T vKbezWxVcUTQvk622kL8ak 3tw4s3r57ktJqMhrLP657k au.relay.tunshell.com)
+export ANSILO_SKIP_PGX_INSTALL=true
+cargo test
 echo ""

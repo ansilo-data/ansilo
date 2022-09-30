@@ -73,19 +73,25 @@ export default function CatalogTreeView(props: Props) {
     );
   };
 
+  if (!catalog.nodes) {
+      return <></>
+  }
+
   if (props.categorisation === "node") {
     return (
       <TreeView
         key={props.categorisation}
         defaultCollapseIcon={<ExpandMoreIcon />}
         defaultExpandIcon={<ChevronRightIcon />}
+        defaultExpanded={catalog.nodes?.map(n => n.id).slice(0, 1)}
+        defaultSelected={catalog.nodes?.map(n => n.id).slice(0, 1)}
         sx={{ height: "100%", flexGrow: 1, width: "100%", overflowY: "auto" }}
       >
-        {catalog.nodes?.map((i) => (
+        {catalog.nodes?.map((n) => (
           <StyledTreeItem
             icon={<NodeIcon />}
-            key={i.id}
-            nodeId={i.id}
+            key={n.id}
+            nodeId={n.id}
             label={
               <Box
                 sx={{
@@ -94,19 +100,19 @@ export default function CatalogTreeView(props: Props) {
                   alignItems: "center",
                 }}
               >
-                {i.name}{" "}
-                {isAuthoritative(i) ? (
+                {n.name}{" "}
+                {isAuthoritative(n) ? (
                   <Note sx={{ pl: 1 }}>(Authoritative)</Note>
                 ) : null}
-                {i.icon && !props.narrow && (
+                {n.icon && !props.narrow && (
                   <>
-                    <VendorIcon src={i.icon} />
+                    <VendorIcon src={n.icon} />
                   </>
                 )}
               </Box>
             }
           >
-            {i.schema.entities.map((e) => renderEntity(i, e))}
+            {n.schema.entities.map((e) => renderEntity(n, e))}
           </StyledTreeItem>
         ))}
       </TreeView>

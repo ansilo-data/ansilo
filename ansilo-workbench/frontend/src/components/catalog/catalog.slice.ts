@@ -95,12 +95,16 @@ const initialState: CatalogState = {
   status: "idle",
 };
 
-export const fetchCatalogAsync = createAsyncThunk("catalog/fetch", async () => {
-  const response = await fetchNodes();
-  return {
-    nodes: response,
-  };
-});
+export const fetchCatalogAsync = createAsyncThunk(
+  "catalog/fetch",
+  async (_, { getState, dispatch }) => {
+    let state = getState() as AppState;
+    const response = await fetchNodes(dispatch as any, state.auth.creds);
+    return {
+      nodes: response,
+    };
+  }
+);
 
 export const catalogSlice = createSlice({
   name: "catalog",

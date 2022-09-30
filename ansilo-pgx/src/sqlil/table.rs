@@ -38,7 +38,7 @@ extension_sql!(
 );
 
 /// Retrieves the entity config as a JSON payload
-/// This is used in order to get a consistent view
+/// This is used to get a consistent view
 /// of the entity when exposing the data catalog.
 #[pg_extern(sql = "")]
 unsafe fn get_entity_config(foreign_table_oid: Oid) -> Option<JsonB> {

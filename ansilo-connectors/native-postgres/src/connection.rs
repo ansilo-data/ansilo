@@ -25,11 +25,14 @@ impl<T: DerefMut<Target = Client>> PostgresConnection<T> {
         }
     }
 
-    pub(crate) fn client<'a>(&'a self) -> &'a T {
+    pub fn client<'a>(&'a self) -> &'a T {
         &*self.client
     }
 
-    pub async fn prepare_async(&mut self, query: PostgresQuery) -> Result<PostgresPreparedQuery<T>> {
+    pub async fn prepare_async(
+        &mut self,
+        query: PostgresQuery,
+    ) -> Result<PostgresPreparedQuery<T>> {
         let statement = self.client.prepare(&query.sql).await?;
 
         Ok(PostgresPreparedQuery::new(

@@ -13,6 +13,7 @@ export interface AuthState {
   methods?: AuthMethod[];
   methodId?: string;
   creds?: AuthCredentials;
+  hasInit: boolean;
 }
 
 export interface AuthMethod {
@@ -49,6 +50,7 @@ const getInitialState = (): AuthState => {
     modalOpen: false,
     authRequiredSem: 0,
     methodsStatus: "idle",
+    hasInit: false,
   };
 };
 
@@ -94,6 +96,7 @@ export const authSlice = createSlice({
 
       state.methodId = methodId;
       state.creds = credentials;
+      state.hasInit = true;
     },
   },
   extraReducers: (builder) => {
