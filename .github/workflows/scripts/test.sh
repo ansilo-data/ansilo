@@ -25,6 +25,7 @@ function track_usage() {
 track_usage &
 
 echo "----- Installing pgx extension -----"
+sudo setfacl -m u:$(id -u):rwx $(pg_config --sharedir)/extension/ $(pg_config --pkglibdir)
 cargo pgx install -p ansilo-pgx
 echo ""
 
