@@ -19,6 +19,8 @@ mod util;
 pub use util::*;
 mod postgres;
 pub use postgres::*;
+mod secrets;
+pub use secrets::*;
 
 // TODO: consider ansilo versioning
 

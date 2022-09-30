@@ -1,17 +1,8 @@
-use std::{
-    any::type_name,
-    collections::HashMap,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{any::type_name, collections::HashMap, fs, path::Path};
 
-use ansilo_core::{
-    config::NodeConfig,
-    err::{Context, Result},
-};
+use ansilo_core::err::{Context, Result};
 use ansilo_logging::{debug, info};
-use serde::Deserialize;
-use serde_yaml::Deserializer;
+use serde::de::DeserializeOwned;
 
 use crate::{
     ctx::Ctx,
@@ -22,6 +13,7 @@ use crate::{
         env::EnvConfigProcessor,
         fetch::FetchConfigProcessor,
         util::{expression_to_string, parse_expression, process_expression, process_strings},
+        vault::VaultConfigProcessor,
         ConfigExprProcessor, ConfigExprResult,
     },
 };
@@ -39,11 +31,6 @@ impl ConfigLoader {
         }
     }
 
-    #[cfg(test)]
-    pub fn mock() -> Self {
-        Self { processors: vec![] }
-    }
-
     fn default_processors() -> Vec<Box<dyn ConfigExprProcessor>> {
         vec![
             Box::new(DirConfigProcessor::default()),
@@ -51,20 +38,25 @@ impl ConfigLoader {
             Box::new(FetchConfigProcessor::default()),
             Box::new(EnvConfigProcessor::default()),
             Box::new(ArgConfigProcessor::default()),
+            Box::new(VaultConfigProcessor::default()),
         ]
     }
 
-    /// Loads the node configuration from the supplied file
-    pub fn load(&self, path: &Path, args: HashMap<String, String>) -> Result<NodeConfig> {
+    /// Loads the configuration from the supplied file
+    pub fn load<T: DeserializeOwned>(
+        &self,
+        path: &Path,
+        args: HashMap<String, String>,
+    ) -> Result<T> {
         let path = path
             .canonicalize()
             .context("Failed to get full config path")?;
         info!("Loading config from path {}", path.display());
 
         let processed = self.load_yaml(path.as_path(), args)?;
-        debug!("Parsing into {}", type_name::<NodeConfig>());
-        let config: NodeConfig =
-            serde_yaml::from_value(processed).context("Failed to parse yaml into NodeConfig")?;
+        debug!("Parsing into {}", type_name::<T>());
+        let config: T = serde_yaml::from_value(processed)
+            .with_context(|| format!("Failed to parse yaml into {}", type_name::<T>()))?;
 
         Ok(config)
     }
@@ -82,24 +74,40 @@ impl ConfigLoader {
             path.display()
         ))?;
 
-        self.load_data(file_data.as_slice(), Some(path.to_path_buf()), args)
+        let config: serde_yaml::Value =
+            serde_yaml::from_slice(file_data.as_slice()).context("Failed to parse yaml")?;
+        let mut ctx = Ctx::new(self, config.clone(), Some(path.to_path_buf()), args);
+
+        self.process_config(&mut ctx, config)
+    }
+
+    /// Loads a subsection of config
+    pub(crate) fn load_part<T: DeserializeOwned>(
+        &self,
+        ctx: &mut Ctx,
+        part: serde_yaml::Value,
+    ) -> Result<T> {
+        debug!("Loading config part for {}", type_name::<T>());
+        let processed = self.process_config(ctx, part)?;
+
+        debug!("Parsing into {}", type_name::<T>());
+        let config: T = serde_yaml::from_value(processed)
+            .with_context(|| format!("Failed to parse yaml into {}", type_name::<T>()))?;
+
+        Ok(config)
     }
 
     /// Parses and processes the supplied yaml
-    pub(crate) fn load_data(
+    pub(crate) fn process_config(
         &self,
-        data: &[u8],
-        path: Option<PathBuf>,
-        args: HashMap<String, String>,
+        ctx: &mut Ctx,
+        config: serde_yaml::Value,
     ) -> Result<serde_yaml::Value> {
-        let mut config = serde_yaml::Value::deserialize(Deserializer::from_slice(data))
-            .context("Failed to parse yaml")?;
-
-        fn process_config(ctx: &Ctx, node: serde_yaml::Value) -> Result<serde_yaml::Value> {
-            process_strings(node, &|string| {
+        fn process_config(ctx: &mut Ctx, node: serde_yaml::Value) -> Result<serde_yaml::Value> {
+            process_strings(node, &mut |string| {
                 let exp = parse_expression(string.as_str())?;
 
-                let res = process_expression(exp, &|mut exp| {
+                let res = process_expression(exp, &mut |mut exp| {
                     for processor in ctx.loader.processors.iter() {
                         let res = processor.process(ctx, exp).context(format!(
                             "Failed to process config value \"{}\" using the {} processor",
@@ -127,7 +135,7 @@ impl ConfigLoader {
             })
         }
 
-        config = process_config(&Ctx::new(self, path, args), config)?;
+        let config = process_config(ctx, config)?;
 
         debug!("Finished processing yaml from file");
         Ok(config)
@@ -137,6 +145,7 @@ impl ConfigLoader {
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::path::PathBuf;
 
     use super::*;
 
@@ -147,7 +156,10 @@ mod tests {
     ) -> Result<String> {
         let loader = ConfigLoader::new();
 
-        let processed = loader.load_data(yaml.as_bytes(), path, args.unwrap_or_default());
+        let yaml: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
+        let mut ctx = Ctx::new(&loader, yaml.clone(), path, args.unwrap_or_default());
+
+        let processed = loader.process_config(&mut ctx, yaml);
 
         processed
             .and_then(|val| Ok(serde_yaml::to_string(&val)?))

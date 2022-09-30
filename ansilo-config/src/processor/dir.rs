@@ -16,7 +16,7 @@ impl ConfigExprProcessor for DirConfigProcessor {
         "current_dir"
     }
 
-    fn process(&self, ctx: &Ctx, expr: X) -> Result<ConfigExprResult> {
+    fn process(&self, ctx: &mut Ctx, expr: X) -> Result<ConfigExprResult> {
         Ok(ConfigExprResult::Expr(
             match (match_interpolation(&expr, &["dir"]), &ctx.path) {
                 (Some(_), Some(path)) if path.parent().is_some() => {
@@ -42,22 +42,22 @@ mod tests {
 
     #[test]
     fn test_dir_processor_ignores_constants() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = DirConfigProcessor::default();
 
         let input = X::Constant("test".to_owned());
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }
 
     #[test]
     fn test_dir_processor_ignores_unknown_prefix() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = DirConfigProcessor::default();
 
         let input = X::Interpolation(vec![X::Constant("test".to_owned())]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }
@@ -69,7 +69,7 @@ mod tests {
         let processor = DirConfigProcessor::default();
 
         let input = X::Interpolation(vec![X::Constant("dir".to_owned())]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(
             result.unwrap(),
@@ -84,7 +84,7 @@ mod tests {
         let processor = DirConfigProcessor::default();
 
         let input = X::Interpolation(vec![X::Constant("dir".to_owned())]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }

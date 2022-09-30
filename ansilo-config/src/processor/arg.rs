@@ -16,7 +16,7 @@ impl ConfigExprProcessor for ArgConfigProcessor {
         "argument"
     }
 
-    fn process(&self, ctx: &Ctx, expr: X) -> Result<ConfigExprResult> {
+    fn process(&self, ctx: &mut Ctx, expr: X) -> Result<ConfigExprResult> {
         Ok(ConfigExprResult::Expr(
             match match_interpolation(&expr, &["arg"]) {
                 Some(p) => {
@@ -49,22 +49,22 @@ mod tests {
 
     #[test]
     fn test_arg_processor_ignores_constants() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = ArgConfigProcessor::default();
 
         let input = X::Constant("test".to_owned());
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }
 
     #[test]
     fn test_arg_processor_ignores_unknown_prefix() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = ArgConfigProcessor::default();
 
         let input = X::Interpolation(vec![X::Constant("test".to_owned())]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }
@@ -79,7 +79,7 @@ mod tests {
             X::Constant("arg".into()),
             X::Constant("TEST_ARG".into()),
         ]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(
             result.unwrap(),
@@ -89,14 +89,14 @@ mod tests {
 
     #[test]
     fn test_arg_processor_errors_when_arg_not_set() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = ArgConfigProcessor::default();
 
         let input = X::Interpolation(vec![
             X::Constant("arg".into()),
             X::Constant("NON_EXISTANT".into()),
         ]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         result.unwrap_err();
     }

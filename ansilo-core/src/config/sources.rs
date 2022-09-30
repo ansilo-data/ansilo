@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Defines a data source
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -7,9 +7,10 @@ pub struct DataSourceConfig {
     pub id: String,
     /// The name of the data source
     pub name: Option<String>,
-    /// The type of the data source. This is the type of the underlying platform.
-    /// eg "postgres", "oracle", "mysql" etc
+    /// The type of the data source. This is the type of the underlying platform defined
+    /// by each connector.
+    /// @see ansilo-connectors/*
     pub r#type: String,
     /// The type specific connection options for the data source
-    pub options: serde_yaml::Value
+    pub options: serde_yaml::Value,
 }

@@ -7,7 +7,8 @@ pub(crate) mod embed;
 pub(crate) mod env;
 pub(crate) mod fetch;
 pub(crate) mod util;
-pub mod arg;
+pub(crate) mod arg;
+pub(crate) mod vault;
 
 /// A config processor applies transformations to the yaml config
 /// This is used for interpolating config items from various sources
@@ -16,7 +17,7 @@ pub(crate) trait ConfigExprProcessor {
     fn display_name(&self) -> &str;
     /// Applies any transformations to the config
     /// The transformations may be recursively applied using the supplied &ConfigLoader
-    fn process(&self, ctx: &Ctx, expr: ConfigStringExpr) -> Result<ConfigExprResult>;
+    fn process(&self, ctx: &mut Ctx, expr: ConfigStringExpr) -> Result<ConfigExprResult>;
 }
 
 /// AST used to represent configuration expressions

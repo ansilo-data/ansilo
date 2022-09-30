@@ -18,7 +18,7 @@ impl ConfigExprProcessor for EnvConfigProcessor {
         "environment"
     }
 
-    fn process(&self, _ctx: &Ctx, expr: X) -> Result<ConfigExprResult> {
+    fn process(&self, _ctx: &mut Ctx, expr: X) -> Result<ConfigExprResult> {
         Ok(ConfigExprResult::Expr(
             match match_interpolation(&expr, &["env"]) {
                 Some(p) => {
@@ -60,29 +60,29 @@ mod tests {
 
     #[test]
     fn test_env_processor_ignores_constants() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = EnvConfigProcessor::default();
 
         let input = X::Constant("test".to_owned());
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }
 
     #[test]
     fn test_env_processor_ignores_unknown_prefix() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = EnvConfigProcessor::default();
 
         let input = X::Interpolation(vec![X::Constant("test".to_owned())]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }
 
     #[test]
     fn test_env_processor_replaces_env_var() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = EnvConfigProcessor::default();
 
         env::set_var("ANSILO_TEST_VAR1", "FROM_ENV");
@@ -90,7 +90,7 @@ mod tests {
             X::Constant("env".to_owned()),
             X::Constant("ANSILO_TEST_VAR1".to_owned()),
         ]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(
             result.unwrap(),
@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_env_processor_default_value() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = EnvConfigProcessor::default();
 
         let input = X::Interpolation(vec![
@@ -108,7 +108,7 @@ mod tests {
             X::Constant("ANSILO_TEST_VAR2".to_owned()),
             X::Constant("DEFAULT_VAL".to_owned()),
         ]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(
             result.unwrap(),
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_env_processor_uses_default_value_if_env_var_is_empty() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = EnvConfigProcessor::default();
 
         env::set_var("ANSILO_TEST_VAR3", "");
@@ -127,7 +127,7 @@ mod tests {
             X::Constant("ANSILO_TEST_VAR3".to_owned()),
             X::Constant("DEFAULT_VAL".to_owned()),
         ]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(
             result.unwrap(),

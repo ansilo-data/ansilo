@@ -29,7 +29,7 @@ pub fn init_conf(config_path: &Path, args: &Args) -> AppConf {
     info!("Loading configuration...");
     let config_loader = ConfigLoader::new();
 
-    let node = config_loader
+    let node: NodeConfig = config_loader
         .load(&config_path, args.config_args.iter().cloned().collect())
         .context("Failed to load configuration")
         .unwrap();

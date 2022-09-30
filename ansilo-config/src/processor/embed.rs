@@ -9,7 +9,7 @@ use super::{
 
 /// Interpolates configuration that embeds the output of the supplied url
 /// This expects the output to parse as valid YAML.
-/// This feature allows for a form of easy confirmation splitting.
+/// This feature allows for a form of easy code splitting.
 #[derive(Default)]
 pub struct EmbedConfigProcessor {}
 
@@ -18,7 +18,7 @@ impl ConfigExprProcessor for EmbedConfigProcessor {
         "embed"
     }
 
-    fn process(&self, _ctx: &Ctx, expr: X) -> Result<ConfigExprResult> {
+    fn process(&self, _ctx: &mut Ctx, expr: X) -> Result<ConfigExprResult> {
         Ok(match match_interpolation(&expr, &["embed"]) {
             Some(p) => {
                 ensure!(p.len() > 1, "${{embed:...}} expression must have arguments");
@@ -55,29 +55,29 @@ mod tests {
 
     #[test]
     fn test_embed_processor_ignores_constants() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = EmbedConfigProcessor::default();
 
         let input = X::Constant("test".to_owned());
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }
 
     #[test]
     fn test_embed_processor_ignores_unknown_prefix() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = EmbedConfigProcessor::default();
 
         let input = X::Interpolation(vec![X::Constant("test".to_owned())]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(result.unwrap(), ConfigExprResult::Expr(input));
     }
 
     #[test]
     fn test_embed_processor_replaces_embed_file_as_parsed_yaml() {
-        let ctx = Ctx::mock();
+        let mut ctx = Ctx::mock();
         let processor = EmbedConfigProcessor::default();
 
         let mut file = NamedTempFile::new().unwrap();
@@ -90,7 +90,7 @@ mod tests {
                 file.path().to_string_lossy().to_string()
             )),
         ]);
-        let result = processor.process(&ctx, input.clone());
+        let result = processor.process(&mut ctx, input.clone());
 
         assert_eq!(
             result.unwrap(),

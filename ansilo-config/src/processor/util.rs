@@ -8,7 +8,10 @@ use super::{ConfigExprResult, ConfigStringExpr as X};
 
 /// Recursively walks the configuration nodes uses the supplied callback
 /// to transforms any strings found
-pub(crate) fn process_strings(node: Value, cb: &impl Fn(String) -> Result<Value>) -> Result<Value> {
+pub(crate) fn process_strings(
+    node: Value,
+    cb: &mut impl FnMut(String) -> Result<Value>,
+) -> Result<Value> {
     Ok(match node {
         Value::String(str) => {
             cb(str.clone()).context(format!("Failed to process config string {}", str))?
@@ -36,9 +39,12 @@ pub(crate) fn process_strings(node: Value, cb: &impl Fn(String) -> Result<Value>
 /// processing nested interpolations, eg ${outer:${inner}}
 pub(crate) fn process_expression(
     exp: X,
-    cb: &impl Fn(X) -> Result<ConfigExprResult>,
+    cb: &mut impl FnMut(X) -> Result<ConfigExprResult>,
 ) -> Result<ConfigExprResult> {
-    fn process_vec(exp: Vec<X>, cb: &impl Fn(X) -> Result<ConfigExprResult>) -> Result<Vec<X>> {
+    fn process_vec(
+        exp: Vec<X>,
+        cb: &mut impl FnMut(X) -> Result<ConfigExprResult>,
+    ) -> Result<Vec<X>> {
         exp.into_iter()
             .map(|i| process_expression(i, cb))
             .collect::<Result<Vec<ConfigExprResult>>>()?
@@ -302,7 +308,7 @@ d!:
         )
         .unwrap();
 
-        let actual = process_strings(input, &|s| Ok(Value::String(s + "!"))).unwrap();
+        let actual = process_strings(input, &mut |s| Ok(Value::String(s + "!"))).unwrap();
 
         assert_eq!(actual, expected);
     }
