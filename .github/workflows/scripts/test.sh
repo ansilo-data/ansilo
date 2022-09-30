@@ -27,6 +27,7 @@ track_usage &
 echo "----- Installing pgx extension -----"
 sudo setfacl -m u:$(id -u):rwx $(pg_config --sharedir)/extension/ $(pg_config --pkglibdir)
 cargo pgx install -p ansilo-pgx
+rm -rf target/pgx-test-data-* # If this dir is present but empty pgx test craps out
 echo ""
 
 echo "----- Running tests -----"
