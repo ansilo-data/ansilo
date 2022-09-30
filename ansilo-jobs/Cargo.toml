@@ -9,9 +9,9 @@ edition = "2021"
 ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-pg = { path = "../ansilo-pg" }
-tokio = "^1.20"
+tokio = { workspace = true }
 tokio-cron-scheduler = "^0.8"
-tokio-postgres = "0.7.7"
+tokio-postgres = { workspace = true }
 
 [dev-dependencies]
 ansilo-pg = { path = "../ansilo-pg", features = ["test"] }

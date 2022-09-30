@@ -10,13 +10,13 @@ ansilo-core = { path = "../../ansilo-core" }
 ansilo-logging = { path = "../../ansilo-logging" }
 ansilo-connectors-base = { path = "../base" }
 ansilo-util-r2d2 = { path = "../../ansilo-util/r2d2" }
-bincode = "2.0.0-rc.1"
-itertools = "0.10"
+bincode = { workspace = true }
+itertools = { workspace = true }
 jni = { git = "https://github.com/TimeToogo/jni-rs", features = ["invocation"] }
-lazy_static = "1.4.0"
+lazy_static = { workspace = true }
 r2d2 = "0.8"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
 cesu8 = "1.1"
 
 [build-dependencies]

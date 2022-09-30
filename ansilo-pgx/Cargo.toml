@@ -28,13 +28,13 @@ ansilo-logging = { path = "../ansilo-logging" }
 ansilo-pg = { path = "../ansilo-pg" }
 ansilo-util-pg = { path = "../ansilo-util/pg" }
 cstr = "0.2.10"
-serde = "1.0"
-serde_json = "1.0"
-serde_yaml = "0.9"
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 time = "0.3"
 pgx = "=0.5.0-beta.0"
-itertools = "0.10"
-lazy_static = "1.4"
+itertools = { workspace = true }
+lazy_static = { workspace = true }
 subtle = "2.4"
 
 # test deps (but also needs to be enabled for pg_test feature)
