@@ -1,0 +1,30 @@
+name: Vault
+
+networking:
+  port: 0 # use kernel-allocated port
+
+vault:
+  address: http://${env:VAULT_IP}:8202
+  auth:
+    type: userpass
+    mount: userpass
+    username: testuser
+    password: ansilo_test
+
+auth:
+  users:
+    - username: test_user1
+      password: ${vault:kv2:secrets/test:key1}
+    - username: test_user2
+      password: ${vault:kv2:secrets/test:key2}
+
+build:
+  stages:
+    - sql: ${dir}/ansilo-sql/*.sql
+
+postgres:
+    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json

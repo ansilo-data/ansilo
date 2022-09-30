@@ -16,3 +16,4 @@ pub mod sqlite;
 pub mod teradata;
 pub mod tls;
 pub mod web;
+pub mod vault;

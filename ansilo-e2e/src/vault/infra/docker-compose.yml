@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  vault:
+    image: 635198228996.dkr.ecr.ap-southeast-2.amazonaws.com/vault:1.11.3
+    ports:
+      - "8202:8202"
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /ecs/ansilo-connectors
+        awslogs-region: ap-southeast-2
+        awslogs-stream-prefix: vault

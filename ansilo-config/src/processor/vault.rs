@@ -43,7 +43,7 @@ impl ConfigExprProcessor for VaultConfigProcessor {
                 let path = &p[2].trim_start_matches('/');
                 let key = &p[3];
 
-                trace!("Retrieving secret from vault {path} (key '{key}') (mount '{mount}')");
+                trace!("Retrieving secret from vault '{path}' (key '{key}') (mount '{mount}')");
                 let secret = state
                     .rt
                     .block_on(vaultrs::kv2::read::<HashMap<String, String>>(
@@ -51,7 +51,9 @@ impl ConfigExprProcessor for VaultConfigProcessor {
                         mount,
                         path,
                     ))
-                    .context("Failed to retrieve vault secret")?;
+                    .with_context(|| {
+                        format!("Failed to retrieve vault secret '{path}' (mount '{mount}')")
+                    })?;
                 trace!("Retrieved secret succesfully");
 
                 let output = match secret.get(key) {
@@ -121,16 +123,14 @@ impl VaultConfigProcessor {
                         &a.mount,
                         &a.role_id,
                         &a.secret_id,
-                    ))
-                    .context("Failed to authenticate with Vault")?
+                    ))?
                     .client_token
                 }
                 VaultAuthMethod::Kubernetes(a) => {
                     debug!("Authenticating with Vault using kubernetes method");
                     rt.block_on(vaultrs::auth::kubernetes::login(
                         &client, &a.mount, &a.role, &a.jwt,
-                    ))
-                    .context("Failed to authenticate with Vault")?
+                    ))?
                     .client_token
                 }
                 VaultAuthMethod::UsernamePassword(a) => {
@@ -140,8 +140,7 @@ impl VaultConfigProcessor {
                         &a.mount,
                         &a.username,
                         &a.password,
-                    ))
-                    .context("Failed to authenticate with Vault")?
+                    ))?
                     .client_token
                 }
             };
