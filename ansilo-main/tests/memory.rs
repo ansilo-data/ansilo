@@ -11,6 +11,8 @@ use std::{
 
 mod common;
 
+const STARTUP_TIMEOUT: u64 = 30;
+
 fn setup() {
     // Remove ansilo & postgres data files before each test
     let _ = fs::remove_dir_all("/tmp/ansilo/pg-main/memory/");
@@ -51,7 +53,7 @@ fn test_memory_conf_run() {
     let pid = child.id();
 
     thread::spawn(move || {
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_secs(STARTUP_TIMEOUT));
         unsafe {
             nix::libc::kill(pid as _, SIGINT);
         }
@@ -90,7 +92,7 @@ fn test_memory_conf_build_then_run() {
     let pid = child.id();
 
     thread::spawn(move || {
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_secs(STARTUP_TIMEOUT));
         unsafe {
             nix::libc::kill(pid as _, SIGINT);
         }
@@ -120,7 +122,7 @@ fn test_memory_conf_dev() {
     let pid = child.id();
 
     thread::spawn(move || {
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_secs(STARTUP_TIMEOUT));
         unsafe {
             nix::libc::kill(pid as _, SIGINT);
         }
