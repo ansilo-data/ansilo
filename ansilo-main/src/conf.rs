@@ -6,7 +6,10 @@ use std::{
 };
 
 use ansilo_config::loader::ConfigLoader;
-use ansilo_core::{config::NodeConfig, err::Context};
+use ansilo_core::{
+    config::NodeConfig,
+    err::{Context, Result},
+};
 use ansilo_logging::info;
 use ansilo_pg::{conf::PostgresConf, PG_ADMIN_USER};
 use ansilo_proxy::conf::{HandlerConf, ProxyConf, TlsConf};
@@ -25,22 +28,34 @@ pub struct AppConf {
 }
 
 /// Initialises the node global config state
-pub fn init_conf(config_path: &Path, args: &Args) -> AppConf {
+pub fn init_conf(config_path: &Path, args: &Args) -> Result<AppConf> {
     info!("Loading configuration...");
     let config_loader = ConfigLoader::new();
 
     let node: NodeConfig = config_loader
         .load(&config_path, args.config_args.iter().cloned().collect())
-        .context("Failed to load configuration")
-        .unwrap();
+        .context("Failed to load configuration")?;
 
     let pg = pg_conf(&node);
 
-    AppConf {
+    Ok(AppConf {
         node,
         path: config_path.into(),
         pg,
-    }
+    })
+}
+
+/// Dumps the processed configuration to stdout
+pub fn dump_conf(config_path: &Path, args: &Args) -> Result<()> {
+    info!("Loading configuration...");
+    let config_loader = ConfigLoader::new();
+
+    let processed = config_loader
+        .load_as_string(&config_path, args.config_args.iter().cloned().collect())
+        .context("Failed to load configuration")?;
+
+    println!("{}", processed);
+    Ok(())
 }
 
 /// Gets the postgres configuration for this instance

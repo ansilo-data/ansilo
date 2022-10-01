@@ -11,7 +11,7 @@ use super::DataValue;
     Debug, PartialEq, Eq, Clone, Serialize, Hash, Deserialize, Encode, Decode, EnumAsInner,
 )]
 pub enum DataType {
-    Utf8String(StringOptions),
+    Utf8String(#[serde(default)] StringOptions),
     Binary,
     Boolean,
     Int8,
@@ -24,7 +24,7 @@ pub enum DataType {
     UInt64,
     Float32,
     Float64,
-    Decimal(DecimalOptions),
+    Decimal(#[serde(default)] DecimalOptions),
     JSON,
     Date,
     Time,

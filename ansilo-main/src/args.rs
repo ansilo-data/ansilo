@@ -4,14 +4,20 @@ use ansilo_core::err::{Error, Result};
 use clap::Parser;
 
 /// Arguments for running the Ansilo main program
-///
-/// TODO[docs]: Add about strings below
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 pub enum Command {
+    /// Runs postgres so it is ready to accept connnections.
+    ///
+    /// If the databasde has not been initialized it will be initialised
+    /// with the current configuration.
     Run(Args),
+    /// Runs in development mode with hot-reload enabled
     Dev(Args),
+    /// Initializes postgres so it can be booted rapidly.
     Build(Args),
+    /// Prints the config, after evaluating all expressions, to stdout
+    DumpConfig(Args),
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -38,6 +44,7 @@ impl Command {
             Command::Run(args) => args,
             Command::Build(args) => args,
             Command::Dev(args) => args,
+            Command::DumpConfig(args) => args,
         }
     }
 
@@ -65,13 +72,21 @@ impl Command {
     pub(crate) fn is_build(&self) -> bool {
         matches!(self, Self::Build(..))
     }
+
+    /// Returns `true` if the command is [`DumpConfig`].
+    ///
+    /// [`DumpConfig`]: Command::DumpConfig
+    #[must_use]
+    pub fn is_dump_config(&self) -> bool {
+        matches!(self, Self::DumpConfig(..))
+    }
 }
 
 impl Args {
     pub(crate) fn config(&self) -> std::path::PathBuf {
         self.config
             .clone()
-            .unwrap_or("/etc/ansilo/main.yml".into())
+            .unwrap_or("/app/ansilo.yml".into())
             .to_path_buf()
     }
 }

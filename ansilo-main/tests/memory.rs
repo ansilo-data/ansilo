@@ -136,3 +136,25 @@ fn test_memory_conf_dev() {
         .stderr(predicate::str::contains("Build complete"))
         .stderr(predicate::str::contains("Start up complete"));
 }
+
+#[test]
+#[serial]
+fn test_memory_dump_config() {
+    setup();
+
+    let mut cmd = Command::cargo_bin("ansilo-main").unwrap();
+
+    cmd.args(["dump-config", "-c", conf().as_str()]);
+    cmd.stdin(Stdio::piped());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let child = cmd.spawn().unwrap();
+
+    child
+        .wait_with_output()
+        .unwrap()
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("name: Memory"));
+}

@@ -73,7 +73,7 @@ impl Ansilo {
         // In dev mode we want to restart if the config is invalid
         // On error we wait for a signal to either terminate or restart
         // SIGUSR1 is triggered by our file inotify watcher.
-        if cmd.is_dev() {
+        if cmd.is_dev() || cmd.is_dump_config() {
             if let Err(_) = panic::catch_unwind(boot) {
                 error!("Error while booting ansilo, waiting for change before restart...");
                 if SIGUSR1 == Self::wait_for_signal().unwrap() {
@@ -92,16 +92,29 @@ impl Ansilo {
 
         // Load configuration
         let config_path = args.config();
-        // We are happy to let the app-wide config leak for the rest of the program
-        let conf: &'static _ = Box::leak(Box::new(init_conf(&config_path, &args)));
 
-        if command.is_dev() {
-            thread::spawn(|| {
-                dev::signal_on_config_update(conf);
+        if command.is_dev() || command.is_dump_config() {
+            let config_path = config_path.clone();
+            thread::spawn(move || {
+                dev::signal_on_config_update(&config_path);
             });
         }
 
-        // Boot tokio
+        if command.is_dump_config() {
+            dump_conf(&config_path, &args)?;
+            std::process::exit(0);
+        }
+
+        // We are happy to let the app-wide config leak for the rest of the program
+        let conf: &'static _ = Box::leak(Box::new(init_conf(&config_path, &args)?));
+
+        if command.is_dev() {
+            thread::spawn(|| {
+                dev::signal_on_sql_update(conf);
+            });
+        }
+
+        // Boot the tokio runtime
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .thread_name("ansilo-tokio-worker")
             .enable_all()

@@ -16,11 +16,11 @@ entities:
       options: null
     attributes:
       - id: type
-        type: !Utf8String
+        type: !Utf8String {}
       - id: name
-        type: !Utf8String
+        type: !Utf8String {}
       - id: age
-        type: Int64
+        type: !Int64
 
 sources:
   - id: memory

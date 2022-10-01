@@ -1,11 +1,12 @@
 use std::{any::type_name, collections::HashMap, fs, path::Path};
 
-use ansilo_core::err::{Context, Result};
+use ansilo_core::err::{bail, Context, Result};
 use ansilo_logging::{debug, info};
 use serde::de::DeserializeOwned;
 
 use crate::{
     ctx::Ctx,
+    diagnostic::ConfigParseError,
     processor::{
         arg::ArgConfigProcessor,
         dir::DirConfigProcessor,
@@ -48,17 +49,32 @@ impl ConfigLoader {
         path: &Path,
         args: HashMap<String, String>,
     ) -> Result<T> {
+        let processed = self.load_as_string(path, args)?;
+        debug!("Parsing into {}", type_name::<T>());
+        let config: T = match serde_yaml::from_str(&processed) {
+            Ok(c) => c,
+            Err(e) => {
+                ConfigParseError::new(processed, e.location().unwrap(), format!("{}", e)).print();
+                bail!("Failed to parse configuration");
+            }
+        };
+
+        Ok(config)
+    }
+
+    /// Loads the configuration from the supplied file and returns the processed
+    /// yaml as a string. This evaluates any expressions in the config file.
+    pub fn load_as_string(&self, path: &Path, args: HashMap<String, String>) -> Result<String> {
         let path = path
             .canonicalize()
-            .context("Failed to get full config path")?;
+            .with_context(|| format!("Failed to get real path of {}", path.display()))?;
         info!("Loading config from path {}", path.display());
 
         let processed = self.load_yaml(path.as_path(), args)?;
-        debug!("Parsing into {}", type_name::<T>());
-        let config: T = serde_yaml::from_value(processed)
-            .with_context(|| format!("Failed to parse yaml into {}", type_name::<T>()))?;
+        let processed =
+            serde_yaml::to_string(&processed).context("Failed to serialised processed config")?;
 
-        Ok(config)
+        Ok(processed)
     }
 
     /// Loads processed yaml from the supplied file

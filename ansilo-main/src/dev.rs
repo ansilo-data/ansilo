@@ -1,7 +1,12 @@
-use std::{ffi::CString, sync::mpsc::channel, time::Duration};
+use std::{
+    ffi::CString,
+    path::Path,
+    sync::mpsc::{self, channel},
+    time::Duration,
+};
 
 use ansilo_core::err::Context;
-use ansilo_logging::{info, warn};
+use ansilo_logging::{info, trace, warn};
 use nix::sys::signal;
 use notify::{watcher, RecursiveMode, Watcher};
 
@@ -9,16 +14,25 @@ use crate::conf::AppConf;
 
 /// We support a fast-reload mode for development using `ansilo dev`.
 /// We will trigger a term signal when configuration files are updated.
-pub fn signal_on_config_update(conf: &AppConf) {
+pub fn signal_on_config_update(path: &Path) {
     let (tx, rx) = channel();
 
     let mut watcher = watcher(tx, Duration::from_secs(10)).unwrap();
 
     // Watch for changes on root config file
+    trace!("Watching on changes for {}", path.display());
     watcher
-        .watch(&conf.path, RecursiveMode::NonRecursive)
-        .context(conf.path.clone().to_string_lossy().to_string())
+        .watch(&path, RecursiveMode::NonRecursive)
+        .context(path.clone().to_string_lossy().to_string())
         .unwrap();
+
+    terminate_on_event(rx)
+}
+
+pub fn signal_on_sql_update(conf: &AppConf) {
+    let (tx, rx) = channel();
+
+    let mut watcher = watcher(tx, Duration::from_secs(10)).unwrap();
 
     // Watch for changes on sql files
     for stage in conf.node.build.stages.iter() {
@@ -34,12 +48,17 @@ pub fn signal_on_config_update(conf: &AppConf) {
             };
         }
 
+        trace!("Watching on changes for {}", path.display());
         watcher
             .watch(path, RecursiveMode::Recursive)
             .context(path.clone().to_string_lossy().to_string())
             .unwrap();
     }
 
+    terminate_on_event(rx)
+}
+
+fn terminate_on_event(rx: mpsc::Receiver<notify::DebouncedEvent>) -> ! {
     loop {
         match rx.recv() {
             Ok(event) => {

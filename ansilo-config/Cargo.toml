@@ -7,6 +7,7 @@ edition = "2021"
 ansilo-core = { path = "../ansilo-core" }
 ansilo-logging = { path = "../ansilo-logging" }
 ansilo-util-url = { path = "../ansilo-util/url" }
+miette = { version = "5.3", features = ["fancy"] }
 serde = { workspace = true }
 serde_yaml = { workspace = true }
 tokio = { workspace = true }

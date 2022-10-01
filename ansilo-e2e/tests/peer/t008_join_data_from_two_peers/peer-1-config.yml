@@ -18,7 +18,7 @@ entities:
       - id: id
         type: Int64
       - id: name
-        type: !Utf8String
+        type: !Utf8String {}
 
 sources:
   - id: memory

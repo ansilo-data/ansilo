@@ -16,7 +16,7 @@ entities:
       options: null
     attributes:
       - id: name
-        type: !Utf8String
+        type: !Utf8String {}
       - id: age
         type: Int64
 
