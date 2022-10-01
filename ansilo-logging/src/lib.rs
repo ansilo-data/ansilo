@@ -2,7 +2,7 @@ use ansilo_core::err::Result;
 pub use env_logger::{init, init_from_env};
 pub use log::*;
 
-/// Configures the logger for this ansilo node
+/// Configures the logger 
 pub fn init_logging() -> Result<()> {
     env_logger::init_from_env(
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),

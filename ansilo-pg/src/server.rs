@@ -32,26 +32,32 @@ impl PostgresServer {
         let mut cmd = Command::new(conf.install_dir.join("bin/postgres"));
         cmd.arg("-D")
             .arg(conf.data_dir.as_os_str())
-            .arg("-c")
-            .arg("listen_addresses=")
-            .arg("-c")
-            .arg(format!("port={}", PG_PORT))
-            .arg("-c")
-            .arg(format!(
-                "data_directory={}",
-                conf.data_dir.to_str().context("Failed to parse data_dir")?
-            ))
-            .arg("-c")
-            .arg(format!(
-                "unix_socket_directories={}",
-                conf.socket_dir_path
-                    .to_str()
-                    .context("Failed to parse socket_dir_path as utf8")?
-            ))
-            .arg("-c")
-            .arg("log_destination=stderr")
-            .arg("-c")
-            .arg("logging_collector=off")
+            .args(["-c", "listen_addresses="])
+            .args(["-c".into(), format!("port={}", PG_PORT)])
+            .args([
+                "-c".into(),
+                format!(
+                    "data_directory={}",
+                    conf.data_dir.to_str().context("Failed to parse data_dir")?
+                ),
+            ])
+            .args([
+                "-c".into(),
+                format!(
+                    "unix_socket_directories={}",
+                    conf.socket_dir_path
+                        .to_str()
+                        .context("Failed to parse socket_dir_path as utf8")?
+                ),
+            ])
+            .args(["-c", "log_destination=stderr"])
+            .args(["-c", "logging_collector=off"])
+            // Minimal logging prefix as our own env_logger add it's own metadata
+            .args(["-c", "log_line_prefix=[%p] "])
+            .args([
+                "-c".into(),
+                format!("log_min_messages={}", Self::get_log_level()),
+            ])
             .env("ANSILO_PG_FDW_SOCKET_PATH", conf.fdw_socket_path.clone());
 
         let mut proc = ChildProc::new("[postgres]", Signal::SIGINT, Duration::from_secs(3), cmd)
@@ -76,6 +82,21 @@ impl PostgresServer {
                 }
             }
         });
+    }
+
+    /// Sets the postgres minimum logging level based on
+    /// the logging level from rust.
+    ///
+    /// @see https://www.postgresql.org/docs/current/runtime-config-logging.html#RUNTIME-CONFIG-SEVERITY-LEVELS
+    fn get_log_level() -> &'static str {
+        match ansilo_logging::max_level() {
+            ansilo_logging::LevelFilter::Off => "PANIC",
+            ansilo_logging::LevelFilter::Error => "ERROR",
+            ansilo_logging::LevelFilter::Warn => "WARNING",
+            ansilo_logging::LevelFilter::Info => "INFO",
+            ansilo_logging::LevelFilter::Debug => "DEBUG1",
+            ansilo_logging::LevelFilter::Trace => "DEBUG5",
+        }
     }
 
     /// Waits until postgres is running and listening for connections
@@ -136,7 +157,9 @@ mod tests {
 
     fn test_pg_config() -> &'static PostgresConf {
         let conf = PostgresConf {
-            install_dir: PathBuf::from(std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into())),
+            install_dir: PathBuf::from(
+                std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
+            ),
             postgres_conf_path: None,
             data_dir: PathBuf::from("/tmp/ansilo-tests/pg-server/data"),
             socket_dir_path: PathBuf::from("/tmp/ansilo-tests/pg-server"),
