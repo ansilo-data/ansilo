@@ -315,4 +315,27 @@ mod tests {
         // Should reuse the same prepared query for all rows
         assert_eq!(crate::rq::get_prepared_queries_count(), 3);
     }
+
+    #[pg_test]
+    fn test_remote_query_select_column_count_mismatch() {
+        setup_test("rq_select_column_count_mismatch");
+
+        std::panic::catch_unwind(|| {
+            Spi::connect(|client| {
+                client.select(
+                    r#"
+                SELECT * FROM 
+                remote_query(
+                    'sqlite_srv',
+                    'SELECT 1, ''abc'', NULL'
+                ) AS t(c1 INT, c2 TEXT)
+                "#,
+                    None,
+                    None,
+                );
+                Ok(None::<()>)
+            });
+        })
+        .unwrap_err();
+    }
 }

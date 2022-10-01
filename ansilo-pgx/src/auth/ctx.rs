@@ -27,6 +27,7 @@ impl AuthContextState {
     }
 
     pub fn get() -> Option<CurrentAuthContext> {
+        pgx::debug1!("Retreiving auth context");
         let ctx = Self::lock();
 
         match &*ctx {
@@ -36,6 +37,7 @@ impl AuthContextState {
     }
 
     pub fn update(new: Self) {
+        pgx::debug1!("Updating auth context");
         let mut ctx = Self::lock();
 
         *ctx = new;

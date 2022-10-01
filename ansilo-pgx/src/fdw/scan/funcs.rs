@@ -63,6 +63,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
     baserel: *mut RelOptInfo,
     foreigntableid: Oid,
 ) {
+    pgx::debug1!("Estimating relation size");
     // We scope the connection to the top-level transaction
     // so all queries use the same connection which is required
     // for remote transactions or locking.
@@ -70,6 +71,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
 
     // Run user-defined callback if provided
     if let Some(func) = ctx.foreign_table_opts.before_select.as_ref() {
+        pgx::debug1!("Invoking before select user-defined function");
         call_udf(func.as_str());
     }
 
@@ -107,6 +109,7 @@ pub unsafe extern "C" fn get_foreign_rel_size(
         (*(*baserel).reltarget).width = row_width as _;
     }
 
+    pgx::debug1!("Estimated size: {:?}", cost);
     (*baserel).fdw_private = into_fdw_private_rel(ctx, query, planner) as *mut _;
 }
 
@@ -119,6 +122,7 @@ pub unsafe extern "C" fn get_foreign_paths(
     baserel: *mut RelOptInfo,
     foreigntableid: Oid,
 ) {
+    pgx::debug1!("Getting foreign paths");
     let (mut ctx, mut base_query, _) = from_fdw_private_rel((*baserel).fdw_private as *mut _);
     let planner = PlannerContext::base_rel(root, baserel);
     let base_cost = calculate_query_cost(&mut base_query, &planner);
@@ -345,14 +349,22 @@ pub unsafe extern "C" fn get_foreign_join_paths(
 
         /// For an full join we are required to push down all clauses
         if join_type == JoinType::Full && join_clause.is_err() {
+            pgx::debug1!(
+                "Failed to push down full join: {:?}",
+                join_clause.unwrap_err()
+            );
             return;
         }
 
-        if let Ok(clause) = join_clause {
-            join_clauses.push(clause);
-            join_query.remote_conds.push(restriction);
-        } else {
-            join_query.local_conds.push(restriction);
+        match join_clause {
+            Ok(clause) => {
+                join_clauses.push(clause);
+                join_query.remote_conds.push(restriction);
+            }
+            Err(err) => {
+                pgx::debug1!("Failed to push down join restriction: {:?}", err);
+                join_query.local_conds.push(restriction);
+            }
         }
     }
 
@@ -555,7 +567,8 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         // Is this expr a GROUP BY expression?
         if sort_group_ref != 0 && !sort_group.is_null() {
             // If we cannot push the grouping expression down then abort
-            if expr.is_err() {
+            if let Err(err) = expr {
+                pgx::debug1!("Failed to push down grouping expression: {:?}", err);
                 return;
             }
 
@@ -590,6 +603,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
                     );
                 } else {
                     // Failed to convert to expression, we cannot push down this grouping
+                    pgx::debug1!("Failed to push down aggregate: {:?}", expr.err());
                     return;
                 }
             }
@@ -610,6 +624,7 @@ pub unsafe extern "C" fn get_foreign_grouping_paths(
         .iter()
         .any(|i| !group_query.as_select().unwrap().remote_ops.contains(i))
     {
+        pgx::debug1!("Failed to push down grouping: not supported by connector");
         return;
     }
 
@@ -1797,10 +1812,11 @@ unsafe fn apply_query_conds(
     let conds = conds
         .into_iter()
         .filter_map(|i| {
-            let expr = convert((*i).clause as *const _, &mut query.cvt, &planner, &ctx).ok();
+            let expr = convert((*i).clause as *const _, &mut query.cvt, &planner, &ctx);
 
             // Store conditions requiring local evaluation for later
-            if expr.is_none() {
+            if let Err(err) = expr {
+                pgx::debug1!("Failed to push down condition: {:?}", err);
                 query.local_conds.push(i);
                 return None;
             }

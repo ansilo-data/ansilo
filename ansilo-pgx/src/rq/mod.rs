@@ -96,6 +96,8 @@ pub fn remote_execute(fcinfo: FunctionCallInfo) -> Option<i64> {
     let query = pg_getarg::<String>(fcinfo, 1).expect("query is null");
     let params = unsafe { parse_params(fcinfo, 2) }.unwrap();
 
+    pgx::debug1!("Executing remote query: {}", query);
+
     try_remote_execute(server_name, query.clone(), params)
         .with_context(|| format!("Failed to execute remote query: '{query}'"))
         .unwrap()
@@ -134,6 +136,8 @@ pub unsafe fn remote_query(fcinfo: FunctionCallInfo) -> Datum {
         let query = pg_getarg::<String>(fcinfo, 1).expect("query is null");
         let params = parse_params(fcinfo, 2).unwrap();
 
+        pgx::debug1!("Executing remote query: {}", query);
+
         // Init func context
         let mut funcctx = srf_first_call_init(fcinfo);
         funcctx.user_fctx = PgMemoryContexts::For(funcctx.multi_call_memory_ctx)
@@ -158,6 +162,13 @@ pub unsafe fn remote_query(fcinfo: FunctionCallInfo) -> Datum {
                 .with_context(|| format!("Failed to execute remote query: '{query}'"))
                 .unwrap()
         });
+
+        let req_atts = (*funcctx.tuple_desc).natts as usize;
+        let actual_atts = result.get_structure().cols.len();
+        
+        if req_atts != actual_atts {
+            pgx::error!("Failed to execute remote query: column count mismatch, defined {req_atts} columns on local query but remote query returned {actual_atts} columns");
+        }
 
         rs_holder.rs = pgx::PgMemoryContexts::For(funcctx.multi_call_memory_ctx)
             .leak_and_drop_on_delete(result);

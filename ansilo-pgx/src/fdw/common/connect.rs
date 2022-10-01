@@ -68,6 +68,7 @@ impl FdwIpcConnection {
 /// of the connection.
 impl Drop for FdwIpcConnection {
     fn drop(&mut self) {
+        pgx::debug1!("Dropping ipc connection");
         let mut client = match self.client.lock() {
             Ok(c) => c,
             Err(err) => {
@@ -158,6 +159,11 @@ unsafe fn get_connection(opts: ServerOptions) -> Result<Arc<FdwIpcConnection>> {
 
     // There is no active connection, let's create a new one
     // Connect to ansilo over a unix socket
+    pgx::debug1!(
+        "Connecting to socket {} for data source {}",
+        opts.socket.display(),
+        opts.data_source
+    );
     let sock = UnixStream::connect(&opts.socket)
         .with_context(|| format!("Failed to connect to socket {}", opts.socket.display()))?;
     let mut client = IpcClientChannel::new(sock);
@@ -178,6 +184,10 @@ unsafe fn get_connection(opts: ServerOptions) -> Result<Arc<FdwIpcConnection>> {
 
     let con = Arc::new(FdwIpcConnection::new(opts.data_source.clone(), client));
     active.insert(opts.data_source.clone(), Arc::downgrade(&con));
+    pgx::debug1!(
+        "Successfully connected for data source {}",
+        opts.data_source
+    );
 
     Ok(con)
 }

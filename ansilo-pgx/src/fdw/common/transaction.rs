@@ -114,6 +114,8 @@ pub(crate) unsafe fn begin_remote_transaction(con: &Arc<FdwIpcConnection>) -> Re
 
 /// Handles transaction events from postgres
 unsafe extern "C" fn handle_transaction_event(event: XactEvent, _arg: *mut c_void) {
+    pgx::debug5!("Handling transaction event: {}", event);
+
     match event {
         // If we are committing the postgres transaction we try
         // commit any active remote transactions

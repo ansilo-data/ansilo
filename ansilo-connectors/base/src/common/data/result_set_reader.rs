@@ -63,7 +63,7 @@ where
     }
 
     /// Gets the data type structure of the rows returned in the result set
-    pub fn get_structure(&mut self) -> &RowStructure {
+    pub fn get_structure(&self) -> &RowStructure {
         &self.structure
     }
 

@@ -44,6 +44,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     target_rte: *mut RangeTblEntry,
     target_relation: Relation,
 ) {
+    pgx::debug1!("Adding foreign row id expressions");
     let mut ctx = pg_transaction_scoped(common::connect_table((*target_relation).rd_id));
 
     let row_ids = match ctx.get_row_id_exprs("unused") {
@@ -97,6 +98,8 @@ pub unsafe extern "C" fn plan_foreign_modify(
     result_relation: Index,
     subplan_index: ::std::os::raw::c_int,
 ) -> *mut List {
+    pgx::debug1!("Planning foreign modify");
+
     if !(*plan).returningLists.is_null() {
         panic!("RETURNING clauses are currently not supported");
     }
@@ -149,6 +152,7 @@ unsafe fn plan_foreign_insert(
 ) -> FdwQueryContext {
     // If the user provided a before insert callback, invoke it now
     if let Some(func) = ctx.foreign_table_opts.before_insert.as_ref() {
+        pgx::debug1!("Invoking before insert user-defined function");
         call_udf(func.as_str());
     }
 
@@ -204,6 +208,7 @@ unsafe fn plan_foreign_update(
 ) -> FdwQueryContext {
     // If the user provided a before update callback, invoke it now
     if let Some(func) = ctx.foreign_table_opts.before_update.as_ref() {
+        pgx::debug1!("Invoking before update user-defined function");
         call_udf(func.as_str());
     }
 
@@ -307,6 +312,7 @@ unsafe fn plan_foreign_delete(
 ) -> FdwQueryContext {
     // If the user provided a before delete callback, invoke it now
     if let Some(func) = ctx.foreign_table_opts.before_delete.as_ref() {
+        pgx::debug1!("Invoking before delete user-defined function");
         call_udf(func.as_str());
     }
 
@@ -741,6 +747,7 @@ pub unsafe extern "C" fn plan_direct_modify(
     result_relation: Index,
     subplan_index: ::std::os::raw::c_int,
 ) -> bool {
+    pgx::debug1!("Planning direct modify");
     // Currently, we do not support RETURNING in direct modifications
     if !(*plan).returningLists.is_null() {
         return false;
@@ -849,6 +856,7 @@ unsafe fn plan_direct_foreign_update(
 ) -> Option<FdwQueryContext> {
     // If the user provided a before update callback, invoke it now
     if let Some(func) = ctx.foreign_table_opts.before_update.as_ref() {
+        pgx::debug1!("Invoking before update user-defined function");
         call_udf(func.as_str());
     }
 
@@ -945,8 +953,9 @@ unsafe fn plan_direct_foreign_delete(
     inner_select: &FdwQueryContext,
     table: PgTable,
 ) -> Option<FdwQueryContext> {
-    // If the user provided a before update callback, invoke it now
+    // If the user provided a before delete callback, invoke it now
     if let Some(func) = ctx.foreign_table_opts.before_delete.as_ref() {
+        pgx::debug1!("Invoking before delete user-defined function");
         call_udf(func.as_str());
     }
 
@@ -987,7 +996,7 @@ unsafe fn plan_direct_foreign_delete(
         query.as_delete_mut().unwrap().remote_ops.push(op);
     }
 
-    // If we made it this far, we have been able to push down the entire update query
+    // If we made it this far, we have been able to push down the entire delete query
     Some(query)
 }
 

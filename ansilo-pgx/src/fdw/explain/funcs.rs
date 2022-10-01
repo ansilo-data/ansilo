@@ -15,6 +15,7 @@ use crate::util::string::{parse_to_owned_utf8_string, to_cstr};
 
 #[pg_guard]
 pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *mut ExplainState) {
+    pgx::debug1!("Explaining foriegn scan");
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
     let (ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
 

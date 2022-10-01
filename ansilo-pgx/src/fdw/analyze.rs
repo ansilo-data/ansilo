@@ -1,6 +1,7 @@
 use pgx::*;
 use pgx::pg_sys::{HeapTuple, Relation, BlockNumber, AcquireSampleRowsFunc};
 
+/// We currenot do not support analyzing foriegn tables
 #[pg_guard]
 pub unsafe extern "C" fn acquire_sampl(
     relation: Relation,

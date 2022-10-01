@@ -9,6 +9,8 @@ pub(crate) unsafe fn prepare_query_params(
     query: &FdwQueryContext,
     node: *mut ForeignScanState,
 ) {
+    pgx::debug1!("Preparing query params");
+
     // Prepare the query param expr's for evaluation
     let param_nodes = query.cvt.param_nodes();
     let param_exprs = PgList::<pg_sys::ExprState>::from_pg(pg_sys::ExecInitExprList(
@@ -40,6 +42,8 @@ pub(crate) unsafe fn send_query_params(
     scan: &FdwScanContext,
     node: *mut ForeignScanState,
 ) {
+    pgx::debug1!("Sending query params");
+
     let input_data = {
         let input_structure = query
             .get_input_structure()
@@ -74,4 +78,5 @@ pub(crate) unsafe fn send_query_params(
 
     // Finally, serialise and send the query params
     query.write_params(input_data).unwrap();
+    pgx::debug1!("Sending query sent");
 }

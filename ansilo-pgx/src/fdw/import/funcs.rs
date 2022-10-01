@@ -19,6 +19,7 @@ pub unsafe extern "C" fn import_foreign_schema(
 ) -> *mut List {
     let server = GetForeignServer(server_oid);
     let mut ctx = connect_server(server_oid);
+    pgx::debug1!("Importing foreign schema from {}", ctx.data_source_id);
 
     // Parse the statement into EntityDiscoverOptions
     let remote_schema = parse_to_owned_utf8_string((*stmt).remote_schema).unwrap();
