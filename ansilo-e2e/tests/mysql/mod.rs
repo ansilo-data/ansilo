@@ -10,3 +10,4 @@ pub mod t009_insert_select;
 pub mod t010_update_where;
 pub mod t011_delete_where;
 pub mod t012_unsupported_column_types;
+pub mod t013_modify_composite_pk;

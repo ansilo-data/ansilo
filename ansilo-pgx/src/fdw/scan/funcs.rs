@@ -1387,8 +1387,7 @@ unsafe fn pull_vars(nodes: impl std::iter::Iterator<Item = *mut Node>) -> Vec<*m
 }
 
 unsafe fn is_self_item_ptr(node: *mut Node) -> bool {
-    (*node).type_ == pg_sys::NodeTag_T_Var as u32
-        && (*(node as *mut pg_sys::Var)).varattno == pg_sys::SelfItemPointerAttributeNumber as i16
+    (*node).type_ == pg_sys::NodeTag_T_Var as u32 && (*(node as *mut pg_sys::Var)).varattno < 0
 }
 
 unsafe fn is_whole_row(node: *mut Node) -> bool {
@@ -1421,13 +1420,7 @@ unsafe fn deduplicate_columns(cols: Vec<*mut Node>) -> Vec<*mut Node> {
 }
 
 unsafe fn cols_are_equivalent(a: *mut pg_sys::Var, b: *mut pg_sys::Var) -> bool {
-    // HACK: If it is a row id var, we include the location in the comparison
-    // to disambiguate them if there are multiple row id's for a table.
-    if is_self_item_ptr(a as *mut _) {
-        ((*a).varno, (*a).varattno, (*a).location) == ((*b).varno, (*b).varattno, (*b).location)
-    } else {
-        ((*a).varno, (*a).varattno) == ((*b).varno, (*b).varattno)
-    }
+    ((*a).varno, (*a).varattno) == ((*b).varno, (*b).varattno)
 }
 
 #[pg_guard]

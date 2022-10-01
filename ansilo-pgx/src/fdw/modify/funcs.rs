@@ -58,19 +58,21 @@ pub unsafe extern "C" fn add_foreign_update_targets(
     };
 
     for (idx, (expr, r#type)) in row_ids.into_iter().enumerate() {
+        // We have to ensure the attnum's are unique for all rowid vars
+        // so set_foreignscan_references in setrefs.c does not get confused
+        // and set distinct rowid var's to the same underlying var from the plan
+        // fdw_scan_list.
+        // We also have to ensure they do not clash with any real attnum's from the 
+        // range table, hence we make them negative.
+        let varattno = -(idx as i16 + 1);
         let col = pg_sys::makeVar(
             rtindex,
-            pg_sys::SelfItemPointerAttributeNumber as _,
+            varattno as _,
             into_pg_type(&r#type).unwrap(),
             -1,
             pg_sys::InvalidOid,
             0,
         );
-
-        // HACK: we could have multiple row id vars using the same varattno
-        // We want to keep these distinct so we need a way to disambiguate them
-        // We use the location attribute to reference which row id var this is.
-        (*col).location = idx as _;
 
         // Append each rowid as a resjunk tle
         // We give each rowid a unique name in the format below so
