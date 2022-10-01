@@ -3,6 +3,7 @@ use ansilo_core::{
     data::chrono::{DateTime, Utc},
 };
 use ansilo_pg::{handler::PostgresConnectionHandler, PostgresConnectionPools};
+use ansilo_util_health::Health;
 use serde::{Deserialize, Serialize};
 
 /// Required state and dependencies for the http api
@@ -14,6 +15,8 @@ pub struct HttpApiState {
     pools: PostgresConnectionPools,
     /// Handler for connections to postgres
     pg_handler: PostgresConnectionHandler,
+    /// System health
+    health: Health,
     /// Version info
     version_info: VersionInfo,
 }
@@ -23,12 +26,14 @@ impl HttpApiState {
         conf: &'static NodeConfig,
         pools: PostgresConnectionPools,
         pg_handler: PostgresConnectionHandler,
+        health: Health,
         version_info: VersionInfo,
     ) -> Self {
         Self {
             conf,
             pools,
             pg_handler,
+            health,
             version_info,
         }
     }
@@ -43,6 +48,10 @@ impl HttpApiState {
 
     pub fn pg_handler(&self) -> &PostgresConnectionHandler {
         &self.pg_handler
+    }
+
+    pub fn health(&self) -> &Health {
+        &self.health
     }
 
     pub fn version_info(&self) -> &VersionInfo {

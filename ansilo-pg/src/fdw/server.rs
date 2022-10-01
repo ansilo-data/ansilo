@@ -70,6 +70,14 @@ impl FdwServer {
         Ok(())
     }
 
+    /// Checks whether the fdw server is running
+    pub fn healthy(&self) -> bool {
+        match &self.thread {
+            Some(h) => !h.is_finished(),
+            None => false,
+        }
+    }
+
     /// Terminates the current server
     pub fn terminate(mut self) -> Result<()> {
         self.terminate_mut()
@@ -450,9 +458,11 @@ mod tests {
 
     #[test]
     fn test_fdw_server_terminate() {
-        let server = create_server("terminate");
+        let mut server = create_server("terminate");
 
-        server.terminate().unwrap();
+        assert!(server.healthy());
+        server.terminate_mut().unwrap();
+        assert!(!server.healthy());
     }
 
     #[test]

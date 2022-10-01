@@ -49,6 +49,15 @@ impl JobScheduler {
         self.runtime.block_on(self.inner.start())
     }
 
+    /// Checks whether the scheduler is healthy
+    pub fn healthy(&self) -> bool {
+        match &self.inner.scheduler {
+            // This heuristic could be improved
+            Some(_s) => true,
+            None => false,
+        }
+    }
+
     /// Terminate the job scheduler
     pub fn terminate(mut self) -> Result<()> {
         self.terminate_mut()

@@ -15,6 +15,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TableCell from "@mui/material/TableCell";
 import TableBody from "@mui/material/TableBody";
+import _ from "lodash";
 
 interface Status {
   ok: boolean
@@ -38,11 +39,12 @@ export const Status = () => {
         if (r.status >= 400) {
           throw new Error(`Unexpected status code from health check: ${r.status}`)
         }
-        return r.text();
+        return r.json();
       })
-        .then(msg => {
-          if (!msg.includes("Ok")) {
-            throw new Error(`Unexpected health check response: ${msg}`)
+        .then(res => {
+          const unhealthy = _.toPairs(res.subsystems).find(([_, state]) => !(state as any).healthy);
+          if (unhealthy) {
+            throw new Error(`Subsystem '${unhealthy[0]}' is not healthy`)
           }
         })
         .then(() => {

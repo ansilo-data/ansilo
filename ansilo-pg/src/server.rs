@@ -89,6 +89,10 @@ impl PostgresServer {
     ///
     /// @see https://www.postgresql.org/docs/current/runtime-config-logging.html#RUNTIME-CONFIG-SEVERITY-LEVELS
     fn get_log_level() -> &'static str {
+        if ansilo_logging::test_mode() {
+            return "DEBUG1";
+        }
+
         match ansilo_logging::max_level() {
             ansilo_logging::LevelFilter::Off => "PANIC",
             ansilo_logging::LevelFilter::Error => "ERROR",

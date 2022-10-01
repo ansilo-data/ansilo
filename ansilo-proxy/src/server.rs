@@ -5,11 +5,12 @@ use std::{
 };
 
 use ansilo_core::err::{Context, Error, Result};
-use ansilo_logging::{debug, error, info, warn, trace};
+use ansilo_logging::{debug, error, info, trace, warn};
 use socket2::{Domain, Socket};
 use tokio::{
     net::TcpListener,
     sync::broadcast::{self, Receiver, Sender},
+    task::JoinHandle,
 };
 
 use crate::{conf::ProxyConf, connection::Connection};
@@ -18,6 +19,7 @@ use crate::{conf::ProxyConf, connection::Connection};
 pub struct ProxyServer {
     conf: &'static ProxyConf,
     addrs: Arc<Mutex<Vec<SocketAddr>>>,
+    listeners: Vec<JoinHandle<()>>,
     terminator: Option<(Sender<()>, Receiver<()>)>,
 }
 
@@ -26,6 +28,7 @@ impl ProxyServer {
         Self {
             conf,
             addrs: Arc::new(Mutex::new(vec![])),
+            listeners: vec![],
             terminator: Some(broadcast::channel(1)),
         }
     }
@@ -50,11 +53,11 @@ impl ProxyServer {
         let listeners = futures::future::try_join_all(listeners).await?;
 
         for mut listener in listeners {
-            tokio::spawn(async move {
+            self.listeners.push(tokio::spawn(async move {
                 if let Err(err) = listener.accept().await {
                     error!("Failed to listen on addr: {:?}", err)
                 }
-            });
+            }));
         }
 
         Ok(())
@@ -67,6 +70,11 @@ impl ProxyServer {
             .lock()
             .map_err(|_| Error::msg("Failed to lock addrs"))?
             .clone())
+    }
+
+    /// Checks whether the proxy server is healthy
+    pub fn healthy(&self) -> bool {
+        self.listeners.iter().all(|l| !l.is_finished())
     }
 
     /// Terminates the proxy server
@@ -200,6 +208,7 @@ mod tests {
         let server = create_server(mock_config_no_tls());
 
         assert!(server.terminator.is_some());
+        assert!(server.healthy());
 
         TcpStream::connect(server.conf.addrs[0]).unwrap_err();
     }
@@ -210,6 +219,7 @@ mod tests {
         let mut server = create_server(mock_config_no_tls());
 
         server.start().await.unwrap();
+        assert!(server.healthy());
 
         let mut con = TcpStream::connect(server.conf.addrs[0]).unwrap();
 
@@ -221,6 +231,7 @@ mod tests {
         yield_now().await;
 
         assert!(server.terminator.is_none());
+        assert!(!server.healthy());
 
         // Connection should now fail
         con.write_all(&[1]).and_then(|_| con.flush()).unwrap_err();

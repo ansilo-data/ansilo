@@ -1,4 +1,14 @@
-use std::{collections::HashMap, os::raw::c_int, panic, thread, time::Duration};
+use std::{
+    collections::HashMap,
+    os::raw::c_int,
+    panic,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Duration,
+};
 
 use crate::{args::Command, build::BuildInfo};
 use ansilo_auth::Authenticator;
@@ -7,14 +17,14 @@ use ansilo_connectors_all::{
 };
 use ansilo_core::err::{Context, Result};
 use ansilo_jobs::JobScheduler;
-use ansilo_logging::{error, info, warn};
+use ansilo_logging::{error, info, trace, warn};
 use ansilo_pg::{fdw::server::FdwServer, handler::PostgresConnectionHandler, PostgresInstance};
 use ansilo_proxy::{conf::HandlerConf, server::ProxyServer};
+use ansilo_util_health::Health;
 use ansilo_web::{Http1ConnectionHandler, Http2ConnectionHandler, HttpApi, HttpApiState};
 use clap::Parser;
-use nix::libc::SIGUSR1;
 use signal_hook::{
-    consts::{SIGINT, SIGTERM},
+    consts::{SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2},
     iterator::Signals,
 };
 
@@ -41,6 +51,10 @@ pub struct Ansilo {
     subsystems: Option<Subsystems>,
     /// Remote query log
     log: RemoteQueryLog,
+    /// Health status
+    health: Health,
+    /// Whether the instance has been terminated
+    term: Arc<AtomicBool>,
 }
 
 pub struct Subsystems {
@@ -146,6 +160,9 @@ impl Ansilo {
             runtime.block_on(build(conf, authenticator.clone()))?
         };
 
+        let health = Health::new();
+        let term = Arc::new(AtomicBool::new(false));
+
         if command.is_build() {
             info!("Build complete...");
             return Ok(Self {
@@ -153,6 +170,8 @@ impl Ansilo {
                 conf,
                 subsystems: None,
                 log,
+                health,
+                term,
             });
         }
 
@@ -164,6 +183,7 @@ impl Ansilo {
             &conf.node,
             postgres.connections().clone(),
             pg_con_handler.clone(),
+            health.clone(),
             (&build_info).into(),
         )))?;
 
@@ -187,8 +207,7 @@ impl Ansilo {
             JobScheduler::new(&conf.node.jobs, runtime.handle().clone(), pg_con_handler);
         scheduler.start().context("Failed to start job scheduler")?;
 
-        info!("Start up complete...");
-        Ok(Self {
+        let instance = Self {
             command,
             conf,
             subsystems: Some(Subsystems {
@@ -201,7 +220,14 @@ impl Ansilo {
                 scheduler,
             }),
             log,
-        })
+            health,
+            term,
+        };
+
+        instance.check_health();
+
+        info!("Start up complete...");
+        Ok(instance)
     }
 
     /// Gets the app config
@@ -225,7 +251,26 @@ impl Ansilo {
             return Ok(());
         }
 
-        let sig = Self::wait_for_signal()?;
+        // Update service health every 30s
+        self.check_health();
+        let term = Arc::clone(&self.term);
+        thread::spawn(move || {
+            while !term.load(Ordering::SeqCst) {
+                thread::sleep(Duration::from_secs(30));
+                let _ = nix::sys::signal::kill(nix::unistd::getpid(), nix::sys::signal::SIGUSR2);
+            }
+        });
+
+        let sig = loop {
+            let sig = Self::wait_for_signal()?;
+
+            if sig == SIGUSR2 {
+                self.check_health();
+                continue;
+            }
+
+            break sig;
+        };
 
         self.terminate_mut(Some(sig))?;
 
@@ -241,6 +286,8 @@ impl Ansilo {
             Some(s) => s,
             None => return Ok(()),
         };
+
+        self.term.store(true, Ordering::SeqCst);
 
         info!("Terminating...");
         if let Err(err) = subsystems.scheduler.terminate() {
@@ -309,19 +356,40 @@ impl Ansilo {
         Ok(pools)
     }
 
+    /// Updates the health of the each subsystem
+    fn check_health(&self) {
+        if let Some(ref subsystems) = self.subsystems {
+            trace!("Updating system health status");
+
+            let _ = self
+                .health
+                .update("Authenticator", subsystems.authenticator().healthy());
+            let _ = self
+                .health
+                .update("Postgres", subsystems.postgres().healthy());
+            let _ = self.health.update("Proxy", subsystems.proxy().healthy());
+            let _ = self.health.update("FDW", subsystems.fdw().healthy());
+            let _ = self.health.update("HTTP", subsystems.http().healthy());
+            let _ = self
+                .health
+                .update("Scheduler", subsystems.scheduler().healthy());
+        }
+    }
+
     fn wait_for_signal() -> Result<i32> {
-        let mut sigs =
-            Signals::new(&[SIGINT, SIGTERM, SIGUSR1]).context("Failed to attach signal handler")?;
+        let mut sigs = Signals::new(&[SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2])
+            .context("Failed to attach signal handler")?;
         let sig = sigs.forever().next().unwrap();
 
-        // TODO: better handling if critical threads fail
         info!(
             "Received {}",
             match sig {
                 SIGINT => "SIGINT".into(),
+                SIGQUIT => "SIGQUIT".into(),
                 SIGTERM => "SIGTERM".into(),
                 SIGUSR1 => "SIGUSR1".into(),
-                _ => format!("unkown signal {}", sig),
+                SIGUSR2 => return Ok(sig),
+                _ => format!("unknown signal {}", sig),
             }
         );
 
@@ -356,5 +424,13 @@ impl Subsystems {
 
     pub fn authenticator(&self) -> &Authenticator {
         &self.authenticator
+    }
+
+    pub fn http(&self) -> &HttpApi {
+        &self.http
+    }
+
+    pub fn scheduler(&self) -> &JobScheduler {
+        &self.scheduler
     }
 }

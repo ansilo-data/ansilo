@@ -136,6 +136,11 @@ impl PostgresInstance {
         &self.conf
     }
 
+    /// Checks whether the postgres instance is running
+    pub fn healthy(&self) -> bool {
+        self.server.running()
+    }
+
     /// Terminates the postgres instance, waiting for shutdown to complete
     pub fn terminate(self) -> Result<()> {
         self.server.terminate()
@@ -198,6 +203,7 @@ mod tests {
         let instance = PostgresInstance::configure(&conf).await.unwrap();
 
         assert!(instance.server.running());
+        assert!(instance.healthy());
     }
 
     #[tokio::test]
@@ -215,9 +221,11 @@ mod tests {
         let conf = test_pg_config("configure_then_start");
         let instance = PostgresInstance::configure(conf).await.unwrap();
         assert!(instance.server.running());
+        assert!(instance.healthy());
         drop(instance);
 
         let instance = PostgresInstance::start(conf).await.unwrap();
         assert!(instance.server.running());
+        assert!(instance.healthy());
     }
 }

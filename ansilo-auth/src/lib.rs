@@ -82,6 +82,12 @@ impl Authenticator {
             .with_context(|| format!("Auth provider '{}' does not exist", provider_id))
     }
 
+    /// Checks whether the authenticator is running
+    pub fn healthy(&self) -> bool {
+        // We could improve this
+        true
+    }
+
     /// Terminates the authenticator
     pub fn terminate(self) -> Result<()> {
         // no op as of now

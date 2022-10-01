@@ -16,6 +16,7 @@ ansilo-auth = { path = "../ansilo-auth" }
 ansilo-web = { path = "../ansilo-web" }
 ansilo-jobs = { path = "../ansilo-jobs" }
 ansilo-util-pg = { path = "../ansilo-util/pg" }
+ansilo-util-health = { path = "../ansilo-util/health" }
 chrono = { workspace = true }
 clap = { version = "4.0", features = ["derive"] }
 glob = "0.3"

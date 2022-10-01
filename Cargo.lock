@@ -464,6 +464,7 @@ dependencies = [
  "ansilo-logging",
  "ansilo-pg",
  "ansilo-proxy",
+ "ansilo-util-health",
  "ansilo-util-pg",
  "ansilo-util-pgx-install",
  "ansilo-web",
@@ -562,6 +563,15 @@ name = "ansilo-util-debug"
 version = "0.1.0"
 
 [[package]]
+name = "ansilo-util-health"
+version = "0.1.0"
+dependencies = [
+ "ansilo-core",
+ "ansilo-logging",
+ "serde",
+]
+
+[[package]]
 name = "ansilo-util-pg"
 version = "0.1.0"
 
@@ -599,6 +609,7 @@ dependencies = [
  "ansilo-logging",
  "ansilo-pg",
  "ansilo-proxy",
+ "ansilo-util-health",
  "ansilo-workbench",
  "async-trait",
  "axum",

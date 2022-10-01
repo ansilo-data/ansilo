@@ -120,6 +120,14 @@ impl HttpApi {
         })
     }
 
+    /// Checks whether http server is running
+    pub fn healthy(&self) -> bool {
+        match (&self.http1_srv, &self.http2_srv) {
+            (Some(http1), Some(http2)) => !http1.is_finished() && !http2.is_finished(),
+            _ => false,
+        }
+    }
+
     fn get_frontend_path() -> String {
         if let Ok(path) = env::var("ANSILO_FRONTEND_PATH") {
             return path;
@@ -232,6 +240,7 @@ mod tests {
         },
         PostgresConnectionPools,
     };
+    use ansilo_util_health::Health;
     use hyper::{Body, Request, StatusCode};
     use tower::ServiceExt;
 
@@ -267,6 +276,7 @@ mod tests {
             conf,
             pools.clone(),
             PostgresConnectionHandler::new(authenticator, pools),
+            Health::new(),
             VersionInfo::new("test", DateTime::<Utc>::MIN_UTC),
         )
     }
@@ -278,11 +288,13 @@ mod tests {
 
         assert_eq!(api.http1_srv.as_ref().unwrap().is_finished(), false);
         assert_eq!(api.http2_srv.as_ref().unwrap().is_finished(), false);
+        assert_eq!(api.healthy(), true);
 
         api.terminate_mut().unwrap();
 
         assert_eq!(api.http1_srv.is_none(), true);
         assert_eq!(api.http2_srv.is_none(), true);
+        assert_eq!(api.healthy(), false);
     }
 
     #[tokio::test]

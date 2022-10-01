@@ -4,9 +4,9 @@ use axum::Router;
 
 use crate::HttpApiState;
 
-mod healthcheck;
-mod v1;
-mod version;
+pub mod healthcheck;
+pub mod v1;
+pub mod version;
 
 pub(super) fn router(state: Arc<HttpApiState>) -> Router<HttpApiState> {
     Router::with_state_arc(state.clone())
