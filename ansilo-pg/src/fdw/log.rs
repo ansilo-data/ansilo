@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use ansilo_connectors_base::interface::LoggedQuery;
 use ansilo_core::err::{bail, Context, Result};
-use ansilo_logging::info;
+use ansilo_logging::{info, limiting::MaxLogLength};
 
 /// Storage for logging remote queries
 #[derive(Clone)]
@@ -23,7 +23,19 @@ impl RemoteQueryLog {
     }
 
     pub fn record(&self, data_source: &str, query: LoggedQuery) -> Result<()> {
-        info!("Remote query sent to {}: {:?}", data_source, query);
+        info!(
+            "Remote query sent to {}: {:?}",
+            data_source,
+            // Query logs can get very long, so limit the length if we are not on debug level
+            MaxLogLength::new(
+                if ansilo_logging::max_level() >= ansilo_logging::Level::Debug {
+                    None
+                } else {
+                    Some(2000)
+                },
+                &query
+            )
+        );
 
         if self.queries.is_some() {
             self.lock()?.push((data_source.into(), query));

@@ -4,6 +4,8 @@ use ansilo_core::err::Result;
 pub use env_logger::{init, init_from_env};
 pub use log::*;
 
+pub mod limiting;
+
 static TEST_MODE: AtomicBool = AtomicBool::new(false);
 
 /// Configures the logger
