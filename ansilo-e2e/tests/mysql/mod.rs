@@ -11,3 +11,4 @@ pub mod t010_update_where;
 pub mod t011_delete_where;
 pub mod t012_unsupported_column_types;
 pub mod t013_modify_composite_pk;
+pub mod t014_insert_empty_string;

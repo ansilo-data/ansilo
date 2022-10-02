@@ -14,3 +14,4 @@ pub mod t013_insert_select;
 pub mod t014_unsupported_column_types;
 pub mod t015_select_constant;
 pub mod t016_import_nonstandard_identifiers;
+pub mod t017_insert_empty_string;

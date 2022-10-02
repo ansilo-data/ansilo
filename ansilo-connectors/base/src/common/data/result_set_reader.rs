@@ -174,7 +174,7 @@ pub(super) mod rs_tests {
     #[test]
     fn test_result_set_reader_get_structure() {
         let structure = RowStructure::new(vec![("test".to_string(), DataType::Int32)]);
-        let mut res = MockResultSet::new(structure.clone(), vec![]);
+        let res = MockResultSet::new(structure.clone(), vec![]);
 
         assert_eq!(res.get_structure(), &structure);
     }

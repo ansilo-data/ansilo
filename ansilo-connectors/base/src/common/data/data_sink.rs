@@ -69,9 +69,11 @@ impl DataSink {
             let buf = self.buf.drain(..(1 + size)).collect();
             DataReader::read_one(buf, self.current_data_type())
         } else {
+            // If this is the first chunk in a stream set the idx to the first chunk
+            // which is after the not null byte
             if self.next_chunk_idx.is_none() {
                 // Current buffer structure is [(not null)u8, (chunk length)u8, (data)n....]
-                self.next_chunk_idx = Some(2 + self.buf[1] as usize);
+                self.next_chunk_idx = Some(1);
             }
 
             loop {
@@ -192,6 +194,7 @@ mod tests {
             DataValue::Utf8String("🔥".into()),
             DataValue::Utf8String("foobar".into()),
             DataValue::Utf8String("🥑🚀".into()),
+            DataValue::Utf8String("".into()),
             DataValue::Decimal(Decimal::new(12345600, 5)),
             DataValue::Int8(88),
             DataValue::Int16(5432),
@@ -529,6 +532,26 @@ mod tests {
         assert_eq!(
             sink.read_data_value().unwrap(),
             Some(DataValue::Utf8String("hello".into()))
+        );
+        assert_eq!(sink.read_data_value().unwrap(), None,);
+    }
+
+    #[test]
+    fn test_data_sink_write_empty_string() {
+        let mut sink = DataSink::new(vec![DataType::rust_string()]);
+
+        sink.write_all(
+            &[
+                vec![1u8], // not null
+                vec![0u8], // empty chunk
+            ]
+            .concat(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            sink.read_data_value().unwrap(),
+            Some(DataValue::Utf8String("".into()))
         );
         assert_eq!(sink.read_data_value().unwrap(), None,);
     }
