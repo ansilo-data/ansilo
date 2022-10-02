@@ -430,5 +430,3 @@ impl<T: DerefMut<Target = Client>> PostgresQueryPlanner<T> {
         expr.iter().all(Self::expr_supported)
     }
 }
-
-// TODO: tests

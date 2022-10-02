@@ -447,4 +447,3 @@ impl MssqlJdbcQueryPlanner {
     }
 }
 
-// TODO: tests

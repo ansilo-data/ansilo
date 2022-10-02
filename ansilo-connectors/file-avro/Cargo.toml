@@ -10,7 +10,7 @@ ansilo-core = { path = "../../ansilo-core" }
 ansilo-logging = { path = "../../ansilo-logging" }
 ansilo-connectors-base = { path = "../base" }
 ansilo-connectors-file-base = { path = "../file-base" }
-# TODO: change to crates.io when next release happens
+# TODO: change to crates.io when next release happens on https://crates.io/crates/apache-avro
 apache-avro = { git = "https://github.com/apache/avro" }
 itertools = { workspace = true }
 serde = { workspace = true }

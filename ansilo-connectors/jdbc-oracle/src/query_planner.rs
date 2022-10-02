@@ -34,7 +34,6 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
         connection: &mut Self::TConnection,
         entity: &EntitySource<OracleJdbcEntitySourceConfig>,
     ) -> Result<OperationCost> {
-        // TODO: custom query support
         // TODO: multiple sample options
 
         let table = OracleJdbcQueryCompiler::compile_source_identifier(&entity.source)?;
@@ -111,31 +110,18 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     fn create_base_insert(
         _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
-        entity: &EntitySource<OracleJdbcEntitySourceConfig>,
+        _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Insert)> {
-        match &entity.source {
-            OracleJdbcEntitySourceConfig::Table(_) => {}
-            OracleJdbcEntitySourceConfig::CustomQueries(q) if q.insert_query.is_some() => {}
-            _ => bail!(
-                "Cannot perform insert on entity without source table or insert query defined"
-            ),
-        }
-
         Ok((OperationCost::default(), sql::Insert::new(source.clone())))
     }
 
     fn create_base_bulk_insert(
         _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
-        entity: &EntitySource<OracleJdbcEntitySourceConfig>,
+        _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::BulkInsert)> {
-        match &entity.source {
-            OracleJdbcEntitySourceConfig::Table(_) => {}
-            _ => bail!("Cannot perform bulk insert on entity without source table"),
-        }
-
         Ok((
             OperationCost::default(),
             sql::BulkInsert::new(source.clone()),
@@ -145,34 +131,18 @@ impl QueryPlanner for OracleJdbcQueryPlanner {
     fn create_base_update(
         _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
-        entity: &EntitySource<OracleJdbcEntitySourceConfig>,
+        _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Update)> {
-        match &entity.source {
-            OracleJdbcEntitySourceConfig::Table(_) => {}
-            OracleJdbcEntitySourceConfig::CustomQueries(q) if q.update_query.is_some() => {}
-            _ => bail!(
-                "Cannot perform update on entity without source table or update query defined"
-            ),
-        }
-
         Ok((OperationCost::default(), sql::Update::new(source.clone())))
     }
 
     fn create_base_delete(
         _connection: &mut Self::TConnection,
         _conf: &OracleJdbcConnectorEntityConfig,
-        entity: &EntitySource<OracleJdbcEntitySourceConfig>,
+        _entity: &EntitySource<OracleJdbcEntitySourceConfig>,
         source: &sql::EntitySource,
     ) -> Result<(OperationCost, sql::Delete)> {
-        match &entity.source {
-            OracleJdbcEntitySourceConfig::Table(_) => {}
-            OracleJdbcEntitySourceConfig::CustomQueries(q) if q.delete_query.is_some() => {}
-            _ => bail!(
-                "Cannot perform delete on entity without source table or delete query defined"
-            ),
-        }
-
         Ok((OperationCost::default(), sql::Delete::new(source.clone())))
     }
 
@@ -427,5 +397,3 @@ impl OracleJdbcQueryPlanner {
         expr.iter().all(Self::expr_supported)
     }
 }
-
-// TODO: tests

@@ -60,7 +60,6 @@ impl OracleJdbcConnectionConfig {
 #[serde(tag = "type")]
 pub enum OracleJdbcEntitySourceConfig {
     Table(OracleJdbcTableOptions),
-    CustomQueries(OracleJdbcCustomQueryOptions),
 }
 
 impl OracleJdbcEntitySourceConfig {
@@ -91,69 +90,6 @@ impl OracleJdbcTableOptions {
             owner_name,
             table_name,
             attribute_column_map,
-        }
-    }
-}
-
-/// Entity source configuration for mapping an entity to custom queries
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OracleJdbcCustomQueryOptions {
-    /// The select query used to read entities, none if select is not supported
-    pub select_query: Option<OracleJdbcSelectQueryOptions>,
-    /// The insert query used to create entities, none if insert is not supported
-    pub insert_query: Option<OracleJdbcModifyQueryOptions>,
-    /// The update query used to update existing entities, none if update is not supported
-    pub update_query: Option<OracleJdbcModifyQueryOptions>,
-    /// The delete query used to delete entities, none if delete is not supported
-    pub delete_query: Option<OracleJdbcModifyQueryOptions>,
-}
-
-impl OracleJdbcCustomQueryOptions {
-    pub fn new(
-        select_query: Option<OracleJdbcSelectQueryOptions>,
-        insert_query: Option<OracleJdbcModifyQueryOptions>,
-        update_query: Option<OracleJdbcModifyQueryOptions>,
-        delete_query: Option<OracleJdbcModifyQueryOptions>,
-    ) -> Self {
-        Self {
-            select_query,
-            insert_query,
-            update_query,
-            delete_query,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OracleJdbcSelectQueryOptions {
-    /// The select SQL query
-    pub query: String,
-    /// Mapping of attributes to their respective column names
-    pub attribute_column_map: HashMap<String, String>,
-}
-
-impl OracleJdbcSelectQueryOptions {
-    pub fn new(query: String, attribute_column_map: HashMap<String, String>) -> Self {
-        Self {
-            query,
-            attribute_column_map,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OracleJdbcModifyQueryOptions {
-    /// The insert/update/delete SQL query
-    pub query: String,
-    /// List of entity attributes the are bound to the query as parameters
-    pub attribute_parameter_list: Vec<String>,
-}
-
-impl OracleJdbcModifyQueryOptions {
-    pub fn new(query: String, attribute_parameter_list: Vec<String>) -> Self {
-        Self {
-            query,
-            attribute_parameter_list,
         }
     }
 }

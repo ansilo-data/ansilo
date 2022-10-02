@@ -32,8 +32,6 @@ impl QueryPlanner for MysqlJdbcQueryPlanner {
         connection: &mut Self::TConnection,
         entity: &EntitySource<MysqlJdbcEntitySourceConfig>,
     ) -> Result<OperationCost> {
-        // TODO: multiple sample options
-
         let tab = match &entity.source {
             MysqlJdbcEntitySourceConfig::Table(tab) => tab,
         };
@@ -437,5 +435,3 @@ impl MysqlJdbcQueryPlanner {
         expr.iter().all(Self::expr_supported)
     }
 }
-
-// TODO: tests

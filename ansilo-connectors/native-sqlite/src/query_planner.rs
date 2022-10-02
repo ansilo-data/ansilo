@@ -394,5 +394,3 @@ impl SqliteQueryPlanner {
         expr.iter().all(Self::expr_supported)
     }
 }
-
-// TODO: tests

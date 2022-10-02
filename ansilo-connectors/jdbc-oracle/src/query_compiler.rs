@@ -80,7 +80,6 @@ impl OracleJdbcQueryCompiler {
         query: &sql::Query,
         insert: &sql::Insert,
     ) -> Result<JdbcQuery> {
-        // TODO: custom query support
         let mut params = Vec::<QueryParam>::new();
 
         let query = [
@@ -172,7 +171,6 @@ impl OracleJdbcQueryCompiler {
         query: &sql::Query,
         update: &sql::Update,
     ) -> Result<JdbcQuery> {
-        // TODO: custom query support
         let mut params = Vec::<QueryParam>::new();
 
         let query = [
@@ -211,7 +209,6 @@ impl OracleJdbcQueryCompiler {
         query: &sql::Query,
         delete: &sql::Delete,
     ) -> Result<JdbcQuery> {
-        // TODO: custom query support
         let mut params = Vec::<QueryParam>::new();
 
         let query = [
@@ -427,7 +424,6 @@ impl OracleJdbcQueryCompiler {
     }
 
     pub fn compile_source_identifier(source: &OracleJdbcEntitySourceConfig) -> Result<String> {
-        // TODO: custom query
         Ok(match &source {
             OracleJdbcEntitySourceConfig::Table(OracleJdbcTableOptions {
                 owner_name: Some(db),
@@ -443,7 +439,6 @@ impl OracleJdbcQueryCompiler {
                 table_name: table,
                 ..
             }) => Self::compile_identifier(table.clone())?,
-            OracleJdbcEntitySourceConfig::CustomQueries(_) => todo!(),
         })
     }
 
@@ -458,10 +453,8 @@ impl OracleJdbcQueryCompiler {
             .get(&source.entity)
             .with_context(|| format!("Failed to find entity {:?}", source.entity.clone()))?;
 
-        // TODO: custom query
         let table = match &entity.source {
             OracleJdbcEntitySourceConfig::Table(table) => table,
-            OracleJdbcEntitySourceConfig::CustomQueries(_) => todo!(),
         };
 
         let column = table
