@@ -12,12 +12,23 @@ use ansilo_core::{
 };
 use pgx::{pg_sys::Oid, *};
 
+use crate::util::string::parse_to_owned_utf8_string;
+
 /// Attempt to convert a postgres datum union type to ansilo's DataValue
 ///
 /// NOTE: This cannot be called with a NULL value, doing so will result in Bad Things (tm)
 ///
 /// This is a hot code path. We need to take good care in optimising this.
 pub unsafe fn from_datum(type_oid: Oid, datum: pg_sys::Datum) -> Result<DataValue> {
+    if pg_sys::log_min_messages <= pg_sys::DEBUG5 as _ {
+        pgx::debug5!(
+            "Converting postgres datum {:?} of type {:?} into DataValue",
+            datum,
+            parse_to_owned_utf8_string(pg_sys::format_type_be(type_oid))
+                .unwrap_or_else(|_| type_oid.to_string()),
+        );
+    }
+
     match type_oid {
         // @see https://github.com/postgres/postgres/blob/REL_14_4/src/include/postgres.h
         pg_sys::INT2OID => Ok(DataValue::Int16(i16::parse(datum)?)),

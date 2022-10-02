@@ -7,7 +7,7 @@ use ansilo_core::{
     },
     err::{bail, Result},
 };
-use pgx::{*, pg_sys::Oid};
+use pgx::{pg_sys::Oid, *};
 
 use crate::util::string::parse_to_owned_utf8_string;
 
@@ -23,6 +23,15 @@ pub unsafe fn into_datum(
     is_null: *mut bool,
     datum: *mut pg_sys::Datum,
 ) -> Result<()> {
+    if pg_sys::log_min_messages <= pg_sys::DEBUG5 as _ {
+        pgx::debug5!(
+            "Converting {:?} into postgres datum of type {}",
+            val,
+            parse_to_owned_utf8_string(pg_sys::format_type_be(type_oid))
+                .unwrap_or_else(|_| type_oid.to_string())
+        );
+    }
+    
     *is_null = false;
 
     *datum = match (type_oid, r#type, val) {
