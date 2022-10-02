@@ -37,6 +37,7 @@ impl<F: FileIO> QueryPlanner for FileQueryPlanner<F> {
         let row_count = if path
             .try_exists()
             .context("Failed to check if file exists")?
+            && path.metadata()?.len() > 0
         {
             F::estimate_row_count(con.conf(), &path)?
         } else {
