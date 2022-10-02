@@ -16,3 +16,6 @@ flamegraph.svg
 **/node_modules/*
 **/.next/*
 .git/*
+.cargo/
+!.devcontainer/.cargo/
+!.github/workflows/docker/.cargo/
