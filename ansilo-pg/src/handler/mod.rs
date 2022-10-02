@@ -408,6 +408,15 @@ impl<'a> ProxySession<'a> {
             sessions.remove(cancel_key);
         }
 
+        // Now that the session has finished, we attempt to clean the connection
+        // to free up any temporary tables, transactions or other state.
+        if !con.broken() {
+            if let Err(err) = con.execute("DISCARD ALL").await {
+                warn!("Error while cleaning conneciton: {:?}", err);
+                con.set_broken();
+            }
+        }
+
         // Reset the auth context so the connection be recycled with a new client.
         if !con.broken() {
             if let Some(reset_token) = self.auth_reset_token.as_ref() {
@@ -421,15 +430,6 @@ impl<'a> ProxySession<'a> {
                     warn!("Error while resetting auth context: {:?}", err);
                     con.set_broken();
                 }
-            }
-        }
-
-        // Now that the session has finished, we attempt to clean the connection
-        // to free up any temporary tables, transactions or other state.
-        if !con.broken() {
-            if let Err(err) = con.execute("DISCARD ALL").await {
-                warn!("Error while cleaning conneciton: {:?}", err);
-                con.set_broken();
             }
         }
 
