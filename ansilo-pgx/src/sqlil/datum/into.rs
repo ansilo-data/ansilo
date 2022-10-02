@@ -1,8 +1,6 @@
 use ansilo_core::{
     data::{
-        chrono::{
-            Datelike, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone, Timelike, Weekday,
-        },
+        chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone, Timelike},
         uuid, DataType, DataValue, DateTimeWithTZ,
     },
     err::{bail, Result},
@@ -31,7 +29,7 @@ pub unsafe fn into_datum(
                 .unwrap_or_else(|_| type_oid.to_string())
         );
     }
-    
+
     *is_null = false;
 
     *datum = match (type_oid, r#type, val) {
@@ -156,18 +154,12 @@ pub(crate) unsafe fn into_datum_pg_alloc(
 
 fn into_date(data: NaiveDate) -> pgx::Date {
     pgx::Date::new(
-        time::Date::from_iso_week_date(
+        time::Date::from_calendar_date(
             data.year() as _,
-            data.iso_week().week() as _,
-            match data.weekday() {
-                Weekday::Mon => time::Weekday::Monday,
-                Weekday::Tue => time::Weekday::Tuesday,
-                Weekday::Wed => time::Weekday::Wednesday,
-                Weekday::Thu => time::Weekday::Thursday,
-                Weekday::Fri => time::Weekday::Friday,
-                Weekday::Sat => time::Weekday::Saturday,
-                Weekday::Sun => time::Weekday::Sunday,
-            },
+            (data.month() as u8)
+                .try_into()
+                .expect("Failed to convert month"),
+            data.day() as _,
         )
         .unwrap(),
     )
@@ -619,6 +611,28 @@ mod tests {
             assert_eq!(
                 Vec::<u8>::from_datum(datum, false).unwrap(),
                 "Hello world".as_bytes().to_vec()
+            );
+        }
+    }
+
+    #[pg_test]
+    fn test_into_datum_date_which_caused_error() {
+        unsafe {
+            assert_eq!(
+                into_datum_owned(
+                    pg_sys::DATEOID,
+                    DataType::Date,
+                    DataValue::Date(NaiveDate::from_ymd(2021, 1, 3))
+                )
+                .unwrap(),
+                (
+                    false,
+                    pgx::Date::new(
+                        time::Date::from_calendar_date(2021, time::Month::January, 3).unwrap()
+                    )
+                    .into_datum()
+                    .unwrap()
+                )
             );
         }
     }
