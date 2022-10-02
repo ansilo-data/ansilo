@@ -314,7 +314,7 @@ impl Ansilo {
         info!("Shutdown sequence complete");
 
         // If we are running in dev-mode, restart the process
-        if self.command.is_dev() && sig == Some(SIGUSR1) {
+        if self.command.is_dev() && sig == Some(SIGHUP) {
             dev::restart();
         }
 
