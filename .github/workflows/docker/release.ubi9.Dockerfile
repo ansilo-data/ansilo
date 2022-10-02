@@ -18,7 +18,7 @@ ENV ANSILO_PG_DEFAULT_CONF=/ansilo/postgresql.conf
 RUN yum install -y openssl
 
 # Copy artifacts
-COPY artifacts/* /ansilo/
+COPY artifacts/ /ansilo/
 
 # Set up runtime user
 RUN adduser ansilo -u 1000 && \
