@@ -1,0 +1,26 @@
+name: postgres
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+sources:
+  - id: postgres
+    type: native.postgres
+    options:
+      url: host=${env:POSTGRES_IP} port=5433 user=ansilo_admin password=ansilo_testing dbname=postgres
+        
+build:
+  stages:
+    - sql: ${dir}/ansilo-sql/*.sql
+
+postgres:
+    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
+    data_dir: ${arg:TEMP_DIR}/data
+    listen_socket_dir_path: ${arg:TEMP_DIR}
+    fdw_socket_path: ${arg:TEMP_DIR}/fdw.sock
+    build_info_path: ${arg:TEMP_DIR}/build-info.json

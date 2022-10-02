@@ -50,7 +50,7 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
                     SELECT
                         t.table_schema,
                         t.table_name,
-                        pg_catalog.obj_description(format('%s.%s', t.table_schema, t.table_name)::regclass::oid, 'pg_class') as table_description,
+                        pg_catalog.obj_description(format('"%s"."%s"', t.table_schema, t.table_name)::regclass::oid, 'pg_class') as table_description,
                         c.column_name,
                         c.is_identity,
                         c.data_type,
@@ -59,7 +59,7 @@ impl<T: DerefMut<Target = Client>> PostgresEntitySearcher<T> {
                         c.numeric_precision,
                         c.numeric_scale,
                         c.ordinal_position,
-                        pg_catalog.col_description(format('%s.%s', t.table_schema, t.table_name)::regclass::oid, c.ordinal_position) as column_description
+                        pg_catalog.col_description(format('"%s"."%s"', t.table_schema, t.table_name)::regclass::oid, c.ordinal_position) as column_description
                     FROM information_schema.tables t
                     INNER JOIN information_schema.columns C ON t.table_schema = c.table_schema AND t.table_name = c.table_name
                     WHERE 1=1
