@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::{conf::PostgresConf, PostgresInstance};
 use ansilo_auth::Authenticator;
-use ansilo_core::config::{AuthConfig, PasswordUserConfig, UserConfig, UserTypeOptions};
+use ansilo_core::config::{AuthConfig, PasswordUserConfig, UserConfig, UserTypeOptions, ResourceConfig};
 use ansilo_proxy::stream::{IOStream, Stream};
 use tokio::net::UnixStream;
 
@@ -38,6 +38,7 @@ pub fn mock_password_auth_default() -> Authenticator {
 pub async fn init_pg(test_name: &'static str, auth: &Authenticator) -> PostgresInstance {
     // This runs blocking code and contains a runtime
     let conf = Box::leak(Box::new(PostgresConf {
+        resources: ResourceConfig::default(),
         install_dir: PathBuf::from(
             std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
         ),

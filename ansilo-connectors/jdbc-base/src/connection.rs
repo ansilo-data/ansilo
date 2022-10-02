@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use ansilo_core::{
     auth::AuthContext,
+    config::ResourceConfig,
     data::DataValue,
     err::{bail, Context, Result},
 };
@@ -36,9 +37,10 @@ struct Manager {
 
 impl JdbcConnectionPool {
     pub fn new<TConnectionOptions: JdbcConnectionConfig>(
+        conf: &ResourceConfig,
         options: TConnectionOptions,
     ) -> Result<Self> {
-        let jvm = Jvm::boot()?;
+        let jvm = Jvm::boot(Some(conf))?;
         let manager = Manager {
             jvm: Arc::new(jvm),
             jdbc_url: options.get_jdbc_url(),
@@ -404,10 +406,10 @@ mod tests {
     }
 
     fn init_sqlite_connection() -> JdbcConnection {
-        JdbcConnectionPool::new(MockSqliteJdbcConnectionConfig(
-            "jdbc:sqlite::memory:".to_owned(),
-            HashMap::new(),
-        ))
+        JdbcConnectionPool::new(
+            &ResourceConfig::default(),
+            MockSqliteJdbcConnectionConfig("jdbc:sqlite::memory:".to_owned(), HashMap::new()),
+        )
         .unwrap()
         .acquire(None)
         .unwrap()
@@ -420,10 +422,10 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_init_invalid() {
-        let res = JdbcConnectionPool::new(MockSqliteJdbcConnectionConfig(
-            "invalid".to_owned(),
-            HashMap::new(),
-        ))
+        let res = JdbcConnectionPool::new(
+            &ResourceConfig::default(),
+            MockSqliteJdbcConnectionConfig("invalid".to_owned(), HashMap::new()),
+        )
         .unwrap()
         .acquire(None);
 

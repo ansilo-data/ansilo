@@ -213,7 +213,7 @@ dependencies = [
  "cesu8",
  "itertools",
  "jni",
- "lazy_static",
+ "once_cell",
  "r2d2",
  "serde",
  "serde_json",

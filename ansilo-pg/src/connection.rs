@@ -67,12 +67,15 @@ impl PostgresConnectionPool {
 mod tests {
     use std::{env, path::PathBuf, thread};
 
+    use ansilo_core::config::ResourceConfig;
+
     use crate::{initdb::PostgresInitDb, server::PostgresServer, PG_SUPER_USER};
 
     use super::*;
 
     fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
         let conf = PostgresConf {
+            resources: ResourceConfig::default(),
             install_dir: PathBuf::from(
                 env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
             ),

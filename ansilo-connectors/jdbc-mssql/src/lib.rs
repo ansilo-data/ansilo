@@ -52,10 +52,10 @@ impl Connector for MssqlJdbcConnector {
 
     fn create_connection_pool(
         options: MssqlJdbcConnectionConfig,
-        _nc: &NodeConfig,
+        nc: &NodeConfig,
         _entities: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
     ) -> Result<Self::TConnectionPool> {
-        JdbcConnectionPool::new(options)
+        JdbcConnectionPool::new(&nc.resources, options)
     }
 }
 

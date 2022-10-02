@@ -1,4 +1,5 @@
 use std::{
+    cmp,
     process::{Command, ExitStatus},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -10,7 +11,7 @@ use std::{
 };
 
 use ansilo_core::err::{bail, Context, Error, Result};
-use ansilo_logging::info;
+use ansilo_logging::{debug, info};
 use nix::sys::signal::Signal;
 
 use crate::{conf::PostgresConf, proc::ChildProc, PG_PORT};
@@ -60,6 +61,28 @@ impl PostgresServer {
             ])
             .env("ANSILO_PG_FDW_SOCKET_PATH", conf.fdw_socket_path.clone());
 
+        // Apply connection limit
+        debug!(
+            "Setting postgres max_connections={}",
+            conf.resources.connections()
+        );
+        cmd.args([
+            "-c".into(),
+            format!("max_connections={}", conf.resources.connections()),
+        ]);
+
+        // Apply memory limits
+        let shared_buff_mem = conf.resources.pg_memory_mb() / 2;
+        debug!("Setting postgres shared_buffers={shared_buff_mem}MB");
+        cmd.args(["-c".into(), format!("shared_buffers={shared_buff_mem}MB")]);
+        let work_mem = cmp::max(
+            1,
+            (conf.resources.pg_memory_mb() / 2) / conf.resources.connections(),
+        );
+        debug!("Setting postgres work_mem={work_mem}MB");
+        cmd.args(["-c".into(), format!("work_mem={work_mem}MB")]);
+
+        // Start postgres
         let mut proc = ChildProc::new("[postgres]", Signal::SIGINT, Duration::from_secs(3), cmd)
             .context("Failed to start postgres server process")?;
         let output = proc.subscribe()?;
@@ -153,6 +176,7 @@ impl PostgresServer {
 mod tests {
     use std::path::PathBuf;
 
+    use ansilo_core::config::ResourceConfig;
     use nix::{sys::signal::kill, unistd::Pid};
 
     use crate::initdb::PostgresInitDb;
@@ -161,6 +185,7 @@ mod tests {
 
     fn test_pg_config() -> &'static PostgresConf {
         let conf = PostgresConf {
+            resources: ResourceConfig::default(),
             install_dir: PathBuf::from(
                 std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
             ),

@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn test_get_row_structure() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
 
         let jdbc_con = create_sqlite_memory_connection(&jvm);
         let result_set = execute_query(&jvm, jdbc_con, "SELECT 1 as num, \"abc\" as str");
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_result_set_read_int() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
 
         let jdbc_con = create_sqlite_memory_connection(&jvm);
         let mut result_set = execute_query(&jvm, jdbc_con, "SELECT 1 as num");
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_result_set_read_string() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
 
         let jdbc_con = create_sqlite_memory_connection(&jvm);
         let mut result_set = execute_query(&jvm, jdbc_con, "SELECT \"abc\" as str");

@@ -21,6 +21,8 @@ mod postgres;
 pub use postgres::*;
 mod secrets;
 pub use secrets::*;
+mod resources;
+pub use resources::*;
 
 // TODO: consider ansilo versioning
 
@@ -33,6 +35,9 @@ pub struct NodeConfig {
     pub description: Option<String>,
     /// Networking options
     pub networking: NetworkingConfig,
+    /// Resource capacity options
+    #[serde(default)]
+    pub resources: ResourceConfig,
     /// Auth options
     pub auth: AuthConfig,
     /// The build configuration

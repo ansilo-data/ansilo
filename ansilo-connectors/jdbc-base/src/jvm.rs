@@ -1,46 +1,70 @@
 use std::{env, fs, path::PathBuf};
 
-use ansilo_core::err::{bail, Context, Error, Result};
+use ansilo_core::{
+    config::ResourceConfig,
+    err::{bail, Context, Error, Result},
+};
 use ansilo_logging::{debug, warn};
 use jni::{
     objects::{JObject, JString},
     InitArgsBuilder, JNIEnv, JNIVersion, JavaVM,
 };
+use once_cell::sync::OnceCell;
 
 // Global JVM instance
-lazy_static::lazy_static! {
-    static ref JVM: Result<JavaVM> = {
-        let jars = find_jars(None).map_err(|e| warn!("Failed to find jars: {:?}", e)).unwrap_or(vec![])
-            .iter().map(|i| i.to_string_lossy().to_string()).collect::<Vec<_>>();
+static JVM: OnceCell<JavaVM> = OnceCell::new();
 
-        let jvm_args = InitArgsBuilder::new()
-            .version(JNIVersion::V8)
-            .option(format!("-Djava.class.path={}", jars.join(":")).as_str())
-            // TODO: configurable temp directory
-            .option("-Xcheck:jni");
+/// Starts the JVM
+fn boot_jvm(conf: Option<&ResourceConfig>) -> Result<JavaVM> {
+    let jars = find_jars(None)
+        .map_err(|e| warn!("Failed to find jars: {:?}", e))
+        .unwrap_or(vec![])
+        .iter()
+        .map(|i| i.to_string_lossy().to_string())
+        .collect::<Vec<_>>();
 
-        #[cfg(debug_assertions)]
-        let jvm_args ={
-            let port = 49152 + std::time::SystemTime::now()
+    let mut jvm_args = InitArgsBuilder::new()
+        .version(JNIVersion::V8)
+        .option(format!("-Djava.class.path={}", jars.join(":")).as_str());
+
+    // Set the max heap size based off the allocated memory
+    if let Some(conf) = conf {
+        debug!("Setting JVM -Xmx{}m", conf.jvm_memory_mb());
+        jvm_args = jvm_args.option(format!("-Xmx{}m", conf.jvm_memory_mb()).as_str());
+    }
+
+    // Escape hatch for configuring the jvm
+    if let Some(opts) = env::var("ANSILO_JVM_ARGS").ok() {
+        for arg in opts.split("||") {
+            jvm_args = jvm_args.option(arg);
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    let jvm_args = {
+        let port = 49152
+            + std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .subsec_nanos() % 1000;
+                .subsec_nanos()
+                % 1000;
 
-            ansilo_logging::info!("JVM Debug port: {}", port);
+        ansilo_logging::info!("JVM Debug port: {}", port);
 
-            jvm_args
-                .option(&format!("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address={}", port))
-                // .option("-verbose:jni")
-        };
-
-        let jvm_args = jvm_args
-            .build()
-            .context("Failed to init JVM args")?;
-
-        let jvm = JavaVM::new(jvm_args).context("Failed to boot JVM")?;
-
-        Ok(jvm)
+        jvm_args
+            .option(&format!(
+                "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address={}",
+                port
+            ))
+            .option("-Xcheck:jni")
+        // .option("-verbose:jni")
     };
+
+    let jvm_args = jvm_args.build().context("Failed to init JVM args")?;
+
+    let jvm = JavaVM::new(jvm_args).context("Failed to boot JVM")?;
+
+    Ok(jvm)
 }
 
 /// Finds jars to add to the JVM class path
@@ -133,13 +157,13 @@ pub struct Jvm {
 
 impl Jvm {
     /// Boots a jvm on the current thread
-    pub fn boot() -> Result<Self> {
-        let jvm = JVM.as_ref().unwrap();
+    pub fn boot(conf: Option<&ResourceConfig>) -> Result<Self> {
+        let jvm = JVM.get_or_try_init(|| boot_jvm(conf))?;
 
         Ok(Self { jvm })
     }
 
-    /// Boots a jvm on the current thread
+    /// Gets the jvm for the current thread
     pub fn env(&self) -> Result<JNIEnv> {
         self.jvm
             .attach_current_thread_permanently()
@@ -233,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_boot_jvm() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Jvm::boot(None).unwrap();
 
         let x = JValue::from(-10i32);
         let val: jint = jvm
@@ -304,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_jvm_with_local_frame() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Jvm::boot(None).unwrap();
 
         let ret = jvm.with_local_frame(10, |env| {
             env.new_object("java/lang/Object", "()V", &[]).unwrap();

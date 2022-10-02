@@ -52,10 +52,10 @@ impl Connector for TeradataJdbcConnector {
 
     fn create_connection_pool(
         options: TeradataJdbcConnectionConfig,
-        _nc: &NodeConfig,
+        nc: &NodeConfig,
         _entities: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
     ) -> Result<Self::TConnectionPool> {
-        JdbcConnectionPool::new(options)
+        JdbcConnectionPool::new(&nc.resources, options)
     }
 }
 

@@ -228,7 +228,7 @@ mod tests {
 
     use ansilo_auth::Authenticator;
     use ansilo_core::{
-        config::NodeConfig,
+        config::{NodeConfig, ResourceConfig},
         data::chrono::{DateTime, Utc},
     };
     use ansilo_pg::{
@@ -249,6 +249,7 @@ mod tests {
     fn mock_state() -> HttpApiState {
         let conf = Box::leak(Box::new(NodeConfig::default()));
         let pg = Box::leak(Box::new(PostgresConf {
+            resources: ResourceConfig::default(),
             install_dir: "unused".into(),
             postgres_conf_path: None,
             data_dir: "unused".into(),
@@ -314,7 +315,7 @@ mod tests {
         assert_eq!(res.status(), StatusCode::OK);
 
         let body = hyper::body::to_bytes(res.into_body()).await.unwrap();
-        assert_eq!(&body[..], b"Ok");
+        assert_eq!(&body[..], r#"{"subsystems":{}}"#.as_bytes());
     }
 
     #[tokio::test]

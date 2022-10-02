@@ -1,10 +1,14 @@
 use std::path::PathBuf;
 
+use ansilo_core::config::ResourceConfig;
+
 use crate::PG_PORT;
 
 /// Configuration of the postgres installation
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostgresConf {
+    /// Resource allocation
+    pub resources: ResourceConfig,
     /// The install directory
     pub install_dir: PathBuf,
     /// The postgres configuration file
@@ -38,6 +42,7 @@ mod tests {
     #[test]
     fn test_postgres_conf_socket_path() {
         let conf = PostgresConf {
+            resources: ResourceConfig::default(),
             install_dir: PathBuf::from("/"),
             postgres_conf_path: None,
             data_dir: PathBuf::from("/"),

@@ -103,7 +103,8 @@ impl PostgresInstance {
     async fn connect(conf: &'static PostgresConf, server: PostgresServerManager) -> Result<Self> {
         let connect_timeout = Duration::from_secs(10);
 
-        // TODO: configurable pool sizes
+        // Admin connections should be used sparingly so we hardcode the max size to 5.
+        // Do we need to make this configurable?
         let admin_pool =
             PostgresConnectionPool::new(conf, PG_ADMIN_USER, PG_DATABASE, 5, connect_timeout)?;
 
@@ -112,7 +113,7 @@ impl PostgresInstance {
                 pg: conf,
                 users: conf.app_users.clone(),
                 database: PG_DATABASE.into(),
-                max_cons_per_user: 50,
+                max_cons_per_user: conf.resources.connections() as _,
                 connect_timeout,
             })?;
 
@@ -178,10 +179,13 @@ impl PostgresConnectionPools {
 mod tests {
     use std::path::PathBuf;
 
+    use ansilo_core::config::ResourceConfig;
+
     use super::*;
 
     fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
         let conf = PostgresConf {
+            resources: ResourceConfig::default(),
             install_dir: PathBuf::from(
                 std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
             ),

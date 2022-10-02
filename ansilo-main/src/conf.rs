@@ -63,13 +63,17 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
     let pg_conf = node.postgres.clone().unwrap_or_default();
 
     PostgresConf {
+        resources: node.resources.clone(),
+        //
         install_dir: pg_conf
             .install_dir
             .or_else(|| env::var("ANSILO_PG_INSTALL_DIR").ok().map(PathBuf::from))
             .or_else(|| try_get_pg_install_dir())
             .unwrap_or("/usr/pgsql-14/".into()),
         //
-        postgres_conf_path: pg_conf.config_path,
+        postgres_conf_path: pg_conf
+            .config_path
+            .or_else(|| env::var("ANSILO_PG_DEFAULT_CONF").ok().map(PathBuf::from)),
         //
         data_dir: pg_conf.data_dir.unwrap_or("/var/run/ansilo/data".into()),
         //

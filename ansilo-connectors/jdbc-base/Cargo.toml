@@ -13,7 +13,7 @@ ansilo-util-r2d2 = { path = "../../ansilo-util/r2d2" }
 bincode = { workspace = true }
 itertools = { workspace = true }
 jni = { git = "https://github.com/TimeToogo/jni-rs", features = ["invocation"] }
-lazy_static = { workspace = true }
+once_cell = { workspace = true }
 r2d2 = "0.8"
 serde = { workspace = true }
 serde_json = { workspace = true }

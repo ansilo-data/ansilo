@@ -129,7 +129,9 @@ impl Manager for LlPostgresConnectionManager {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, thread, env};
+    use std::{env, path::PathBuf, thread};
+
+    use ansilo_core::config::ResourceConfig;
 
     use crate::{initdb::PostgresInitDb, server::PostgresServer, PG_SUPER_USER};
 
@@ -137,6 +139,7 @@ mod tests {
 
     fn test_pg_config(test_name: &'static str) -> &'static PostgresConf {
         let conf = PostgresConf {
+            resources: ResourceConfig::default(),
             install_dir: PathBuf::from(
                 env::var("ANSILO_TEST_PG_DIR")
                     .unwrap_or("/home/vscode/.pgx/14.5/pgx-install/".into()),

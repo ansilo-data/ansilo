@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_no_params() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(&jvm, jdbc_con, "SELECT 1 as num", vec![]);
@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_with_int_param() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -403,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_with_varchar_param() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -443,7 +443,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_with_missing_param() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_multiple_execute() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -494,7 +494,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_with_constant_int_param() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -513,7 +513,7 @@ mod tests {
 
     #[test]
     fn test_prepared_query_get_logged() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
         let jdbc_con = create_sqlite_memory_connection(&jvm);
 
         let mut prepared_query = create_prepared_query(
@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn test_jdbc_query_param_into_java_dynamic() {
-        let jvm = Arc::new(Jvm::boot().unwrap());
+        let jvm = Arc::new(Jvm::boot(None).unwrap());
         let param = QueryParam::dynamic2(1, DataType::Int32);
 
         let java_obj = to_java_jdbc_parameter(&param, 1, &jvm).unwrap();
@@ -601,7 +601,7 @@ mod tests {
 
     #[test]
     fn test_jdbc_query_param_into_java_constant() {
-        let jvm = Jvm::boot().unwrap();
+        let jvm = Jvm::boot(None).unwrap();
         let param = QueryParam::Constant(DataValue::Int32(1123));
 
         let java_obj = to_java_jdbc_parameter(&param, 1, &jvm).unwrap();
