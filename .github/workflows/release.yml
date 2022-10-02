@@ -64,8 +64,7 @@ jobs:
       - name: Build release image
         run: |
           docker build -t ansilo-release \
-            --file .github/workflows/docker/release.ubi9.Dockerfile \
-            ./artifacts
+            --file .github/workflows/docker/release.ubi9.Dockerfile .
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
