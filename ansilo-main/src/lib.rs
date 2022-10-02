@@ -24,7 +24,7 @@ use ansilo_util_health::Health;
 use ansilo_web::{Http1ConnectionHandler, Http2ConnectionHandler, HttpApi, HttpApiState};
 use clap::Parser;
 use signal_hook::{
-    consts::{SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2},
+    consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1},
     iterator::Signals,
 };
 
@@ -86,11 +86,11 @@ impl Ansilo {
 
         // In dev mode we want to restart if the config is invalid
         // On error we wait for a signal to either terminate or restart
-        // SIGUSR1 is triggered by our file inotify watcher.
+        // SIGHUP is triggered by our file inotify watcher.
         if cmd.is_dev() || cmd.is_dump_config() {
             if let Err(_) = panic::catch_unwind(boot) {
                 error!("Error while booting ansilo, waiting for change before restart...");
-                if SIGUSR1 == Self::wait_for_signal().unwrap() {
+                if SIGHUP == Self::wait_for_signal().unwrap() {
                     dev::restart();
                 }
             }
@@ -257,14 +257,14 @@ impl Ansilo {
         thread::spawn(move || {
             while !term.load(Ordering::SeqCst) {
                 thread::sleep(Duration::from_secs(30));
-                let _ = nix::sys::signal::kill(nix::unistd::getpid(), nix::sys::signal::SIGUSR2);
+                let _ = nix::sys::signal::kill(nix::unistd::getpid(), nix::sys::signal::SIGUSR1);
             }
         });
 
         let sig = loop {
             let sig = Self::wait_for_signal()?;
 
-            if sig == SIGUSR2 {
+            if sig == SIGUSR1 {
                 self.check_health();
                 continue;
             }
@@ -377,7 +377,7 @@ impl Ansilo {
     }
 
     fn wait_for_signal() -> Result<i32> {
-        let mut sigs = Signals::new(&[SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2])
+        let mut sigs = Signals::new(&[SIGINT, SIGQUIT, SIGTERM, SIGHUP, SIGUSR1])
             .context("Failed to attach signal handler")?;
         let sig = sigs.forever().next().unwrap();
 
@@ -387,8 +387,8 @@ impl Ansilo {
                 SIGINT => "SIGINT".into(),
                 SIGQUIT => "SIGQUIT".into(),
                 SIGTERM => "SIGTERM".into(),
-                SIGUSR1 => "SIGUSR1".into(),
-                SIGUSR2 => return Ok(sig),
+                SIGHUP => "SIGHUP".into(),
+                SIGUSR1 => return Ok(sig),
                 _ => format!("unknown signal {}", sig),
             }
         );

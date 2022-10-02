@@ -75,7 +75,7 @@ fn terminate_on_event(rx: mpsc::Receiver<notify::DebouncedEvent>) -> ! {
 // Signal the current process to terminate
 fn terminate() {
     let pid = nix::unistd::getpid();
-    signal::kill(pid, signal::SIGUSR1).unwrap();
+    signal::kill(pid, signal::SIGHUP).unwrap();
 }
 
 // Restart the current process with the same arguments

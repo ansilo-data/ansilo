@@ -27,6 +27,11 @@ fn boot_jvm(conf: Option<&ResourceConfig>) -> Result<JavaVM> {
         .version(JNIVersion::V8)
         .option(format!("-Djava.class.path={}", jars.join(":")).as_str());
 
+    // Tell JVM to reduce its signal usage
+    // @see https://github.com/openjdk/jdk/blob/master/src/hotspot/os/posix/signals_posix.cpp
+    // @see https://www.oracle.com/java/technologies/javase/signals.html
+    jvm_args = jvm_args.option("-Xrs");
+
     // Set the max heap size based off the allocated memory
     if let Some(conf) = conf {
         debug!("Setting JVM -Xmx{}m", conf.jvm_memory_mb());
