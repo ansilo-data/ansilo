@@ -136,7 +136,7 @@ fn create_db_init_sql(node: &NodeConfig) -> Vec<String> {
                     data_source {id}
                 );
                 
-                GRANT ALL ON FOREIGN SERVER {name} TO {PG_ADMIN_USER};
+                GRANT ALL ON FOREIGN SERVER {name} TO {PG_ADMIN_USER} WITH GRANT OPTION;
             "#
                 )
             })
