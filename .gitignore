@@ -5,7 +5,7 @@ target/
 **/*.rs.bk
 .cargo/
 !.devcontainer/.cargo/
-!.github/workflows/docker/.cargo/
+!.github/workflows/docker/
 .m2/
 .vscode-server/
 *.log

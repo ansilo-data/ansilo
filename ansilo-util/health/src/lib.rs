@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let mut health = Health::new();
+        let health = Health::new();
 
         assert_eq!(health.check().unwrap(), HashMap::new());
 
