@@ -21,7 +21,8 @@ extension_sql!(
 
 #[pg_extern(sql = "")]
 fn ansilo_set_auth_context(context: String, reset_nonce: String) -> String {
-    info!("Requested set auth context to '{}'", context.clone());
+    info!("Setting auth context");
+    debug5!("Requested set auth context to '{}'", context.clone());
 
     assert!(AuthContextState::get().is_none(), "Already in auth context");
 
