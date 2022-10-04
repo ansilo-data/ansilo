@@ -47,7 +47,7 @@ export const fetchNodes = async (
         ({
           id: `ev-${e.id}`,
           version: e.source.table_name.split("$")[1] || "latest",
-          tableName: e.source.table_name,
+          tableName: e.id,
           attributes: e.attributes.map((a: any) => convertAttribute(e, a)),
           constraints: e.constraints.map((c: any, idx: number) =>
             convertConstraint(e, c, idx)
