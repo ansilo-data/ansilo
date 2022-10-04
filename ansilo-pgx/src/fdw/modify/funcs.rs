@@ -62,7 +62,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
         // so set_foreignscan_references in setrefs.c does not get confused
         // and set distinct rowid var's to the same underlying var from the plan
         // fdw_scan_list.
-        // We also have to ensure they do not clash with any real attnum's from the 
+        // We also have to ensure they do not clash with any real attnum's from the
         // range table, hence we make them negative.
         let varattno = -(idx as i16 + 1);
         let col = pg_sys::makeVar(
@@ -462,7 +462,14 @@ pub unsafe extern "C" fn get_foreign_modify_batch_size(
     }
 
     // Get the maximum batch size we support
-    let batch_size = cmp::min(batch_size, MAX_BULK_INSERT_BATCH_SIZE as _);
+    let mut batch_size = cmp::min(batch_size, MAX_BULK_INSERT_BATCH_SIZE as _);
+
+    // Min with the user-defined max batch size if any
+    if let Some(mbs) = ctx.foreign_table_opts.max_batch_size {
+        batch_size = cmp::min(batch_size, mbs);
+    }
+
+    pgx::debug1!("Calculated optimal insert batch size: {}", batch_size);
 
     batch_size as _
 }

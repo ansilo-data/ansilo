@@ -24,6 +24,8 @@ use super::{
 // Maximum query params supported by teradata in a single query
 // @see https://www.docs.teradata.com/r/bBJcqMYyoxECDlJRAz9Dgw/8OqmibJKUccjW6Sb4d4CNQ
 const MAX_PARAMS: u32 = 2500;
+const MAX_QUERY_SIZE: u32 = 1024 * 1024 * 1024;
+const MAX_FIELD_SIZE: u32 = 64000;
 
 /// Query planner for Teradata JDBC driver
 pub struct TeradataJdbcQueryPlanner {}
@@ -153,8 +155,8 @@ impl QueryPlanner for TeradataJdbcQueryPlanner {
     }
 
     fn get_insert_max_batch_size(
-        _connection: &mut Self::TConnection,
-        _conf: &TeradataJdbcConnectorEntityConfig,
+        con: &mut Self::TConnection,
+        conf: &TeradataJdbcConnectorEntityConfig,
         insert: &sql::Insert,
     ) -> Result<u32> {
         // @see https://docs.teradata.com/cd/B10501_01/appdev.920/a96624/e_limits.htm#LNPLS018
@@ -168,7 +170,33 @@ impl QueryPlanner for TeradataJdbcQueryPlanner {
             return Ok(u32::MAX);
         }
 
-        Ok((MAX_PARAMS as f32 / params as f32).floor() as _)
+        let mut max_rows = (MAX_PARAMS as f32 / params as f32).floor() as usize;
+
+        // Ensure our query stays within maximum size of 1MB
+        loop {
+            let mut bulk_insert = sql::BulkInsert::new(insert.target.clone());
+            bulk_insert.cols = insert.cols.iter().map(|(c, _)| c.clone()).collect();
+            bulk_insert.values = (0..max_rows)
+                .map(|i| insert.cols[i % insert.cols.len()].1.clone())
+                .collect();
+            let query = TeradataJdbcQueryCompiler::compile_query(con, conf, bulk_insert.into())?;
+
+            let query_size: usize = query.query.len()
+                + query
+                    .params
+                    .iter()
+                    .map(Self::parameter_length)
+                    .sum::<usize>();
+
+            // Leave 20% buffer
+            if query_size < (MAX_QUERY_SIZE as usize) * 8 / 10 || max_rows == 1 {
+                break;
+            }
+
+            max_rows = max_rows / 2;
+        }
+
+        Ok(max_rows as _)
     }
 
     fn apply_insert_operation(
@@ -424,6 +452,32 @@ impl TeradataJdbcQueryPlanner {
 
         delete.r#where.push(cond);
         Ok(QueryOperationResult::Ok(OperationCost::default()))
+    }
+
+    fn parameter_length(param: &QueryParam) -> usize {
+        match param.r#type() {
+            DataType::Utf8String(opts) => opts.length.unwrap_or(MAX_FIELD_SIZE) as _,
+            DataType::Binary => MAX_FIELD_SIZE as _,
+            DataType::Boolean => 1,
+            DataType::Int8 => 1,
+            DataType::UInt8 => 1,
+            DataType::Int16 => 2,
+            DataType::UInt16 => 2,
+            DataType::Int32 => 4,
+            DataType::UInt32 => 4,
+            DataType::Int64 => 8,
+            DataType::UInt64 => 8,
+            DataType::Float32 => 4,
+            DataType::Float64 => 8,
+            DataType::Decimal(o) => o.precision.unwrap_or(64) as _,
+            DataType::JSON => MAX_FIELD_SIZE as _,
+            DataType::Date => 12,
+            DataType::Time => 12,
+            DataType::DateTime => 24,
+            DataType::DateTimeWithTZ => 30,
+            DataType::Uuid => 36,
+            DataType::Null => 1,
+        }
     }
 
     fn expr_supported(expr: &sql::Expr) -> bool {

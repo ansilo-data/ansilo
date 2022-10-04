@@ -60,6 +60,8 @@ pub struct TableOptions {
     pub before_delete: Option<String>,
     /// The user-defined function to call before INSERT/UPDATE/DELETE queries
     pub before_modify: Option<String>,
+    /// Max batch size for inserts
+    pub max_batch_size: Option<u32>,
 }
 
 impl TableOptions {
@@ -72,6 +74,9 @@ impl TableOptions {
             before_update: opts.get("before_update").cloned(),
             before_delete: opts.get("before_delete").cloned(),
             before_modify: opts.get("before_modify").cloned(),
+            max_batch_size: opts
+                .get("max_batch_size")
+                .and_then(|v| v.parse::<u32>().ok()),
         })
     }
 }
@@ -155,6 +160,7 @@ mod tests {
                     before_update: None,
                     before_delete: None,
                     before_modify: None,
+                    max_batch_size: None,
                 }
             );
         }
@@ -189,6 +195,11 @@ mod tests {
                 makeString(cstr!("modify_func").as_ptr() as _) as _,
                 0,
             ));
+            opts.push(makeDefElem(
+                cstr!("max_batch_size").as_ptr() as _,
+                makeString(cstr!("123").as_ptr() as _) as _,
+                0,
+            ));
 
             assert_eq!(
                 TableOptions::parse(opts).unwrap(),
@@ -198,6 +209,7 @@ mod tests {
                     before_update: Some("update_func".into()),
                     before_delete: Some("delete_func".into()),
                     before_modify: Some("modify_func".into()),
+                    max_batch_size: Some(123)
                 }
             );
         }
