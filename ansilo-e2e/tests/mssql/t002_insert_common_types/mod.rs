@@ -43,6 +43,7 @@ fn test() {
                 col_datetime,
                 col_datetimeoffset,
                 col_uuid,
+                col_text,
                 col_null
             ) VALUES (
                 'A',
@@ -62,6 +63,7 @@ fn test() {
                 TIMESTAMP '2018-02-01 01:02:03',
                 TIMESTAMPTZ '1999-01-15 11:00:00+06:00',
                 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+                'text',
                 NULL
             )
         "#,
@@ -131,6 +133,7 @@ fn test() {
                 "col_uuid".to_string(),
                 DataValue::Uuid("A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11".parse().unwrap()),
             ),
+            ("col_text".to_string(), DataValue::Utf8String("text".into())),
             ("col_null".to_string(), DataValue::Null),
         ]
         .into_iter()
@@ -146,9 +149,9 @@ fn test() {
                 LoggedQuery::new(
                     [
                         r#"INSERT INTO [dbo].[t002__test_tab] "#,
-                        r#"([col_char], [col_nchar], [col_varchar], [col_nvarchar], [col_decimal], [col_uint8], [col_int16], [col_int32], [col_int64], [col_float], [col_double], [col_binary], [col_date], [col_time], [col_datetime], [col_datetimeoffset], [col_uuid], [col_null])"#,
+                        r#"([col_char], [col_nchar], [col_varchar], [col_nvarchar], [col_decimal], [col_uint8], [col_int16], [col_int32], [col_int64], [col_float], [col_double], [col_binary], [col_date], [col_time], [col_datetime], [col_datetimeoffset], [col_uuid], [col_text], [col_null])"#,
                         r#" VALUES "#,
-                        r#"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
+                        r#"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
                     ].join(""),
                     vec![
                         "LoggedParam [index=1, method=setNString, value=A]".into(),
@@ -168,7 +171,8 @@ fn test() {
                         "LoggedParam [index=15, method=setTimestamp, value=2018-02-01 01:02:03.0]".into(),
                         "LoggedParam [index=16, method=setTimestamp, value=1999-01-15 05:00:00.0]".into(),
                         "LoggedParam [index=17, method=setString, value=a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11]".into(),
-                        "LoggedParam [index=18, method=setNull, value=null]".into(),
+                        "LoggedParam [index=18, method=setNString, value=text]".into(),
+                        "LoggedParam [index=19, method=setNull, value=null]".into(),
                     ],
                     Some([("affected".into(), "Some(1)".into())]
                     .into_iter()

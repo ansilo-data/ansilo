@@ -19,6 +19,7 @@ CREATE TABLE t001__test_tab (
     col_datetime DATETIME,
     col_datetimeoffset DATETIMEOFFSET,
     col_uuid UNIQUEIDENTIFIER,
+    col_text TEXT,
     col_null CHAR
 )
 $$
@@ -41,6 +42,7 @@ INSERT INTO t001__test_tab (
     col_datetime,
     col_datetimeoffset,
     col_uuid,
+    col_text,
     col_null
 ) VALUES (
     'A',
@@ -60,5 +62,6 @@ INSERT INTO t001__test_tab (
     '2018-02-01 01:02:03',
     '1999-01-15 11:00:00+05:00',
     'ec5b5753-407c-480f-839f-ece3fc82689e',
+    'text',
     NULL
 )

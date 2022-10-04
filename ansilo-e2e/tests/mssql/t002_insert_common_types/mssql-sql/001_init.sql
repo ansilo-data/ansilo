@@ -19,5 +19,6 @@ CREATE TABLE t002__test_tab (
     col_datetime DATETIME,
     col_datetimeoffset DATETIMEOFFSET,
     col_uuid UNIQUEIDENTIFIER,
+    col_text TEXT,
     col_null CHAR
 )

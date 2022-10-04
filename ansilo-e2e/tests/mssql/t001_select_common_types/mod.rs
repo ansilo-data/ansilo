@@ -47,6 +47,7 @@ fn test() {
             "col_datetime",
             "col_datetimeoffset",
             "col_uuid",
+            "col_text",
             "col_null"
         ]
         .into_iter()
@@ -88,7 +89,8 @@ fn test() {
         rows[0].get::<_, Uuid>(16),
         Uuid::from_str("ec5b5753-407c-480f-839f-ece3fc82689e").unwrap()
     );
-    assert_eq!(rows[0].get::<_, Option<String>>(17), None);
+    assert_eq!(rows[0].get::<_, String>(17), "text".to_string());
+    assert_eq!(rows[0].get::<_, Option<String>>(18), None);
 
     assert_eq!(
         instance.log().get_from_memory().unwrap(),
@@ -113,7 +115,8 @@ fn test() {
                     r#"[t1].[col_datetime] AS [c14], "#,
                     r#"[t1].[col_datetimeoffset] AS [c15], "#,
                     r#"[t1].[col_uuid] AS [c16], "#,
-                    r#"[t1].[col_null] AS [c17] "#,
+                    r#"[t1].[col_text] AS [c17], "#,
+                    r#"[t1].[col_null] AS [c18] "#,
                     r#"FROM [dbo].[t001__test_tab] AS [t1]"#,
                 ]
                 .join("")

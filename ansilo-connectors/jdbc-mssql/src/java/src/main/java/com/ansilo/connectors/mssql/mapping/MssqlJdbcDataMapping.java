@@ -31,7 +31,7 @@ public class MssqlJdbcDataMapping extends JdbcDataMapping {
             return new MssqlUInt8DataType();
         }
 
-        if (colType == Types.VARCHAR || colType == Types.CHAR) {
+        if (colType == Types.VARCHAR || colType == Types.CHAR || colType == Types.LONGVARCHAR) {
             return new MssqlStringDataType();
         }
 
