@@ -22,7 +22,8 @@ use super::{
 };
 
 // Maximum query params supported by teradata in a single query
-const MAX_PARAMS: u32 = 32767;
+// @see https://www.docs.teradata.com/r/bBJcqMYyoxECDlJRAz9Dgw/8OqmibJKUccjW6Sb4d4CNQ
+const MAX_PARAMS: u32 = 2500;
 
 /// Query planner for Teradata JDBC driver
 pub struct TeradataJdbcQueryPlanner {}
