@@ -78,5 +78,5 @@ pub(crate) unsafe fn send_query_params(
 
     // Finally, serialise and send the query params
     query.write_params(input_data).unwrap();
-    pgx::debug1!("Sending query sent");
+    pgx::debug1!("Query params sent");
 }

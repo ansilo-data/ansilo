@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     io::{self, Read, Write},
     mem::size_of,
     os::unix::net::UnixStream,
@@ -42,11 +43,9 @@ impl IpcClientChannel {
 
     /// Sends the supplied message and waits for the response
     pub fn send(&mut self, req: ClientMessage) -> Result<ServerMessage> {
-        trace!("Sending to fdw: {:?}", req);
         send_message(&mut self.sock, req, &self.conf)?;
 
         let res = recv_message(&mut self.sock, &self.conf)?;
-        trace!("Response from fdw: {:?}", res);
 
         Ok(res)
     }
@@ -98,7 +97,7 @@ impl IpcServerChannel {
         F: FnOnce(ClientMessage) -> Result<(Option<ServerMessage>, R)>,
     {
         let req = recv_message(&mut self.sock, &self.conf)?;
-        trace!("Received from postgres: {:?}", req);
+        trace!("Received from postgres: {:?} [{:?}]", req, self.sock);
 
         let (res, ret) = cb(req)?;
 
@@ -107,7 +106,7 @@ impl IpcServerChannel {
         }
 
         let res = res.unwrap();
-        trace!("Response to postgres: {:?}", res);
+        trace!("Response to postgres: {:?} [{:?}]", res, self.sock);
 
         send_message(&mut self.sock, res, &self.conf)?;
 
@@ -155,6 +154,23 @@ fn recv_message<T: Decode>(
         .context("Failed to decode message")?;
 
     Ok(msg)
+}
+
+impl fmt::Debug for IpcClientChannel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IpcClientChannel")
+            .field("sock", &self.sock)
+            .field("closed", &self.closed)
+            .finish()
+    }
+}
+
+impl fmt::Debug for IpcServerChannel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IpcServerChannel")
+            .field("sock", &self.sock)
+            .finish()
+    }
 }
 
 #[cfg(test)]

@@ -3,7 +3,7 @@ use cstr::cstr;
 use std::{env, path::PathBuf};
 
 use pgx::{
-    pg_sys::{strcmp, DefElem},
+    pg_sys::{strcmp, DefElem, GetForeignTable},
     *,
 };
 
@@ -78,6 +78,11 @@ impl TableOptions {
                 .get("max_batch_size")
                 .and_then(|v| v.parse::<u32>().ok()),
         })
+    }
+
+    pub unsafe fn from_id(oid: pg_sys::Oid) -> Result<Self> {
+        let table = GetForeignTable(oid);
+        Self::parse(PgList::from_pg((*table).options))
     }
 }
 

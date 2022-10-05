@@ -1,0 +1,44 @@
+name: Ansilo
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+entities:
+  - id: people
+    description: This is the list of people
+    source:
+      data_source: memory
+      options: null
+    attributes:
+      - id: name
+        type: !Utf8String {}
+      - id: age
+        type: Int64
+
+sources:
+  - id: memory
+    type: test.memory
+    options:
+      people:
+        - ["Sunny", 2]
+        - ["Jacky", 8]
+        - ["Robby", 9]
+        - ["John", 17]
+        - ["Mary", 18]
+        - ["Claire", 20]
+
+build:
+  stages:
+    - sql: ${dir}/ansilo-peer-sql/*.sql
+
+postgres:
+    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
+    data_dir: ${env:TEMP_DIR}/data
+    listen_socket_dir_path: ${env:TEMP_DIR}
+    fdw_socket_path: ${env:TEMP_DIR}/fdw.sock
+    build_info_path: ${env:TEMP_DIR}/build-info.json

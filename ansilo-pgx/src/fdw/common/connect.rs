@@ -38,6 +38,7 @@ lazy_static! {
 }
 
 /// An IPC connection to a data source.
+#[derive(Debug)]
 pub struct FdwIpcConnection {
     /// The ID of the ansilo data source for the connection
     pub data_source_id: String,
@@ -47,19 +48,39 @@ pub struct FdwIpcConnection {
 
 impl FdwIpcConnection {
     pub fn new(data_source_id: impl Into<String>, client: IpcClientChannel) -> Self {
-        Self {
+        let con = Self {
             data_source_id: data_source_id.into(),
             client: Mutex::new(client),
-        }
+        };
+
+        pgx::debug1!("Established ipc connection: {:?}", con);
+
+        con
     }
 
     pub fn send(&self, req: ClientMessage) -> Result<ServerMessage> {
-        let mut client = match self.client.lock() {
-            Ok(c) => c,
-            Err(_) => bail!("Failed to lock mutex"),
+        unsafe {
+            if pg_sys::log_min_messages <= pg_sys::DEBUG1 as _ {
+                pgx::debug1!("Sending to fdw: {:?} [{:?}]", req, self);
+            }
+        }
+
+        let res = {
+            let mut client = match self.client.lock() {
+                Ok(c) => c,
+                Err(_) => bail!("Failed to lock mutex"),
+            };
+
+            client.send(req)?
         };
 
-        client.send(req)
+        unsafe {
+            if pg_sys::log_min_messages <= pg_sys::DEBUG1 as _ {
+                pgx::debug1!("Response from fdw: {:?} [{:?}]", res, self);
+            }
+        }
+
+        Ok(res)
     }
 }
 
@@ -68,7 +89,7 @@ impl FdwIpcConnection {
 /// of the connection.
 impl Drop for FdwIpcConnection {
     fn drop(&mut self) {
-        pgx::debug1!("Dropping ipc connection");
+        pgx::debug1!("Dropping ipc connection: {:?}", self);
         let mut client = match self.client.lock() {
             Ok(c) => c,
             Err(err) => {

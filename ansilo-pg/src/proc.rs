@@ -62,15 +62,31 @@ impl ChildProc {
 
         let logger = |stream: Box<dyn Read + Send>, txs: Arc<Mutex<Vec<Sender<String>>>>| {
             move || {
-                for i in io::BufReader::new(stream).lines() {
-                    let i = i.unwrap_or_else(|e| format!("{} failed to read: {:?}", prefix, e));
-                    info!("{} {}", prefix, i);
+                let mut reader = io::BufReader::new(stream);
+                let mut buf = vec![];
+                loop {
+                    if let Err(err) = reader.read_until(b'\n', &mut buf) {
+                        warn!("Failed to read from {} stdout/err: {:?}", prefix, err);
+                    }
+
+                    if buf.is_empty() {
+                        break;
+                    }
+
+                    while buf.last().cloned() == Some(b'\n') || buf.last().cloned() == Some(b'\r') {
+                        buf.pop();
+                    }
+
+                    let line = String::from_utf8_lossy(&buf);
+                    info!("{} {}", prefix, line);
 
                     if let Ok(txs) = txs.lock() {
                         for tx in txs.iter() {
-                            let _ = tx.send(i.clone());
+                            let _ = tx.send(line.to_string());
                         }
                     }
+
+                    buf.clear();
                 }
             }
         };

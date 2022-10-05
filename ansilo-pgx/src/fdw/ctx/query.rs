@@ -24,7 +24,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{fdw::common::FdwIpcConnection, sqlil::ConversionContext};
 
-/// Query-specific state for the FDW
+/// Query-specific state for the FDW used during query planning and execution
+/// Ideally we should have seperate structs for planning/execution.
 pub struct FdwQueryContext {
     /// The type-specific query state
     pub q: FdwQueryType,
@@ -34,6 +35,10 @@ pub struct FdwQueryContext {
     query_writer: Option<QueryHandleWriter<FdwQueryHandle>>,
     /// The current result set reader
     result_set: Option<ResultSetReader<FdwResultSet>>,
+    /// Whether the query has been executed
+    executed: bool,
+    /// Whether to discard the query on drop
+    pub should_discard: bool,
     /// The base entity size estimation
     pub base_cost: OperationCost,
     /// The base relation var number
@@ -91,6 +96,8 @@ impl FdwQueryContext {
             q: query,
             query_writer: None,
             result_set: None,
+            executed: false,
+            should_discard: true,
             base_cost,
             base_varno,
             retrieved_rows,
@@ -103,6 +110,14 @@ impl FdwQueryContext {
 
     pub fn base_rel_alias(&self) -> &str {
         self.cvt.get_alias(self.base_varno).unwrap()
+    }
+
+    pub(crate) fn connection(&self) -> &QueryScopedConnection {
+        &self.connection
+    }
+
+    pub fn query_id(&self) -> QueryId {
+        self.connection.query_id
     }
 
     pub fn as_select(&self) -> Option<&FdwSelectQuery> {
@@ -220,6 +235,11 @@ impl FdwQueryContext {
             .context("Query not prepared")
     }
 
+    /// Checks whether the query has been prepared
+    pub fn is_prepared(&self) -> bool {
+        self.query_writer.is_some()
+    }
+
     /// Writes the supplied query params
     /// This function assumes that the values are in the order expected by the query input structure
     pub fn write_params(&mut self, data: Vec<DataValue>) -> Result<()> {
@@ -260,6 +280,7 @@ impl FdwQueryContext {
         let row_structure = result_set.row_structure.clone();
 
         self.result_set = Some(ResultSetReader::new(result_set)?);
+        self.executed = true;
 
         Ok(row_structure)
     }
@@ -271,6 +292,7 @@ impl FdwQueryContext {
 
         writer.flush()?;
         let affected_rows = writer.inner_mut().execute_modify()?;
+        self.executed = true;
 
         Ok(affected_rows)
     }
@@ -282,11 +304,18 @@ impl FdwQueryContext {
         reader.read_data_value()
     }
 
+    /// Returns whether the query has been executed
+    pub fn executed(&self) -> bool {
+        self.executed
+    }
+
     /// Restart's the current query.
     /// Query parameters will have to be rewritten for the next execution.
     pub fn restart_query(&mut self) -> Result<()> {
         let writer = self.query_writer.as_mut().context("Query not executed")?;
         writer.restart()?;
+
+        self.executed = false;
 
         Ok(())
     }
@@ -402,6 +431,8 @@ impl FdwQueryContext {
             ),
             query_writer: None,
             result_set: None,
+            executed: false,
+            should_discard: true,
             base_cost: self.base_cost.clone(),
             base_varno: self.base_varno.clone(),
             retrieved_rows: self.retrieved_rows.clone(),
@@ -428,6 +459,10 @@ impl FdwQueryContext {
 /// the query is dropped on the server side.
 impl Drop for FdwQueryContext {
     fn drop(&mut self) {
+        if !self.should_discard {
+            return;
+        }
+
         let result = self
             .connection
             .send(ClientQueryMessage::Discard)
@@ -532,6 +567,10 @@ impl QueryScopedConnection {
         }
     }
 
+    pub fn inner(&self) -> &Arc<FdwIpcConnection> {
+        &self.connection
+    }
+
     pub fn send(&self, message: ClientQueryMessage) -> Result<ServerQueryMessage> {
         let res = self
             .connection
@@ -562,6 +601,30 @@ pub enum FdwQueryType {
     BulkInsert(FdwBulkInsertQuery),
     Update(FdwUpdateQuery),
     Delete(FdwDeleteQuery),
+}
+
+impl FdwQueryType {
+    pub fn r#type(&self) -> sqlil::QueryType {
+        match self {
+            FdwQueryType::Select(_) => sqlil::QueryType::Select,
+            FdwQueryType::Insert(_) => sqlil::QueryType::Insert,
+            FdwQueryType::BulkInsert(_) => sqlil::QueryType::BulkInsert,
+            FdwQueryType::Update(_) => sqlil::QueryType::Update,
+            FdwQueryType::Delete(_) => sqlil::QueryType::Delete,
+        }
+    }
+
+    pub fn get_remote_ops(&self) -> Vec<QueryOperation> {
+        match self {
+            FdwQueryType::Select(q) => q.remote_ops.iter().map(|op| op.clone().into()).collect(),
+            FdwQueryType::Insert(q) => q.remote_ops.iter().map(|op| op.clone().into()).collect(),
+            FdwQueryType::BulkInsert(q) => {
+                q.remote_ops.iter().map(|op| op.clone().into()).collect()
+            }
+            FdwQueryType::Update(q) => q.remote_ops.iter().map(|op| op.clone().into()).collect(),
+            FdwQueryType::Delete(q) => q.remote_ops.iter().map(|op| op.clone().into()).collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]

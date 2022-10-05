@@ -8,3 +8,4 @@ pub mod t007_select_peer_foreign_table;
 pub mod t008_join_data_from_two_peers;
 pub mod t009_select_peer_two_hops;
 pub mod t010_insert_two_peers_in_transaction;
+pub mod t011_select_from_peer_in_subquery;

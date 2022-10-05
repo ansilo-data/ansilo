@@ -17,7 +17,11 @@ use crate::util::string::{parse_to_owned_utf8_string, to_cstr};
 pub unsafe extern "C" fn explain_foreign_scan(node: *mut ForeignScanState, es: *mut ExplainState) {
     pgx::debug1!("Explaining foriegn scan");
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
+    let (mut planned_ctx,) = from_fdw_private_plan((*plan).fdw_private);
+
+    // Since this is an EXPLAIN we should be safe to assume we are in the original
+    // planning phase
+    let mut query = planned_ctx.unsafe_original_planning_ctx();
 
     // Retrieve explain state from data source
     let remote_query = query.explain((*es).verbose).unwrap();
@@ -54,7 +58,7 @@ pub unsafe extern "C" fn explain_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     es: *mut ExplainState,
 ) {
-    let (ctx, mut query, _) = from_fdw_private_rel((*rinfo).ri_FdwState as *mut _);
+    let (_, mut query, _) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
 
     explain_modify((*mtstate).ps.plan, es, &mut query);
 }
@@ -63,7 +67,10 @@ pub unsafe extern "C" fn explain_foreign_modify(
 pub unsafe extern "C" fn explain_direct_modify(node: *mut ForeignScanState, es: *mut ExplainState) {
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
 
-    let (ctx, mut query, _) = from_fdw_private_modify((*plan).fdw_private);
+    let (mut planned_ctx,) = from_fdw_private_plan((*plan).fdw_private);
+    // Since this is an EXPLAIN we should be safe to assume we are in the original
+    // planning phase
+    let mut query = planned_ctx.unsafe_original_planning_ctx();
 
     explain_modify(plan as *mut Plan, es, &mut query);
 }

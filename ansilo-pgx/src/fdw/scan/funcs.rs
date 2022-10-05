@@ -27,7 +27,7 @@ use crate::{
     fdw::{
         common::{self, prepare_query_params, send_query_params},
         ctx::{
-            mem::{pg_scan_scoped, pg_transaction_scoped},
+            mem::{pg_global_scoped, pg_scan_scoped, pg_transaction_scoped},
             *,
         },
     },
@@ -1283,8 +1283,9 @@ pub unsafe extern "C" fn get_foreign_plan(
 
     let local_conds =
         pg_sys::extract_actual_clauses(vec_to_pg_list(query.local_conds.clone()), false);
-    let fdw_exprs = vec_to_pg_list(query.cvt.param_nodes());
-    let fdw_private = into_fdw_private_rel(ctx, query, planner);
+    let (planned_ctx, fdw_exprs) = FdwPlanContext::create(&*ctx, query);
+    let fdw_exprs = vec_to_pg_list(fdw_exprs);
+    let fdw_private = into_fdw_private_plan(pg_global_scoped(planned_ctx));
 
     pg_sys::make_foreignscan(
         tlist,
@@ -1434,16 +1435,34 @@ pub unsafe extern "C" fn begin_foreign_scan(
     }
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (ctx, mut query, _) = from_fdw_private_rel((*plan).fdw_private);
+    let (planned_ctx,) = from_fdw_private_plan((*plan).fdw_private);
+    let fdw_exprs = PgList::from_pg((*((*node).ss.ps.plan as *mut ForeignScan)).fdw_exprs);
+
+    // Restore the query context from the planned context
+    // This could create a new IPC connection in the case of cached plans.
+    let mut query = pg_transaction_scoped(planned_ctx.restore(Some(fdw_exprs)).1);
     let mut scan = pg_scan_scoped(&mut (*node).ss, FdwScanContext::new());
 
-    // Prepare the query for the chosen path
-    query.prepare().unwrap();
+    if !query.is_prepared() {
+        // Prepare the query for the chosen path
+        query.prepare().unwrap();
+    }
+
+    // In the case of cached generic (parameter-independent) plans
+    // This can be called to issue multiple scans without triggering re_scan_foreign_scan
+    // so we detect this case here and manually restart the query so we execute it again
+    // with new parameters
+    // For extra debugging fun, this only happens when the same query is executed more than 5 times.
+    // Why? Ask this loc
+    // @see https://github.com/postgres/postgres/blob/07d683b54af854098cc559d4b8640905f9efa0ea/src/backend/utils/cache/plancache.c#L1047
+    if query.executed() {
+        query.restart_query().unwrap();
+    }
 
     // Prepare the query parameter expr's for evaluation
     prepare_query_params(&mut scan, &query, node);
 
-    (*node).fdw_state = into_fdw_private_scan(ctx, query, scan) as *mut _;
+    (*node).fdw_state = into_fdw_private_scan(query, scan) as *mut _;
 }
 
 /// Retrieve next row from the result set, or clear tuple slot to indicate EOF
@@ -1453,7 +1472,7 @@ pub unsafe extern "C" fn begin_foreign_scan(
 pub unsafe extern "C" fn iterate_foreign_scan(node: *mut ForeignScanState) -> *mut TupleTableSlot {
     let slot = (*node).ss.ss_ScanTupleSlot;
 
-    let (ctx, mut query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
+    let (mut query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
 
     // Get the query output structure, if this is not present then execute the query
     let row_structure = if let Some(row_structure) = scan.row_structure.as_ref() {
@@ -1679,7 +1698,8 @@ pub unsafe extern "C" fn recheck_foreign_scan(
 /// @see https://doxygen.postgresql.org/postgres__fdw_8c_source.html#l01641
 #[pg_guard]
 pub unsafe extern "C" fn re_scan_foreign_scan(node: *mut ForeignScanState) {
-    let (ctx, mut query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
+    let (mut query, mut scan) = from_fdw_private_scan((*node).fdw_state as _);
+    pgx::debug1!("Rescan triggered for query #{}", query.query_id());
 
     if scan.row_structure.is_some() {
         query.restart_query().unwrap();

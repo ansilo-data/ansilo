@@ -5,7 +5,9 @@ use pgx::{
     *,
 };
 
-use super::{FdwContext, FdwModifyContext, FdwQueryContext, FdwScanContext, PlannerContext};
+use super::{
+    FdwContext, FdwModifyContext, FdwPlanContext, FdwQueryContext, FdwScanContext, PlannerContext,
+};
 
 /// Converts the supplied context data to a pointer suitable
 /// to be stored in fdw_private fields
@@ -70,13 +72,11 @@ pub(crate) unsafe fn from_fdw_private_path(
 }
 
 pub(crate) unsafe fn into_fdw_private_scan(
-    ctx: PgBox<FdwContext, AllocatedByPostgres>,
     query: PgBox<FdwQueryContext, AllocatedByPostgres>,
     scan: PgBox<FdwScanContext, AllocatedByPostgres>,
 ) -> *mut List {
     let mut list = PgList::<c_void>::new();
 
-    list.push(ptr_to_node(ctx.into_pg()));
     list.push(ptr_to_node(query.into_pg()));
     list.push(ptr_to_node(scan.into_pg()));
 
@@ -87,18 +87,16 @@ pub(crate) unsafe fn into_fdw_private_scan(
 pub(crate) unsafe fn from_fdw_private_scan(
     list: *mut List,
 ) -> (
-    PgBox<FdwContext, AllocatedByPostgres>,
     PgBox<FdwQueryContext, AllocatedByPostgres>,
     PgBox<FdwScanContext, AllocatedByPostgres>,
 ) {
     let list = PgList::<c_void>::from_pg(list);
-    assert!(list.len() == 3);
+    assert!(list.len() == 2);
 
-    let ctx = PgBox::<FdwContext>::from_pg(node_to_ptr(list.get_ptr(0).unwrap()));
-    let query = PgBox::<FdwQueryContext>::from_pg(node_to_ptr(list.get_ptr(1).unwrap()));
-    let scan = PgBox::<FdwScanContext>::from_pg(node_to_ptr(list.get_ptr(2).unwrap()));
+    let query = PgBox::<FdwQueryContext>::from_pg(node_to_ptr(list.get_ptr(0).unwrap()));
+    let scan = PgBox::<FdwScanContext>::from_pg(node_to_ptr(list.get_ptr(1).unwrap()));
 
-    (ctx, query, scan)
+    (query, scan)
 }
 
 pub(crate) unsafe fn into_fdw_private_modify(
@@ -131,6 +129,28 @@ pub(crate) unsafe fn from_fdw_private_modify(
     let modify = PgBox::<FdwModifyContext>::from_pg(node_to_ptr(list.get_ptr(2).unwrap()));
 
     (ctx, query, modify)
+}
+
+pub(crate) unsafe fn into_fdw_private_plan(
+    plan: PgBox<FdwPlanContext, AllocatedByPostgres>,
+) -> *mut List {
+    let mut list = PgList::<c_void>::new();
+
+    list.push(ptr_to_node(plan.into_pg()));
+
+    list.into_pg()
+}
+
+#[track_caller]
+pub(crate) unsafe fn from_fdw_private_plan(
+    list: *mut List,
+) -> (PgBox<FdwPlanContext, AllocatedByPostgres>,) {
+    let list = PgList::<c_void>::from_pg(list);
+    assert!(list.len() == 1);
+
+    let plan = PgBox::<FdwPlanContext>::from_pg(node_to_ptr(list.get_ptr(0).unwrap()));
+
+    (plan,)
 }
 
 /// Our fdw_private lists need to be copyable via postgres internal copyObject

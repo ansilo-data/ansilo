@@ -1,7 +1,10 @@
 use std::{collections::HashMap, ptr};
 
 use itertools::Itertools;
-use pgx::pg_sys::{self, Node};
+use pgx::{
+    pg_sys::{self, Node},
+    PgList,
+};
 
 /// Mapping data that is accrued while converting pg expr's to sqlil
 #[derive(Debug, Clone, PartialEq)]
@@ -11,8 +14,22 @@ pub struct ConversionContext {
     aliases: HashMap<pg_sys::Oid, String>,
 
     /// Query parameter mappings
-    /// Postgres query params (paramkind, paramid) to SQLIL parameter id's
+    /// Postgres expression node's to SQLIL parameter id's
     params: Vec<(*mut Node, u32)>,
+}
+
+/// Mapping data that is accrued while converting pg expr's to sqlil
+/// This is a "serialiseable" version of the the conversion context
+/// that can be safely stored in cached query plans.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlannedConversionContext {
+    /// Query table var no's to alias mappings
+    /// We record the aliases for any relations within the query here
+    aliases: HashMap<pg_sys::Oid, String>,
+
+    /// Query parameter mappings
+    /// Mapping from foreign_scan->fdw_exprs[idx] to SQLIL parameter id's
+    param_ids: Vec<u32>,
 }
 
 impl ConversionContext {
@@ -83,6 +100,28 @@ impl ConversionContext {
             .filter(|(n, _)| pg_sys::equal(*n as *mut _ as *const _, node as _))
             .map(|(_, id)| *id)
             .collect()
+    }
+
+    /// Converts the context into the planned form with the fdw_exprs
+    pub unsafe fn to_planned(&self) -> (PlannedConversionContext, Vec<*mut Node>) {
+        let aliases = self.aliases.clone();
+        let nodes = self.params.iter().map(|(e, _)| *e).collect();
+        let param_ids = self.params.iter().map(|(_, id)| *id).collect();
+
+        (PlannedConversionContext { aliases, param_ids }, nodes)
+    }
+
+    /// Restores the original conversion context back from the planned state
+    pub fn from_planned(planned: &PlannedConversionContext, fdw_exprs: PgList<Node>) -> Self {
+        assert_eq!(fdw_exprs.len(), planned.param_ids.len());
+
+        let aliases = planned.aliases.clone();
+        let params = fdw_exprs
+            .iter_ptr()
+            .zip(planned.param_ids.iter().cloned())
+            .collect();
+
+        Self { aliases, params }
     }
 }
 

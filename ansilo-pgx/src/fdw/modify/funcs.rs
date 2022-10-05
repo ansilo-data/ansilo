@@ -17,15 +17,16 @@ use pgx::{
 
 use crate::{
     fdw::{
-        common::{self, begin_remote_transaction, prepare_query_params, send_query_params},
-        ctx::{
-            from_fdw_private_modify, from_fdw_private_rel, into_fdw_private_modify,
-            into_fdw_private_rel, mem::pg_transaction_scoped, FdwContext, FdwModifyContext,
-            FdwQueryContext, FdwQueryType, FdwScanContext, FdwSelectQuery, PlannerContext,
+        common::{
+            self, begin_remote_transaction, prepare_query_params, send_query_params, TableOptions,
         },
+        ctx::{mem::*, *},
     },
     sqlil::{convert, from_datum, from_pg_type, into_pg_type},
-    util::{func::call_udf, string::to_pg_cstr, table::PgTable, tuple::slot_get_attr},
+    util::{
+        func::call_udf, list::vec_to_pg_list, string::to_pg_cstr, table::PgTable,
+        tuple::slot_get_attr,
+    },
 };
 
 /// Number of executions of a single-row insert query we should "batch" together
@@ -137,11 +138,13 @@ pub unsafe extern "C" fn plan_foreign_modify(
         _ => panic!("Unexpected operation: {}", (*plan).operation),
     };
 
-    into_fdw_private_modify(
-        ctx,
-        pg_transaction_scoped(query),
-        pg_transaction_scoped(FdwModifyContext::new()),
-    )
+    let query = pg_transaction_scoped(query);
+    // We discard the fdw_exprs because they are not used in foreign insert/update/delete
+    // rather query params are extracted for foreign tuples in the exec_* funcs below.
+    let (planned_ctx, _) = FdwPlanContext::create(&*ctx, query);
+    let planned_ctx = pg_global_scoped(planned_ctx);
+
+    into_fdw_private_plan(planned_ctx)
 }
 
 unsafe fn plan_foreign_insert(
@@ -364,18 +367,22 @@ pub unsafe extern "C" fn begin_foreign_modify(
     subplan_index: ::std::os::raw::c_int,
     eflags: ::std::os::raw::c_int,
 ) {
-    let (ctx, mut query, mut state) = from_fdw_private_modify(fdw_private);
+    let (planned_ctx,) = from_fdw_private_plan(fdw_private);
+    let (ctx, query) = planned_ctx.restore(None);
+    let ctx = pg_transaction_scoped(ctx);
+    let mut query = pg_transaction_scoped(query);
+    let mut modify = pg_transaction_scoped(FdwModifyContext::new());
 
     if query.as_insert().is_some() {
         // Save the singular insert query for later in case the batch size
         // needs to be changed
-        state.singular_insert = Some(query.duplicate().unwrap());
+        modify.singular_insert = Some(query.duplicate().unwrap());
     }
 
     // We still want to do batch size calculations for EXPLAIN
     // but skip the actual preparation of the queries.
     if eflags & pg_sys::EXEC_FLAG_EXPLAIN_ONLY as i32 != 0 {
-        (*rinfo).ri_FdwState = fdw_private as *mut _;
+        (*rinfo).ri_FdwState = into_fdw_private_modify(ctx, query, modify) as *mut _;
         return;
     }
 
@@ -412,7 +419,7 @@ pub unsafe extern "C" fn begin_foreign_modify(
 
     query.prepare().unwrap();
 
-    (*rinfo).ri_FdwState = fdw_private as *mut _;
+    (*rinfo).ri_FdwState = into_fdw_private_modify(ctx, query, modify) as *mut _;
 }
 
 /// We support 2 types of "batching":
@@ -425,7 +432,7 @@ pub unsafe extern "C" fn begin_foreign_modify(
 pub unsafe extern "C" fn get_foreign_modify_batch_size(
     rinfo: *mut ResultRelInfo,
 ) -> ::std::os::raw::c_int {
-    let (mut ctx, query, mut state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
+    let (ctx, query, mut state) = from_fdw_private_modify((*rinfo).ri_FdwState as *mut _);
 
     // Batching is only supported for inserts
     if query.as_insert().is_none() {
@@ -465,7 +472,8 @@ pub unsafe extern "C" fn get_foreign_modify_batch_size(
     let mut batch_size = cmp::min(batch_size, MAX_BULK_INSERT_BATCH_SIZE as _);
 
     // Min with the user-defined max batch size if any
-    if let Some(mbs) = ctx.foreign_table_opts.max_batch_size {
+    let opts = TableOptions::from_id((*(*rinfo).ri_RelationDesc).rd_id).unwrap();
+    if let Some(mbs) = opts.max_batch_size {
         batch_size = cmp::min(batch_size, mbs);
     }
 
@@ -775,12 +783,9 @@ pub unsafe extern "C" fn plan_direct_modify(
         return false;
     }
 
-    let (ctx, inner_select, planner) = from_fdw_private_rel((*foreign_scan).fdw_private);
-
-    // If the user provided a before modify callback, invoke it now
-    if let Some(func) = ctx.foreign_table_opts.before_modify.as_ref() {
-        call_udf(func.as_str());
-    }
+    let (mut planned_select,) = from_fdw_private_plan((*foreign_scan).fdw_private);
+    // Since we are still planning this should be safe
+    let inner_select = planned_select.unsafe_original_planning_ctx();
 
     // If any quals need to be locally evaluated we cannot perform
     // the modification remotely
@@ -807,6 +812,11 @@ pub unsafe extern "C" fn plan_direct_modify(
     let table = PgTable::open((*rte).relid as _, pg_sys::NoLock as _).unwrap();
 
     let mut ctx = pg_transaction_scoped(common::connect_table(table.rd_id));
+
+    // If the user provided a before modify callback, invoke it now
+    if let Some(func) = ctx.foreign_table_opts.before_modify.as_ref() {
+        call_udf(func.as_str());
+    }
 
     let query = match (*plan).operation {
         pg_sys::CmdType_CMD_UPDATE => plan_direct_foreign_update(
@@ -845,11 +855,10 @@ pub unsafe extern "C" fn plan_direct_modify(
     }
 
     // Update the fdw_private state with the modification query state
-    (*foreign_scan).fdw_private = into_fdw_private_modify(
-        ctx,
-        pg_transaction_scoped(query),
-        pg_transaction_scoped(FdwModifyContext::new()),
-    );
+    let query = pg_transaction_scoped(query);
+    let (planned_ctx, fdw_exprs) = FdwPlanContext::create(&*ctx, query);
+    (*foreign_scan).fdw_exprs = vec_to_pg_list(fdw_exprs);
+    (*foreign_scan).fdw_private = into_fdw_private_plan(pg_global_scoped(planned_ctx));
 
     return true;
 }
@@ -1020,16 +1029,26 @@ pub unsafe extern "C" fn begin_direct_modify(
     }
 
     let plan = (*node).ss.ps.plan as *mut ForeignScan;
-    let (ctx, mut query, mut state) = from_fdw_private_modify((*plan).fdw_private);
+    let (planned_ctx,) = from_fdw_private_plan((*plan).fdw_private);
+    let (ctx, query) = planned_ctx.restore(Some(PgList::from_pg((*plan).fdw_exprs)));
+    let ctx = pg_transaction_scoped(ctx);
+    let mut query = pg_transaction_scoped(query);
+    let mut modify = pg_transaction_scoped(FdwModifyContext::new());
 
     // Upon the first modification query we begin a remote transaction
-    begin_remote_transaction(&ctx.connection);
+    begin_remote_transaction(&query.connection().inner());
 
-    query.prepare().unwrap();
+    if query.executed() {
+        query.restart_query().unwrap();
+    }
 
-    prepare_query_params(&mut state.scan, &query, node);
+    if !query.is_prepared() {
+        query.prepare().unwrap();
+    }
 
-    (*node).fdw_state = (*plan).fdw_private as *mut _;
+    prepare_query_params(&mut modify.scan, &query, node);
+
+    (*node).fdw_state = into_fdw_private_modify(ctx, query, modify) as *mut _
 }
 
 #[pg_guard]

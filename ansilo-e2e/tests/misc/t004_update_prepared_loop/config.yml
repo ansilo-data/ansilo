@@ -1,0 +1,46 @@
+name: Misc
+
+networking:
+  port: 0 # use kernel-allocated port
+
+auth:
+  users:
+    - username: app
+      password: pass
+
+entities:
+  - id: people
+    description: This is the list of people
+    source:
+      data_source: memory
+      options: null
+    attributes:
+      - id: id
+        type: Int64
+      - id: name
+        type: !Utf8String {}
+
+sources:
+  - id: memory
+    type: test.memory
+    options:
+      people:
+        - [1, "Sunny"]
+        - [2, "Jacky"]
+        - [3, "Robby"]
+        - [4, "John"]
+        - [5, "Mary"]
+        - [6, "Claire"]
+        - [7, "Chris"]
+        - [8, "James"]
+
+build:
+  stages:
+    - sql: ${dir}/ansilo-sql/*.sql
+
+postgres:
+    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
+    data_dir: /tmp/${dir}/data
+    listen_socket_dir_path: /tmp/${dir}
+    fdw_socket_path: /tmp/${dir}/fdw.sock
+    build_info_path: /tmp/${dir}/build-info.json

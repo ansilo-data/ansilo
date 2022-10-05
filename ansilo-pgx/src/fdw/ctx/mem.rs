@@ -1,6 +1,12 @@
 use pgx::{pg_sys::ScanState, *};
 
 /// Stores the supplied value in memory managed by postgres.
+/// This value is never dropped, so it can be considered leaked.
+pub(crate) unsafe fn pg_global_scoped<T>(v: T) -> PgBox<T, AllocatedByPostgres> {
+    pg_scoped(PgMemoryContexts::TopMemoryContext, v)
+}
+
+/// Stores the supplied value in memory managed by postgres.
 /// This value is dropped at the end of the top level transaction.
 pub(crate) unsafe fn pg_transaction_scoped<T>(v: T) -> PgBox<T, AllocatedByPostgres> {
     pg_scoped(PgMemoryContexts::TopTransactionContext, v)

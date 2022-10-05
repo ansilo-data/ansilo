@@ -413,7 +413,11 @@ impl MemoryQueryExecutor {
             }
         }
 
-        let groups = groups.into_iter().map(|(_, g)| g).collect();
+        let mut groups = groups.into_iter().map(|(_, g)| g).collect::<Vec<_>>();
+
+        if groups.is_empty() {
+            groups.push(vec![]);
+        }
 
         Ok(groups)
     }

@@ -484,7 +484,10 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
                 query.clone(),
             )?,
             FdwQueryState::Compiled(query) => query,
-            _ => bail!("Expected query to be in planning or compiled state"),
+            _ => bail!(
+                "Expected query to be in planning or compiled state but currest state is '{}'",
+                state
+            ),
         };
 
         let handle = connection.prepare(query)?;
