@@ -24,7 +24,7 @@ pub(super) async fn handler(
 
     // Discover all the table schemas accessible to the user
     let entities = PostgresEntitySearcher::<UnpooledClient>::discover_async(
-        con.client(),
+        &*con.client_async().await,
         EntityDiscoverOptions::new(
             "%",
             [

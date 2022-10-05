@@ -30,7 +30,7 @@ impl Connector for PeerConnector {
     type TQueryCompiler = PostgresQueryCompiler<UnpooledClient>;
     type TQueryHandle = PostgresPreparedQuery<UnpooledClient>;
     type TQuery = PostgresQuery;
-    type TResultSet = PostgresResultSet;
+    type TResultSet = PostgresResultSet<UnpooledClient>;
     type TTransactionManager = PostgresConnection<UnpooledClient>;
 
     const TYPE: &'static str = "peer";

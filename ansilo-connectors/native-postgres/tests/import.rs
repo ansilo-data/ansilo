@@ -41,7 +41,7 @@ fn test_postgres_discover_entities_with_filter_wildcard() {
     let containers = common::start_postgres();
     let mut con = common::connect_to_postgres(&containers);
 
-    con.execute(
+    con.execute_modify(
         "
         DROP TABLE IF EXISTS test_import_wildcard;
         ",
@@ -49,7 +49,7 @@ fn test_postgres_discover_entities_with_filter_wildcard() {
     )
     .unwrap();
 
-    con.execute(
+    con.execute_modify(
         "
         CREATE TABLE test_import_wildcard (
             x VARCHAR(255)
@@ -80,7 +80,7 @@ fn test_postgres_discover_entities_varchar_type_mapping() {
     let containers = common::start_postgres();
     let mut con = common::connect_to_postgres(&containers);
 
-    con.execute(
+    con.execute_modify(
         "
         DROP TABLE IF EXISTS import_varchar_types;
         ",
@@ -88,7 +88,7 @@ fn test_postgres_discover_entities_varchar_type_mapping() {
     )
     .unwrap();
 
-    con.execute(
+    con.execute_modify(
         r#"
         CREATE TABLE import_varchar_types (
             "VARCHAR" VARCHAR(255),
@@ -138,7 +138,7 @@ fn test_postgres_discover_entities_number_type_mapping() {
     let containers = common::start_postgres();
     let mut con = common::connect_to_postgres(&containers);
 
-    con.execute(
+    con.execute_modify(
         r#"
         DROP TABLE IF EXISTS import_number_types;
         "#,
@@ -146,7 +146,7 @@ fn test_postgres_discover_entities_number_type_mapping() {
     )
     .unwrap();
 
-    con.execute(
+    con.execute_modify(
         r#"
         CREATE TABLE import_number_types (
             "INT16" SMALLINT,
@@ -212,7 +212,7 @@ fn test_postgres_discover_entities_with_comments() {
     let containers = common::start_postgres();
     let mut con = common::connect_to_postgres(&containers);
 
-    con.execute(
+    con.execute_modify(
         r#"
         DROP TABLE IF EXISTS import_comments;
         "#,
@@ -220,7 +220,7 @@ fn test_postgres_discover_entities_with_comments() {
     )
     .unwrap();
 
-    con.execute(
+    con.execute_modify(
         r#"
         CREATE TABLE import_comments (
             col_a INT,
@@ -231,17 +231,17 @@ fn test_postgres_discover_entities_with_comments() {
     )
     .unwrap();
 
-    con.execute(
+    con.execute_modify(
         r#"COMMENT ON TABLE import_comments IS 'This is the table comment';"#,
         vec![],
     )
     .unwrap();
-    con.execute(
+    con.execute_modify(
         r#"COMMENT ON COLUMN import_comments.col_a IS 'This is the first column comment';"#,
         vec![],
     )
     .unwrap();
-    con.execute(
+    con.execute_modify(
         r#"COMMENT ON COLUMN import_comments.col_b IS 'This is the second column comment';"#,
         vec![],
     )

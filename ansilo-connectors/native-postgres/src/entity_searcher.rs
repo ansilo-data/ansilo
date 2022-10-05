@@ -29,7 +29,7 @@ impl<T: DerefMut<Target = Client>> EntitySearcher for PostgresEntitySearcher<T> 
         _nc: &NodeConfig,
         opts: EntityDiscoverOptions,
     ) -> Result<Vec<EntityConfig>> {
-        runtime().block_on(Self::discover_async(connection.client(), opts))
+        runtime().block_on(Self::discover_async(&connection.client(), opts))
     }
 }
 

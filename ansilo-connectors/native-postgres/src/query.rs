@@ -1,4 +1,4 @@
-use std::{io::Write, ops::DerefMut, sync::Arc};
+use std::{io::Write, ops::DerefMut, pin::Pin, sync::Arc};
 
 use ansilo_connectors_base::{
     common::{data::QueryParamSink, query::QueryParam},
@@ -6,9 +6,11 @@ use ansilo_connectors_base::{
 };
 use ansilo_core::{
     data::DataValue,
-    err::{ensure, Result},
+    err::{ensure, Context, Result},
 };
+use ansilo_logging::debug;
 use serde::Serialize;
+use tokio::sync::RwLock;
 use tokio_postgres::{
     types::{ToSql, Type},
     Client, Statement,
@@ -18,6 +20,7 @@ use crate::{
     data::{from_pg_type, to_pg},
     result_set::PostgresResultSet,
     runtime::runtime,
+    TransactionState, BATCH_SIZE,
 };
 
 /// Postgres query
@@ -41,7 +44,9 @@ impl PostgresQuery {
 /// Postgres prepared query
 pub struct PostgresPreparedQuery<T> {
     /// The postgres client
-    client: Arc<T>,
+    client: Pin<Arc<RwLock<T>>>,
+    /// The current transaction state
+    transaction: TransactionState<T>,
     /// The postgres SQL query
     sql: String,
     /// The prepared postgres query
@@ -54,7 +59,8 @@ pub struct PostgresPreparedQuery<T> {
 
 impl<T: DerefMut<Target = Client>> PostgresPreparedQuery<T> {
     pub fn new(
-        client: Arc<T>,
+        client: Pin<Arc<RwLock<T>>>,
+        transaction: TransactionState<T>,
         statement: Statement,
         sql: String,
         params: Vec<QueryParam>,
@@ -65,6 +71,7 @@ impl<T: DerefMut<Target = Client>> PostgresPreparedQuery<T> {
 
         Ok(Self {
             client,
+            transaction,
             sql,
             statement,
             sink,
@@ -84,12 +91,16 @@ impl<T: DerefMut<Target = Client>> PostgresPreparedQuery<T> {
         Ok(params)
     }
 
-    pub async fn execute_query_async(&mut self) -> Result<PostgresResultSet> {
+    pub async fn execute_query_async(&mut self) -> Result<PostgresResultSet<T>> {
         let params = self.get_params()?;
 
-        let stream = self
-            .client
-            .query_raw(&self.statement, params.into_iter().map(|p| p))
+        let transaction = self.transaction.get_transaction_async().await?;
+        let portal = transaction
+            .inner_async()
+            .await
+            .as_ref()
+            .context("Transaction closed")?
+            .bind_raw(&self.statement, params.into_iter().map(|p| p))
             .await?;
 
         let cols = self
@@ -99,14 +110,26 @@ impl<T: DerefMut<Target = Client>> PostgresPreparedQuery<T> {
             .map(|c| Ok((c.name().to_string(), from_pg_type(c.type_())?)))
             .collect::<Result<_>>()?;
 
-        Ok(PostgresResultSet::new(stream, cols))
+        // Ensure the query has actually been executed
+        debug!("Retreiving first batch of up to {BATCH_SIZE} rows");
+        let stream = transaction
+            .inner_async()
+            .await
+            .as_ref()
+            .context("Transaction closed")?
+            .query_portal_raw(&portal, BATCH_SIZE as _)
+            .await?;
+
+        let rs = PostgresResultSet::new(transaction, portal, stream, cols);
+
+        Ok(rs)
     }
 
     pub async fn execute_modify_async(&mut self) -> Result<Option<u64>> {
         let params = self.get_params()?;
+        let client = self.client.read().await;
 
-        let affected = self
-            .client
+        let affected = client
             .execute_raw(&self.statement, params.into_iter().map(|p| p))
             .await?;
 
@@ -115,7 +138,7 @@ impl<T: DerefMut<Target = Client>> PostgresPreparedQuery<T> {
 }
 
 impl<T: DerefMut<Target = Client>> QueryHandle for PostgresPreparedQuery<T> {
-    type TResultSet = PostgresResultSet;
+    type TResultSet = PostgresResultSet<T>;
 
     fn get_structure(&self) -> Result<QueryInputStructure> {
         Ok(self.sink.get_input_structure().clone())

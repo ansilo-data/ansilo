@@ -1,19 +1,30 @@
-use std::{cmp, pin::Pin};
+use std::{cmp, ops::DerefMut, pin::Pin, sync::Arc};
 
 use ansilo_connectors_base::{
     common::data::DataWriter,
     interface::{ResultSet, RowStructure},
 };
-use ansilo_core::{data::DataType, err::Result};
+use ansilo_core::{
+    data::DataType,
+    err::{Context, Result},
+};
+use ansilo_logging::debug;
 use futures_util::TryStreamExt;
-use tokio_postgres::RowStream;
+use tokio::runtime::Runtime;
+use tokio_postgres::{Client, Portal, Row, RowStream};
 
-use crate::{data::from_pg, runtime::runtime};
+use crate::{data::from_pg, runtime::runtime, OwnedTransaction};
+
+pub(crate) const BATCH_SIZE: usize = 1000;
 
 /// Postgres result set
-pub struct PostgresResultSet {
-    /// The stream of table rows
-    stream: Pin<Box<RowStream>>,
+pub struct PostgresResultSet<T> {
+    /// The postgres tranaction
+    transaction: Arc<OwnedTransaction<T>>,
+    /// The portal which streams the results
+    portal: Portal,
+    /// The current row stream
+    stream: Option<Pin<Box<RowStream>>>,
     /// The resultant column types
     cols: Vec<(String, DataType)>,
     /// Output buffer
@@ -22,10 +33,17 @@ pub struct PostgresResultSet {
     done: bool,
 }
 
-impl PostgresResultSet {
-    pub fn new(stream: RowStream, cols: Vec<(String, DataType)>) -> Self {
+impl<T: DerefMut<Target = Client>> PostgresResultSet<T> {
+    pub fn new(
+        transaction: Arc<OwnedTransaction<T>>,
+        portal: Portal,
+        stream: RowStream,
+        cols: Vec<(String, DataType)>,
+    ) -> Self {
         Self {
-            stream: Box::pin(stream),
+            transaction,
+            portal,
+            stream: Some(Box::pin(stream)),
             cols,
             buf: vec![],
             done: false,
@@ -33,7 +51,7 @@ impl PostgresResultSet {
     }
 }
 
-impl ResultSet for PostgresResultSet {
+impl<T: DerefMut<Target = Client>> ResultSet for PostgresResultSet<T> {
     fn get_structure(&self) -> Result<RowStructure> {
         Ok(RowStructure::new(self.cols.clone()))
     }
@@ -59,7 +77,7 @@ impl ResultSet for PostgresResultSet {
                 return Ok(read);
             }
 
-            if let Some(row) = rt.block_on(self.stream.try_next())? {
+            if let Some(row) = self.get_next_row(&rt)? {
                 let vals = row
                     .columns()
                     .iter()
@@ -74,5 +92,46 @@ impl ResultSet for PostgresResultSet {
                 return Ok(read);
             }
         }
+    }
+}
+
+impl<T: DerefMut<Target = Client>> PostgresResultSet<T> {
+    fn get_next_row(&mut self, rt: &Runtime) -> Result<Option<Row>> {
+        loop {
+            let (new, stream) = if let Some(stream) = self.stream.as_mut() {
+                (false, stream)
+            } else {
+                (true, self.get_next_batch(rt)?)
+            };
+
+            if let Some(row) = rt.block_on(stream.try_next())? {
+                return Ok(Some(row));
+            }
+
+            // Check if empty batch (eof)
+            if new {
+                return Ok(None);
+            } else {
+                // Else this batch is empty, get a new one
+                self.stream = None;
+            }
+        }
+    }
+
+    pub(crate) fn get_next_batch(&mut self, rt: &Runtime) -> Result<&mut Pin<Box<RowStream>>> {
+        if !self.stream.is_some() {
+            debug!("Retrieving {BATCH_SIZE} rows");
+            self.stream = Some(Box::pin(
+                rt.block_on(
+                    self.transaction
+                        .inner()
+                        .as_ref()
+                        .context("Transaction closed")?
+                        .query_portal_raw(&self.portal, BATCH_SIZE as _),
+                )?,
+            ));
+        }
+
+        Ok(self.stream.as_mut().unwrap())
     }
 }

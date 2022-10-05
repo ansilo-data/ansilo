@@ -44,7 +44,7 @@ impl Connector for PostgresConnector {
     type TQueryCompiler = PostgresQueryCompiler<PooledClient>;
     type TQueryHandle = PostgresPreparedQuery<PooledClient>;
     type TQuery = PostgresQuery;
-    type TResultSet = PostgresResultSet;
+    type TResultSet = PostgresResultSet<PooledClient>;
     type TTransactionManager = PostgresConnection<PooledClient>;
 
     const TYPE: &'static str = "native.postgres";
