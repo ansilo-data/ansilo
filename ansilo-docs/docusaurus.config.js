@@ -6,9 +6,9 @@ const darkCodeTheme = require("prism-react-renderer/themes/dracula");
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "Ansilo Docs",
+  title: "Ansilo Documentation",
   tagline: "",
-  url: "https://your-docusaurus-test-site.com",
+  url: "https://docs.ansilo.io",
   baseUrl: "/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
@@ -34,13 +34,9 @@ const config = {
       ({
         docs: {
           sidebarPath: require.resolve("./sidebars.js"),
-          editUrl:
-            "https://github.com/ansilo-data/ansilo/tree/main/ansilo-docs/",
         },
         blog: {
           showReadingTime: true,
-          editUrl:
-            "https://github.com/ansilo-data/ansilo/tree/main/ansilo-docs/",
         },
         theme: {
           customCss: require.resolve("./src/css/custom.css"),
@@ -53,13 +49,13 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
-        title: "Ansilo Docs",
+        title: "Ansilo Documentation",
         items: [
           {
             type: "doc",
-            docId: "intro",
+            docId: "index",
             position: "left",
-            label: "Introduction",
+            label: "Documentation",
           },
           {
             href: "https://github.com/ansilo-data/ansilo",
@@ -90,8 +86,9 @@ const config = {
             ],
           },
         ],
-        copyright: `Copyright © ${new Date().getFullYear()} Ansilo PTY LTD. Built with Docusaurus.`,
+        copyright: `Copyright © ${new Date().getFullYear()} Ansilo. Built with Docusaurus.`,
       },
+      colorMode: { defaultMode: "dark" },
       prism: {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,

@@ -1,0 +1,8 @@
+{
+  "label": "Fundamentals",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "description": "The core concepts underpinning the why and how of Ansilo"
+  }
+}
