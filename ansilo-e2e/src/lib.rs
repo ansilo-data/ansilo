@@ -11,3 +11,4 @@ pub mod teradata;
 pub mod util;
 pub mod web;
 pub mod vault;
+pub mod jvm;

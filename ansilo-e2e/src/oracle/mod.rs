@@ -2,7 +2,7 @@ use std::{collections::HashMap, env, fs, path::PathBuf, sync::Mutex, time::Durat
 
 use ansilo_connectors_base::{
     interface::{Connection, QueryHandle},
-    test::ecs::{get_current_target_dir, start_containers, wait_for_log, ContainerInstances},
+    test::ecs::{ start_containers, wait_for_log, ContainerInstances},
 };
 use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 use ansilo_connectors_jdbc_oracle::{OracleJdbcConnectionConfig, OracleJdbcConnector};
@@ -19,11 +19,6 @@ static ORACLE_MUTEX: Mutex<()> = Mutex::new(());
 /// script which will exit automatically after idleing for 30 min
 pub fn start_oracle() -> ContainerInstances {
     let _lock = ORACLE_MUTEX.lock().unwrap();
-
-    env::set_var(
-        "ANSILO_CLASSPATH",
-        get_current_target_dir().to_str().unwrap(),
-    );
 
     let mut cache = FunctionCache::<ContainerInstances>::new("oracle", Duration::from_secs(600));
 

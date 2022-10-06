@@ -1,8 +1,6 @@
 use std::{collections::HashMap, env, fs, path::PathBuf, sync::Mutex, thread, time::Duration};
 
-use ansilo_connectors_base::test::ecs::{
-    get_current_target_dir, start_containers, wait_for_log, ContainerInstances,
-};
+use ansilo_connectors_base::test::ecs::{start_containers, wait_for_log, ContainerInstances};
 use ansilo_connectors_jdbc_base::JdbcConnection;
 use ansilo_connectors_jdbc_mssql::{MssqlJdbcConnectionConfig, MssqlJdbcConnector};
 use ansilo_logging::info;
@@ -15,11 +13,6 @@ static MSSQL_MUTEX: Mutex<()> = Mutex::new(());
 /// Starts an mssql DB instance and waits for it to become ready to accept connections
 pub fn start_mssql() -> ContainerInstances {
     let _lock = MSSQL_MUTEX.lock().unwrap();
-
-    env::set_var(
-        "ANSILO_CLASSPATH",
-        get_current_target_dir().to_str().unwrap(),
-    );
 
     let mut cache = FunctionCache::<ContainerInstances>::new("mssql", Duration::from_secs(600));
 

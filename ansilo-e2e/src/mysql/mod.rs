@@ -1,8 +1,8 @@
-use std::{collections::HashMap, env, fs, path::PathBuf, sync::Mutex, time::Duration, thread};
+use std::{collections::HashMap, env, fs, path::PathBuf, sync::Mutex, thread, time::Duration};
 
 use ansilo_connectors_base::{
     interface::{Connection, QueryHandle},
-    test::ecs::{get_current_target_dir, start_containers, wait_for_log, ContainerInstances},
+    test::ecs::{start_containers, wait_for_log, ContainerInstances},
 };
 use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 use ansilo_connectors_jdbc_mysql::{MysqlJdbcConnectionConfig, MysqlJdbcConnector};
@@ -16,11 +16,6 @@ static MYSQL_MUTEX: Mutex<()> = Mutex::new(());
 /// Starts an mysql DB instance and waits for it to become ready to accept connections
 pub fn start_mysql() -> ContainerInstances {
     let _lock = MYSQL_MUTEX.lock().unwrap();
-
-    env::set_var(
-        "ANSILO_CLASSPATH",
-        get_current_target_dir().to_str().unwrap(),
-    );
 
     let mut cache = FunctionCache::<ContainerInstances>::new("mysql", Duration::from_secs(600));
 

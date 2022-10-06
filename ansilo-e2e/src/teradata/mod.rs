@@ -1,11 +1,6 @@
-use std::{
-    collections::HashMap, env, fs, path::PathBuf, process::Command, sync::Mutex, time::Duration,
-};
+use std::{collections::HashMap, fs, path::PathBuf, process::Command, sync::Mutex, time::Duration};
 
-use ansilo_connectors_base::{
-    interface::{Connection, QueryHandle},
-    test::ecs::get_current_target_dir,
-};
+use ansilo_connectors_base::interface::{Connection, QueryHandle};
 use ansilo_connectors_jdbc_base::{JdbcConnection, JdbcQuery};
 use ansilo_connectors_jdbc_teradata::{TeradataJdbcConnectionConfig, TeradataJdbcConnector};
 use ansilo_logging::info;
@@ -39,11 +34,6 @@ pub fn start_teradata() {
 }
 
 pub fn connect_to_teradata() -> JdbcConnection {
-    env::set_var(
-        "ANSILO_CLASSPATH",
-        get_current_target_dir().to_str().unwrap(),
-    );
-
     let config = TeradataJdbcConnectionConfig::new(
         "jdbc:teradata://ansilo-teradata-test.japaneast.cloudapp.azure.com/DBS_PORT=1026,USER=ansilo_admin,PASSWORD=ansilo_testing,CHARSET=UTF16".into(),
         HashMap::new(),
