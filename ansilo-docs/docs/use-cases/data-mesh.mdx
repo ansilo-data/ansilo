@@ -1,7 +1,6 @@
 ---
 sidebar_position: 1
 ---
-
 import Diagram from "./diagrams/data-mesh.svg";
 
 # Data Mesh
@@ -9,7 +8,7 @@ import Diagram from "./diagrams/data-mesh.svg";
 Ansilo has been designed from the ground up to enable organisations to build a secure, robust and scalable [Data Mesh](https://www.datamesh-architecture.com/).
 
 <center>
-  <Diagram maxHeight="200px" width="70%" height="auto" class="auto-invert" />
+  <Diagram width="70%" height="auto" class="auto-invert" />
 </center>
 
 ### Decentralised Data Domains
@@ -25,7 +24,7 @@ for their respective business domain.
 
 The Ansilo workbench provides a self-service interface into each data product.
 Ansilo will **automatically generate a data catalog** that documents the schema, types, versions and more. 
-Each product can be queried or ingested using the workbench interface with SQL.
+Each product can be queried or ingested using the workbench interface using SQL.
 
 Data products can even be **exposed in realtime**, using the powerful SQL translation engine.
 Ansilo will execute optimised queries for the underlying data store as required for each data product.
@@ -33,8 +32,8 @@ Ansilo will execute optimised queries for the underlying data store as required 
 ### Federated Governance
 
 Ansilo exposes every data product through an industry-standard [PostgreSQL](https://postgresql.org) interface,
-regardless of the underlying technology. This provides a unified SQL interface into data stores, whether
+regardless of the underlying technology. This provides a **unified SQL interface into data stores**, whether
 they are relational, NoSQL or even flat-files.
 
-With Ansilo you can federate access to every data store using an organisation-wide IdP that supports [Json Web Tokens](https://jwt.io)
+With Ansilo you can federate access to every data store **using an organisation-wide IdP** that supports [Json Web Tokens](https://jwt.io)
 (Active Directory, Okta, Auth0, etc).
