@@ -1,0 +1,46 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches:
+      - develop
+
+env:
+  AWS_DEFAULT_REGION: ap-southeast-2
+
+jobs:
+  build:
+    name: build
+    runs-on: ${{ matrix.os }}
+    if: "!contains(github.event.head_commit.message, 'nogha') && !contains(github.event.head_commit.message, 'nodocs')"
+
+    strategy:
+      matrix:
+        os: ["ubuntu-20.04"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v1
+        with:
+          node-version: 18
+      
+      - run: npm ci
+        working-directory: ansilo-docs
+      
+      - run: npm run build
+        working-directory: ansilo-docs
+      
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.DOCS_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.DOCS_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+        
+      - name: Deploy to S3
+        run: aws s3 cp --recursive --cache-control max-age=7200 --metadata-directive REPLACE build/ s3://ansilo-docs/
+        working-directory: ansilo-docs
+      
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id=EIQZ4A58Q34SC --paths '/*'
