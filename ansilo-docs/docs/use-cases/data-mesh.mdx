@@ -18,7 +18,7 @@ At the heart of the Data Mesh architecture is the decomposition of data ownershi
 Ansilo is deployed as a **lightweight sidecar container alongside each service or data store**.
 This enables teams to design, expose or ingest data products autonomously, within their existing pipeline and SDLC.
 
-### Self-service Data Products 
+### Self-Service Data Products 
 
 With minimal setup required, each instance of Ansilo can be configured to expose the data product 
 for their respective business domain. 
@@ -33,8 +33,8 @@ Ansilo will execute optimised queries for the underlying data store as required 
 ### Federated Governance
 
 Ansilo exposes every data product through an industry-standard [PostgreSQL](https://postgresql.org) interface,
-regardless of the underlying data store. This provides a unified SQL interface into all your data stores, regardless
-of underlying technology.
+regardless of the underlying technology. This provides a unified SQL interface into data stores, whether
+they are relational, NoSQL or even flat-files.
 
 With Ansilo you can federate access to every data store using an organisation-wide IdP that supports [Json Web Tokens](https://jwt.io)
 (Active Directory, Okta, Auth0, etc).
