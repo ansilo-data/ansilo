@@ -11,11 +11,11 @@ We will keep adding support for new data sources, feel free to [contact us](/) a
 
 |                              | Readable | Writable | Condition Pushdown | Join Pushdown | Aggregation Pushdown | Sort/Limit/Offset Pushdown |
 | ---------------------------- | -------- | -------- | ------------------ | ------------- | -------------------- | -------------------------- |
-| [PostgreSQL](./postgresql)   | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
-| [MySQL](./mysql)             | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
-| [Oracle](./oracle)           | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
-| [SQL Server](./sql-server)   | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
-| [SQLite](./sqlite)           | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
-| [Teradata](./teradata)       | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
-| [MongoDB](./mongodb)         | ✅       | ✅       | ✅                 | -             | ❌                   | ✅                         |
-| [Files (Avro)](./files-avro) | ✅       | ✅       | -                  | -             | -                    | -                          |
+| [PostgreSQL](../postgresql)   | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
+| [MySQL](../mysql)             | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
+| [Oracle](../oracle)           | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
+| [SQL Server](../sql-server)   | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
+| [SQLite](../sqlite)           | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
+| [Teradata](../teradata)       | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
+| [MongoDB](../mongodb)         | ✅       | ✅       | ✅                 | -             | ❌                   | ✅                         |
+| [Files (Avro)](../files-avro) | ✅       | ✅       | -                  | -             | -                    | -                          |
