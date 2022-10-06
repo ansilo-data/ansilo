@@ -8,6 +8,7 @@ use ansilo_core::{
     config::{CustomAuthProviderConfig, CustomUserConfig},
     err::{bail, ensure, Context, Result},
 };
+use ansilo_logging::warn;
 use serde::{Deserialize, Serialize};
 
 pub struct CustomAuthProvider {
@@ -57,9 +58,13 @@ impl CustomAuthProvider {
 
         // Write input json to stdin
         let mut stdin = proc.stdin.take().unwrap();
-        stdin
-            .write_all(input.as_slice())
-            .context("Failed to write to stdin")?;
+        if let Err(err) = stdin.write_all(input.as_slice()) {
+            // If we fail to write to stdin, it could be because
+            // the script exited before reading all the input
+            // so we take this as a warning and respect the exit code
+            // of the process
+            warn!("Failed to write to stdin of custom auth process: {:?}", err);
+        }
         // Ensure we drop the stdin to avoid the child blocking
         drop(stdin);
 
@@ -117,7 +122,6 @@ struct CustomAuthFailure {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use serial_test::serial;
 
     use super::*;
 
@@ -134,7 +138,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_custom_auth_success() {
         let provider = mock_provider(r#"echo '{"result": "success", "context": {"foo": "bar"}}'"#);
 
@@ -151,7 +154,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_custom_auth_failure() {
         let provider =
             mock_provider(r#"echo '{"result": "failure", "message": "failed to auth"}'"#);
@@ -166,7 +168,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_custom_auth_stdin_json() {
         let provider = mock_provider(
             r#"
@@ -216,7 +217,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_custom_auth_non_zero_exit_code() {
         let provider = mock_provider(r#"exit 1"#);
 
@@ -231,7 +231,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_custom_auth_invalid_json_output() {
         let provider = mock_provider(r#"echo 'invalid json'"#);
 

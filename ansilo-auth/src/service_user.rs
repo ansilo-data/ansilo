@@ -85,7 +85,6 @@ mod tests {
     use ansilo_core::config::{
         AuthConfig, ConstantServiceUserPassword, ServiceUserConfig, ShellServiceUserPassword,
     };
-    use serial_test::serial;
 
     use super::*;
 
@@ -117,7 +116,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_authenticate_as_service_user_success_with_shell_script() {
         let conf = Box::leak(Box::new(AuthConfig {
             providers: vec![],
