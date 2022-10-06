@@ -12,7 +12,8 @@ const config = {
   baseUrl: "/",
   onBrokenLinks: "throw",
   onBrokenMarkdownLinks: "warn",
-  trailingSlash: false,
+  // CloudFront Function will add trailing /index.html
+  trailingSlash: true,
   favicon: "img/favicon.ico",
 
   // GitHub pages deployment config.
