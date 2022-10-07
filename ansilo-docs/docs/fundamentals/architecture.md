@@ -10,7 +10,7 @@ To make the most out of developing with Ansilo, it is important to understand th
 of [Data Mesh](https://www.datamesh-architecture.com/) and the key components underpinning Ansilo.
 
 <center>
-    <DataMesh width="70%" height="auto" class="auto-invert" />
+    <DataMesh width="70%" height="auto" className="auto-invert" />
 </center>
 
 ### Data Mesh 
@@ -30,7 +30,7 @@ with the ability to run SQL queries that read, analyse or move data across the n
 Each node is deployed as stateless container composed of the following subsystems:
 
 <center>
-    <OverviewDiagram width="100%" height="auto" class="auto-invert" />
+    <OverviewDiagram width="100%" height="auto" className="auto-invert" />
 </center>
 
 ### Multi-protocol proxy

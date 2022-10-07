@@ -92,8 +92,9 @@ const config = {
       },
       colorMode: { defaultMode: "dark" },
       prism: {
-        theme: lightCodeTheme,
-        darkTheme: darkCodeTheme,
+        theme: require('prism-react-renderer/themes/vsLight'),
+        darkTheme: require('prism-react-renderer/themes/vsDark'),
+        additionalLanguages: ['yaml']
       },
     }),
 };

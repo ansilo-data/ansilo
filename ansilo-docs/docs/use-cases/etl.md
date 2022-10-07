@@ -10,7 +10,7 @@ Ansilo significantly reduces the cost of ETL/ELT by using unified SQL across dat
 data pipelines.
 
 <center>
-    <WarehouseDiagram width="70%" height="auto" class="auto-invert" />
+    <WarehouseDiagram width="70%" height="auto" className="auto-invert" />
 </center>
 
 ### Unified SQL

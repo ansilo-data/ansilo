@@ -9,8 +9,8 @@ We will keep adding support for new data sources, feel free to [contact us](/) a
 
 ## Support Matrix
 
-|                              | Readable | Writable | Condition Pushdown | Join Pushdown | Aggregation Pushdown | Sort/Limit/Offset Pushdown |
-| ---------------------------- | -------- | -------- | ------------------ | ------------- | -------------------- | -------------------------- |
+|                               | Readable | Writable | Condition Pushdown | Join Pushdown | Aggregation Pushdown | Sort/Limit/Offset Pushdown |
+| ----------------------------- | -------- | -------- | ------------------ | ------------- | -------------------- | -------------------------- |
 | [PostgreSQL](../postgresql)   | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
 | [MySQL](../mysql)             | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
 | [Oracle](../oracle)           | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |

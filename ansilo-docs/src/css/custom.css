@@ -32,3 +32,7 @@
 [data-theme="dark"] svg.auto-invert {
   filter: invert(100%)
 }
+
+.language-yaml .token.key {
+  filter: hue-rotate(-90deg)
+}

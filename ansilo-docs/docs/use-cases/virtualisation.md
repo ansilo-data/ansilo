@@ -8,7 +8,7 @@ import Diagram from './diagrams/virtualisation.svg'
 Leverage unified SQL and Ansilo's powerful query translation engine to query across your data stores.
 
 <center>
-    <Diagram width="70%" height="auto" class="auto-invert" />
+    <Diagram width="70%" height="auto" className="auto-invert" />
 </center>
 
 ### Unified SQL

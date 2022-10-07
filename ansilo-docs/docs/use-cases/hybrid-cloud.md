@@ -10,7 +10,7 @@ Reduce the costs and risks of moving data between on-prem and cloud by leveragin
 decentralised architecture. 
 
 <center>
-    <ActivateDiagram width="70%" height="auto" class="auto-invert" />
+    <ActivateDiagram width="70%" height="auto" className="auto-invert" />
 </center>
 
 ### Decentralised Architecture

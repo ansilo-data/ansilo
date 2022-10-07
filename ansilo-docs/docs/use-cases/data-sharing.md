@@ -5,11 +5,11 @@ import Diagram from './diagrams/data-sharing.svg'
 
 # Data Sharing
 
-Provide a standardised interface into your shared datasets with partner organisations
-using Ansilo's [PostgreSQL](https://postgresql.org) interface.
+Provide a secure and standardised interface into your shared datasets with partner organisations
+using Ansilo's [PostgreSQL](https://postgresql.org) translation engine.
 
 <center>
-    <Diagram width="70%" height="auto" class="auto-invert" />
+    <Diagram width="70%" height="auto" className="auto-invert" />
 </center>
 
 ### Unified SQL
