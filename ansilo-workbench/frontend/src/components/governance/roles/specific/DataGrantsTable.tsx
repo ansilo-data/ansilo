@@ -70,7 +70,7 @@ export const DataGrantsTable = () => {
               <TableCell>{grant.table}</TableCell>
               <TableCell>{grant.grants}</TableCell>
             </TableRow>)
-            : <TableRow><TableCell colSpan={2}>No grants found</TableCell></TableRow>}
+            : <TableRow><TableCell colSpan={3}>No grants found</TableCell></TableRow>}
         </TableBody>
       </Table>
     </TableContainer>

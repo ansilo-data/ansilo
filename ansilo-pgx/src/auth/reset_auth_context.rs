@@ -21,7 +21,7 @@ extension_sql!(
 
 #[pg_extern(sql = "")]
 fn ansilo_reset_auth_context(reset_nonce: String) -> String {
-    info!("Requested to reset auth context");
+    debug1!("Requested to reset auth context");
 
     assert!(AuthContextState::get().is_some(), "Not in auth context");
 
@@ -45,7 +45,7 @@ fn ansilo_reset_auth_context(reset_nonce: String) -> String {
     clear_fdw_ipc_connections();
     clear_rq_prepared_queries();
 
-    info!("Auth context reset");
+    debug1!("Auth context reset");
 
     "OK".into()
 }
