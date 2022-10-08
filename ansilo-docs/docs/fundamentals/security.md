@@ -33,13 +33,13 @@ auth:
 
 In this case a user will be able connect using postgresql:
 
-```sh
+```bash
 PGPASSWORD="mysupersecret!" psql -h my.ansilo.host -U exampleuser
 ```
 
 Or using HTTP Basic authentication:
 
-```sh
+```bash
 curl --user 'exampleuser:mysupersecret!' https://my.ansilo.host
 ```
 
@@ -82,13 +82,13 @@ auth:
 
 Then will be able connect using postgresql:
 
-```sh
+```bash
 PGPASSWORD="$JWT_TOKEN" psql -h my.ansilo.host -U token
 ```
 
 Or using HTTP Basic authentication:
 
-```sh
+```bash
 curl --user "jwt:$JWT_TOKEN" https://my.ansilo.host
 ```
 

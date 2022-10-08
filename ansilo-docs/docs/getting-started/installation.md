@@ -21,7 +21,7 @@ Install docker on your machine using the [instructions provided](https://docs.do
 
 Using the credentials provided to you, login to the private Ansilo Docker registry.
 
-```sh
+```bash
 docker login https://get.ansilo.tech
 ```
 
@@ -38,7 +38,7 @@ If you are not able to login, please contact us at [support@ansilo.io](mailto:su
 
 Now pull the Ansilo base image to your local machine:
 
-```sh
+```bash
 docker pull get.ansilo.tech/ansilo-prod
 ```
 
@@ -53,7 +53,7 @@ To specify a specify version use the following command:
 
 Run the following command to check that your base image is working.
 
-```sh
+```bash
 docker run --rm get.ansilo.tech/ansilo-prod help
 ```
 
