@@ -33,6 +33,11 @@
   filter: invert(100%)
 }
 
+[data-theme="dark"] .light-only,
+[data-theme="light"] .dark-only {
+  display: none;
+}
+
 .language-yaml .token.key {
   filter: hue-rotate(-90deg)
 }

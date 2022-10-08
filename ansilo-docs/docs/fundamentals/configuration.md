@@ -46,7 +46,7 @@ build:
 :::caution
 The above example hard-codes sensitive passwords to provide a minimal example.
 It is recommended to store any sensitive values outside of the configuration and import
-them using of the directives below.
+them using the directives below.
 :::
 
 ### Sections
@@ -72,7 +72,7 @@ Directives enable you to import configuration values from external sources.
 | `${dir}`                        | The directory of the configuration file                                                                                                                                          |
 | `${arg:ARG_NAME}`               | The value passed to the CLI argument `-D ARG_NAME=value` when running ansilo                                                                                                     |
 | `${embed:example.yml}`          | Yaml from the file `example.yml`. Useful for configuration splitting.                                                                                                            |
-| `${fetch:scheme://uri}`         | Response from downloading `scheme://uri`. Supported schemes are `http(s)`, `file` and `sh` (shell)                                                                               |
+| `${fetch:scheme://uri}`         | Response from downloading `scheme://uri`. Supported schemes are `http`, `https`, `file` and `sh` (shell)                                                                               |
 | `${vault:mnt:/secret/path:key}` | Connects to [HashiCorp Vault](https://www.vaultproject.io/) the secret from mount `mnt` at path `/secret/path` with key `key`. See [vault integration](/docs/advanced/secrets/). |
 
 ### Postgres Configuration

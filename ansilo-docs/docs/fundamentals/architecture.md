@@ -22,7 +22,7 @@ interface into each data store. Some nodes may only expose data schemas for read
 some for writing and some for both. The exact topology would depend on your organisation.
 
 The network of nodes can be considered the logical Data Mesh of your organisation.
-Multiple nodes can then connect together providing interoperability between data stores,
+Multiple nodes can connect together providing interoperability between data stores,
 with the ability to run SQL queries that read, analyse or move data across the network.
 
 # System Design
