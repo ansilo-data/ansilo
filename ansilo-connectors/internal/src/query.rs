@@ -112,7 +112,7 @@ impl QueryHandle for InternalQuery {
                         JobColumn::Id => Some(job.id.clone()),
                         JobColumn::Name => job.name.clone(),
                         JobColumn::Description => job.description.clone(),
-                        JobColumn::ServiceUserId => job.service_user_id.clone(),
+                        JobColumn::ServiceUserId => job.service_user.clone(),
                         JobColumn::Sql => Some(job.sql.clone()),
                     })
                 })

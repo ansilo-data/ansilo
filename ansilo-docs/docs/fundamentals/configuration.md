@@ -7,7 +7,7 @@ import Diagram from './diagrams/configuration.svg'
 # Configuration
 
 Every node is defined by its configuration, the configuration files can be considered
-the "source code" when working with Ansilo.
+the _source code_ when working with Ansilo.
 
 <center>
     <Diagram width="70%" height="auto" className="auto-invert" />

@@ -21,7 +21,7 @@ fn test_internal_select_jobs() {
         id: "job1".into(),
         name: Some("Job 1".into()),
         description: None,
-        service_user_id: None,
+        service_user: None,
         sql: "SQL".into(),
         triggers: vec![],
     });
@@ -30,7 +30,7 @@ fn test_internal_select_jobs() {
         id: "job2".into(),
         name: Some("Job 2".into()),
         description: None,
-        service_user_id: None,
+        service_user: None,
         sql: "SQL".into(),
         triggers: vec![],
     });
@@ -90,7 +90,7 @@ fn test_internal_select_job_triggers() {
         id: "job1".into(),
         name: Some("Job 1".into()),
         description: None,
-        service_user_id: None,
+        service_user: None,
         sql: "SQL".into(),
         triggers: vec![
             JobTriggerConfig::Cron(CronTriggerConfig {

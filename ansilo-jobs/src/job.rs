@@ -24,7 +24,7 @@ impl Job {
         info!("Starting job {}", self.conf.id);
 
         // Acquire a connection to postgres and execute the queries
-        let res = if let Some(svc_user) = self.conf.service_user_id.as_ref() {
+        let res = if let Some(svc_user) = self.conf.service_user.as_ref() {
             let con = self
                 .pg
                 .authenticate_as_service_user(svc_user.clone())

@@ -11,7 +11,7 @@ pub struct JobConfig {
     pub description: Option<String>,
     /// The ID of the service user to authenticate as
     /// If not provided it will be executed as ansilo_admin
-    pub service_user_id: Option<String>,
+    pub service_user: Option<String>,
     /// The query/queries that are executed by the job
     pub sql: String,
     /// The trigger conditions for the job

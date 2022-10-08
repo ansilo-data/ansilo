@@ -181,7 +181,7 @@ mod tests {
                 id: "test".into(),
                 name: None,
                 description: None,
-                service_user_id: None,
+                service_user: None,
                 sql: "UPDATE job SET runs = runs + 1".into(),
                 triggers: vec![JobTriggerConfig::Cron(CronTriggerConfig {
                     cron: "* * * * * *".into(),

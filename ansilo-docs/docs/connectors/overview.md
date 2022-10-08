@@ -11,6 +11,7 @@ We will keep adding support for new data sources, feel free to [contact us](/) a
 
 |                               | Readable | Writable | Condition Pushdown | Join Pushdown | Aggregation Pushdown | Sort/Limit/Offset Pushdown |
 | ----------------------------- | -------- | -------- | ------------------ | ------------- | -------------------- | -------------------------- |
+| [Peer](../peer)               | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
 | [PostgreSQL](../postgresql)   | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
 | [MySQL](../mysql)             | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |
 | [Oracle](../oracle)           | ✅       | ✅       | ✅                 | ✅            | ✅                   | ✅                         |

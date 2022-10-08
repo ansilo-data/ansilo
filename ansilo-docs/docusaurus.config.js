@@ -6,8 +6,8 @@ const darkCodeTheme = require("prism-react-renderer/themes/dracula");
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "Ansilo Documentation",
-  tagline: "",
+  title: "Ansilo",
+  tagline: "Build portals not pipelines",
   url: "https://docs.ansilo.io",
   baseUrl: "/",
   onBrokenLinks: "throw",
@@ -51,7 +51,7 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       navbar: {
-        title: "Ansilo Documentation",
+        title: "Ansilo",
         items: [
           {
             type: "doc",
@@ -94,7 +94,7 @@ const config = {
       prism: {
         theme: require('prism-react-renderer/themes/vsLight'),
         darkTheme: require('prism-react-renderer/themes/vsDark'),
-        additionalLanguages: ['yaml']
+        additionalLanguages: ['yaml', 'bash']
       },
     }),
 };

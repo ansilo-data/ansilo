@@ -17,7 +17,7 @@ auth:
 
 jobs:
   - id: cron_job
-    service_user_id: svc
+    service_user: svc
     triggers:
       - cron: "* * * * * *"
     sql: |

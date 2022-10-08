@@ -41,3 +41,15 @@
 .language-yaml .token.key {
   filter: hue-rotate(-90deg)
 }
+
+.combined-code-blocks > *:not(:last-child) {
+  margin-bottom: 0;
+}
+
+.combined-code-blocks > *:not(:last-child) code {
+  padding-bottom: 0;
+}
+
+.combined-code-blocks > *:last-child code {
+  padding-top: 0;
+}

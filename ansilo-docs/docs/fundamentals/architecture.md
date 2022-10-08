@@ -15,7 +15,7 @@ of [Data Mesh](https://www.datamesh-architecture.com/) and the key components un
 
 ### Data Mesh 
 
-A "node" is an individual instance of Ansilo that is running on your infrastructure.
+A _node_ is an individual instance of Ansilo that is running on your infrastructure.
 Each node is typically connected to a single logical data store, where it exposes
 data schemas that can be read or written to. This way we have a clear and consistent 
 interface into each data store. Some nodes may only expose data schemas for reading,
