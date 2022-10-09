@@ -83,12 +83,12 @@ Each sql script defined in the `build` section will be executed consecutively.
 Following on from the prior example, we could configure our node to expose a data schema from mysql:
 
 ```sql
--- Create schema for internal tables
-CREATE SCHEMA private;
+-- Create a schema for our data source
+CREATE SCHEMA sources;
 
 -- Import tables from mysql
 IMPORT FOREIGN SCHEMA "db.%"
-FROM SERVER mysql INTO private;
+FROM SERVER mysql INTO sources;
 
 -- Expose data schema
 CREATE VIEW public.customers AS
@@ -99,7 +99,7 @@ CREATE VIEW public.customers AS
         email,
         gender,
         country
-     FROM private.customers;
+     FROM sources.customers;
 
 -- Grant access to demouser
 GRANT SELECT ON public.customers TO demouser;

@@ -9,6 +9,8 @@ A _job_ is one or many SQL queries which get executed on a regular basis.
 
 ### Step 1: configure the job in `ansilo.yml`
 
+In this example we define a job which copies customer data from a source database into a table in the data warehouse.
+
 <div className="combined-code-blocks">
 
 ```yaml

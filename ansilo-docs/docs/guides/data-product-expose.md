@@ -18,12 +18,12 @@ See [schema organisation](/docs/best-practices/schema-organisation/) for more de
 In this example we expose a the `customers` table from a `mysql`.
 
 ```sql
--- Create schema for internal tables
-CREATE SCHEMA private;
+-- Create a schema for our data source
+CREATE SCHEMA sources;
 
 -- Import customers table from mysql
 IMPORT FOREIGN SCHEMA "db.customers" 
-FROM SERVER mysql INTO private;
+FROM SERVER mysql INTO sources;
 
 -- Expose data products
 CREATE VIEW public.customers AS
@@ -34,7 +34,7 @@ CREATE VIEW public.customers AS
         email,
         gender,
         country
-     FROM private.customers;
+     FROM sources.customers;
 
 -- Grant access the view
 GRANT SELECT ON public.customers TO exampleuser;

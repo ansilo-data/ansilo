@@ -36,12 +36,12 @@ If the connection fails, the error will be logged to stdout/stderr.
 Once connected, the schemas from the data store can be imported using [`IMPORT FOREIGN SCHEMA`](https://www.postgresql.org/docs/current/sql-importforeignschema.html).
 
 ```sql
--- Create a schema for internal tables
-CREATE SCHEMA private;
+-- Create a schema for our data source
+CREATE SCHEMA sources;
 
--- Import foreign tables into the private schema
+-- Import foreign tables into the sources schema
 IMPORT FOREIGN SCHEMA "ORACLEUSER.%" 
-FROM SERVER oracle INTO private;
+FROM SERVER oracle INTO sources;
 ```
 
 :::tip
