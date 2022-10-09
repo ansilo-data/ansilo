@@ -60,8 +60,6 @@ them using the directives below.
 | `jobs`       | Queries to execute on a schedule                       |
 | `resources`  | Memory and concurrency limits                          |
 
-See [configuration reference](/docs/resources/configuration-reference/) for all available options.
-
 ### Directives
 
 Directives enable you to import configuration values from external sources.
@@ -73,7 +71,7 @@ Directives enable you to import configuration values from external sources.
 | `${arg:ARG_NAME}`               | The value passed to the CLI argument `-D ARG_NAME=value` when running ansilo                                                                                                     |
 | `${embed:example.yml}`          | Yaml from the file `example.yml`. Useful for configuration splitting.                                                                                                            |
 | `${fetch:scheme://uri}`         | Response from downloading `scheme://uri`. Supported schemes are `http`, `https`, `file` and `sh` (shell)                                                                               |
-| `${vault:mnt:/secret/path:key}` | Connects to [HashiCorp Vault](https://www.vaultproject.io/) the secret from mount `mnt` at path `/secret/path` with key `key`. See [vault integration](/docs/advanced/secrets/). |
+| `${vault:mnt:/secret/path:key}` | Retrieves a secret from [HashiCorp Vault](https://www.vaultproject.io/). See [vault integration](/docs/advanced/secrets/). |
 
 ### Postgres Configuration
 
