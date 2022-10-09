@@ -105,13 +105,13 @@ mod tests {
     pub fn mock_job(
         pg: PostgresConnectionHandler,
         sql: &str,
-        service_user_id: Option<String>,
+        service_user: Option<String>,
     ) -> Job {
         let conf = Box::leak(Box::new(JobConfig {
             id: "test".into(),
             name: None,
             description: None,
-            service_user_id,
+            service_user,
             sql: sql.into(),
             triggers: vec![],
         }));
