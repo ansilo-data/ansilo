@@ -178,6 +178,8 @@ impl Ansilo {
         let pg_con_handler =
             PostgresConnectionHandler::new(authenticator.clone(), postgres.connections().clone());
 
+        runtime.block_on(runtime_build(conf, &pg_con_handler))?;
+
         info!("Starting http api...");
         let http = runtime.block_on(HttpApi::start(HttpApiState::new(
             &conf.node,

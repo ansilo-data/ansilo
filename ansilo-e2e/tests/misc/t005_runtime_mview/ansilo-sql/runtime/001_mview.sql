@@ -1,0 +1,4 @@
+CREATE MATERIALIZED VIEW people_mat
+AS SELECT * FROM people;
+
+GRANT SELECT ON people_mat TO app;

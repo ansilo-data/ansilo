@@ -7,6 +7,7 @@ use std::{
 use ansilo_auth::Authenticator;
 use ansilo_core::{
     build::ansilo_version,
+    config::BuildStageMode,
     err::{Context, Result},
 };
 use ansilo_logging::info;
@@ -22,7 +23,7 @@ pub async fn build(
     conf: &'static AppConf,
     auth: Authenticator,
 ) -> Result<(PostgresInstance, BuildInfo)> {
-    info!("Running build...");
+    info!("Building database (mode: buildtime)...");
 
     // Initialize postgres via initdb
     let mut postgres = PostgresInstance::configure(&conf.pg)
@@ -31,15 +32,54 @@ pub async fn build(
 
     let handler = PostgresConnectionHandler::new(auth, postgres.connections().clone());
 
+    run_build_stages(conf, BuildStageMode::Build, &handler).await?;
+
+    let build_info = BuildInfo::new();
+    build_info.store(conf)?;
+    info!("Build complete...");
+
+    Ok((postgres, build_info))
+}
+
+/// Runs the runtime build scripts
+pub async fn runtime_build(
+    conf: &'static AppConf,
+    handler: &PostgresConnectionHandler,
+) -> Result<()> {
+    info!("Building database (mode: runtime)...");
+
+    run_build_stages(conf, BuildStageMode::Runtime, handler).await?;
+
+    info!("Runtime build complete...");
+
+    Ok(())
+}
+
+async fn run_build_stages(
+    conf: &AppConf,
+    mode: BuildStageMode,
+    handler: &PostgresConnectionHandler,
+) -> Result<()> {
+    let stages = conf
+        .node
+        .build
+        .stages
+        .iter()
+        .filter(|s| s.mode == mode)
+        .collect::<Vec<_>>();
+
+    if stages.is_empty() {
+        return Ok(());
+    }
+
     // Connect to postgres as the default admin user
-    let admin_con = postgres
-        .connections()
+    let admin_con = handler
+        .pool()
         .admin()
         .await
         .context("Failed to connect to postgres")?;
 
-    // Run build stages
-    for (idx, stage) in conf.node.build.stages.iter().enumerate() {
+    Ok(for (idx, stage) in stages.iter().enumerate() {
         info!(
             "Running build stage {}...",
             stage.name.as_ref().unwrap_or(&(idx + 1).to_string())
@@ -76,13 +116,7 @@ pub async fn build(
                 .await
                 .with_context(|| format!("Failed to execute sql script: {}", script.display()))?;
         }
-    }
-
-    let build_info = BuildInfo::new();
-    build_info.store(conf)?;
-    info!("Build complete...");
-
-    Ok((postgres, build_info))
+    })
 }
 
 /// Captures information about the build
