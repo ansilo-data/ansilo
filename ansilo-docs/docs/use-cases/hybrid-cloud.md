@@ -17,7 +17,7 @@ decentralised architecture.
 
 Ansilo is the first data integration platform with a decentralised architecture at its heart.
 This enables instances of Ansilo to be **deployed across network zones and system trust levels**
-where each instance has only the minimum required access to the data stores within its zone.
+where each instance has only the minimum required access to its data store.
 
 ### Network Security
 
