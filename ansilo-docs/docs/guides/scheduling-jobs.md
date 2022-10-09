@@ -65,9 +65,3 @@ jobs:
 
 See [service users](/docs/advanced/service-users) for how to define service users.
 
-```yaml
-build:
-  stages:
-    - sql: ${dir}/sql/*.sql
-      service_user: example_service_user
-```
