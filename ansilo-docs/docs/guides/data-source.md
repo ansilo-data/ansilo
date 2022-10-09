@@ -15,7 +15,7 @@ Each connector page has examples of the configuration options specific to that d
 
 ```yaml
 # In this example, we are using an Oracle database but you can use any 
-# from the support list
+# from the supported connectors.
 sources:
   - id: oracle
     type: jdbc.oracle
@@ -25,6 +25,8 @@ sources:
         oracle.jdbc.user: oracleuser
         oracle.jdbc.password: oraclepass
 ```
+
+See [connectors](/docs/connectors/overview/) for all supported data sources.
 
 ### Step 3: Validate the connection
 
