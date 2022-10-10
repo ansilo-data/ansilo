@@ -14,7 +14,7 @@ using Ansilo's [PostgreSQL](https://postgresql.org) translation engine.
 
 ### Unified SQL
 
-Ansilo exposes an industry-standard [PostgreSQL](https://postgresql.org) interface into each shared datasets. 
+Ansilo exposes an industry-standard [PostgreSQL](https://postgresql.org) interface into each shared dataset. 
 This enables partner organisations to freely integrate using the tech stack of their choosing.
 
 ### Token Security
