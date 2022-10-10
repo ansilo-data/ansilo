@@ -109,6 +109,10 @@ impl PostgresServer {
 
     /// Sets the postgres minimum logging level based on
     /// the logging level from rust.
+    /// 
+    /// Currently we rely on the "ready for connections" log line to check that postgres
+    /// has booted so we need a minimum of "INFO" logging. In future we could use `pg_isready`
+    /// and map the log levels more linearly.
     ///
     /// @see https://www.postgresql.org/docs/current/runtime-config-logging.html#RUNTIME-CONFIG-SEVERITY-LEVELS
     fn get_log_level() -> &'static str {
@@ -117,9 +121,9 @@ impl PostgresServer {
         }
 
         match ansilo_logging::max_level() {
-            ansilo_logging::LevelFilter::Off => "PANIC",
-            ansilo_logging::LevelFilter::Error => "ERROR",
-            ansilo_logging::LevelFilter::Warn => "WARNING",
+            ansilo_logging::LevelFilter::Off => "INFO",
+            ansilo_logging::LevelFilter::Error => "INFO",
+            ansilo_logging::LevelFilter::Warn => "INFO",
             ansilo_logging::LevelFilter::Info => "INFO",
             ansilo_logging::LevelFilter::Debug => "DEBUG1",
             ansilo_logging::LevelFilter::Trace => "DEBUG5",

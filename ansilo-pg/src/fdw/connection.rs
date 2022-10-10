@@ -22,7 +22,7 @@ use ansilo_core::{
     err::{bail, Context, Result},
     sqlil::{self, EntityId},
 };
-use ansilo_logging::warn;
+use ansilo_logging::{warn, debug, trace};
 
 use super::{
     channel::IpcServerChannel,
@@ -512,9 +512,11 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     fn execute_query(&mut self, query_id: QueryId) -> Result<RowStructure> {
         let mut handle = self.get_prepared_query(query_id)?;
 
+        debug!("Executing query on {}", self.data_source_id);
         let result_set = handle.0.execute_query()?;
         let row_structure = result_set.get_structure()?;
 
+        debug!("Logging query on {}", self.data_source_id);
         let query = handle.0.logged()?;
         self.log.record(&self.data_source_id, query)?;
 
@@ -527,8 +529,10 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     fn execute_modify(&mut self, query_id: QueryId) -> Result<Option<u64>> {
         let mut handle = self.get_prepared_query(query_id)?;
 
+        debug!("Executing query on {}", self.data_source_id);
         let affected_rows = handle.0.execute_modify()?;
 
+        debug!("Logging query on {}", self.data_source_id);
         let mut query = handle.0.logged()?;
         query
             .other_mut()

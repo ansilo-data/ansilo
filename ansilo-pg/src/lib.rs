@@ -73,7 +73,7 @@ impl PostgresInstance {
     /// supplied configuration
     pub async fn start(conf: &'static PostgresConf) -> Result<Self> {
         let server = PostgresServerManager::new(conf);
-        server.block_until_ready(Duration::from_secs(10))?;
+        server.block_until_ready(Duration::from_secs(30))?;
 
         Self::connect(conf, server).await
     }
@@ -81,7 +81,7 @@ impl PostgresInstance {
     /// Boots and initialises postgres instance based on the
     /// supplied configuration
     pub async fn configure(conf: &'static PostgresConf) -> Result<Self> {
-        let connect_timeout = Duration::from_secs(10);
+        let connect_timeout = Duration::from_secs(30);
 
         info!("Running initdb...");
         PostgresInitDb::reset(conf)?;

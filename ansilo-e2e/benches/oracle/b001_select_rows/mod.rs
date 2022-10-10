@@ -10,6 +10,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     g.measurement_time(Duration::from_secs(15));
     g.throughput(criterion::Throughput::Elements(100_000));
     g.bench_function("bench", |b| {
+        // std::panic::catch_unwind(|| {
+        //     ansilo_logging::init_logging();
+        // });
         let containers = ansilo_e2e::oracle::start_oracle();
         let _oracle = ansilo_e2e::oracle::init_oracle_sql(
             &containers,
@@ -19,7 +22,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         let (_instance, mut client) =
             ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
 
-        b.iter(|| bench(&mut client))
+        b.iter(|| bench(&mut client));
     });
     g.finish();
 }

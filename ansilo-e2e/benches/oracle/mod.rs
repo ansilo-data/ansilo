@@ -1,3 +1,5 @@
+ansilo_util_pgx_install::install_ansilo_pgx!();
+
 use criterion::criterion_group;
 
 pub mod b001_select_rows;
