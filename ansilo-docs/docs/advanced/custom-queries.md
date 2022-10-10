@@ -32,13 +32,18 @@ FROM remote_query(
     -- The data source 
     'mysql',
     -- The query to execute
-    $$ SELECT * FROM customers WHERE id > ? $$,
+    $$ SELECT id, name FROM customers WHERE id > ? $$,
     -- Query parameters (if any)
     5
 ) AS
      -- Define the types of the returning columns
     results(id INT, name TEXT)
 ```
+
+:::tip
+As per the above example, you can use [dollar-qouted strings](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-DOLLAR-QUOTING)
+to define the custom query.
+:::
 
 ### Executing a custom `INSERT`/`UPDATE`/`DELETE`
 
