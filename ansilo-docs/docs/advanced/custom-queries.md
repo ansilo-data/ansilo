@@ -57,6 +57,6 @@ CREATE FUNCTION example_custom_query() RETURNS INT SECURITY DEFINER
     RETURN remote_execute('data_source', 'MY QUERY');
 
 -- Grant the function to your user
-GRANT EXECUTE ON FUNCTION example_customer_query TO example_user;
+GRANT EXECUTE ON FUNCTION example_custom_query TO example_user;
 ```
 :::
