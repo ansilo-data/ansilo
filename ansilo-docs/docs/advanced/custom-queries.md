@@ -52,7 +52,11 @@ SELECT remote_execute('mysql', 'UPDATE customers SET updated = NOW()')
 You can allow users to only issue specific custom queries by wrapping them in a function:
 
 ```sql
+-- Define a wrapper for your custom query
 CREATE FUNCTION example_custom_query() RETURNS INT SECURITY DEFINER
     RETURN remote_execute('data_source', 'MY QUERY');
+
+-- Grant the function to your user
+GRANT EXECUTE ON FUNCTION example_customer_query TO example_user;
 ```
 :::
