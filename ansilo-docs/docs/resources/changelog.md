@@ -1,9 +1,9 @@
 ---
-sidebar_position: 3
+sidebar_position: 2
 ---
 
 # Changelog
 
-::info
+:::info
 This page is under construction. Stay tuned for updates!
 :::
