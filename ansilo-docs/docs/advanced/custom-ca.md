@@ -13,7 +13,9 @@ Installing a custom CA can be done by make the following changes to your Dockerf
 COPY your-ca-bundle.crt /etc/pki/ca-trust/source/anchors/
 
 # Regenerate CA files for openssl, java, etc
+USER root
 RUN update-ca-trust
+USER ansilo
 ```
 
 :::info
