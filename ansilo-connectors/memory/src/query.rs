@@ -2,7 +2,7 @@ use std::{collections::HashMap, io, sync::Arc};
 
 use ansilo_core::{
     data::{DataType, DataValue},
-    err::{Context, Result},
+    err::{bail, ensure, Context, Result},
     sqlil,
 };
 use serde::Serialize;
@@ -31,6 +31,7 @@ impl MemoryQuery {
 
 pub struct MemoryQueryHandle {
     query: MemoryQuery,
+    batch: Vec<HashMap<u32, DataValue>>,
     data: Arc<MemoryDatabase>,
     entities: ConnectorEntityConfig<MemoryConnectorEntitySourceConfig>,
     param_buff: Vec<u8>,
@@ -46,6 +47,7 @@ impl MemoryQueryHandle {
         Self {
             query,
             data,
+            batch: vec![],
             entities,
             param_buff: vec![],
             reset: false,
@@ -71,10 +73,14 @@ impl QueryHandle for MemoryQueryHandle {
 
     fn restart(&mut self) -> Result<()> {
         self.reset = true;
+        self.batch.clear();
         Ok(())
     }
 
     fn execute_query(&mut self) -> Result<MemoryResultSet> {
+        if !self.batch.is_empty() {
+            bail!("Batching is not supported on result set queries");
+        }
         let params = self.parse_params()?;
 
         let executor = MemoryQueryExecutor::new(
@@ -88,16 +94,31 @@ impl QueryHandle for MemoryQueryHandle {
     }
 
     fn execute_modify(&mut self) -> Result<Option<u64>> {
-        let params = self.parse_params()?;
+        if self.batch.is_empty() {
+            let params = self.parse_params()?;
+            self.batch.push(params);
+        } else {
+            ensure!(self.param_buff.is_empty(), "Partial query input written")
+        }
 
-        let executor = MemoryQueryExecutor::new(
-            Arc::clone(&self.data),
-            self.entities.clone(),
-            self.query.query.clone(),
-            params,
-        );
+        let mut totals = vec![];
 
-        executor.run_modify()
+        for params in &self.batch {
+            let executor = MemoryQueryExecutor::new(
+                Arc::clone(&self.data),
+                self.entities.clone(),
+                self.query.query.clone(),
+                params.clone(),
+            );
+
+            totals.push(executor.run_modify()?);
+        }
+
+        Ok(if totals.contains(&None) {
+            None
+        } else {
+            Some(totals.into_iter().map(|i| i.unwrap()).sum())
+        })
     }
 
     fn logged(&self) -> Result<LoggedQuery> {
@@ -110,10 +131,22 @@ impl QueryHandle for MemoryQueryHandle {
             None,
         ))
     }
+
+    fn supports_batching(&self) -> bool {
+        true
+    }
+
+    fn add_to_batch(&mut self) -> Result<()> {
+        let params = self.parse_params()?;
+        self.batch.push(params);
+        self.param_buff.clear();
+        Ok(())
+    }
 }
 
 impl MemoryQueryHandle {
     fn parse_params(&self) -> Result<HashMap<u32, DataValue>> {
+        eprintln!("Params: {:?}", self.param_buff);
         let mut params = HashMap::new();
         let mut param_reader = DataReader::new(
             io::Cursor::new(self.param_buff.clone()),

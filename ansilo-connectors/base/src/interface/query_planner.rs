@@ -106,7 +106,7 @@ pub trait QueryPlanner {
 
     /// Gets the maximum number of rows that can be inserted in a single
     /// insert query.
-    fn get_insert_max_batch_size(
+    fn get_insert_max_bulk_size(
         connection: &mut Self::TConnection,
         conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         insert: &sql::Insert,

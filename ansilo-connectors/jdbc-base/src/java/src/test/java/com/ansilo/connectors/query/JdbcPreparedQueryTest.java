@@ -617,6 +617,7 @@ public class JdbcPreparedQueryTest {
         assertEquals(123, count);
     }
 
+
     @Test
     void executeModifyReturnsNullForResultSet() throws Exception {
         this.innerStatement = mock(PreparedStatement.class);
@@ -630,6 +631,46 @@ public class JdbcPreparedQueryTest {
         verify(this.innerStatement, times(0)).getResultSet();
         verify(this.innerStatement, times(0)).getLargeUpdateCount();
         assertEquals(null, count);
+    }
+
+    @Test
+    void executeBatched() throws Exception {
+        this.innerParams.add(JdbcParameter.createDynamic(1, new Int32DataType()));
+        this.innerStatement = mock(PreparedStatement.class);
+        when(this.innerStatement.executeBatch()).thenReturn(new int[] {1, 2, 3});
+
+        this.preparedQuery =
+                new JdbcPreparedQuery(this.mapping, this.innerStatement, this.innerParams);
+
+        var buff = this.newByteBuffer(5);
+        buff.put((byte) 1); // not null
+        buff.putInt(123); // val
+        buff.rewind();
+
+        var wrote = this.preparedQuery.write(buff);
+
+        assertEquals(5, wrote);
+        verify(this.innerStatement, times(1)).setInt(1, 123);
+
+        this.preparedQuery.addBatch();
+        verify(this.innerStatement, times(1)).addBatch();
+
+        buff = this.newByteBuffer(5);
+        buff.put((byte) 1); // not null
+        buff.putInt(123); // val
+        buff.rewind();
+
+        wrote = this.preparedQuery.write(buff);
+
+        assertEquals(5, wrote);
+        verify(this.innerStatement, times(2)).setInt(1, 123);
+
+        this.preparedQuery.addBatch();
+        verify(this.innerStatement, times(2)).addBatch();
+
+        var affected = this.preparedQuery.executeModify();
+        assertEquals(1 + 2 + 3, affected);
+        verify(this.innerStatement, times(1)).executeBatch();
     }
 
     private ByteBuffer newByteBuffer(int capacity) {

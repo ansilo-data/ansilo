@@ -91,10 +91,7 @@ fn test_insert_select_local_values() {
                 "oracle".to_string(),
                 LoggedQuery::new(
                     [
-                        r#"INSERT ALL"#,
-                        r#"INTO "ANSILO_ADMIN"."T009__TEST_TARGET" ("ID", "NAME", "SOURCE", "CREATED_AT") VALUES (?, ?, ?, ?)"#,
-                        r#"INTO "ANSILO_ADMIN"."T009__TEST_TARGET" ("ID", "NAME", "SOURCE", "CREATED_AT") VALUES (?, ?, ?, ?)"#,
-                        r#"SELECT 1 FROM DUAL"#
+                        r#"INSERT INTO "ANSILO_ADMIN"."T009__TEST_TARGET" ("ID", "NAME", "SOURCE", "CREATED_AT") VALUES (?, ?, ?, ?)"#,
                     ]
                     .join("\n"),
                     vec![
@@ -103,10 +100,10 @@ fn test_insert_select_local_values() {
                         "LoggedParam [index=3, method=setNString, value=SELECT]".into(),
                         "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 16:00:00.0]"
                             .into(),
-                        "LoggedParam [index=5, method=setBigDecimal, value=2]".into(),
-                        "LoggedParam [index=6, method=setNString, value=George]".into(),
-                        "LoggedParam [index=7, method=setNString, value=SELECT]".into(),
-                        "LoggedParam [index=8, method=setTimestamp, value=2000-01-15 16:00:00.0]"
+                        "LoggedParam [index=1, method=setBigDecimal, value=2]".into(),
+                        "LoggedParam [index=2, method=setNString, value=George]".into(),
+                        "LoggedParam [index=3, method=setNString, value=SELECT]".into(),
+                        "LoggedParam [index=4, method=setTimestamp, value=2000-01-15 16:00:00.0]"
                             .into(),
                     ],
                     Some(
@@ -225,11 +222,7 @@ fn test_insert_select_from_remote_table() {
                 "oracle".to_string(),
                 LoggedQuery::new(
                     [
-                        r#"INSERT ALL"#,
-                        r#"INTO "ANSILO_ADMIN"."T009__TEST_TARGET" ("ID", "NAME", "SOURCE", "CREATED_AT") VALUES (?, ?, ?, ?)"#,
-                        r#"INTO "ANSILO_ADMIN"."T009__TEST_TARGET" ("ID", "NAME", "SOURCE", "CREATED_AT") VALUES (?, ?, ?, ?)"#,
-                        r#"INTO "ANSILO_ADMIN"."T009__TEST_TARGET" ("ID", "NAME", "SOURCE", "CREATED_AT") VALUES (?, ?, ?, ?)"#,
-                        r#"SELECT 1 FROM DUAL"#
+                        r#"INSERT INTO "ANSILO_ADMIN"."T009__TEST_TARGET" ("ID", "NAME", "SOURCE", "CREATED_AT") VALUES (?, ?, ?, ?)"#,
                     ]
                     .join("\n"),
                     vec![
@@ -238,15 +231,15 @@ fn test_insert_select_from_remote_table() {
                         "LoggedParam [index=3, method=setNString, value=REMOTE]".into(),
                         "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 11:00:00.0]"
                             .into(),
-                        "LoggedParam [index=5, method=setBigDecimal, value=2]".into(),
-                        "LoggedParam [index=6, method=setNString, value=Emma]".into(),
-                        "LoggedParam [index=7, method=setNString, value=REMOTE]".into(),
-                        "LoggedParam [index=8, method=setTimestamp, value=1999-01-15 11:00:00.0]"
+                        "LoggedParam [index=1, method=setBigDecimal, value=2]".into(),
+                        "LoggedParam [index=2, method=setNString, value=Emma]".into(),
+                        "LoggedParam [index=3, method=setNString, value=REMOTE]".into(),
+                        "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 11:00:00.0]"
                             .into(),
-                        "LoggedParam [index=9, method=setBigDecimal, value=3]".into(),
-                        "LoggedParam [index=10, method=setNString, value=Jane]".into(),
-                        "LoggedParam [index=11, method=setNString, value=REMOTE]".into(),
-                        "LoggedParam [index=12, method=setTimestamp, value=1999-01-15 11:00:00.0]"
+                        "LoggedParam [index=1, method=setBigDecimal, value=3]".into(),
+                        "LoggedParam [index=2, method=setNString, value=Jane]".into(),
+                        "LoggedParam [index=3, method=setNString, value=REMOTE]".into(),
+                        "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 11:00:00.0]"
                             .into(),
                     ],
                     Some(

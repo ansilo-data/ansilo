@@ -82,8 +82,7 @@ fn test_insert_select_local_values() {
                 "teradata".to_string(),
                 LoggedQuery::new(
                     [
-                        r#"INSERT INTO "testdb"."t012__test_target" ("id", "name", "source", "created_at") VALUES (?, ?, ?, ?);"#,
-                        r#"INSERT INTO "testdb"."t012__test_target" ("id", "name", "source", "created_at") VALUES (?, ?, ?, ?);"#,
+                        r#"INSERT INTO "testdb"."t012__test_target" ("id", "name", "source", "created_at") VALUES (?, ?, ?, ?)"#,
                     ]
                     .join("\n"),
                     vec![
@@ -92,13 +91,13 @@ fn test_insert_select_local_values() {
                         "LoggedParam [index=3, method=setString, value=SELECT]".into(),
                         "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 16:00:00.0]"
                             .into(),
-                        "LoggedParam [index=5, method=setInt, value=2]".into(),
-                        "LoggedParam [index=6, method=setString, value=George]".into(),
-                        "LoggedParam [index=7, method=setString, value=SELECT]".into(),
-                        "LoggedParam [index=8, method=setTimestamp, value=2000-01-15 16:00:00.0]"
+                        "LoggedParam [index=1, method=setInt, value=2]".into(),
+                        "LoggedParam [index=2, method=setString, value=George]".into(),
+                        "LoggedParam [index=3, method=setString, value=SELECT]".into(),
+                        "LoggedParam [index=4, method=setTimestamp, value=2000-01-15 16:00:00.0]"
                             .into(),
                     ],
-                    Some([("affected".into(), "None".into())].into_iter().collect())
+                    Some([("affected".into(), "Some(2)".into())].into_iter().collect())
                 )
             ),
             ("teradata".to_string(), LoggedQuery::new_query("COMMIT")),
@@ -202,9 +201,7 @@ fn test_insert_select_from_remote_table() {
                 "teradata".to_string(),
                 LoggedQuery::new(
                     [
-                        r#"INSERT INTO "testdb"."t012__test_target" ("id", "name", "source", "created_at") VALUES (?, ?, ?, ?);"#,
-                        r#"INSERT INTO "testdb"."t012__test_target" ("id", "name", "source", "created_at") VALUES (?, ?, ?, ?);"#,
-                        r#"INSERT INTO "testdb"."t012__test_target" ("id", "name", "source", "created_at") VALUES (?, ?, ?, ?);"#,
+                        r#"INSERT INTO "testdb"."t012__test_target" ("id", "name", "source", "created_at") VALUES (?, ?, ?, ?)"#,
                     ]
                     .join("\n"),
                     vec![
@@ -212,16 +209,16 @@ fn test_insert_select_from_remote_table() {
                         "LoggedParam [index=2, method=setString, value=John]".into(),
                         "LoggedParam [index=3, method=setString, value=remote]".into(),
                         "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 11:00:00.0]".into(),
-                        "LoggedParam [index=5, method=setInt, value=2]".into(),
-                        "LoggedParam [index=6, method=setString, value=Emma]".into(),
-                        "LoggedParam [index=7, method=setString, value=remote]".into(),
-                        "LoggedParam [index=8, method=setTimestamp, value=1999-01-15 11:00:00.0]".into(),
-                        "LoggedParam [index=9, method=setInt, value=3]".into(),
-                        "LoggedParam [index=10, method=setString, value=Jane]".into(),
-                        "LoggedParam [index=11, method=setString, value=remote]".into(),
-                        "LoggedParam [index=12, method=setTimestamp, value=1999-01-15 11:00:00.0]".into(),
+                        "LoggedParam [index=1, method=setInt, value=2]".into(),
+                        "LoggedParam [index=2, method=setString, value=Emma]".into(),
+                        "LoggedParam [index=3, method=setString, value=remote]".into(),
+                        "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 11:00:00.0]".into(),
+                        "LoggedParam [index=1, method=setInt, value=3]".into(),
+                        "LoggedParam [index=2, method=setString, value=Jane]".into(),
+                        "LoggedParam [index=3, method=setString, value=remote]".into(),
+                        "LoggedParam [index=4, method=setTimestamp, value=1999-01-15 11:00:00.0]".into(),
                     ],
-                    Some([("affected".into(), "None".into())].into_iter().collect())
+                    Some([("affected".into(), "Some(3)".into())].into_iter().collect())
                 )
             ),
             ("teradata".to_string(), LoggedQuery::new_query("COMMIT")),

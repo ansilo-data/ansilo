@@ -33,6 +33,7 @@ struct Manager {
     init_queries: Vec<String>,
     connection_class: String,
     data_mapping_class: String,
+    supports_batching: bool,
 }
 
 impl JdbcConnectionPool {
@@ -48,6 +49,7 @@ impl JdbcConnectionPool {
             init_queries: options.get_initialisation_queries(),
             connection_class: options.get_java_connection().replace('.', "/"),
             data_mapping_class: options.get_java_jdbc_data_mapping().replace('.', "/"),
+            supports_batching: options.supports_query_batching(),
         }
         .adaptor();
 
@@ -124,6 +126,7 @@ impl OurManageConnection for Manager {
 
         let state = JdbcConnectionState {
             jvm: Arc::clone(&self.jvm),
+            supports_batching: self.supports_batching,
             jdbc_con,
             closed: false,
         };
@@ -174,6 +177,7 @@ pub struct JdbcConnection(
 struct JdbcConnectionState {
     jvm: Arc<Jvm>,
     jdbc_con: GlobalRef,
+    supports_batching: bool,
     closed: bool,
 }
 
@@ -241,6 +245,7 @@ fn prepare_query(query: JdbcQuery, state: &JdbcConnectionState) -> Result<JdbcPr
         Arc::clone(&state.jvm),
         jdbc_prepared_query,
         query,
+        state.supports_batching,
     ))
 }
 

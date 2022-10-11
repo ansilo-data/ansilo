@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ansilo_core::err::{bail, Context, Result};
+use ansilo_core::err::{bail, ensure, Context, Result};
 use jni::{
     objects::{GlobalRef, JMethodID, JObject, JString, JValue},
     signature::{JavaType, Primitive},
@@ -40,18 +40,25 @@ pub struct JdbcPreparedQuery {
     pub jvm: Arc<Jvm>,
     pub jdbc_prepared_statement: GlobalRef,
     pub query: JdbcQuery,
+    supports_batching: bool,
     write_method_id: Option<jmethodID>,
     as_read_only_buffer_method_id: Option<jmethodID>,
 }
 
 impl JdbcPreparedQuery {
-    pub fn new(jvm: Arc<Jvm>, jdbc_prepared_statement: GlobalRef, query: JdbcQuery) -> Self {
+    pub fn new(
+        jvm: Arc<Jvm>,
+        jdbc_prepared_statement: GlobalRef,
+        query: JdbcQuery,
+        supports_batching: bool,
+    ) -> Self {
         Self {
             jvm,
             jdbc_prepared_statement,
             query,
             write_method_id: None,
             as_read_only_buffer_method_id: None,
+            supports_batching,
         }
     }
 
@@ -242,6 +249,28 @@ impl QueryHandle for JdbcPreparedQuery {
 
         Ok(LoggedQuery::new(&self.query.query, params, None))
     }
+
+    fn supports_batching(&self) -> bool {
+        self.supports_batching
+    }
+
+    fn add_to_batch(&mut self) -> Result<()> {
+        ensure!(self.supports_batching());
+
+        self.jvm.with_local_frame(32, |env| {
+            env.call_method(
+                self.jdbc_prepared_statement.as_obj(),
+                "addBatch",
+                "()V",
+                &[],
+            )
+            .context("Failed to invoke JdbcPreparedQuery::addBatch")?;
+
+            self.jvm.check_exceptions(env)?;
+
+            Ok(())
+        })
+    }
 }
 
 /// Initialises a new instance of the JdbcParameter class which
@@ -352,7 +381,7 @@ mod tests {
 
         let jdbc_prepared_query = env.new_global_ref(jdbc_prepared_query).unwrap();
 
-        JdbcPreparedQuery::new(Arc::clone(&jvm), jdbc_prepared_query, query)
+        JdbcPreparedQuery::new(Arc::clone(&jvm), jdbc_prepared_query, query, true)
     }
 
     #[test]

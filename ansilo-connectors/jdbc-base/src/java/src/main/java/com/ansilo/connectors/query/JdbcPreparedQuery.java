@@ -9,12 +9,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.stream.Collectors;
-import com.ansilo.connectors.data.DataType;
 import com.ansilo.connectors.data.FixedSizeDataType;
 import com.ansilo.connectors.data.StreamDataType;
 import com.ansilo.connectors.mapping.JdbcDataMapping;
 import com.ansilo.connectors.result.JdbcResultSet;
-import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 /**
@@ -51,6 +49,11 @@ public class JdbcPreparedQuery {
      * The index of the current param
      */
     protected int paramIndex = 0;
+
+    /**
+     * Whether the current statement is batched
+     */
+    protected boolean isBatched = false;
 
     /**
      * Local buffer used to buffer partial parameter data
@@ -202,6 +205,7 @@ public class JdbcPreparedQuery {
         // Reset parameter index for next execution
         this.paramIndex = 0;
         this.preparedStatement.clearLoggedParams();
+        this.isBatched = false;
     }
 
     /**
@@ -211,6 +215,10 @@ public class JdbcPreparedQuery {
      * @throws SQLException
      */
     public JdbcResultSet executeQuery() throws Exception {
+        if (this.isBatched) {
+            throw new SQLException("Returning result sets is not supported on batched query");
+        }
+
         this.beforeExecute();
         var hasResultSet = this.preparedStatement.execute();
 
@@ -228,9 +236,33 @@ public class JdbcPreparedQuery {
      */
     public Long executeModify() throws Exception {
         this.beforeExecute();
-        var hasResultSet = this.preparedStatement.execute();
+        if (this.isBatched) {
+            var counts = this.preparedStatement.executeBatch();
+            long total = 0;
 
-        return this.getAffectedRows(hasResultSet);
+            for (var count : counts) {
+                total += count;
+            }
+
+            return total;
+        } else {
+            var hasResultSet = this.preparedStatement.execute();
+
+            return this.getAffectedRows(hasResultSet);
+        }
+    }
+
+    /**
+     * Adds the query to the current batch.
+     * 
+     * @return
+     * @throws SQLException
+     */
+    public void addBatch() throws Exception {
+        this.beforeExecute();
+        this.preparedStatement.addBatch();
+        this.isBatched = true;
+        this.paramIndex = 0;
     }
 
     protected Long getAffectedRows(boolean hasResultSet) throws SQLException {
@@ -246,7 +278,8 @@ public class JdbcPreparedQuery {
     }
 
     protected void beforeExecute() throws Exception {
-        if (this.paramIndex != this.dynamicParameters.size()) {
+        if (this.paramIndex != this.dynamicParameters.size()
+                && !(this.isBatched && this.paramIndex == 0)) {
             throw new SQLException(
                     "Cannot execute query until all parameter data has been written");
         }

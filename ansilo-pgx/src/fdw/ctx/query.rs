@@ -37,6 +37,10 @@ pub struct FdwQueryContext {
     result_set: Option<ResultSetReader<FdwResultSet>>,
     /// Whether the query has been executed
     executed: bool,
+    /// Max bulk insert size
+    pub max_bulk_query_size: Option<u32>,
+    /// Whether the query supports batching
+    pub supports_batching: Option<bool>,
     /// Whether to discard the query on drop
     pub should_discard: bool,
     /// The base entity size estimation
@@ -97,6 +101,8 @@ impl FdwQueryContext {
             query_writer: None,
             result_set: None,
             executed: false,
+            max_bulk_query_size: None,
+            supports_batching: None,
             should_discard: true,
             base_cost,
             base_varno,
@@ -324,6 +330,7 @@ impl FdwQueryContext {
     /// Returning the number of affected rows if known.
     pub fn execute_batch(&mut self, data: Vec<Vec<(u32, DataValue)>>) -> Result<Option<u64>> {
         let mut reqs = vec![];
+        let batching = data.len() > 1 && self.supports_batching()?;
         let structure = self.get_input_structure()?;
         let mut writer = DataWriter::new(std::io::Cursor::new(vec![]), Some(structure.types()));
 
@@ -341,6 +348,27 @@ impl FdwQueryContext {
                 self.connection.query_id,
                 ClientQueryMessage::WriteParams(data.into_inner()),
             ));
+
+            if batching {
+                reqs.push(ClientMessage::Query(
+                    self.connection.query_id,
+                    ClientQueryMessage::AddToBatch,
+                ));
+            } else {
+                reqs.push(ClientMessage::Query(
+                    self.connection.query_id,
+                    ClientQueryMessage::ExecuteModify,
+                ));
+                reqs.push(ClientMessage::Query(
+                    self.connection.query_id,
+                    ClientQueryMessage::Restart,
+                ));
+            }
+
+            writer.restart()?;
+        }
+
+        if batching {
             reqs.push(ClientMessage::Query(
                 self.connection.query_id,
                 ClientQueryMessage::ExecuteModify,
@@ -349,8 +377,6 @@ impl FdwQueryContext {
                 self.connection.query_id,
                 ClientQueryMessage::Restart,
             ));
-
-            writer.restart()?;
         }
 
         let res = self
@@ -396,19 +422,41 @@ impl FdwQueryContext {
         Ok(parsed)
     }
 
-    /// Gets the maximum batch size for the current query.
+    /// Gets the maximum bulk query size for the current query.
     /// This is only supported for insert queries.
-    pub fn get_max_batch_size(&mut self) -> Result<u32> {
-        let size: u32 = self
-            .connection
-            .send(ClientQueryMessage::GetMaxBatchSize)
-            .and_then(|res| match res {
-                ServerQueryMessage::MaxBatchSize(size) => Ok(size),
-                _ => Err(unexpected_response(res)),
-            })
-            .context("Max batch size")?;
+    pub fn get_max_bulk_query_size(&mut self) -> Result<u32> {
+        if self.max_bulk_query_size.is_none() {
+            let size: u32 = self
+                .connection
+                .send(ClientQueryMessage::GetMaxBulkQuerySize)
+                .and_then(|res| match res {
+                    ServerQueryMessage::MaxBulkQuerySize(size) => Ok(size),
+                    _ => Err(unexpected_response(res)),
+                })
+                .context("Max batch size")?;
 
-        Ok(size)
+            self.max_bulk_query_size = Some(size);
+        }
+
+        Ok(self.max_bulk_query_size.unwrap())
+    }
+
+    /// Returns whether the current query supports batching
+    pub fn supports_batching(&mut self) -> Result<bool> {
+        if self.supports_batching.is_none() {
+            let flag = self
+                .connection
+                .send(ClientQueryMessage::SupportsBatching)
+                .and_then(|res| match res {
+                    ServerQueryMessage::BatchSupport(flag) => Ok(flag),
+                    _ => Err(unexpected_response(res)),
+                })
+                .context("Supports batching")?;
+
+            self.supports_batching = Some(flag);
+        }
+
+        Ok(self.supports_batching.unwrap())
     }
 
     /// Creates a copy of the query that can be modified
@@ -433,6 +481,8 @@ impl FdwQueryContext {
             result_set: None,
             executed: false,
             should_discard: true,
+            max_bulk_query_size: self.max_bulk_query_size,
+            supports_batching: self.supports_batching,
             base_cost: self.base_cost.clone(),
             base_varno: self.base_varno.clone(),
             retrieved_rows: self.retrieved_rows.clone(),

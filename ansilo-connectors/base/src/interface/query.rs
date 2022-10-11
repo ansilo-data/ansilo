@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use ansilo_core::{data::DataType, err::Result, sqlil};
+use ansilo_core::{
+    data::DataType,
+    err::{bail, Result},
+    sqlil,
+};
 use bincode::{Decode, Encode};
 
 use crate::common::data::QueryHandleWriter;
@@ -14,6 +18,11 @@ pub trait QueryHandle {
     /// Gets the types of the input expected by the query
     fn get_structure(&self) -> Result<QueryInputStructure>;
 
+    /// Returns whether the query supports batched executions
+    fn supports_batching(&self) -> bool {
+        false
+    }
+
     /// Writes query parameter data to the underlying query
     /// Returns the number of bytes written
     fn write(&mut self, buff: &[u8]) -> Result<usize>;
@@ -26,6 +35,11 @@ pub trait QueryHandle {
 
     /// Executes the query, returning the number of affected rows, if known
     fn execute_modify(&mut self) -> Result<Option<u64>>;
+
+    /// Adds the query to the current batch to be executed.
+    fn add_to_batch(&mut self) -> Result<()> {
+        bail!("Batching is not supported on this query");
+    }
 
     /// Returns a loggable representation of the query
     fn logged(&self) -> Result<LoggedQuery>;

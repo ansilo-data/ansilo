@@ -18,6 +18,11 @@ pub trait JdbcConnectionConfig: Send + Sync + Clone {
         vec![]
     }
 
+    /// Whether the driver supports query batching
+    fn supports_query_batching(&self) -> bool {
+        true
+    }
+
     /// Gets the java class name of the connection
     fn get_java_connection(&self) -> String {
         "com.ansilo.connectors.JdbcConnection".into()

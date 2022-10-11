@@ -189,7 +189,7 @@ impl<T: DerefMut<Target = Client>> QueryPlanner for PostgresQueryPlanner<T> {
         Ok((OperationCost::default(), sql::Delete::new(source.clone())))
     }
 
-    fn get_insert_max_batch_size(
+    fn get_insert_max_bulk_size(
         _connection: &mut Self::TConnection,
         _conf: &PostgresConnectorEntityConfig,
         insert: &sql::Insert,

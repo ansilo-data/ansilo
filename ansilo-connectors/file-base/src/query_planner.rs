@@ -139,7 +139,7 @@ impl<F: FileIO> QueryPlanner for FileQueryPlanner<F> {
         }
     }
 
-    fn get_insert_max_batch_size(
+    fn get_insert_max_bulk_size(
         _connection: &mut Self::TConnection,
         _conf: &ConnectorEntityConfig<Self::TEntitySourceConfig>,
         _insert: &sql::Insert,

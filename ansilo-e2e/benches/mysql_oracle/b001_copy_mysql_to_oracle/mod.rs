@@ -9,7 +9,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let mut g = c.benchmark_group("mysql_oracle/b001_copy_mysql_to_oracle");
     g.sample_size(10);
     g.measurement_time(Duration::from_secs(15));
-    g.throughput(criterion::Throughput::Elements(100));
+    g.throughput(criterion::Throughput::Elements(10_000));
     g.bench_function("bench", |b| {
         let oracle = ansilo_e2e::oracle::start_oracle();
         ansilo_e2e::oracle::init_oracle_sql(&oracle, current_dir!().join("oracle-sql/*.sql"));
@@ -44,5 +44,5 @@ fn bench(client: &mut Client) {
         )
         .unwrap();
 
-    assert_eq!(rows, 10000);
+    assert_eq!(rows, 10_000);
 }

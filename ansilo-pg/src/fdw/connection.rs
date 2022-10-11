@@ -22,7 +22,7 @@ use ansilo_core::{
     err::{bail, Context, Result},
     sqlil::{self, EntityId},
 };
-use ansilo_logging::{warn, debug, trace};
+use ansilo_logging::{debug, warn};
 
 use super::{
     channel::IpcServerChannel,
@@ -166,8 +166,8 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             ClientQueryMessage::Explain(verbose) => {
                 ServerQueryMessage::Explained(self.explain_query(query_id, verbose)?)
             }
-            ClientQueryMessage::GetMaxBatchSize => {
-                ServerQueryMessage::MaxBatchSize(self.get_max_batch_size(query_id)?)
+            ClientQueryMessage::GetMaxBulkQuerySize => {
+                ServerQueryMessage::MaxBulkQuerySize(self.get_max_bulk_query_size(query_id)?)
             }
             ClientQueryMessage::Prepare => {
                 let structure = self.prepare(query_id)?;
@@ -182,6 +182,13 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
             }
             ClientQueryMessage::ExecuteModify => {
                 ServerQueryMessage::AffectedRows(self.execute_modify(query_id)?)
+            }
+            ClientQueryMessage::SupportsBatching => {
+                ServerQueryMessage::BatchSupport(self.supports_query_batching(query_id)?)
+            }
+            ClientQueryMessage::AddToBatch => {
+                self.add_to_batch(query_id)?;
+                ServerQueryMessage::AddedToBatch
             }
             ClientQueryMessage::Read(len) => {
                 // TODO[low]: remove copy
@@ -544,6 +551,25 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         Ok(affected_rows)
     }
 
+    fn supports_query_batching(&mut self, query_id: QueryId) -> Result<bool> {
+        let handle = self.get_prepared_query(query_id)?;
+        let supports_batching = handle.0.supports_batching();
+        *Self::query(&mut self.queries, query_id)? = FdwQueryState::Prepared(handle);
+
+        Ok(supports_batching)
+    }
+
+    fn add_to_batch(&mut self, query_id: QueryId) -> Result<()> {
+        let mut handle = self.get_prepared_query(query_id)?;
+
+        debug!("Adding query to batch on {}", self.data_source_id);
+        handle.0.add_to_batch()?;
+
+        *Self::query(&mut self.queries, query_id)? = FdwQueryState::Prepared(handle);
+
+        Ok(())
+    }
+
     fn get_prepared_query(
         &mut self,
         query_id: u32,
@@ -611,15 +637,15 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         Ok(json)
     }
 
-    fn get_max_batch_size(&mut self, query_id: QueryId) -> Result<u32> {
+    fn get_max_bulk_query_size(&mut self, query_id: QueryId) -> Result<u32> {
         let query = Self::query(&mut self.queries, query_id)?.current()?;
 
         let insert = match query.as_insert() {
             Some(q) => q,
-            None => bail!("Batch sizes are is only supported for insert queries"),
+            None => bail!("Bulk query sizes are is only supported for insert queries"),
         };
 
-        let res = TConnector::TQueryPlanner::get_insert_max_batch_size(
+        let res = TConnector::TQueryPlanner::get_insert_max_bulk_size(
             self.connection.get()?,
             &*Self::entities(self.entities)?,
             insert,
@@ -2012,7 +2038,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fdw_connection_insert_with_batch_request() {
+    fn test_fdw_connection_insert_with_batch_multi_execute() {
         let (thread, mut client) = create_mock_connection("connection_insert_batch");
 
         let res = client
@@ -2075,8 +2101,8 @@ mod tests {
     }
 
     #[test]
-    fn test_fdw_connection_insert_max_batch_size() {
-        let (_thread, mut client) = create_mock_connection("connection_insert_max_batch_size");
+    fn test_fdw_connection_insert_max_bulk_query_size() {
+        let (_thread, mut client) = create_mock_connection("connection_insert_max_bulk_query_size");
 
         let res = client
             .send(ClientMessage::Batch(vec![
@@ -2121,12 +2147,15 @@ mod tests {
         );
 
         let res = client
-            .send(ClientMessage::Query(0, ClientQueryMessage::GetMaxBatchSize))
+            .send(ClientMessage::Query(
+                0,
+                ClientQueryMessage::GetMaxBulkQuerySize,
+            ))
             .unwrap();
 
         assert_eq!(
             res,
-            ServerMessage::Query(ServerQueryMessage::MaxBatchSize(10)),
+            ServerMessage::Query(ServerQueryMessage::MaxBulkQuerySize(10)),
         );
 
         client.close().unwrap();
@@ -2263,6 +2292,105 @@ mod tests {
                 vec![DataValue::from("New"), DataValue::from("Person")],
                 vec![DataValue::from("New"), DataValue::from("Person")],
                 vec![DataValue::from("New"), DataValue::from("Person")],
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fdw_connection_insert_supports_batching() {
+        let (_thread, mut client) = create_mock_connection("connection_insert_supports_batching");
+
+        let res = client
+            .send(ClientMessage::Batch(vec![
+                ClientMessage::CreateQuery(
+                    sqlil::source("people", "people"),
+                    sqlil::QueryType::Insert,
+                ),
+                ClientMessage::Query(0, ClientQueryMessage::Prepare),
+                ClientMessage::Query(0, ClientQueryMessage::SupportsBatching),
+            ]))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Batch(vec![
+                ServerMessage::QueryCreated(0, OperationCost::default()),
+                ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                    vec![]
+                ))),
+                ServerMessage::Query(ServerQueryMessage::BatchSupport(true)),
+            ])
+        );
+
+        client.close().unwrap();
+    }
+
+    #[test]
+    fn test_fdw_connection_insert_with_batch_single_execute() {
+        let (thread, mut client) = create_mock_connection("connection_insert_batch_single_execute");
+
+        let res = client
+            .send(ClientMessage::Batch(vec![
+                ClientMessage::CreateQuery(
+                    sqlil::source("people", "people"),
+                    sqlil::QueryType::Insert,
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        InsertQueryOperation::AddColumn((
+                            "first_name".into(),
+                            sqlil::Expr::constant(DataValue::from("New")),
+                        ))
+                        .into(),
+                    ),
+                ),
+                ClientMessage::Query(
+                    0,
+                    ClientQueryMessage::Apply(
+                        InsertQueryOperation::AddColumn((
+                            "last_name".into(),
+                            sqlil::Expr::constant(DataValue::from("Man")),
+                        ))
+                        .into(),
+                    ),
+                ),
+                ClientMessage::Query(0, ClientQueryMessage::Prepare),
+                ClientMessage::Query(0, ClientQueryMessage::AddToBatch),
+                ClientMessage::Query(0, ClientQueryMessage::AddToBatch),
+                ClientMessage::Query(0, ClientQueryMessage::ExecuteModify),
+            ]))
+            .unwrap();
+
+        assert_eq!(
+            res,
+            ServerMessage::Batch(vec![
+                ServerMessage::QueryCreated(0, OperationCost::default()),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+                ServerMessage::Query(ServerQueryMessage::OperationResult(
+                    QueryOperationResult::Ok(OperationCost::default())
+                )),
+                ServerMessage::Query(ServerQueryMessage::Prepared(QueryInputStructure::new(
+                    vec![]
+                ))),
+                ServerMessage::Query(ServerQueryMessage::AddedToBatch),
+                ServerMessage::Query(ServerQueryMessage::AddedToBatch),
+                ServerMessage::Query(ServerQueryMessage::AffectedRows(Some(2))),
+            ])
+        );
+
+        client.close().unwrap();
+        let entities = thread.join().unwrap().unwrap().pool.conf();
+
+        // Assert row was actually inserted
+        let rows = entities.get_data("people").unwrap();
+        assert_eq!(
+            &rows[(rows.len() - 2)..],
+            &[
+                vec![DataValue::from("New"), DataValue::from("Man")],
+                vec![DataValue::from("New"), DataValue::from("Man")]
             ]
         );
     }

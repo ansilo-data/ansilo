@@ -31,7 +31,7 @@ use crate::{
 
 /// Number of executions of a single-row insert query we should "batch" together
 /// This reduces the overhead of communicating with the FDW server over the unix socket.
-const SINGLE_INSERT_BATCH_SIZE: usize = 100;
+const SINGLE_INSERT_BATCH_SIZE: usize = 1000;
 
 /// The data source could support batching of very high volume inserts but we dont
 /// necessarily want to batch everything together due to memory constraints.
@@ -461,10 +461,11 @@ pub unsafe extern "C" fn get_foreign_modify_batch_size(
     let singular_insert = state.singular_insert.as_mut().unwrap();
 
     // First get the max batch size for the current insert query
-    let batch_size = singular_insert.get_max_batch_size().unwrap();
+    let batch_size = singular_insert.get_max_bulk_query_size().unwrap();
 
     // If the batch size is 1, the connector does not support bulk inserts
     if batch_size == 1 {
+        state.bulk_insert_supported = Some(false);
         return SINGLE_INSERT_BATCH_SIZE as _;
     }
 
@@ -502,7 +503,7 @@ unsafe fn create_bulk_insert(
     let cols = inserted_cols.iter().map(|c| c.name().to_string()).collect();
     let mut values = vec![];
 
-    // Create a parameter for each column in each
+    // Create a parameter for each column in each row
     for _ in 0..batch_size {
         for att in inserted_cols.iter() {
             let (col_name, att_type, param) = create_param_for_col(att, &mut query);

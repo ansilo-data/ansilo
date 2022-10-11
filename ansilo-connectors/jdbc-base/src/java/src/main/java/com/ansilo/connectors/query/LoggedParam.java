@@ -1,7 +1,6 @@
 package com.ansilo.connectors.query;
 
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 
 /**
  * Logged query parameter

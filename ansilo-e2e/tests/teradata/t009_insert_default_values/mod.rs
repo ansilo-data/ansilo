@@ -67,15 +67,14 @@ fn test_serial() {
                 "teradata".to_string(),
                 LoggedQuery::new(
                     [
-                        r#"INSERT INTO "testdb"."t009__serial" ("data") VALUES (?);"#,
-                        r#"INSERT INTO "testdb"."t009__serial" ("data") VALUES (?);"#
+                        r#"INSERT INTO "testdb"."t009__serial" ("data") VALUES (?)"#,
                     ]
                     .join("\n"),
                     vec![
                         "LoggedParam [index=1, method=setString, value=value]".into(),
-                        "LoggedParam [index=2, method=setString, value=another]".into(),
+                        "LoggedParam [index=1, method=setString, value=another]".into(),
                     ],
-                    Some([("affected".into(), "None".into())].into_iter().collect())
+                    Some([("affected".into(), "Some(2)".into())].into_iter().collect())
                 )
             ),
             ("teradata".to_string(), LoggedQuery::new_query("COMMIT")),

@@ -188,7 +188,7 @@ impl QueryPlanner for MssqlJdbcQueryPlanner {
         Ok((OperationCost::default(), sql::Delete::new(source.clone())))
     }
 
-    fn get_insert_max_batch_size(
+    fn get_insert_max_bulk_size(
         _connection: &mut Self::TConnection,
         _conf: &MssqlJdbcConnectorEntityConfig,
         insert: &sql::Insert,

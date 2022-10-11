@@ -58,9 +58,9 @@ pub enum ClientQueryMessage {
     Explain(bool),
     /// Prepares the current query
     Prepare,
-    /// Gets the maximum batch size for the current query.
+    /// Gets the maximum bulk query size for the current query.
     /// Currently only inserts are supported.
-    GetMaxBatchSize,
+    GetMaxBulkQuerySize,
     /// Write params to query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
     WriteParams(Vec<u8>),
@@ -68,6 +68,10 @@ pub enum ClientQueryMessage {
     ExecuteQuery,
     /// Execute the current query and return the number of affected rows
     ExecuteModify,
+    /// Whether the current query supports batching
+    SupportsBatching,
+    /// Adds the query to the current batch
+    AddToBatch,
     /// Read up to the supplied number of bytes from result set
     Read(u32),
     /// Discard the current result set and ready the query for new params and execution
@@ -145,9 +149,9 @@ pub enum ServerQueryMessage {
     OperationResult(QueryOperationResult),
     /// The result of the query explaination as a JSON encoded string
     Explained(String),
-    /// Returns the maximum batch size for this query
+    /// Returns the maximum bulk size for this query
     /// (Currently only inserts are supported)
-    MaxBatchSize(u32),
+    MaxBulkQuerySize(u32),
     /// The query was prepared
     Prepared(QueryInputStructure),
     /// Query params written
@@ -156,6 +160,10 @@ pub enum ServerQueryMessage {
     ResultSet(RowStructure),
     /// The query was executed and with the following number of rows affected
     AffectedRows(Option<u64>),
+    /// Returns where the query supports batching
+    BatchSupport(bool),
+    /// The query was added to the current batch
+    AddedToBatch,
     /// Rows returned by the query
     /// TODO[maybe]: Write this to a shared-memory segment to avoid copying
     ReadData(Vec<u8>),
