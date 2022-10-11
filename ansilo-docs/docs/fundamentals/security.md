@@ -145,7 +145,7 @@ IMPORT FOREIGN SCHEMA "db.customers"
 FROM SERVER oracle INTO public;
 
 -- Grant base query access
-GRANT SELECT, INSERT, UPDATE, DELETE ON customers TO token;
+GRANT SELECT, INSERT, UPDATE, DELETE ON customers TO jwt;
 
 -- Grant SELECT to "read" scope
 ALTER TABLE customers OPTIONS (ADD before_select 'check_read_scope');
