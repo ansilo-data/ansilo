@@ -43,6 +43,10 @@ const config = {
         theme: {
           customCss: require.resolve("./src/css/custom.css"),
         },
+        gtag: {
+          trackingID: "G-0BWGMZ7J2X",
+          anonymizeIP: true,
+        },
       }),
     ],
   ],
@@ -92,9 +96,9 @@ const config = {
       },
       colorMode: { defaultMode: "dark" },
       prism: {
-        theme: require('prism-react-renderer/themes/vsLight'),
-        darkTheme: require('prism-react-renderer/themes/vsDark'),
-        additionalLanguages: ['yaml', 'bash']
+        theme: require("prism-react-renderer/themes/vsLight"),
+        darkTheme: require("prism-react-renderer/themes/vsDark"),
+        additionalLanguages: ["yaml", "bash"],
       },
     }),
 };
