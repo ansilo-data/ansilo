@@ -153,7 +153,7 @@ ALTER TABLE customers OPTIONS (ADD before_select 'check_read_scope');
 CREATE FUNCTION check_read_scope() RETURNS VOID
     RETURN STRICT('read' = ANY(string_to_array(auth_context()->'claims'->'scope'->>0, ' '), 'read scope is required'));
 
--- Grant ALL to "write" scope
+-- Grant INSERT/UPDATE/DELETE to "write" scope
 ALTER TABLE customers OPTIONS (ADD before_modify 'check_write_scope');
 
 CREATE FUNCTION check_write_scope() RETURNS VOID
