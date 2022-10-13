@@ -14,7 +14,7 @@ const config = {
   onBrokenMarkdownLinks: "warn",
   // CloudFront Function will add trailing /index.html
   trailingSlash: true,
-  favicon: "img/favicon.ico",
+  favicon: "img/favicon.png",
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
