@@ -39,7 +39,7 @@ jobs:
 
         
       - name: Deploy to S3
-        run: aws s3 sync --recursive --cache-control max-age=7200 --metadata-directive REPLACE build/ s3://ansilo-docs/
+        run: aws s3 sync --cache-control max-age=7200 --metadata-directive REPLACE build/ s3://ansilo-docs/
         working-directory: ansilo-docs
       
       - name: Invalidate CloudFront
