@@ -71,7 +71,7 @@ Directives enable you to import configuration values from external sources.
 | `${arg:ARG_NAME}`               | The value passed to the CLI argument `-D ARG_NAME=value` when running ansilo                                                                                                     |
 | `${embed:example.yml}`          | Yaml from the file `example.yml`. Useful for configuration splitting.                                                                                                            |
 | `${fetch:scheme://uri}`         | Response from downloading `scheme://uri`. Supported schemes are `http`, `https`, `file` and `sh` (shell)                                                                               |
-| `${vault:mnt:/secret/path:key}` | Retrieves a secret from [HashiCorp Vault](https://www.vaultproject.io/). See [vault integration](/docs/advanced/secrets/). |
+| `${vault:mnt:/secret/path:key}` | Retrieves a secret from [HashiCorp Vault](https://www.vaultproject.io/). See [vault integration](/advanced/secrets/). |
 
 ### Postgres Configuration
 
@@ -103,4 +103,4 @@ CREATE VIEW public.customers AS
 GRANT SELECT ON public.customers TO demouser;
 ```
 
-For more detailed examples check out the [development guides](/docs/category/development-guides/).
+For more detailed examples check out the [development guides](/category/development-guides/).

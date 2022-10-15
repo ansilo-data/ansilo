@@ -9,7 +9,7 @@ any postgres compatible tools such as `psql`, [pgAdmin](https://www.pgadmin.org/
 using the built-in query workbench.
 
 It is recommended that QA is performed by defining the test-cases as SQL scripts.
-You may use [PL/pgSQL](https://www.postgresql.org/docs/current/plpgsql.html) as the procedural language in
+You may use [PL/pgSQL](https://www.postgresql.org/current/plpgsql.html) as the procedural language in
 which to specify the scenarios.
 
 Example of a SQL test script:

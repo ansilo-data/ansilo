@@ -9,7 +9,7 @@ Doing so makes it easier for other teams to interact with your node and it will 
 
 ### The `public` schema
 
-Every node will have a `public` schema. This is a [postgres default](https://www.postgresql.org/docs/current/ddl-schemas.html#DDL-SCHEMAS-PUBLIC)
+Every node will have a `public` schema. This is a [postgres default](https://www.postgresql.org/current/ddl-schemas.html#DDL-SCHEMAS-PUBLIC)
 and cannot be changed.
 
 :::info
@@ -36,4 +36,4 @@ IMPORT FOREIGN SCHEMA "db.customers"
 FROM SERVER mysql INTO sources;
 ```
 
-See [publishing you data product](/docs/guides/data-product-expose/) for a complete example.
+See [publishing you data product](/guides/data-product-expose/) for a complete example.

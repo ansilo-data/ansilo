@@ -46,7 +46,7 @@ curl --user 'exampleuser:mysupersecret!' https://my.ansilo.host
 :::caution
 The above example hard-codes sensitive passwords to provide a minimal example.
 It is recommended to store any sensitive values outside of the configuration and import
-them using [directives](/docs/fundamentals/configuration/#directives).
+them using [directives](/fundamentals/configuration/#directives).
 :::
 
 ### JWT Authentication
@@ -100,12 +100,12 @@ As a convention, when using JWT authentication specify the username as `jwt`.
 
 ### Authorisation
 
-Defining who has access to what is performed using the [PostgreSQL privileges system](https://www.postgresql.org/docs/current/ddl-priv.html).
-This is configured by adding `GRANT` and `REVOKE` statements in your [SQL build scripts](/docs/fundamentals/configuration/#postgres-configuration).
+Defining who has access to what is performed using the [PostgreSQL privileges system](https://www.postgresql.org/current/ddl-priv.html).
+This is configured by adding `GRANT` and `REVOKE` statements in your [SQL build scripts](/fundamentals/configuration/#postgres-configuration).
  
 :::tip
 If you are not familiar with authorization in PostgreSQL, it is recommended to read through 
-[PostgreSQL privileges system](https://www.postgresql.org/docs/current/ddl-priv.html) documentation first.
+[PostgreSQL privileges system](https://www.postgresql.org/current/ddl-priv.html) documentation first.
 :::
 
 ### Granting access to users
@@ -128,7 +128,7 @@ GRANT INSERT, UPDATE, DELETE ON TABLE customers TO exampleuser;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO exampleuser;
 ```
 
-See [GRANT documentation](https://www.postgresql.org/docs/current/sql-grant.html) for all options.
+See [GRANT documentation](https://www.postgresql.org/current/sql-grant.html) for all options.
 
 ### Granting access using JWT claims
 

@@ -8,7 +8,7 @@ Data sources are configured in the `sources` section in the `ansilo.yml` configu
 
 ### Step 1: review the support matrix
 
-Check that your data store is supported on the [support matrix](/docs/connectors/overview/).
+Check that your data store is supported on the [support matrix](/connectors/overview/).
 Each connector page has examples of the configuration options specific to that data store.
 
 ### Step 2: Add the source to `ansilo.yml`
@@ -26,7 +26,7 @@ sources:
         oracle.jdbc.password: oraclepass
 ```
 
-See [connectors](/docs/connectors/overview/) for all supported data sources.
+See [connectors](/connectors/overview/) for all supported data sources.
 
 ### Step 3: Validate the connection
 
@@ -35,7 +35,7 @@ If the connection fails, the error will be logged to stdout/stderr.
 
 ### Step 4: Import foreign schemas
 
-Once connected, the schemas from the data store can be imported using [`IMPORT FOREIGN SCHEMA`](https://www.postgresql.org/docs/current/sql-importforeignschema.html).
+Once connected, the schemas from the data store can be imported using [`IMPORT FOREIGN SCHEMA`](https://www.postgresql.org/current/sql-importforeignschema.html).
 
 ```sql
 -- Create a schema for our data source

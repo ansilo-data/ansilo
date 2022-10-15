@@ -6,7 +6,7 @@ sidebar_position: 2
 
 In some situations you may want to reduce the load on you data source.
 A good technique is to cache the data in postgres using 
-[materalised views](https://www.postgresql.org/docs/current/rules-materializedviews.html)
+[materalised views](https://www.postgresql.org/current/rules-materializedviews.html)
 and refresh the data regularly.
 
 ### Step 1: Configure runtime SQL scripts in `ansilo.yml`
@@ -27,7 +27,7 @@ build:
 
 ### Step 2: Create materialized views
 
-In the example we cache customer data using a [materalised view](https://www.postgresql.org/docs/current/rules-materializedviews.html).
+In the example we cache customer data using a [materalised view](https://www.postgresql.org/current/rules-materializedviews.html).
 
 ```sql
 CREATE MATERIALIZED VIEW customers_mat AS
@@ -60,4 +60,4 @@ jobs:
 
 </div>
 
-See [scheduling jobs](/docs/guides/scheduling-jobs/) for more details.
+See [scheduling jobs](/guides/scheduling-jobs/) for more details.

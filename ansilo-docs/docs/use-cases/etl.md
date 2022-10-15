@@ -17,7 +17,7 @@ data pipelines.
 
 Ansilo exposes a [PostgreSQL](https://postgresql.org) interface into each data store, regardless of the underlying
 technology. This provides a unified SQL interface across relational, NoSQL and even flat-files. See the list of supported
-[connectors](/docs/connectors/overview/).
+[connectors](/connectors/overview/).
 
 Rather than spending costly development time building custom and often brittle data pipelines, the most common forms of ETL
 can be distilled down into SQL queries that can fit onto a single monitor.

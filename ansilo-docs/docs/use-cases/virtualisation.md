@@ -22,7 +22,7 @@ Covering all **common BI tools, programming languages, Jupyter** and many more p
 
 Ansilo is built with a powerful query translation engine that is capable of pushing down conditions, joins, aggregations and windowing
 of queries. The full-query pushdown technology enables optimal query plans for efficient query execution.
-See the list of supported [connectors](/docs/connectors/overview/).
+See the list of supported [connectors](/connectors/overview/).
 
 ### Query Workbench
 

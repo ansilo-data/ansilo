@@ -41,7 +41,7 @@ FROM remote_query(
 ```
 
 :::tip
-As per the above example, you can use [dollar-qouted strings](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-DOLLAR-QUOTING)
+As per the above example, you can use [dollar-qouted strings](https://www.postgresql.org/current/sql-syntax-lexical.html#SQL-SYNTAX-DOLLAR-QUOTING)
 to define the custom query.
 :::
 

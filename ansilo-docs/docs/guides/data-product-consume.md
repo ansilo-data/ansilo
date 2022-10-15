@@ -28,14 +28,14 @@ sources:
 
 :::info
 By default, when connecting to peer nodes the authenticated the username and password will passthrough.
-This works well with [JWT authentication](/docs/fundamentals/security/#jwt-authentication) but is unlikely to work
-with [password authentication](/docs/fundamentals/security/#password-authentication). 
-In this case you can explicitly specify the credentials. See [peer connector](/docs/connectors/peer/) for details.
+This works well with [JWT authentication](/fundamentals/security/#jwt-authentication) but is unlikely to work
+with [password authentication](/fundamentals/security/#password-authentication). 
+In this case you can explicitly specify the credentials. See [peer connector](/connectors/peer/) for details.
 :::
 
 ### Step 2: Import the schemas
 
-The schemas can be imported using [`IMPORT FOREIGN SCHEMA`](https://www.postgresql.org/docs/current/sql-importforeignschema.html).
+The schemas can be imported using [`IMPORT FOREIGN SCHEMA`](https://www.postgresql.org/current/sql-importforeignschema.html).
 
 ```sql
 -- Create a schema for peer tables

@@ -20,7 +20,7 @@ sources:
 
 ### Supported options
 
-See the [MongoDB docs](https://www.mongodb.com/docs/manual/reference/connection-string/) for supported options.
+See the [MongoDB docs](https://www.mongodb.com/manual/reference/connection-string/) for supported options.
 
 ### Importing schemas
 

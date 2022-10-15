@@ -20,7 +20,7 @@ sources:
 
 :::tip
 You can omit the `username` and `password` fields to enable passthrough authentication into peer nodes.
-This is useful for [JWT authentication](http://localhost:3000/docs/fundamentals/security/#jwt-authentication).
+This is useful for [JWT authentication](http://localhost:3000/fundamentals/security/#jwt-authentication).
 :::
 
 ### Importing schemas

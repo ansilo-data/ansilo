@@ -63,5 +63,5 @@ jobs:
     service_user: example_service_user
 ```
 
-See [service users](/docs/advanced/service-users) for how to define service users.
+See [service users](/advanced/service-users) for how to define service users.
 

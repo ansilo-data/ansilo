@@ -29,5 +29,5 @@ can be tightly controlled without the need for passwords or secrets.
 
 Ansilo exposes a [PostgreSQL](https://postgresql.org) interface into each data store, regardless of the underlying
 technology. Using unified SQL you can transfer large volumes of data securely between data stores, without the need
-for files or persistent storage. See the list of supported [connectors](/docs/connectors/overview/).
+for files or persistent storage. See the list of supported [connectors](/connectors/overview/).
 

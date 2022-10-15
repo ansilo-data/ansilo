@@ -10,7 +10,7 @@ views or tables within the `public` schema.
 :::info
 The data catalog, displayed within the query workbench, automatically shows tables and views defined in the
 `public` schema. If you do not want to expose a table/view in the data catalog, create it a different schema. 
-See [schema organisation](/docs/best-practices/schema-organisation/) for more details.
+See [schema organisation](/best-practices/schema-organisation/) for more details.
 :::
 
 ### Example
@@ -50,15 +50,15 @@ formatting or transformations as required.
 :::tip
 It is recommended to implement a versioning scheme on your public data products
 to enable backwards compatibility when the underlying data changes.
-See [schema versioning](/docs/best-practices/schema-versioning) for more details. 
+See [schema versioning](/best-practices/schema-versioning) for more details. 
 :::
 
 :::tip
 This example exposes the data from mysql in realtime. This means that every query to the view
 will execute a query against mysql. In some cases it is preferable to cache data.
-See [caching](/docs/advanced/caching/) for more details.
+See [caching](/advanced/caching/) for more details.
 :::
 
 :::tip
-You can also create writable data products using [updatable views](https://www.postgresql.org/docs/current/sql-createview.html#SQL-CREATEVIEW-UPDATABLE-VIEWS).
+You can also create writable data products using [updatable views](https://www.postgresql.org/current/sql-createview.html#SQL-CREATEVIEW-UPDATABLE-VIEWS).
 :::

@@ -8,9 +8,9 @@ Ansilo is the first decentralised data integration platform.
 We believe that standardising a [PostgreSQL](https://postgresql.org) interface into every data store is the ultimate
 solution to Data Mesh, ETL, Virtualisation and more.
 
-If you would like to see how Ansilo can help your organisation then check out some of the potential [use cases](/docs/category/use-cases/).
+If you would like to see how Ansilo can help your organisation then check out some of the potential [use cases](/category/use-cases/).
 
-If you want to start developing with Ansilo then read through our [development guides](/docs/category/getting-started/).
+If you want to start developing with Ansilo then read through our [development guides](/category/getting-started/).
 
 :::info
 

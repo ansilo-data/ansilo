@@ -67,4 +67,4 @@ Usage: ansilo <COMMAND>
 ...
 ```
 
-You should be ready to start developing with Ansilo! [Check out the fundamentals to get started](/docs/fundamentals/architecture/).
+You should be ready to start developing with Ansilo! [Check out the fundamentals to get started](/fundamentals/architecture/).

@@ -50,7 +50,7 @@ The proxy performs authentication of incoming requests, supporting JWT and passw
 ### PostgreSQL
 
 At the heart of each instance is a PostgreSQL server. 
-The data schemas for each node are defined through [foreign tables](https://www.postgresql.org/docs/current/sql-createforeigntable.html) and [views](https://www.postgresql.org/docs/current/sql-createview.html).
+The data schemas for each node are defined through [foreign tables](https://www.postgresql.org/current/sql-createforeigntable.html) and [views](https://www.postgresql.org/current/sql-createview.html).
 And Postgres is also the workhorse that, plans, optimises and executes all SQL queries. 
 The majority of the development work using Ansilo is configuring PostgreSQL.
 
@@ -68,8 +68,8 @@ to use in some platforms than the PostgreSQL protocol.
 
 ### Data Source Connectors
 
-Each node connects to its data store using a [PostgreSQL Foreign Data Wrapper](https://www.postgresql.org/docs/current/ddl-foreign-data.html).
+Each node connects to its data store using a [PostgreSQL Foreign Data Wrapper](https://www.postgresql.org/current/ddl-foreign-data.html).
 Ansilo comes with a sophisticated framework for translating SQL into optimised queries for each data store.
 This enables querying of external data using standard postgres SQL without having to copy data.
 
-See the natively [supported connectors and SQL compatibility](/docs/connectors/overview/) for reference.
+See the natively [supported connectors and SQL compatibility](/connectors/overview/) for reference.

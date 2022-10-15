@@ -11,7 +11,7 @@ The data catalog is automatically generated using tables and views defined in th
 
 ### Documenting tables and views
 
-We use [postgres comments](https://www.postgresql.org/docs/current/sql-comment.html) to provide additional
+We use [postgres comments](https://www.postgresql.org/current/sql-comment.html) to provide additional
 descriptions to our tables and views.
 
 ```sql
@@ -23,5 +23,5 @@ COMMENT ON COLUMN customers.id IS 'UUIDv4 identifier';
 ```
 
 :::tip
-For multiline comments you can use [dollar-qouted strings](https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-DOLLAR-QUOTING).
+For multiline comments you can use [dollar-qouted strings](https://www.postgresql.org/current/sql-syntax-lexical.html#SQL-SYNTAX-DOLLAR-QUOTING).
 :::
