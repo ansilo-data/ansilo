@@ -12,7 +12,7 @@ ansilo-connectors-base = { path = "../base" }
 ansilo-util-r2d2 = { path = "../../ansilo-util/r2d2" }
 bincode = { workspace = true }
 itertools = { workspace = true }
-jni = { git = "https://github.com/TimeToogo/jni-rs", features = ["invocation"] }
+jni = { workspace = true }
 once_cell = { workspace = true }
 r2d2 = "0.8"
 serde = { workspace = true }

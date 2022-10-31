@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use ansilo_connectors_file_avro::{AvroConfig, AvroIO};
 use ansilo_connectors_file_base::{FileConnection, FileConnectionUnpool};
+use ansilo_connectors_jdbc_cdata::{CDataJdbcConnectionConfig, CDataJdbcEntitySourceConfig};
 use ansilo_connectors_jdbc_mssql::{MssqlJdbcConnectionConfig, MssqlJdbcEntitySourceConfig};
 use ansilo_connectors_jdbc_mysql::{MysqlJdbcConnectionConfig, MysqlJdbcEntitySourceConfig};
 use ansilo_connectors_jdbc_teradata::{
@@ -38,6 +39,7 @@ use ansilo_connectors_base::interface::Connector;
 pub use ansilo_connectors_file_avro::AvroConnector;
 pub use ansilo_connectors_file_base::FileSourceConfig;
 pub use ansilo_connectors_internal::{InternalConnection, InternalConnector};
+pub use ansilo_connectors_jdbc_cdata::CDataJdbcConnector;
 pub use ansilo_connectors_jdbc_mssql::MssqlJdbcConnector;
 pub use ansilo_connectors_jdbc_mysql::MysqlJdbcConnector;
 pub use ansilo_connectors_jdbc_oracle::OracleJdbcConnector;
@@ -54,6 +56,7 @@ pub enum Connectors {
     MysqlJdbc,
     TeradataJdbc,
     MssqlJdbc,
+    CdataJdbc,
     NativePostgres,
     NativeSqlite,
     NativeMongodb,
@@ -68,6 +71,7 @@ pub enum ConnectionConfigs {
     OracleJdbc(OracleJdbcConnectionConfig),
     MysqlJdbc(MysqlJdbcConnectionConfig),
     TeradataJdbc(TeradataJdbcConnectionConfig),
+    CdataJdbc(CDataJdbcConnectionConfig),
     MssqlJdbc(MssqlJdbcConnectionConfig),
     NativePostgres(PostgresConnectionConfig),
     NativeSqlite(SqliteConnectionConfig),
@@ -84,6 +88,7 @@ pub enum EntitySourceConfigs {
     MysqlJdbc(MysqlJdbcEntitySourceConfig),
     TeradataJdbc(TeradataJdbcEntitySourceConfig),
     MssqlJdbc(MssqlJdbcEntitySourceConfig),
+    CdataJdbc(CDataJdbcEntitySourceConfig),
     NativePostgres(PostgresEntitySourceConfig),
     NativeSqlite(SqliteEntitySourceConfig),
     NativeMongodb(MongodbEntitySourceConfig),
@@ -99,6 +104,7 @@ pub enum ConnectorEntityConfigs {
     MysqlJdbc(ConnectorEntityConfig<MysqlJdbcEntitySourceConfig>),
     TeradataJdbc(ConnectorEntityConfig<TeradataJdbcEntitySourceConfig>),
     MssqlJdbc(ConnectorEntityConfig<MssqlJdbcEntitySourceConfig>),
+    CdataJdbc(ConnectorEntityConfig<CDataJdbcEntitySourceConfig>),
     NativePostgres(ConnectorEntityConfig<PostgresEntitySourceConfig>),
     NativeSqlite(ConnectorEntityConfig<SqliteEntitySourceConfig>),
     NativeMongodb(ConnectorEntityConfig<MongodbEntitySourceConfig>),
@@ -138,6 +144,7 @@ impl Connectors {
             MysqlJdbcConnector::TYPE => Connectors::MysqlJdbc,
             TeradataJdbcConnector::TYPE => Connectors::TeradataJdbc,
             MssqlJdbcConnector::TYPE => Connectors::MssqlJdbc,
+            CDataJdbcConnector::TYPE => Connectors::CdataJdbc,
             PostgresConnector::TYPE => Connectors::NativePostgres,
             SqliteConnector::TYPE => Connectors::NativeSqlite,
             MongodbConnector::TYPE => Connectors::NativeMongodb,
@@ -155,6 +162,7 @@ impl Connectors {
             Connectors::MysqlJdbc => MysqlJdbcConnector::TYPE,
             Connectors::TeradataJdbc => TeradataJdbcConnector::TYPE,
             Connectors::MssqlJdbc => MssqlJdbcConnector::TYPE,
+            Connectors::CdataJdbc => CDataJdbcConnector::TYPE,
             Connectors::NativePostgres => PostgresConnector::TYPE,
             Connectors::NativeSqlite => SqliteConnector::TYPE,
             Connectors::NativeMongodb => MongodbConnector::TYPE,
@@ -178,6 +186,9 @@ impl Connectors {
             }
             Connectors::MssqlJdbc => {
                 ConnectionConfigs::MssqlJdbc(MssqlJdbcConnector::parse_options(options)?)
+            }
+            Connectors::CdataJdbc => {
+                ConnectionConfigs::CdataJdbc(CDataJdbcConnector::parse_options(options)?)
             }
             Connectors::NativePostgres => {
                 ConnectionConfigs::NativePostgres(PostgresConnector::parse_options(options)?)
@@ -215,6 +226,9 @@ impl Connectors {
             ),
             Connectors::MssqlJdbc => EntitySourceConfigs::MssqlJdbc(
                 MssqlJdbcConnector::parse_entity_source_options(options)?,
+            ),
+            Connectors::CdataJdbc => EntitySourceConfigs::CdataJdbc(
+                CDataJdbcConnector::parse_entity_source_options(options)?,
             ),
             Connectors::NativePostgres => EntitySourceConfigs::NativePostgres(
                 PostgresConnector::parse_entity_source_options(options)?,
@@ -275,6 +289,14 @@ impl Connectors {
                 (
                     ConnectionPools::Jdbc(pool),
                     ConnectorEntityConfigs::MssqlJdbc(entities),
+                )
+            }
+            (Connectors::CdataJdbc, ConnectionConfigs::CdataJdbc(options)) => {
+                let (pool, entities) =
+                    Self::create_pool::<CDataJdbcConnector>(options, nc, data_source_id)?;
+                (
+                    ConnectionPools::Jdbc(pool),
+                    ConnectorEntityConfigs::CdataJdbc(entities),
                 )
             }
             (Connectors::NativePostgres, ConnectionConfigs::NativePostgres(options)) => {

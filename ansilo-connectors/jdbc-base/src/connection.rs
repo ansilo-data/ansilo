@@ -172,6 +172,13 @@ pub struct JdbcConnection(
     JdbcTransactionManager,
 );
 
+impl JdbcConnection {
+    /// Gets a reference to the jvm
+    pub fn jvm(&self) -> &Arc<Jvm> {
+        &self.1.0.jvm
+    }
+}
+
 /// Implementation of the JDBC connection
 #[derive(Clone)]
 struct JdbcConnectionState {
