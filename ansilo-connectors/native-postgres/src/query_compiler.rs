@@ -255,7 +255,7 @@ impl<T: DerefMut<Target = Client>> PostgresQueryCompiler<T> {
             .into_iter()
             .map(|j| Ok(Self::compile_select_join(conf, query, j, params)?))
             .collect::<Result<Vec<String>>>()?
-            .join(", "))
+            .join(" "))
     }
 
     fn compile_select_join(
