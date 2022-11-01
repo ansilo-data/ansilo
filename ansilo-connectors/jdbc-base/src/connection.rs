@@ -6,7 +6,7 @@ use ansilo_core::{
     data::DataValue,
     err::{bail, Context, Result},
 };
-use ansilo_logging::{debug, warn};
+use ansilo_logging::{debug, trace, warn};
 use ansilo_util_r2d2::manager::{OurManageConnection, R2d2Adaptor};
 use jni::objects::{GlobalRef, JValue};
 use r2d2::PooledConnection;
@@ -77,7 +77,7 @@ impl JdbcConnectionPool {
 }
 
 impl OurManageConnection for Manager {
-    type Connection = JdbcConnectionState;
+    type Connection = Arc<JdbcConnectionState>;
 
     fn connect(&self) -> Result<Self::Connection> {
         let jdbc_con = self
@@ -124,12 +124,12 @@ impl OurManageConnection for Manager {
                 Ok(jdbc_con)
             })?;
 
-        let state = JdbcConnectionState {
+        let state = Arc::new(JdbcConnectionState {
             jvm: Arc::clone(&self.jvm),
             supports_batching: self.supports_batching,
             jdbc_con,
             closed: false,
-        };
+        });
 
         if !self.init_queries.is_empty() {
             for query in self.init_queries.iter() {
@@ -175,12 +175,11 @@ pub struct JdbcConnection(
 impl JdbcConnection {
     /// Gets a reference to the jvm
     pub fn jvm(&self) -> &Arc<Jvm> {
-        &self.1.0.jvm
+        &self.1 .0.jvm
     }
 }
 
 /// Implementation of the JDBC connection
-#[derive(Clone)]
 struct JdbcConnectionState {
     jvm: Arc<Jvm>,
     jdbc_con: GlobalRef,
@@ -248,6 +247,7 @@ fn prepare_query(query: JdbcQuery, state: &JdbcConnectionState) -> Result<JdbcPr
 
         Ok(jdbc_prepared_query)
     })?;
+
     Ok(JdbcPreparedQuery::new(
         Arc::clone(&state.jvm),
         jdbc_prepared_query,
@@ -277,6 +277,10 @@ impl JdbcConnection {
 impl JdbcConnectionState {
     /// Checks whether the connection is valid
     pub fn is_valid(&self) -> Result<()> {
+        if self.closed {
+            bail!("Connection closed");
+        }
+
         let env = self.jvm.env()?;
         let timeout_sec = 30; // TODO: make configurable
 
@@ -302,6 +306,10 @@ impl JdbcConnectionState {
 
     /// Checks whether the connection is closed
     pub fn is_closed(&self) -> Result<bool> {
+        if self.closed {
+            return Ok(true);
+        }
+
         let env = self.jvm.env()?;
         let res = env
             .call_method(self.jdbc_con.as_obj(), "isClosed", "()Z", &[])
@@ -332,6 +340,7 @@ impl JdbcConnectionState {
 
 impl Drop for JdbcConnectionState {
     fn drop(&mut self) {
+        trace!("Dropping JDBC connection");
         if let Err(err) = self.close() {
             warn!("Failed to close JDBC connection: {:?}", err);
         }
@@ -339,7 +348,7 @@ impl Drop for JdbcConnectionState {
 }
 
 /// Transaction manager for a JDBC connection
-pub struct JdbcTransactionManager(JdbcConnectionState);
+pub struct JdbcTransactionManager(Arc<JdbcConnectionState>);
 
 impl TransactionManager for JdbcTransactionManager {
     fn is_in_transaction(&mut self) -> Result<bool> {
