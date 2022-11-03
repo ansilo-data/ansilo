@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, MutexGuard},
+    time::Duration,
+};
 
 use ansilo_core::{
     auth::AuthContext,
@@ -128,7 +132,7 @@ impl OurManageConnection for Manager {
             jvm: Arc::clone(&self.jvm),
             supports_batching: self.supports_batching,
             jdbc_con,
-            closed: false,
+            closed: Mutex::new(false),
         });
 
         if !self.init_queries.is_empty() {
@@ -184,7 +188,7 @@ struct JdbcConnectionState {
     jvm: Arc<Jvm>,
     jdbc_con: GlobalRef,
     supports_batching: bool,
-    closed: bool,
+    closed: Mutex<bool>,
 }
 
 impl Connection for JdbcConnection {
@@ -277,7 +281,7 @@ impl JdbcConnection {
 impl JdbcConnectionState {
     /// Checks whether the connection is valid
     pub fn is_valid(&self) -> Result<()> {
-        if self.closed {
+        if *self.closed()? {
             bail!("Connection closed");
         }
 
@@ -306,7 +310,7 @@ impl JdbcConnectionState {
 
     /// Checks whether the connection is closed
     pub fn is_closed(&self) -> Result<bool> {
-        if self.closed {
+        if *self.closed()? {
             return Ok(true);
         }
 
@@ -322,8 +326,10 @@ impl JdbcConnectionState {
         Ok(res)
     }
 
-    fn close(&mut self) -> Result<()> {
-        if self.closed {
+    fn close(&self) -> Result<()> {
+        let mut closed = self.closed()?;
+
+        if *closed {
             return Ok(());
         }
 
@@ -333,8 +339,15 @@ impl JdbcConnectionState {
 
         self.jvm.check_exceptions(&env)?;
 
-        self.closed = true;
+        *closed = true;
         Ok(())
+    }
+
+    fn closed<'a>(&'a self) -> Result<MutexGuard<'a, bool>> {
+        match self.closed.lock() {
+            Ok(g) => Ok(g),
+            Err(_) => bail!("Failed to lock connection closed mutex"),
+        }
     }
 }
 
@@ -575,16 +588,16 @@ mod tests {
 
     #[test]
     fn test_jdbc_connection_close() {
-        let mut con = init_sqlite_connection();
-        let con = &mut *con.0;
+        let con = init_sqlite_connection();
+        let con = con.0;
 
         con.close().unwrap();
     }
 
     #[test]
     fn test_jdbc_connection_is_valid() {
-        let mut con = init_sqlite_connection();
-        let con = &mut *con.0;
+        let con = init_sqlite_connection();
+        let con = con.0;
 
         con.is_valid().unwrap();
 

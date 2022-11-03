@@ -3,8 +3,7 @@ use std::sync::Arc;
 use ansilo_core::err::{bail, ensure, Context, Result};
 use jni::{
     objects::{GlobalRef, JMethodID, JObject, JString, JValue},
-    signature::{JavaType, Primitive},
-    sys::jmethodID,
+    signature::{Primitive, ReturnType},
 };
 use serde::Serialize;
 
@@ -41,8 +40,8 @@ pub struct JdbcPreparedQuery {
     pub jdbc_prepared_statement: GlobalRef,
     pub query: JdbcQuery,
     supports_batching: bool,
-    write_method_id: Option<jmethodID>,
-    as_read_only_buffer_method_id: Option<jmethodID>,
+    write_method_id: Option<JMethodID>,
+    as_read_only_buffer_method_id: Option<JMethodID>,
 }
 
 impl JdbcPreparedQuery {
@@ -72,8 +71,7 @@ impl JdbcPreparedQuery {
                     "write",
                     "(Ljava/nio/ByteBuffer;)I",
                 )
-                .context("Failed to find JdbcPreparedQuery::write method")?
-                .into_inner(),
+                .context("Failed to find JdbcPreparedQuery::write method")?,
             );
         }
 
@@ -84,8 +82,7 @@ impl JdbcPreparedQuery {
                     "asReadOnlyBuffer",
                     "()Ljava/nio/ByteBuffer;",
                 )
-                .context("Failed to find ByteBuffer::asReadOnlyBuffer method")?
-                .into_inner(),
+                .context("Failed to find ByteBuffer::asReadOnlyBuffer method")?,
             );
         }
 
@@ -106,17 +103,17 @@ impl QueryHandle for JdbcPreparedQuery {
             // Our supplied buff is a immutable reference however our jni interface
             // requires an &mut [u8]. We use some unsafe code to override this restriction
             // and manually enforce it using https://docs.oracle.com/javase/10/docs/api/java/nio/ByteBuffer.html#asReadOnlyBuffer()
-            let byte_buff = unsafe {
-                // TODO: Hopefully get https://github.com/jni-rs/jni-rs/pull/351 merged
-                let byte_buff = env
-                    .new_direct_byte_buffer_raw(buff.as_ptr() as *mut _, buff.len())
-                    .context("Failed to create direct byte buffer")?;
+            let byte_buff = {
+                let byte_buff = unsafe {
+                    env.new_direct_byte_buffer(buff.as_ptr() as *mut _, buff.len())
+                        .context("Failed to create direct byte buffer")?
+                };
 
                 let byte_buff = env.auto_local(
                     env.call_method_unchecked(
                         *byte_buff,
                         JMethodID::from(self.as_read_only_buffer_method_id.unwrap()),
-                        JavaType::Object("java/nio/ByteBuffer".to_owned()),
+                        ReturnType::Object,
                         &[],
                     )
                     .context("Failed to call ByteBuffer::asReadOnlyBuffer")?
@@ -132,9 +129,9 @@ impl QueryHandle for JdbcPreparedQuery {
             let written = env
                 .call_method_unchecked(
                     self.jdbc_prepared_statement.as_obj(),
-                    JMethodID::from(self.write_method_id.unwrap()),
-                    JavaType::Primitive(Primitive::Int),
-                    &[JValue::Object(byte_buff.as_obj())],
+                    self.write_method_id.unwrap(),
+                    ReturnType::Primitive(Primitive::Int),
+                    &[JValue::Object(byte_buff.as_obj()).into()],
                 )
                 .context("Failed to invoke JdbcPreparedQuery::write")?
                 .i()
@@ -296,9 +293,10 @@ pub(crate) fn to_java_jdbc_parameter<'a>(
         QueryParam::Constant(data_value) => {
             let mut buff = DataWriter::to_vec_one(data_value.clone())?;
 
-            let byte_buff = env
-                .new_direct_byte_buffer(buff.as_mut_slice())
-                .context("Failed to init ByteBuffer")?;
+            let byte_buff = unsafe {
+                env.new_direct_byte_buffer(buff.as_mut_ptr(), buff.len())
+                    .context("Failed to init ByteBuffer")?
+            };
 
             env.call_static_method(
                 "com/ansilo/connectors/query/JdbcParameter",

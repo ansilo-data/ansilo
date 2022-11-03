@@ -3,8 +3,7 @@ use std::sync::Arc;
 use ansilo_core::err::{Context, Result};
 use jni::{
     objects::{GlobalRef, JList, JMethodID, JString, JValue},
-    signature::{JavaType, Primitive},
-    sys::jmethodID,
+    signature::{Primitive, ReturnType},
 };
 
 use ansilo_connectors_base::interface::{ResultSet, RowStructure};
@@ -15,7 +14,7 @@ use super::{JavaDataType, Jvm};
 pub struct JdbcResultSet {
     pub jvm: Arc<Jvm>,
     pub jdbc_result_set: GlobalRef,
-    pub read_method_id: Option<jmethodID>,
+    pub read_method_id: Option<JMethodID>,
 }
 
 impl JdbcResultSet {
@@ -100,21 +99,21 @@ impl ResultSet for JdbcResultSet {
                         "read",
                         "(Ljava/nio/ByteBuffer;)I",
                     )
-                    .context("Failed to get method id of JdbcResultSet::read")?
-                    .into_inner(),
+                    .context("Failed to get method id of JdbcResultSet::read")?,
                 );
             }
 
-            let jvm_buff = *env
-                .new_direct_byte_buffer(buff)
-                .context("Failed to create java ByteBuffer")?;
+            let jvm_buff = unsafe {
+                *env.new_direct_byte_buffer(buff.as_mut_ptr(), buff.len())
+                    .context("Failed to create java ByteBuffer")?
+            };
 
             let result = env
                 .call_method_unchecked(
                     self.jdbc_result_set.as_obj(),
                     JMethodID::from(self.read_method_id.unwrap()),
-                    JavaType::Primitive(Primitive::Int),
-                    &[JValue::Object(jvm_buff)],
+                    ReturnType::Primitive(Primitive::Int),
+                    &[JValue::Object(jvm_buff).into()],
                 )
                 .context("Failed to call JdbcResultSet::read")?
                 .i()
