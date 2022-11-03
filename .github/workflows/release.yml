@@ -54,8 +54,6 @@ jobs:
 
       - name: Cargo build
         run: |
-          ls -al $HOME/.cargo/
-          rm -rf $HOME/.cargo/{registry,git}
           docker run \
             -v $HOME/.cargo:/home/build/.cargo \
             -v $HOME/.m2:/home/build/.m2 \

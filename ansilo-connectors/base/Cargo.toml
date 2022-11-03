@@ -15,7 +15,6 @@ ansilo-logging = { path = "../../ansilo-logging" }
 bincode = { workspace = true }
 enum-as-inner = { workspace = true }
 itertools = { workspace = true }
-jni = { git = "https://github.com/TimeToogo/jni-rs", features = ["invocation"] }
 lazy_static = { workspace = true }
 r2d2 = "0.8"
 serde = { workspace = true }
