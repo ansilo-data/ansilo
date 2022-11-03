@@ -21,7 +21,7 @@ impl Job {
 
     /// Run the job
     pub async fn run(&self) -> Result<()> {
-        info!("Starting job {}", self.conf.id);
+        info!("Starting job '{}'", self.conf.id);
 
         // Acquire a connection to postgres and execute the queries
         let res = if let Some(svc_user) = self.conf.service_user.as_ref() {
