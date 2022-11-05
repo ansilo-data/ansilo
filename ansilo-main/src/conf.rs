@@ -69,7 +69,7 @@ fn pg_conf(node: &NodeConfig) -> PostgresConf {
             .install_dir
             .or_else(|| env::var("ANSILO_PG_INSTALL_DIR").ok().map(PathBuf::from))
             .or_else(|| try_get_pg_install_dir())
-            .unwrap_or("/usr/pgsql-14/".into()),
+            .unwrap_or("/usr/pgsql-15/".into()),
         //
         postgres_conf_path: pg_conf
             .config_path
