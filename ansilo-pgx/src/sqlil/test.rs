@@ -62,7 +62,7 @@ fn parse_pg_expr(select: &'static str, params: Vec<DataType>) -> (PgBox<Node>, P
             .iter()
             .map(|i| into_pg_type(i).unwrap())
             .collect::<Vec<_>>();
-        let query_tree = pg_sys::pg_analyze_and_rewrite(
+        let query_tree = pg_sys::pg_analyze_and_rewrite_fixedparams(
             stmt_node,
             cstr.as_ptr(),
             params.as_mut_slice().as_mut_ptr(),

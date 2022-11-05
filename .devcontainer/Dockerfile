@@ -18,8 +18,8 @@ RUN mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys \
 # First load user-specific init scripts...
 RUN touch ~/.initenvrc && echo 'source ~/.initenvrc' | tee -a ~/.bashrc ~/.zshrc 
 
-RUN cargo install cargo-pgx --version 0.5.0-beta.0
-RUN cargo pgx init --pg14 download
+RUN cargo install cargo-pgx --git https://github.com/tcdi/pgx.git --rev 4ad8a9
+RUN cargo pgx init --pg15 download
 
 RUN cargo install cargo-edit
 
@@ -78,11 +78,11 @@ RUN curl -sL https://packages.microsoft.com/keys/microsoft.asc | \
 RUN sudo apt-get update && export DEBIAN_FRONTEND=noninteractive && \
     sudo apt-get -y install netcat socat
 
-# Install postgres 14 server
+# Install postgres 15 server
 RUN sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' && \
     wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - && \
     sudo apt-get update -y && \
-    sudo apt install -y postgresql-14
+    sudo apt install -y postgresql-15
 
 # Install https://github.com/TimeToogo/lazyprox
 RUN curl --fail https://lazyprox.elliotlevin.dev/lazyprox-x86_64-unknown-linux-musl -o ~/lazyprox && \

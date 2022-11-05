@@ -717,11 +717,11 @@ impl FdwSelectQuery {
     }
 
     pub(crate) unsafe fn record_result_col(&mut self, res_no: u32, var: *mut pg_sys::Var) {
-        if !self.res_cols.contains_key(&(*var).varno) {
-            self.res_cols.insert((*var).varno, HashMap::new());
+        if !self.res_cols.contains_key(&((*var).varno as _)) {
+            self.res_cols.insert((*var).varno as _, HashMap::new());
         }
 
-        let cols = self.res_cols.get_mut(&(*var).varno).unwrap();
+        let cols = self.res_cols.get_mut(&((*var).varno as _)).unwrap();
         cols.insert((*var).varattno as _, res_no);
     }
 

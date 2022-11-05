@@ -67,7 +67,7 @@ pub unsafe extern "C" fn add_foreign_update_targets(
         // range table, hence we make them negative.
         let varattno = -(idx as i16 + 1);
         let col = pg_sys::makeVar(
-            rtindex,
+            rtindex as _,
             varattno as _,
             into_pg_type(&r#type).unwrap(),
             -1,

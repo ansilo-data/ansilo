@@ -142,7 +142,7 @@ mod tests {
             resources: ResourceConfig::default(),
             install_dir: PathBuf::from(
                 env::var("ANSILO_TEST_PG_DIR")
-                    .unwrap_or("/home/vscode/.pgx/14.5/pgx-install/".into()),
+                    .unwrap_or("/home/vscode/.pgx/15.0/pgx-install/".into()),
             ),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!(

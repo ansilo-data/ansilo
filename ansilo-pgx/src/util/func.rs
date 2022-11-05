@@ -7,7 +7,7 @@ use pgx::*;
 pub(crate) unsafe fn call_udf(name: &str) {
     debug1!("Invoking user-defined function: {name}");
     let c_func_name = CString::new(name).unwrap();
-    let mut func_name = PgList::<pg_sys::Value>::new();
+    let mut func_name = PgList::<_>::new();
     func_name.push(pg_sys::makeString(c_func_name.as_ptr() as *mut _));
 
     // Look up the function by name

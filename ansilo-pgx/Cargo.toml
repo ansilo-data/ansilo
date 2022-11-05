@@ -7,8 +7,8 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [features]
-default = ["pg14"]
-pg14 = ["pgx/pg14", "pgx-tests/pg14"]
+default = ["pg15"]
+pg15 = ["pgx/pg15", "pgx-tests/pg15"]
 pg_test = [
     "dep:ansilo-connectors-base",
     "dep:ansilo-connectors-memory",
@@ -32,7 +32,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 time = "0.3"
-pgx = "=0.5.0-beta.0"
+pgx = { git = "https://github.com/tcdi/pgx.git", rev = "4ad8a91", features=["time-crate"] }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 subtle = "2.4"
@@ -44,7 +44,7 @@ ansilo-connectors-native-sqlite = { path = "../ansilo-connectors/native-sqlite",
 ansilo-connectors-all = { path = "../ansilo-connectors/all", optional = true }
 ansilo-util-debug = { path = "../ansilo-util/debug", optional = true }
 assert-json-diff = { version = "2.0", optional = true }
-pgx-tests = { version = "=0.5.0-beta.0", optional = true }
+pgx-tests = { git = "https://github.com/tcdi/pgx.git", rev = "4ad8a91", optional = true }
 pretty_assertions = { version = "1.2", optional = true }
 postgres = { version = "0.19", optional = true }
 rusqlite = { version = "0.28", features = ["chrono", "bundled", "column_decltype"], optional = true }
@@ -56,7 +56,7 @@ ansilo-connectors-native-sqlite = { path = "../ansilo-connectors/native-sqlite" 
 ansilo-connectors-all = { path = "../ansilo-connectors/all" }
 ansilo-util-debug = { path = "../ansilo-util/debug" }
 assert-json-diff = { version = "2.0" }
-pgx-tests = { version = "=0.5.0-beta.0" }
+pgx-tests = { git = "https://github.com/tcdi/pgx.git", rev = "4ad8a91" }
 postgres = { version = "0.19.3" }
 rusqlite = { version = "0.28", features = ["chrono", "bundled", "column_decltype"] }
 pretty_assertions = "*"

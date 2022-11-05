@@ -94,16 +94,16 @@ pub unsafe fn into_datum(
         }
         //
         (pg_sys::DATEOID, DataType::Date, DataValue::Date(data)) => {
-            into_date(data).into_datum().unwrap()
+            into_pgx_date(data)?.into_datum().unwrap()
         }
         (pg_sys::TIMEOID, DataType::Time, DataValue::Time(data)) => {
-            into_time(data).into_datum().unwrap()
+            into_pgx_time(data)?.into_datum().unwrap()
         }
         (pg_sys::TIMESTAMPOID, DataType::DateTime, DataValue::DateTime(data)) => {
-            into_date_time(data).into_datum().unwrap()
+            into_pgx_date_time(data)?.into_datum().unwrap()
         }
         (pg_sys::TIMESTAMPTZOID, DataType::DateTimeWithTZ, DataValue::DateTimeWithTZ(data)) => {
-            into_date_time_tz(data).into_datum().unwrap()
+            into_pgx_date_time_tz(data)?.into_datum().unwrap()
         }
         //
         (pg_sys::UUIDOID, DataType::Uuid, DataValue::Uuid(data)) => {
@@ -152,41 +152,51 @@ pub(crate) unsafe fn into_datum_pg_alloc(
     Ok((is_null, datum))
 }
 
-fn into_date(data: NaiveDate) -> pgx::Date {
-    pgx::Date::new(
-        time::Date::from_calendar_date(
-            data.year() as _,
-            (data.month() as u8)
-                .try_into()
-                .expect("Failed to convert month"),
-            data.day() as _,
-        )
-        .unwrap(),
+fn into_pgx_date(data: NaiveDate) -> Result<pgx::Date> {
+    Ok(into_date(data).try_into()?)
+}
+
+fn into_date(data: NaiveDate) -> time::Date {
+    time::Date::from_calendar_date(
+        data.year() as _,
+        (data.month() as u8)
+            .try_into()
+            .expect("Failed to convert month"),
+        data.day() as _,
     )
+    .unwrap()
 }
 
-fn into_time(data: NaiveTime) -> pgx::Time {
-    pgx::Time::new(
-        time::Time::from_hms_nano(
-            data.hour() as _,
-            data.minute() as _,
-            data.second() as _,
-            data.nanosecond() as _,
-        )
-        .unwrap(),
+fn into_pgx_time(data: NaiveTime) -> Result<pgx::Time> {
+    Ok(into_time(data).try_into()?)
+}
+
+fn into_time(data: NaiveTime) -> time::Time {
+    time::Time::from_hms_nano(
+        data.hour() as _,
+        data.minute() as _,
+        data.second() as _,
+        data.nanosecond() as _,
     )
+    .unwrap()
 }
 
-fn into_date_time(data: NaiveDateTime) -> pgx::Timestamp {
-    pgx::Timestamp::new(time::PrimitiveDateTime::new(
-        *into_date(data.date()),
-        *into_time(data.time()),
-    ))
+fn into_pgx_date_time(data: NaiveDateTime) -> Result<pgx::Timestamp> {
+    Ok(into_date_time(data).try_into()?)
 }
 
-fn into_date_time_tz(data: DateTimeWithTZ) -> pgx::TimestampWithTimeZone {
-    pgx::TimestampWithTimeZone::new(
-        *into_date_time(data.dt),
+fn into_date_time(data: NaiveDateTime) -> time::PrimitiveDateTime {
+    time::PrimitiveDateTime::new(into_date(data.date()), into_time(data.time()))
+        .try_into()
+        .unwrap()
+}
+
+fn into_pgx_date_time_tz(data: DateTimeWithTZ) -> Result<pgx::TimestampWithTimeZone> {
+    Ok(into_date_time_tz(data).try_into()?)
+}
+
+fn into_date_time_tz(data: DateTimeWithTZ) -> time::OffsetDateTime {
+    into_date_time(data.dt).assume_offset(
         time::UtcOffset::from_whole_seconds(
             data.tz
                 .offset_from_local_datetime(&data.dt)
@@ -475,9 +485,10 @@ mod tests {
                 .unwrap(),
                 (
                     false,
-                    pgx::Date::new(
+                    pgx::Date::try_from(
                         time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap()
                     )
+                    .unwrap()
                     .into_datum()
                     .unwrap()
                 )
@@ -497,7 +508,8 @@ mod tests {
                 .unwrap(),
                 (
                     false,
-                    pgx::Time::new(time::Time::from_hms_milli(7, 43, 11, 123).unwrap())
+                    pgx::Time::try_from(time::Time::from_hms_milli(7, 43, 11, 123).unwrap())
+                        .unwrap()
                         .into_datum()
                         .unwrap()
                 )
@@ -520,10 +532,11 @@ mod tests {
                 .unwrap(),
                 (
                     false,
-                    pgx::Timestamp::new(time::PrimitiveDateTime::new(
+                    pgx::Timestamp::try_from(time::PrimitiveDateTime::new(
                         time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap(),
                         time::Time::from_hms_milli(7, 43, 11, 123).unwrap()
                     ))
+                    .unwrap()
                     .into_datum()
                     .unwrap()
                 )
@@ -549,13 +562,11 @@ mod tests {
                 .unwrap(),
                 (
                     false,
-                    pgx::TimestampWithTimeZone::new(
-                        time::PrimitiveDateTime::new(
-                            time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap(),
-                            time::Time::from_hms_milli(7, 43, 11, 123).unwrap()
-                        ),
-                        time::UtcOffset::UTC
-                    )
+                    pgx::TimestampWithTimeZone::try_from(time::PrimitiveDateTime::new(
+                        time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap(),
+                        time::Time::from_hms_milli(7, 43, 11, 123).unwrap()
+                    ))
+                    .unwrap()
                     .into_datum()
                     .unwrap()
                 )
@@ -627,9 +638,10 @@ mod tests {
                 .unwrap(),
                 (
                     false,
-                    pgx::Date::new(
+                    pgx::Date::try_from(
                         time::Date::from_calendar_date(2021, time::Month::January, 3).unwrap()
                     )
+                    .unwrap()
                     .into_datum()
                     .unwrap()
                 )

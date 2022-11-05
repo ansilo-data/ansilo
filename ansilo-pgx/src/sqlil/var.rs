@@ -31,8 +31,8 @@ pub(super) unsafe fn convert_var(
         }
 
         // If the var node references of the foreign entities we append it a attribute of that entity
-        let rte = pg_sys::planner_rt_fetch((*node).varno, planner.root() as *mut _);
-        let alias = ctx.register_alias((*node).varno);
+        let rte = pg_sys::planner_rt_fetch((*node).varno as _, planner.root() as *mut _);
+        let alias = ctx.register_alias((*node).varno as _);
         let attr_id =
             parse_to_owned_utf8_string(pg_sys::get_attname((*rte).relid, (*node).varattno, false))?;
 

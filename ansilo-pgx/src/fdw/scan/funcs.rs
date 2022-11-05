@@ -1154,7 +1154,7 @@ pub unsafe extern "C" fn get_foreign_plan(
 
         for att in rel.attrs() {
             required_cols.push(pg_sys::makeVar(
-                varno,
+                varno as _,
                 att.attnum,
                 att.atttypid,
                 att.atttypmod,
@@ -1188,7 +1188,7 @@ pub unsafe extern "C" fn get_foreign_plan(
             query
                 .as_select_mut()
                 .unwrap()
-                .record_result_var_no(res_no as _, (*(col as *mut pg_sys::Var)).varno);
+                .record_result_var_no(res_no as _, (*(col as *mut pg_sys::Var)).varno as _);
 
             fdw_scan_list.push(tle as *mut _);
             continue;
@@ -1306,7 +1306,7 @@ unsafe fn find_whole_row_vars(
     required_cols
         .iter()
         .filter(|c| is_whole_row(**c))
-        .map(|r| (*((*r) as *mut pg_sys::Var)).varno)
+        .map(|r| (*((*r) as *mut pg_sys::Var)).varno as u32)
         .map(|varno| (varno, pg_sys::planner_rt_fetch(varno, root)))
         .collect()
 }
@@ -1316,7 +1316,7 @@ unsafe fn find_row_id_vars(required_cols: &Vec<*mut Node>) -> HashMap<u32, Vec<*
         .iter()
         .filter(|c| is_self_item_ptr(**c))
         .map(|r| (*r) as *mut pg_sys::Var)
-        .into_group_map_by(|var| (**var).varno)
+        .into_group_map_by(|var| (**var).varno as _)
 }
 
 /// Retrieves vars required for the evaluating the expr locally
@@ -1355,7 +1355,7 @@ unsafe fn find_vars_required_for_local_eval(
             required_vars.push((
                 att.name().to_string(),
                 pg_sys::makeVar(
-                    (*foreignrel).relid,
+                    (*foreignrel).relid as _,
                     att.attnum,
                     att.atttypid,
                     att.atttypmod,

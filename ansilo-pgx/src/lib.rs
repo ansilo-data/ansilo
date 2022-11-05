@@ -14,8 +14,8 @@ pg_module_magic!();
 // Register our FDW
 extension_sql!(
     r#"
-        CREATE FUNCTION "ansilo_fdw_handler_typed"() RETURNS fdw_handler STRICT LANGUAGE c AS 'MODULE_PATHNAME', 'ansilo_fdw_handler_wrapper';
-        CREATE FOREIGN DATA WRAPPER ansilo_fdw HANDLER ansilo_fdw_handler_typed;
+        CREATE FUNCTION "ansilo_fdw_handler"() RETURNS fdw_handler STRICT LANGUAGE c AS 'MODULE_PATHNAME', 'ansilo_fdw_handler';
+        CREATE FOREIGN DATA WRAPPER ansilo_fdw HANDLER ansilo_fdw_handler;
 "#,
     name = "ansilo_fdw"
 );

@@ -8,8 +8,8 @@ RUN yum install -y java-17-openjdk-headless && \
 
 # Install postgres
 RUN yum install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm && \
-    yum install -y postgresql14-server
-ENV ANSILO_PG_INSTALL_DIR=/usr/pgsql-14/
+    yum install -y postgresql15-server
+ENV ANSILO_PG_INSTALL_DIR=/usr/pgsql-15/
 # Copy default postgresql.conf
 COPY .github/workflows/docker/release.postgresql.conf /ansilo/postgresql.conf
 ENV ANSILO_PG_DEFAULT_CONF=/ansilo/postgresql.conf
@@ -40,7 +40,7 @@ RUN mkdir -p /var/run/ansilo/ && \
 
 # Clean up
 RUN yum clean all && \
-    rpm -q java-17-openjdk-headless postgresql14-server openssl && \
+    rpm -q java-17-openjdk-headless postgresql15-server openssl && \
     rm -rf /var/cache/yum && \
     rm -rf /tmp/*
 

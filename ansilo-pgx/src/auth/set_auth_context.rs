@@ -75,7 +75,7 @@ mod tests {
 
     #[pg_test]
     fn test_set_auth_context_valid() {
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
 
         client
             .batch_execute(
@@ -90,7 +90,7 @@ mod tests {
 
     #[pg_test]
     fn test_set_auth_context_fails_when_already_set() {
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
 
         client
             .batch_execute(
@@ -109,7 +109,7 @@ mod tests {
 
     #[pg_test]
     fn test_set_auth_context_fails_when_in_transaction() {
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
         let mut t = client.transaction().unwrap();
 
         t.batch_execute(r#"SELECT ansilo_set_auth_context('{"username": "foo", "provider": "bar", "authenticated_at": 123, "type": "password"}', '1234567890123456');"#)

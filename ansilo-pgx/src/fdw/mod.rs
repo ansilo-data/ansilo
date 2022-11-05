@@ -38,8 +38,8 @@ use pgx::{
 
 /// The fdw handler initialisation function
 /// @see https://www.postgresql.org/docs/14/fdw-functions.html
-#[pg_extern]
-fn ansilo_fdw_handler() -> pg_sys::Datum {
+#[pg_guard]
+pub fn ansilo_fdw_handler() -> pg_sys::Datum {
     // Initialise the FDW routine struct with memory allocated by rust
     let mut handler = PgBox::<FdwRoutine>::alloc_node(pg_sys::NodeTag_T_FdwRoutine);
 
@@ -92,4 +92,11 @@ fn ansilo_fdw_handler() -> pg_sys::Datum {
 
     // Convert the ownership to postgres, so it is not dropped by rust
     handler.into_pg_boxed().into_datum().unwrap()
+}
+
+#[no_mangle]
+#[doc(hidden)]
+pub extern "C" fn pg_finfo_ansilo_fdw_handler() -> &'static pg_sys::Pg_finfo_record {
+    const V1_API: pg_sys::Pg_finfo_record = pg_sys::Pg_finfo_record { api_version: 1 };
+    &V1_API
 }

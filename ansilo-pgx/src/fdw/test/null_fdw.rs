@@ -8,16 +8,16 @@ use pgx::{
 extension_sql!(
     r#"
         -- Register our FDW
-        CREATE FUNCTION "null_fdw_handler_typed"() RETURNS fdw_handler STRICT LANGUAGE c AS 'MODULE_PATHNAME', 'null_fdw_handler_wrapper';
-        CREATE FOREIGN DATA WRAPPER null_fdw HANDLER null_fdw_handler_typed;
+        CREATE FUNCTION null_fdw_handler() RETURNS fdw_handler STRICT LANGUAGE c AS 'MODULE_PATHNAME', 'null_fdw_handler';
+        CREATE FOREIGN DATA WRAPPER null_fdw HANDLER null_fdw_handler;
 "#,
     name = "null_fdw"
 );
 
 /// In testing mode we create a "null_fdw" that returns no data
 /// This is useful for some tests
-#[pg_extern]
-fn null_fdw_handler() -> pg_sys::Datum {
+#[pg_guard]
+pub fn null_fdw_handler() -> pg_sys::Datum {
     // Initialise the FDW routine struct with memory allocated by rust
     let mut handler = PgBox::<FdwRoutine>::alloc_node(pg_sys::NodeTag_T_FdwRoutine);
 
@@ -27,6 +27,13 @@ fn null_fdw_handler() -> pg_sys::Datum {
 
     // Convert the ownership to postgres, so it is not dropped by rust
     handler.into_pg_boxed().into_datum().unwrap()
+}
+
+#[no_mangle]
+#[doc(hidden)]
+pub extern "C" fn pg_finfo_null_fdw_handler() -> &'static pg_sys::Pg_finfo_record {
+    const V1_API: pg_sys::Pg_finfo_record = pg_sys::Pg_finfo_record { api_version: 1 };
+    &V1_API
 }
 
 unsafe extern "C" fn get_foreign_rel_size(

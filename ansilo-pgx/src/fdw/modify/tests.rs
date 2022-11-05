@@ -649,7 +649,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_modify_test_before_modify_function_is_called_if_specified() {
+    fn before_modify_function_is_called_if_specified() {
         setup_test("scan_before_modify_cb");
 
         execute_query(
@@ -702,7 +702,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_modify_test_before_insert_function_is_called_if_specified() {
+    fn before_insert_function_is_called_if_specified() {
         setup_test("scan_before_insert_cb");
 
         execute_query(
@@ -732,7 +732,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_modify_test_before_update_function_is_called_if_specified() {
+    fn before_update_function_is_called_if_specified() {
         setup_test("scan_before_update_cb");
 
         execute_query(
@@ -763,7 +763,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_modify_test_before_delete_function_is_called_if_specified() {
+    fn before_delete_function_is_called_if_specified() {
         setup_test("scan_before_delete_cb");
 
         execute_query(

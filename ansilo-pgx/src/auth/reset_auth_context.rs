@@ -64,7 +64,7 @@ mod tests {
 
     #[pg_test]
     fn test_reset_auth_context_fails_with_invalid_nonce() {
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
 
         client
             .batch_execute(
@@ -86,7 +86,7 @@ mod tests {
 
     #[pg_test]
     fn test_reset_auth_context_valid() {
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
 
         // should be able to set context again after resetting it
         for _ in 1..5 {
@@ -105,7 +105,7 @@ mod tests {
 
     #[pg_test]
     fn test_reset_auth_context_fails_when_in_transaction() {
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
 
         client
             .batch_execute(

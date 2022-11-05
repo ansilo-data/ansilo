@@ -2,9 +2,9 @@ use std::{any::TypeId, str::FromStr};
 
 use ansilo_core::{
     data::{
-        chrono::{NaiveDate, NaiveDateTime, NaiveTime, Weekday},
+        chrono::{NaiveDate, NaiveDateTime, NaiveTime},
         chrono_tz::Tz,
-        rust_decimal::{prelude::FromPrimitive, Decimal},
+        rust_decimal::Decimal,
         uuid::Uuid,
         DataValue, DateTimeWithTZ,
     },
@@ -100,29 +100,25 @@ unsafe fn from_numeric(datum: pg_sys::Datum) -> DataValue {
 }
 
 fn from_date(datum: pgx::Date) -> NaiveDate {
-    let (y, w, d) = datum.to_iso_week_date();
-    NaiveDate::from_isoywd(
-        y as _,
-        w as _,
-        Weekday::from_u8(d.number_days_from_monday()).unwrap(),
-    )
+    NaiveDate::from_num_days_from_ce(datum.to_julian_days() - 1721425)
 }
 
 fn from_time(datum: pgx::Time) -> NaiveTime {
-    let (h, m, s, p) = datum.as_hms_micro();
+    let (h, m, s, p) = datum.to_hms_micro();
     NaiveTime::from_hms_micro(h as _, m as _, s as _, p as _)
 }
 
 fn from_date_time(datum: pgx::Timestamp) -> NaiveDateTime {
-    NaiveDateTime::new(
-        from_date(pgx::Date::new(datum.date())),
-        from_time(pgx::Time::new(datum.time())),
-    )
+    // TODO: handle inf/-inf conversions better
+    let datetime: time::OffsetDateTime = datum.try_into().unwrap();
+    NaiveDateTime::from_timestamp(datetime.unix_timestamp() as _, datetime.nanosecond() as _)
 }
 
 fn from_date_time_tz(datum: pgx::TimestampWithTimeZone) -> DateTimeWithTZ {
-    let ts = datum.unix_timestamp();
-    let ns = datum.nanosecond();
+    // TODO: handle inf/-inf conversions better
+    let datetime: time::OffsetDateTime = datum.try_into().unwrap();
+    let ts = datetime.unix_timestamp();
+    let ns = datetime.nanosecond();
     // TODO: do we need timezones here?, dont think so. maybe just have UtcTimestamp type
     DateTimeWithTZ::new(NaiveDateTime::from_timestamp(ts, ns), Tz::UTC)
 }
@@ -134,6 +130,7 @@ fn to_uuid(datum: pgx::Uuid) -> Uuid {
 #[cfg(any(test, feature = "pg_test"))]
 #[pg_schema]
 mod tests {
+    use ansilo_core::data::rust_decimal::prelude::FromPrimitive;
     use ansilo_core::data::uuid;
 
     use super::*;
@@ -512,9 +509,10 @@ mod tests {
             assert_eq!(
                 from_datum(
                     pg_sys::DATEOID,
-                    pgx::Date::new(
+                    pgx::Date::try_from(
                         time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap()
                     )
+                    .unwrap()
                     .into_datum()
                     .unwrap()
                 )
@@ -544,7 +542,8 @@ mod tests {
             assert_eq!(
                 from_datum(
                     pg_sys::TIMEOID,
-                    pgx::Time::new(time::Time::from_hms_milli(7, 43, 11, 123).unwrap())
+                    pgx::Time::try_from(time::Time::from_hms_milli(7, 43, 11, 123).unwrap())
+                        .unwrap()
                         .into_datum()
                         .unwrap()
                 )
@@ -574,10 +573,11 @@ mod tests {
             assert_eq!(
                 from_datum(
                     pg_sys::TIMESTAMPOID,
-                    pgx::Timestamp::new(time::PrimitiveDateTime::new(
+                    pgx::Timestamp::try_from(time::PrimitiveDateTime::new(
                         time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap(),
                         time::Time::from_hms_milli(7, 43, 11, 123).unwrap()
                     ))
+                    .unwrap()
                     .into_datum()
                     .unwrap()
                 )
@@ -615,13 +615,11 @@ mod tests {
             assert_eq!(
                 from_datum(
                     pg_sys::TIMESTAMPTZOID,
-                    pgx::TimestampWithTimeZone::new(
-                        time::PrimitiveDateTime::new(
-                            time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap(),
-                            time::Time::from_hms_milli(7, 43, 11, 123).unwrap()
-                        ),
-                        time::UtcOffset::UTC
-                    )
+                    pgx::TimestampWithTimeZone::try_from(time::PrimitiveDateTime::new(
+                        time::Date::from_calendar_date(2020, time::Month::January, 5).unwrap(),
+                        time::Time::from_hms_milli(7, 43, 11, 123).unwrap()
+                    ),)
+                    .unwrap()
                     .into_datum()
                     .unwrap()
                 )

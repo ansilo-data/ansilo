@@ -173,5 +173,5 @@ unsafe fn node_to_ptr<T>(node: *mut c_void) -> *mut T {
     assert!((*node).consttype == pg_sys::INT8OID);
     assert!((*node).constbyval);
 
-    (*node).constvalue.ptr_cast()
+    (*node).constvalue.cast_mut_ptr::<T>()
 }

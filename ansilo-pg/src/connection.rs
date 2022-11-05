@@ -77,7 +77,7 @@ mod tests {
         let conf = PostgresConf {
             resources: ResourceConfig::default(),
             install_dir: PathBuf::from(
-                env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
+                env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/15".into()),
             ),
             postgres_conf_path: None,
             data_dir: PathBuf::from(format!(

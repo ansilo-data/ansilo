@@ -150,7 +150,17 @@ mod tests {
 
         let results = execute_query(
             r#"SELECT * FROM remote_query('sqlite_srv', 'SELECT ''2010-09-08T01:02:03''') AS t(col TIMESTAMP)"#,
-            |i| (i["col"].value::<pgx::Timestamp>().unwrap().to_string(),),
+            |i| {
+                ({
+                    let ts: time::PrimitiveDateTime = i["col"]
+                        .value::<pgx::Timestamp>()
+                        .unwrap()
+                        .try_into()
+                        .unwrap();
+
+                    ts.to_string()
+                },)
+            },
         );
 
         assert_eq!(results, vec![("2010-09-08 1:02:03.0".into(),)]);

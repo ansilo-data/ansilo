@@ -763,7 +763,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_scan_test_before_select_function_is_called_if_specified() {
+    fn before_select_function_is_called_if_specified() {
         setup_test("scan_before_select_cb");
 
         let results = execute_query(

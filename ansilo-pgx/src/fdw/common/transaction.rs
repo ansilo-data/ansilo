@@ -287,7 +287,7 @@ mod tests {
         let lock = LOCK.lock().unwrap();
         let test_name = test_name.into();
         let socket_path = socket_path.into();
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
 
         client
             .batch_execute(&format!(

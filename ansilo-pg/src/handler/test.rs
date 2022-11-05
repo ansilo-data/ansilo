@@ -40,7 +40,7 @@ pub async fn init_pg(test_name: &'static str, auth: &Authenticator) -> PostgresI
     let conf = Box::leak(Box::new(PostgresConf {
         resources: ResourceConfig::default(),
         install_dir: PathBuf::from(
-            std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/14".into()),
+            std::env::var("ANSILO_TEST_PG_DIR").unwrap_or("/usr/lib/postgresql/15".into()),
         ),
         postgres_conf_path: None,
         data_dir: PathBuf::from(format!("/tmp/ansilo-tests/main-pg-handler/{}", test_name)),

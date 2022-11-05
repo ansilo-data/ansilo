@@ -22,7 +22,7 @@ mod tests {
 
     #[pg_test]
     fn test_get_auth_context_valid() {
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
 
         client
             .batch_execute(
@@ -38,7 +38,7 @@ mod tests {
 
     #[pg_test]
     fn test_get_auth_context_fails_after_reset() {
-        let (mut client, _) = pgx_tests::client();
+        let (mut client, _) = pgx_tests::client().unwrap();
 
         client
             .batch_execute(

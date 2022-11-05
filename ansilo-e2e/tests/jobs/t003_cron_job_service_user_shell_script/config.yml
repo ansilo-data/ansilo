@@ -31,7 +31,7 @@ build:
     - sql: ${dir}/ansilo-sql/*.sql
 
 postgres:
-    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/14/}
+    install_dir: ${env:ANSILO_TEST_PG_DIR:/usr/lib/postgresql/15/}
     data_dir: ${arg:TEMP_DIR}/data
     listen_socket_dir_path: ${arg:TEMP_DIR}
     fdw_socket_path: /tmp//fdw.sock

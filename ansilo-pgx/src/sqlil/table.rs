@@ -221,7 +221,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_common_parse_entity_id_from_foreign_table_with_explicit_option() {
+    fn parse_entity_id_from_foreign_table_with_explicit_option() {
         let oid = Spi::connect(|mut client| {
             client.update(
                 r#"CREATE SERVER IF NOT EXISTS test_srv FOREIGN DATA WRAPPER ansilo_fdw"#,
@@ -311,7 +311,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_common_parse_entity_config_from_foreign_table_with_serialized_config_option() {
+    fn parse_entity_config_from_foreign_table_with_serialized_config() {
         let conf = EntityConfig::minimal(
             "test_entity",
             vec![EntityAttributeConfig::minimal("test_col", DataType::Int32)],
@@ -355,7 +355,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_common_parse_entity_config_from_foreign_table_with_user_defined_config() {
+    fn parse_entity_config_from_foreign_table_with_user_defined_config() {
         let oid = Spi::connect(|mut client| {
             client.update(
                 r#"
@@ -536,7 +536,7 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_fdw_common_get_entity_config_on_base_table_oid_returns_null() {
+    fn test_get_entity_config_on_base_table_oid_returns_null() {
         let entity = Spi::connect(|mut client| {
             client.update(
                 r#"
