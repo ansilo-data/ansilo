@@ -16,7 +16,7 @@ public class Float64DataType implements FixedSizeDataType {
 
     @Override
     public int getFixedSize() {
-        return 5;
+        return 9;
     }
 
     @Override
