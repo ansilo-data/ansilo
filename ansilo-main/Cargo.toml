@@ -28,6 +28,7 @@ serde_json = { workspace = true }
 signal-hook = "0.3"
 nix = { version = "^0.25", features = ["process"] }
 tokio = { workspace = true }
+dotenvy = "0.15.6"
 
 [dev-dependencies]
 ansilo-util-pgx-install = { path = "../ansilo-util/pgx-install" }

@@ -35,18 +35,17 @@ sources:
     options:
       jdbc_url: jdbc:mysql://my-customers-data-store:3306/db
       properties:
-        user: ansilouser
-        password: mysecretpass
+        user: ${env:MYSQL_USERNAME}
+        password: ${env:MYSQL_PASSWORD}
 
 build:
   stages:
     - sql: ${dir}/sql/*.sql
 ```
 
-:::caution
-The above example hard-codes sensitive passwords to provide a minimal example.
-It is recommended to store any sensitive values outside of the configuration and import
-them using the directives below.
+:::info
+You can import external values or secrets into your configuration
+using [directives](/fundamentals/configuration/#directives).
 :::
 
 ### Sections
@@ -64,13 +63,13 @@ them using the directives below.
 
 Directives enable you to import configuration values from external sources.
 
-| Directive                       | Replacement                                                                                                                                                                      |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `${env:ENV_VAR:default}`        | Environment variable `ENV_VAR` or `default` if the variable is not set                                                                                                           |
-| `${dir}`                        | The directory of the configuration file                                                                                                                                          |
-| `${arg:ARG_NAME}`               | The value passed to the CLI argument `-D ARG_NAME=value` when running ansilo                                                                                                     |
-| `${embed:example.yml}`          | Yaml from the file `example.yml`. Useful for configuration splitting.                                                                                                            |
-| `${fetch:scheme://uri}`         | Response from downloading `scheme://uri`. Supported schemes are `http`, `https`, `file` and `sh` (shell)                                                                               |
+| Directive                       | Replacement                                                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `${env:ENV_VAR:default}`        | Environment variable `ENV_VAR` or `default` if the variable is not set                                                |
+| `${dir}`                        | The directory of the configuration file                                                                               |
+| `${arg:ARG_NAME}`               | The value passed to the CLI argument `-D ARG_NAME=value` when running ansilo                                          |
+| `${embed:example.yml}`          | Yaml from the file `example.yml`. Useful for configuration splitting.                                                 |
+| `${fetch:scheme://uri}`         | Response from downloading `scheme://uri`. Supported schemes are `http`, `https`, `file` and `sh` (shell)              |
 | `${vault:mnt:/secret/path:key}` | Retrieves a secret from [HashiCorp Vault](https://www.vaultproject.io/). See [vault integration](/advanced/secrets/). |
 
 ### Postgres Configuration

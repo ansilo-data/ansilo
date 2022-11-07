@@ -1,5 +1,5 @@
 use std::{
-    env,
+    env, io,
     net::{IpAddr, Ipv4Addr},
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -10,7 +10,7 @@ use ansilo_core::{
     config::NodeConfig,
     err::{Context, Result},
 };
-use ansilo_logging::info;
+use ansilo_logging::{debug, info};
 use ansilo_pg::{conf::PostgresConf, PG_ADMIN_USER};
 use ansilo_proxy::conf::{HandlerConf, ProxyConf, TlsConf};
 use ansilo_util_pg::query::{pg_quote_identifier, pg_str_literal};
@@ -27,10 +27,24 @@ pub struct AppConf {
     pub pg: PostgresConf,
 }
 
+/// Loads the dotenv file if it exists
+fn load_dotenv(path: &Path) -> Result<()> {
+    match dotenvy::from_path(path) {
+        Ok(_) => Ok(()),
+        Err(dotenvy::Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        e @ Err(_) => e.map(|_| ()).context("Failed to load .env file"),
+    }
+}
+
 /// Initialises the node global config state
 pub fn init_conf(config_path: &Path, args: &Args) -> Result<AppConf> {
     info!("Loading configuration...");
     let config_loader = ConfigLoader::new();
+
+    if let Some(path) = config_path.parent().map(|p| p.join(".env")) {
+        debug!("Loading .env from {}", path.display());
+        load_dotenv(&path)?;
+    }
 
     let node: NodeConfig = config_loader
         .load(&config_path, args.config_args.iter().cloned().collect())
