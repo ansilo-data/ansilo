@@ -410,8 +410,13 @@ impl<'a> ProxySession<'a> {
         // Now that the session has finished, we attempt to clean the connection
         // to free up any temporary tables, transactions or other state.
         if !con.broken() {
+            if let Err(err) = con.execute("ROLLBACK").await {
+                warn!("Error while cleaning connection: {:?}", err);
+                con.set_broken();
+            }
+
             if let Err(err) = con.execute("DISCARD ALL").await {
-                warn!("Error while cleaning conneciton: {:?}", err);
+                warn!("Error while cleaning connection: {:?}", err);
                 con.set_broken();
             }
         }
