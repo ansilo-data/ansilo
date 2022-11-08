@@ -270,26 +270,25 @@ impl<'a> ProxySession<'a> {
             .filter(|(k, _)| ALLOWED_CLIENT_PARAMS.contains(k.as_str()))
             .collect::<Vec<(&String, &String)>>();
 
-        if params.is_empty() {
-            return Ok(());
-        }
+        let responses = if !params.is_empty() {
+            let query = params
+                .into_iter()
+                .map(|(k, v)| {
+                    format!(
+                        "SET SESSION {} = {};",
+                        pg_quote_identifier(k),
+                        pg_str_literal(v)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
 
-        let query = params
-            .into_iter()
-            .map(|(k, v)| {
-                format!(
-                    "SET SESSION {} = {};",
-                    pg_quote_identifier(k),
-                    pg_str_literal(v)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let responses = con
-            .execute_with_responses(query)
-            .await
-            .context("Failed to set connection parameters")?;
+            con.execute_with_responses(query)
+                .await
+                .context("Failed to set connection parameters")?
+        } else {
+            vec![]
+        };
 
         // First send the initial parameter statuses back to the client
         for (key, value) in con.initial_parameters().iter().cloned() {
