@@ -53,6 +53,18 @@ impl Authenticator {
             );
         }
 
+        if let Some(invalid) = conf.users.iter().find(|u| {
+            u.r#type
+                .as_password()
+                .map(|p| p.password.is_empty())
+                .unwrap_or(false)
+        }) {
+            bail!(
+                "User '{}' defined with empty password which is disallowed",
+                invalid.username
+            );
+        }
+
         Ok(Self {
             conf,
             providers: Arc::new(providers),
@@ -134,5 +146,24 @@ mod tests {
         let authenticator = Authenticator::init(conf).unwrap();
 
         assert_eq!(authenticator.get_user("mary").unwrap(), &conf.users[0]);
+    }
+
+    #[test]
+    fn test_empty_password_disallowed() {
+        let conf = Box::leak(Box::new(AuthConfig {
+            providers: vec![],
+            users: vec![UserConfig {
+                username: "test".into(),
+                description: None,
+                provider: None,
+                r#type: UserTypeOptions::Password(PasswordUserConfig {
+                    password: "".into(),
+                }),
+            }],
+            service_users: vec![],
+        }));
+
+        let res = Authenticator::init(conf);
+        res.err().unwrap();
     }
 }
