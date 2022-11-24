@@ -133,7 +133,7 @@ See [GRANT documentation](https://www.postgresql.org/current/sql-grant.html) for
 ### Granting access using JWT claims
 
 It is slightly more challenging to define access rules based when working with JWTs.
-In this cause we use the `auth_context()` function which returns a `jsonb` object containing the decoded token.
+In this case we use the `auth_context()` function which returns a `jsonb` object containing the decoded token.
 
 #### Using foreign table callbacks
 
