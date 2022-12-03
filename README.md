@@ -80,7 +80,7 @@ COMMENT ON COLUMN public.customers.id IS 'UUIDv4 identifier';
 #### 3. You can now query your data
 
 Use any postgres-compatible driver from any language, tool or `psql` to query your data.
-Ansilo also exposes a web interface which can be used to execute basic queries without install additional software.
+Ansilo also exposes a web interface which can be used to execute basic queries without installing additional software.
 
 ## Documentation
 
