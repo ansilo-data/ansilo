@@ -16,8 +16,8 @@ It enables efficient query execution by transpiling postgres-style SQL queries i
 
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://uploads-ssl.webflow.com/634643648780f64459633a43/638adc8377d1c713dc90412f_Ansilo%20-%20Docs%20-%20System%20Architecture-dark.svg">
-  <img alt="High-level design" src="https://uploads-ssl.webflow.com/634643648780f64459633a43/638adc4465a7e42c08632d36_Ansilo%20-%20Docs%20-%20System%20Architecture.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://uploads-ssl.webflow.com/634643648780f64459633a43/638ae11bc239dee569ad4cba_Ansilo%20-%20Docs%20-%20System%20Architecture-dark.png">
+  <img alt="High-level design" src="https://uploads-ssl.webflow.com/634643648780f64459633a43/638ae11c9a1618e38b992c1b_Ansilo%20-%20Docs%20-%20System%20Architecture.png">
 </picture>
 
 ## Just show me how
