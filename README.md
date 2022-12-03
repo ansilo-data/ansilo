@@ -84,7 +84,7 @@ Ansilo also exposes a web interface which can be used to execute basic queries w
 
 ## Documentation
 
-Check out [our documentation](https://docs.ansilo.io) for additional .
+Check out [our documentation](https://docs.ansilo.io) for more examples.
 
 ## License
 
