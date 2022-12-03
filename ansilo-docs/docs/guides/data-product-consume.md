@@ -64,7 +64,7 @@ UPDATE peer.customers SET name = '...' WHERE id = 123;
 
 -- Ingest data into our local datastore
 INSERT INTO sources.customers (id, name)
-SELECT * FROM id, name FROM peer.customers;
+SELECT id, name FROM peer.customers;
 ```
 
 ## Consuming programmatically
