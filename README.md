@@ -1,6 +1,6 @@
 ![Ansilo](https://uploads-ssl.webflow.com/634643648780f64459633a43/638ace9b90ec6df05064bc70_logo-with-text-sm.png)
 
-Ansilo is a stateless postgres container with JWT auth and an universal foreign data wrapper, making it simple to build interopable data products on top of your existing databases.
+Ansilo is a stateless postgres container with JWT auth and a universal foreign data wrapper, making it simple to build interopable data products on top of your existing databases.
 
 The vision for Ansilo is to massively reduce the burden of having data spread across multiple databases or vendors by leveraging postgres and [SQL/MED](https://en.wikipedia.org/wiki/SQL/MED) to provide a simple and standards-compliant interface to query, copy or move data across disparate systems.  
 
@@ -13,7 +13,6 @@ Check out [our getting started guide](https://docs.ansilo.io/getting-started/acc
 Ansilo is designed to help you expose analytical data from your applications and make it easy for others to consume. It does this by exposing postgres views  into your underlying database. 
 
 It enables efficient query execution by transpiling postgres-style SQL queries into the equivalent queries to be run on the underlying platform. Yet still supporting powerful postgres-specific SQL by running the necessary parts locally.
-
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://uploads-ssl.webflow.com/634643648780f64459633a43/638ae11bc239dee569ad4cba_Ansilo%20-%20Docs%20-%20System%20Architecture-dark.png">
@@ -85,7 +84,7 @@ Ansilo also exposes a web interface which can be used to execute basic queries w
 
 ## Documentation
 
-Check out [our documentation](https://docs.ansilo.io).
+Check out [our documentation](https://docs.ansilo.io) for additional .
 
 ## License
 
