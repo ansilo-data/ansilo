@@ -115,7 +115,6 @@ dependencies = [
  "ansilo-connectors-file-base",
  "ansilo-connectors-internal",
  "ansilo-connectors-jdbc-base",
- "ansilo-connectors-jdbc-cdata",
  "ansilo-connectors-jdbc-mssql",
  "ansilo-connectors-jdbc-mysql",
  "ansilo-connectors-jdbc-oracle",
@@ -208,21 +207,6 @@ dependencies = [
  "r2d2",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "ansilo-connectors-jdbc-cdata"
-version = "0.1.0"
-dependencies = [
- "ansilo-connectors-base",
- "ansilo-connectors-jdbc-base",
- "ansilo-core",
- "ansilo-logging",
- "itertools",
- "pretty_assertions",
- "serde",
- "serde_json",
- "serial_test",
 ]
 
 [[package]]

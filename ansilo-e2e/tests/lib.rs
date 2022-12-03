@@ -17,4 +17,3 @@ pub mod teradata;
 pub mod tls;
 pub mod web;
 pub mod vault;
-pub mod cdata;
