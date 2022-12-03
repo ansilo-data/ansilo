@@ -2,7 +2,7 @@
 
 Ansilo is a stateless postgres container with JWT auth and a universal foreign data wrapper, making it simple to build interopable data products on top of your existing databases.
 
-The vision for Ansilo is to massively reduce the burden of having data spread across multiple databases or vendors by leveraging postgres and [SQL/MED](https://en.wikipedia.org/wiki/SQL/MED) to provide a simple and standards-compliant interface to query, copy or move data across disparate systems.  
+The vision for Ansilo is to massively reduce the burden of having data spread across multiple databases or vendors by leveraging [PostgreSQL](https://postgresql.org/) and [SQL/MED](https://en.wikipedia.org/wiki/SQL/MED) to provide a simple and standards-compliant interface to query, copy or move data across disparate systems.  
 
 ## Get started
 
