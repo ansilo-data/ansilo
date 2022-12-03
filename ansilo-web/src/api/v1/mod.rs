@@ -9,10 +9,10 @@ pub mod catalog;
 pub mod node;
 pub mod query;
 
-pub(super) fn router(state: Arc<HttpApiState>) -> Router<HttpApiState> {
-    Router::with_state_arc(state.clone())
-        .nest("/node", node::router(state.clone()))
+pub(super) fn router(state: Arc<HttpApiState>) -> Router<Arc<HttpApiState>> {
+    Router::new()
+        .nest("/node", node::router())
         .nest("/catalog", catalog::router(state.clone()))
-        .nest("/auth", auth::router(state.clone()))
+        .nest("/auth", auth::router())
         .nest("/query", query::router(state.clone()))
 }

@@ -14,7 +14,7 @@ pub struct HealthCheck {
 }
 
 async fn handler(
-    State(state): State<HttpApiState>,
+    State(state): State<Arc<HttpApiState>>,
 ) -> Result<(StatusCode, Json<HealthCheck>), (StatusCode, &'static str)> {
     let subsystems = state.health().check().map_err(|e| {
         warn!("Failed to get health: {:?}", e);
@@ -36,6 +36,6 @@ async fn handler(
     ))
 }
 
-pub(super) fn router(state: Arc<HttpApiState>) -> Router<HttpApiState> {
-    Router::with_state_arc(state).route("/", routing::get(handler))
+pub(super) fn router() -> Router<Arc<HttpApiState>> {
+    Router::new().route("/", routing::get(handler))
 }

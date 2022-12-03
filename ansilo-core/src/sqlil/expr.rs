@@ -373,16 +373,16 @@ mod tests {
             DataValue::Float64(9876.54321),
             DataValue::Decimal(Decimal::new(123456789, 4)),
             DataValue::JSON("{\"foo\": \"bar\"}".into()),
-            DataValue::Date(chrono::NaiveDate::from_ymd(2020, 8, 12)),
-            DataValue::Time(chrono::NaiveTime::from_hms_nano(1, 2, 3, 12345)),
+            DataValue::Date(chrono::NaiveDate::from_ymd_opt(2020, 8, 12).unwrap()),
+            DataValue::Time(chrono::NaiveTime::from_hms_nano_opt(1, 2, 3, 12345).unwrap()),
             DataValue::DateTime(chrono::NaiveDateTime::new(
-                chrono::NaiveDate::from_ymd(2020, 8, 12),
-                chrono::NaiveTime::from_hms_nano(1, 2, 3, 12345),
+                chrono::NaiveDate::from_ymd_opt(2020, 8, 12).unwrap(),
+                chrono::NaiveTime::from_hms_nano_opt(1, 2, 3, 12345).unwrap(),
             )),
             DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                 chrono::NaiveDateTime::new(
-                    chrono::NaiveDate::from_ymd(2020, 8, 12),
-                    chrono::NaiveTime::from_hms_nano(1, 2, 3, 12345),
+                    chrono::NaiveDate::from_ymd_opt(2020, 8, 12).unwrap(),
+                    chrono::NaiveTime::from_hms_nano_opt(1, 2, 3, 12345).unwrap(),
                 ),
                 chrono_tz::UTC,
             )),

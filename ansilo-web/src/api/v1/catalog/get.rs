@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ansilo_connectors_base::interface::EntityDiscoverOptions;
 use ansilo_connectors_native_postgres::{PostgresEntitySearcher, UnpooledClient};
 use ansilo_core::{config::EntityConfig, err::Result, web::catalog::*};
@@ -14,7 +16,7 @@ use super::common::to_catalog;
 /// As a convention, we define the data catalog as all tables and
 /// views in the postgres "public" schema.
 pub(super) async fn handler(
-    State(state): State<HttpApiState>,
+    State(state): State<Arc<HttpApiState>>,
 ) -> Result<Json<Catalog>, (StatusCode, &'static str)> {
     // First retrieve an admin connection to postgres
     let mut con = state.pools().admin().await.map_err(|e| {

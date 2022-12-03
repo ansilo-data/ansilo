@@ -27,6 +27,18 @@ impl Decode for EntitySourceConfig {
     }
 }
 
+impl<'a> bincode::BorrowDecode<'a> for EntitySourceConfig {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'a>>(
+        decoder: &mut D,
+    ) -> Result<Self, DecodeError> {
+        Ok(Self {
+            data_source: String::borrow_decode(decoder)?,
+            options: serde_yaml::from_str(&String::borrow_decode(decoder)?)
+                .map_err(|e| DecodeError::OtherString(e.to_string()))?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io;

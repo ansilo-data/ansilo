@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ansilo_core::{
     config::{AuthProviderConfig, AuthProviderTypeConfig, NodeConfig},
     err::Result,
@@ -12,7 +14,7 @@ use crate::HttpApiState;
 /// Retrieves authentication methods for this node.
 /// This is a public endpoint.
 pub(super) async fn handler(
-    State(state): State<HttpApiState>,
+    State(state): State<Arc<HttpApiState>>,
 ) -> Result<Json<AuthMethods>, (StatusCode, &'static str)> {
     let mut methods = vec![];
 

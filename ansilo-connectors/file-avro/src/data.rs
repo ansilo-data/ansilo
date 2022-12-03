@@ -90,24 +90,30 @@ pub fn from_avro_value(val: AvroValue) -> Result<DataValue> {
         AvroValue::String(s) => DataValue::Utf8String(s),
         AvroValue::Union(_, b) => from_avro_value(*b)?,
         AvroValue::Date(d) => {
-            DataValue::Date(NaiveDate::from_ymd(1970, 1, 1) + Duration::days(d as _))
+            DataValue::Date(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap() + Duration::days(d as _))
         }
-        AvroValue::TimeMillis(t) => DataValue::Time(NaiveTime::from_num_seconds_from_midnight(
-            (t / 1000) as _,
-            ((t % 1000) * 1000_000) as _,
-        )),
-        AvroValue::TimeMicros(t) => DataValue::Time(NaiveTime::from_num_seconds_from_midnight(
-            (t / 1000_000) as _,
-            ((t % 1000_000) * 1000) as _,
-        )),
-        AvroValue::TimestampMillis(t) => DataValue::DateTime(NaiveDateTime::from_timestamp(
-            (t / 1000) as _,
-            ((t % 1000) * 1000_000) as _,
-        )),
-        AvroValue::TimestampMicros(t) => DataValue::DateTime(NaiveDateTime::from_timestamp(
-            (t / 1000_000) as _,
-            ((t % 1000_000) * 1000) as _,
-        )),
+        AvroValue::TimeMillis(t) => DataValue::Time(
+            NaiveTime::from_num_seconds_from_midnight_opt(
+                (t / 1000) as _,
+                ((t % 1000) * 1000_000) as _,
+            )
+            .unwrap(),
+        ),
+        AvroValue::TimeMicros(t) => DataValue::Time(
+            NaiveTime::from_num_seconds_from_midnight_opt(
+                (t / 1000_000) as _,
+                ((t % 1000_000) * 1000) as _,
+            )
+            .unwrap(),
+        ),
+        AvroValue::TimestampMillis(t) => DataValue::DateTime(
+            NaiveDateTime::from_timestamp_opt((t / 1000) as _, ((t % 1000) * 1000_000) as _)
+                .unwrap(),
+        ),
+        AvroValue::TimestampMicros(t) => DataValue::DateTime(
+            NaiveDateTime::from_timestamp_opt((t / 1000_000) as _, ((t % 1000_000) * 1000) as _)
+                .unwrap(),
+        ),
         AvroValue::Uuid(u) => DataValue::Uuid(u),
         _ => bail!("Unsupported avro type: {:?}", val),
     };
@@ -134,7 +140,7 @@ pub fn into_avro_value(val: DataValue) -> AvroValue {
         DataValue::Decimal(d) => AvroValue::String(d.to_string()),
         DataValue::JSON(j) => AvroValue::String(j),
         DataValue::Date(d) => AvroValue::Date(
-            d.signed_duration_since(NaiveDate::from_ymd(1970, 1, 1))
+            d.signed_duration_since(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap())
                 .num_days() as _,
         ),
         DataValue::Time(t) => AvroValue::TimeMicros(

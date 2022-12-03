@@ -60,17 +60,17 @@ fn test() {
     );
     assert_eq!(
         rows[0].get::<_, NaiveDate>(8),
-        NaiveDate::from_ymd(1973, 5, 19)
+        NaiveDate::from_ymd_opt(1973, 5, 19).unwrap()
     );
     assert_eq!(
         rows[0].get::<_, NaiveTime>(9),
-        NaiveTime::from_hms_micro(16, 40, 0, 1)
+        NaiveTime::from_hms_micro_opt(16, 40, 0, 1).unwrap()
     );
     assert_eq!(
         rows[0].get::<_, NaiveDateTime>(10),
         NaiveDateTime::new(
-            NaiveDate::from_ymd(2022, 9, 30),
-            NaiveTime::from_hms_micro(4, 3, 50, 1)
+            NaiveDate::from_ymd_opt(2022, 9, 30).unwrap(),
+            NaiveTime::from_hms_micro_opt(4, 3, 50, 1).unwrap()
         )
     );
 }

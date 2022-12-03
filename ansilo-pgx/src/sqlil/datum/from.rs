@@ -100,18 +100,19 @@ unsafe fn from_numeric(datum: pg_sys::Datum) -> DataValue {
 }
 
 fn from_date(datum: pgx::Date) -> NaiveDate {
-    NaiveDate::from_num_days_from_ce(datum.to_julian_days() - 1721425)
+    NaiveDate::from_num_days_from_ce_opt(datum.to_julian_days() - 1721425).unwrap()
 }
 
 fn from_time(datum: pgx::Time) -> NaiveTime {
     let (h, m, s, p) = datum.to_hms_micro();
-    NaiveTime::from_hms_micro(h as _, m as _, s as _, p as _)
+    NaiveTime::from_hms_micro_opt(h as _, m as _, s as _, p as _).unwrap()
 }
 
 fn from_date_time(datum: pgx::Timestamp) -> NaiveDateTime {
     // TODO: handle inf/-inf conversions better
     let datetime: time::OffsetDateTime = datum.try_into().unwrap();
-    NaiveDateTime::from_timestamp(datetime.unix_timestamp() as _, datetime.nanosecond() as _)
+    NaiveDateTime::from_timestamp_opt(datetime.unix_timestamp() as _, datetime.nanosecond() as _)
+        .unwrap()
 }
 
 fn from_date_time_tz(datum: pgx::TimestampWithTimeZone) -> DateTimeWithTZ {
@@ -120,7 +121,7 @@ fn from_date_time_tz(datum: pgx::TimestampWithTimeZone) -> DateTimeWithTZ {
     let ts = datetime.unix_timestamp();
     let ns = datetime.nanosecond();
     // TODO: do we need timezones here?, dont think so. maybe just have UtcTimestamp type
-    DateTimeWithTZ::new(NaiveDateTime::from_timestamp(ts, ns), Tz::UTC)
+    DateTimeWithTZ::new(NaiveDateTime::from_timestamp_opt(ts, ns).unwrap(), Tz::UTC)
 }
 
 fn to_uuid(datum: pgx::Uuid) -> Uuid {

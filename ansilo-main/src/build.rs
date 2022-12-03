@@ -138,7 +138,7 @@ impl BuildInfo {
 
     /// When the build occurred
     pub fn built_at(&self) -> chrono::DateTime<chrono::Utc> {
-        chrono::Utc.timestamp_millis(self.ts as _)
+        chrono::Utc.timestamp_millis_opt(self.ts as _).unwrap()
     }
 
     /// Stores the build info at the path specified in the node config

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 use ansilo_connectors_base::interface::EntityDiscoverOptions;
 use ansilo_connectors_native_postgres::{PostgresEntitySearcher, UnpooledClient};
@@ -17,7 +17,7 @@ use crate::{
 /// We define the private catalog as the tables and views outside of the "public"
 /// schema which the authenticated user has access to.
 pub(super) async fn handler(
-    State(state): State<HttpApiState>,
+    State(state): State<Arc<HttpApiState>>,
     Extension(con): Extension<ClientAuthenticatedPostgresConnection>,
 ) -> Result<Json<Catalog>, (StatusCode, &'static str)> {
     let con = con.0.lock().await;

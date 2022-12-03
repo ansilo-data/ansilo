@@ -50,7 +50,7 @@ pub struct HttpApi {
 
 impl HttpApi {
     /// The main api router
-    fn router(state: HttpApiState) -> Router<HttpApiState> {
+    fn router(state: HttpApiState) -> Router<()> {
         let state = Arc::new(state);
 
         // Build our middleware stack
@@ -77,8 +77,9 @@ impl HttpApi {
                 CorsLayer::new()
             });
 
-        Router::with_state_arc(state.clone())
+        Router::new()
             .nest("/api", api::router(state.clone()))
+            .with_state(state)
             .fallback_service(
                 get_service(ServeDir::new(Self::get_frontend_path()))
                     .handle_error(Self::handle_file_error),
@@ -163,7 +164,7 @@ impl HttpApi {
     fn server(
         rx: mpsc::Receiver<Result<Box<dyn IOStream>>>,
         mode: HttpMode,
-        svc: IntoMakeService<Router<HttpApiState>>,
+        svc: IntoMakeService<Router<()>>,
         mut shutdown_rx: broadcast::Receiver<()>,
     ) -> JoinHandle<Result<()>> {
         let server = axum::Server::builder(from_stream(ReceiverStream::new(rx)))

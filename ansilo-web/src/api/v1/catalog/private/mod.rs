@@ -6,8 +6,8 @@ use crate::{middleware::pg_auth, HttpApiState};
 
 pub mod get;
 
-pub(super) fn router(state: Arc<HttpApiState>) -> Router<HttpApiState> {
-    Router::with_state_arc(state.clone())
+pub(super) fn router(state: Arc<HttpApiState>) -> Router<Arc<HttpApiState>> {
+    Router::new()
         .route("/", routing::get(get::handler))
         .route_layer({
             let state = state.clone();

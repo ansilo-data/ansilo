@@ -12,7 +12,8 @@ use serde_json::json;
 fn test() {
     ansilo_logging::init_for_tests();
     ansilo_e2e::teradata::start_teradata();
-    let _teradata = ansilo_e2e::teradata::init_teradata_sql(current_dir!().join("teradata-sql/*.sql"));
+    let _teradata =
+        ansilo_e2e::teradata::init_teradata_sql(current_dir!().join("teradata-sql/*.sql"));
 
     let (instance, mut client) =
         ansilo_e2e::util::main::run_instance(current_dir!().join("config.yml"));
@@ -72,17 +73,17 @@ fn test() {
     );
     assert_eq!(
         rows[0].get::<_, NaiveDate>(12),
-        NaiveDate::from_ymd(2020, 12, 23)
+        NaiveDate::from_ymd_opt(2020, 12, 23).unwrap()
     );
     assert_eq!(
         rows[0].get::<_, NaiveTime>(13),
-        NaiveTime::from_hms(1, 2, 3)
+        NaiveTime::from_hms_opt(1, 2, 3).unwrap()
     );
     assert_eq!(
         rows[0].get::<_, NaiveDateTime>(14),
         NaiveDateTime::new(
-            NaiveDate::from_ymd(2018, 2, 1),
-            NaiveTime::from_hms(1, 2, 3)
+            NaiveDate::from_ymd_opt(2018, 2, 1).unwrap(),
+            NaiveTime::from_hms_opt(1, 2, 3).unwrap()
         )
     );
     assert_eq!(

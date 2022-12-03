@@ -130,20 +130,22 @@ where
     }
 
     fn read_time(d: [u8; 7]) -> Result<NaiveTime> {
-        Ok(NaiveTime::from_hms_nano(
+        Ok(NaiveTime::from_hms_nano_opt(
             d[0] as _,
             d[1] as _,
             d[2] as _,
             u32::from_be_bytes([d[3], d[4], d[5], d[6]]),
-        ))
+        )
+        .unwrap())
     }
 
     fn read_date(d: [u8; 6]) -> Result<NaiveDate> {
-        Ok(NaiveDate::from_ymd(
+        Ok(NaiveDate::from_ymd_opt(
             i32::from_be_bytes([d[0], d[1], d[2], d[3]]),
             d[4] as _,
             d[5] as _,
-        ))
+        )
+        .unwrap())
     }
 
     /// Reads a stream of data from the internal buf reader
@@ -579,7 +581,7 @@ mod tests {
 
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Date(NaiveDate::from_ymd(2020, 10, 21)))
+            Some(DataValue::Date(NaiveDate::from_ymd_opt(2020, 10, 21).unwrap()))
         );
     }
 
@@ -599,7 +601,7 @@ mod tests {
 
         assert_eq!(
             res.read_data_value().unwrap(),
-            Some(DataValue::Time(NaiveTime::from_hms_nano(12, 45, 23, 12345)))
+            Some(DataValue::Time(NaiveTime::from_hms_nano_opt(12, 45, 23, 12345).unwrap()))
         );
     }
 
@@ -623,8 +625,8 @@ mod tests {
         assert_eq!(
             res.read_data_value().unwrap(),
             Some(DataValue::DateTime(NaiveDateTime::new(
-                NaiveDate::from_ymd(2020, 10, 21),
-                NaiveTime::from_hms_nano(12, 45, 23, 12345)
+                NaiveDate::from_ymd_opt(2020, 10, 21).unwrap(),
+                NaiveTime::from_hms_nano_opt(12, 45, 23, 12345).unwrap()
             )))
         );
     }
@@ -654,8 +656,8 @@ mod tests {
             res.read_data_value().unwrap(),
             Some(DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                 NaiveDateTime::new(
-                    NaiveDate::from_ymd(2020, 10, 21),
-                    NaiveTime::from_hms_nano(12, 45, 23, 12345)
+                    NaiveDate::from_ymd_opt(2020, 10, 21).unwrap(),
+                    NaiveTime::from_hms_nano_opt(12, 45, 23, 12345).unwrap()
                 ),
                 Tz::Australia__Melbourne
             )))
@@ -686,8 +688,8 @@ mod tests {
             res.read_data_value().unwrap(),
             Some(DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                 NaiveDateTime::new(
-                    NaiveDate::from_ymd(2020, 10, 21),
-                    NaiveTime::from_hms_nano(12, 45, 23, 12345)
+                    NaiveDate::from_ymd_opt(2020, 10, 21).unwrap(),
+                    NaiveTime::from_hms_nano_opt(12, 45, 23, 12345).unwrap()
                 ),
                 Tz::Australia__Melbourne
             )))

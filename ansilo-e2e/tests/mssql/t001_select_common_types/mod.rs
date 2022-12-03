@@ -68,17 +68,17 @@ fn test() {
     assert_eq!(rows[0].get::<_, Vec<u8>>(11), b"BLOB".to_vec());
     assert_eq!(
         rows[0].get::<_, NaiveDate>(12),
-        NaiveDate::from_ymd(2020, 12, 23)
+        NaiveDate::from_ymd_opt(2020, 12, 23).unwrap()
     );
     assert_eq!(
         rows[0].get::<_, NaiveTime>(13),
-        NaiveTime::from_hms(1, 2, 3)
+        NaiveTime::from_hms_opt(1, 2, 3).unwrap()
     );
     assert_eq!(
         rows[0].get::<_, NaiveDateTime>(14),
         NaiveDateTime::new(
-            NaiveDate::from_ymd(2018, 2, 1),
-            NaiveTime::from_hms(1, 2, 3)
+            NaiveDate::from_ymd_opt(2018, 2, 1).unwrap(),
+            NaiveTime::from_hms_opt(1, 2, 3).unwrap()
         )
     );
     assert_eq!(

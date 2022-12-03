@@ -8,8 +8,8 @@ mod common;
 mod get;
 mod private;
 
-pub(super) fn router(state: Arc<HttpApiState>) -> Router<HttpApiState> {
-    Router::with_state_arc(state.clone())
+pub(super) fn router(state: Arc<HttpApiState>) -> Router<Arc<HttpApiState>> {
+    Router::new()
         .route("/", routing::get(get::handler))
-        .nest("/private", private::router(state.clone()))
+        .nest("/private", private::router(state))
 }

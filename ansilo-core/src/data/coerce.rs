@@ -632,7 +632,7 @@ impl DataValue {
     fn try_coerce_date(data: NaiveDate, r#type: &DataType) -> Result<DataValue> {
         Ok(match r#type {
             DataType::Date => Self::Date(data),
-            DataType::DateTime => Self::DateTime(data.and_hms(0, 0, 0)),
+            DataType::DateTime => Self::DateTime(data.and_hms_opt(0, 0, 0).unwrap()),
             DataType::Utf8String(_) => Self::Utf8String(data.format("%Y-%m-%d").to_string()),
             _ => bail!(
                 "No type coercion exists from type 'date' ({}) to {:?}",
@@ -646,7 +646,7 @@ impl DataValue {
         Ok(match r#type {
             DataType::Time => Self::Time(data),
             DataType::DateTime => {
-                Self::DateTime(NaiveDateTime::new(NaiveDate::from_ymd(1970, 1, 1), data))
+                Self::DateTime(NaiveDateTime::new(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(), data))
             }
             DataType::Utf8String(_) => Self::Utf8String(data.format("%H:%M:%S").to_string()),
             _ => bail!(
@@ -935,16 +935,16 @@ mod tests {
             ),
             (
                 vec![
-                    DataValue::Date(NaiveDate::from_ymd(2020, 10, 25)),
-                    DataValue::Time(NaiveTime::from_hms(16, 54, 32)),
+                    DataValue::Date(NaiveDate::from_ymd_opt(2020, 10, 25).unwrap()),
+                    DataValue::Time(NaiveTime::from_hms_opt(16, 54, 32).unwrap()),
                     DataValue::DateTime(NaiveDateTime::new(
-                        NaiveDate::from_ymd(2020, 10, 25),
-                        NaiveTime::from_hms(16, 54, 32),
+                        NaiveDate::from_ymd_opt(2020, 10, 25).unwrap(),
+                        NaiveTime::from_hms_opt(16, 54, 32).unwrap(),
                     )),
                     DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                         NaiveDateTime::new(
-                            NaiveDate::from_ymd(2020, 10, 25),
-                            NaiveTime::from_hms(16, 54, 32),
+                            NaiveDate::from_ymd_opt(2020, 10, 25).unwrap(),
+                            NaiveTime::from_hms_opt(16, 54, 32).unwrap(),
                         ),
                         Tz::UTC,
                     )),
@@ -963,11 +963,11 @@ mod tests {
                 ],
             ),
             (
-                vec![DataValue::Date(NaiveDate::from_ymd(2020, 10, 25))],
+                vec![DataValue::Date(NaiveDate::from_ymd_opt(2020, 10, 25).unwrap())],
                 vec![DataType::DateTime],
             ),
             (
-                vec![DataValue::Time(NaiveTime::from_hms_nano(12, 43, 56, 1234))],
+                vec![DataValue::Time(NaiveTime::from_hms_nano_opt(12, 43, 56, 1234).unwrap())],
                 vec![DataType::DateTime],
             ),
         ];

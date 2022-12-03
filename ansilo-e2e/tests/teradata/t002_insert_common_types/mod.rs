@@ -110,11 +110,11 @@ fn test_values() {
             ),
             (
                 "col_date".to_string(),
-                DataValue::Date(NaiveDate::from_ymd(2020, 12, 23)),
+                DataValue::Date(NaiveDate::from_ymd_opt(2020, 12, 23).unwrap()),
             ),
             (
                 "col_time".to_string(),
-                DataValue::Time(NaiveTime::from_hms(1, 2, 3)),
+                DataValue::Time(NaiveTime::from_hms_opt(1, 2, 3).unwrap()),
             ),
             (
                 "col_timestamp".to_string(),
