@@ -12,8 +12,3 @@ If you would like to see how Ansilo can help your organisation then check out so
 
 If you want to start developing with Ansilo then read through our [development guides](/category/getting-started/).
 
-:::info
-
-Ansilo is currently approaching its first Beta release. Stay tuned for more updates!
-
-:::
