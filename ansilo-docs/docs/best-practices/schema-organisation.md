@@ -13,10 +13,11 @@ Every node will have a `public` schema. This is a [postgres default](https://www
 and cannot be changed.
 
 :::info
-The `public` schema has a special meaning within an Ansilo node. All tables and views defined in the public
-schema will automatically be published in the node's data catalog through the query workbench. 
+The `public` schema has a special meaning within an Ansilo node. The structure of all tables and views defined in the public
+schema will automatically be published in the node's data catalog through the query workbench.
+Access to query the data still has to be granted normally. 
 
-It is important that only tables and views that are intended to be public are created in the `public` schema.
+It is important that only tables and views that are intended to be made accessible are created in the `public` schema.
 :::
 
 :::tip
