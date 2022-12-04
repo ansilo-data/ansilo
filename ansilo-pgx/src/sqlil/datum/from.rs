@@ -82,11 +82,10 @@ impl<T: FromDatum + 'static> ParseDatum<T> for T {
     }
 }
 
-/// TODO[low]: implement faster conversion using bit manipulation to translate across formats
 unsafe fn from_numeric(datum: pg_sys::Datum) -> DataValue {
     // @see https://doxygen.postgresql.org/numeric_8h_source.html#l00059
-    let numeric = pgx::Numeric::from_datum(datum, false).unwrap();
-    let num_str = numeric.0;
+    let numeric = pgx::AnyNumeric::from_datum(datum, false).unwrap();
+    let num_str = numeric.normalize();
 
     // Convert +/-Infinity and NaN's to null
     if num_str.starts_with("I") || num_str.starts_with("-I") || num_str.starts_with("N") {
@@ -131,15 +130,33 @@ fn to_uuid(datum: pgx::Uuid) -> Uuid {
 #[cfg(any(test, feature = "pg_test"))]
 #[pg_schema]
 mod tests {
+    use std::panic::{RefUnwindSafe, UnwindSafe};
+
     use ansilo_core::data::rust_decimal::prelude::FromPrimitive;
     use ansilo_core::data::uuid;
 
     use super::*;
 
-    fn datum_from_query<T: FromDatum + IntoDatum>(query: &'static str) -> Datum {
+    fn datum_from_query<T: FromDatum + IntoDatum>(query: &'static str) -> pg_sys::Datum {
         let res = Spi::connect(|client| {
             let data = Box::new(client.select(query, None, None).next().unwrap());
             let datum = data.by_ordinal(1).unwrap().value::<T>().unwrap();
+
+            Ok(Some(datum))
+        })
+        .unwrap();
+
+        res.into_datum().unwrap()
+    }
+
+    fn datum_from_query_cloned<T: FromDatum + IntoDatum + Clone + UnwindSafe + RefUnwindSafe>(
+        query: &'static str,
+    ) -> pg_sys::Datum {
+        let res = Spi::connect(|client| {
+            let data = Box::new(client.select(query, None, None).next().unwrap());
+            let datum = data.by_ordinal(1).unwrap().value::<T>().unwrap();
+            let datum =
+                pgx::PgMemoryContexts::TopTransactionContext.switch_to(move |_| datum.clone());
 
             Ok(Some(datum))
         })
@@ -152,7 +169,7 @@ mod tests {
     fn test_from_datum_i16() {
         unsafe {
             assert_eq!(
-                from_datum(pg_sys::INT2OID, pgx::Datum::from(123i16)).unwrap(),
+                from_datum(pg_sys::INT2OID, pg_sys::Datum::from(123i16)).unwrap(),
                 DataValue::Int16(123)
             );
         }
@@ -176,7 +193,7 @@ mod tests {
     fn test_from_datum_i32() {
         unsafe {
             assert_eq!(
-                from_datum(pg_sys::INT4OID, pgx::Datum::from(123i32)).unwrap(),
+                from_datum(pg_sys::INT4OID, pg_sys::Datum::from(123i32)).unwrap(),
                 DataValue::Int32(123)
             );
         }
@@ -200,7 +217,7 @@ mod tests {
     fn test_from_datum_i64() {
         unsafe {
             assert_eq!(
-                from_datum(pg_sys::INT8OID, pgx::Datum::from(123i64)).unwrap(),
+                from_datum(pg_sys::INT8OID, pg_sys::Datum::from(123i64)).unwrap(),
                 DataValue::Int64(123)
             );
         }
@@ -270,8 +287,8 @@ mod tests {
 
     #[pg_test]
     fn test_from_datum_numeric() {
-        fn make_numeric(num: impl Into<String>) -> Datum {
-            let num = pgx::Numeric(num.into());
+        fn make_numeric(num: impl Into<String>) -> pg_sys::Datum {
+            let num = pgx::AnyNumeric::from_str(num.into().as_str()).unwrap();
             let res = num.into_datum().unwrap();
             res
         }
@@ -302,7 +319,7 @@ mod tests {
             assert_eq!(
                 from_datum(
                     pg_sys::NUMERICOID,
-                    datum_from_query::<Numeric>("SELECT 987.654::numeric")
+                    datum_from_query_cloned::<AnyNumeric>("SELECT 987.654::numeric")
                 )
                 .unwrap(),
                 DataValue::Decimal(Decimal::from_f64(987.654).unwrap())
@@ -310,7 +327,7 @@ mod tests {
             assert_eq!(
                 from_datum(
                     pg_sys::NUMERICOID,
-                    datum_from_query::<Numeric>("SELECT 'Infinity'::numeric")
+                    datum_from_query_cloned::<AnyNumeric>("SELECT 'Infinity'::numeric")
                 )
                 .unwrap(),
                 DataValue::Null
@@ -318,7 +335,7 @@ mod tests {
             assert_eq!(
                 from_datum(
                     pg_sys::NUMERICOID,
-                    datum_from_query::<Numeric>("SELECT '-Infinity'::numeric")
+                    datum_from_query_cloned::<AnyNumeric>("SELECT '-Infinity'::numeric")
                 )
                 .unwrap(),
                 DataValue::Null
@@ -326,7 +343,7 @@ mod tests {
             assert_eq!(
                 from_datum(
                     pg_sys::NUMERICOID,
-                    datum_from_query::<Numeric>("SELECT 'NaN'::numeric")
+                    datum_from_query_cloned::<AnyNumeric>("SELECT 'NaN'::numeric")
                 )
                 .unwrap(),
                 DataValue::Null
@@ -518,7 +535,7 @@ mod tests {
                     .unwrap()
                 )
                 .unwrap(),
-                DataValue::Date(NaiveDate::from_ymd(2020, 1, 5))
+                DataValue::Date(NaiveDate::from_ymd_opt(2020, 1, 5).unwrap())
             );
         }
     }
@@ -532,7 +549,7 @@ mod tests {
                     datum_from_query::<pgx::Date>("SELECT '2020-03-18'::date")
                 )
                 .unwrap(),
-                DataValue::Date(NaiveDate::from_ymd(2020, 3, 18))
+                DataValue::Date(NaiveDate::from_ymd_opt(2020, 3, 18).unwrap())
             );
         }
     }
@@ -549,7 +566,7 @@ mod tests {
                         .unwrap()
                 )
                 .unwrap(),
-                DataValue::Time(NaiveTime::from_hms_milli(7, 43, 11, 123))
+                DataValue::Time(NaiveTime::from_hms_milli_opt(7, 43, 11, 123).unwrap())
             );
         }
     }
@@ -563,7 +580,7 @@ mod tests {
                     datum_from_query::<pgx::Time>("SELECT '23:50:42.123456'::time")
                 )
                 .unwrap(),
-                DataValue::Time(NaiveTime::from_hms_micro(23, 50, 42, 123456))
+                DataValue::Time(NaiveTime::from_hms_micro_opt(23, 50, 42, 123456).unwrap())
             );
         }
     }
@@ -584,8 +601,8 @@ mod tests {
                 )
                 .unwrap(),
                 DataValue::DateTime(NaiveDateTime::new(
-                    NaiveDate::from_ymd(2020, 1, 5),
-                    NaiveTime::from_hms_milli(7, 43, 11, 123)
+                    NaiveDate::from_ymd_opt(2020, 1, 5).unwrap(),
+                    NaiveTime::from_hms_milli_opt(7, 43, 11, 123).unwrap()
                 ))
             );
         }
@@ -603,8 +620,8 @@ mod tests {
                 )
                 .unwrap(),
                 DataValue::DateTime(NaiveDateTime::new(
-                    NaiveDate::from_ymd(2020, 1, 22),
-                    NaiveTime::from_hms_micro(23, 50, 42, 123456)
+                    NaiveDate::from_ymd_opt(2020, 1, 22).unwrap(),
+                    NaiveTime::from_hms_micro_opt(23, 50, 42, 123456).unwrap()
                 ))
             );
         }
@@ -627,8 +644,8 @@ mod tests {
                 .unwrap(),
                 DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                     NaiveDateTime::new(
-                        NaiveDate::from_ymd(2020, 1, 5),
-                        NaiveTime::from_hms_milli(7, 43, 11, 123)
+                        NaiveDate::from_ymd_opt(2020, 1, 5).unwrap(),
+                        NaiveTime::from_hms_milli_opt(7, 43, 11, 123).unwrap()
                     ),
                     Tz::UTC
                 ))
@@ -649,8 +666,8 @@ mod tests {
                 .unwrap(),
                 DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                     NaiveDateTime::new(
-                        NaiveDate::from_ymd(2020, 1, 22),
-                        NaiveTime::from_hms_micro(18, 50, 42, 123456)
+                        NaiveDate::from_ymd_opt(2020, 1, 22).unwrap(),
+                        NaiveTime::from_hms_micro_opt(18, 50, 42, 123456).unwrap()
                     ),
                     Tz::UTC
                 ))

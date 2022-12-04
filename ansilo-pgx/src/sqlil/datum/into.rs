@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use ansilo_core::{
     data::{
         chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Offset, TimeZone, Timelike},
@@ -71,7 +73,10 @@ pub unsafe fn into_datum(
             (data as i64).into_datum().unwrap()
         }
         (pg_sys::NUMERICOID, DataType::UInt64, DataValue::UInt64(data)) => {
-            pgx::Numeric(data.to_string()).into_datum().unwrap()
+            pgx::AnyNumeric::from_str(data.to_string().as_str())
+                .unwrap()
+                .into_datum()
+                .unwrap()
         }
         //
         (pg_sys::FLOAT4OID, DataType::Float32, DataValue::Float32(data)) => {
@@ -81,7 +86,10 @@ pub unsafe fn into_datum(
             data.into_datum().unwrap()
         }
         (pg_sys::NUMERICOID, DataType::Decimal(_), DataValue::Decimal(data)) => {
-            pgx::Numeric(data.to_string()).into_datum().unwrap()
+            pgx::AnyNumeric::from_str(data.to_string().as_str())
+                .unwrap()
+                .into_datum()
+                .unwrap()
         }
         //
         (pg_sys::JSONOID, DataType::JSON, DataValue::JSON(data)) => {
@@ -235,7 +243,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 into_datum_owned(pg_sys::INT2OID, DataType::Int32, DataValue::Null).unwrap(),
-                (true, pgx::Datum::from(0u8))
+                (true, pg_sys::Datum::from(0u8))
             );
         }
     }
@@ -245,7 +253,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 into_datum_owned(pg_sys::INT2OID, DataType::Int8, DataValue::Int8(-123)).unwrap(),
-                (false, pgx::Datum::from(-123i16))
+                (false, pg_sys::Datum::from(-123i16))
             );
         }
     }
@@ -255,7 +263,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 into_datum_owned(pg_sys::INT2OID, DataType::UInt8, DataValue::UInt8(255)).unwrap(),
-                (false, pgx::Datum::from(255i16))
+                (false, pg_sys::Datum::from(255i16))
             );
         }
     }
@@ -265,7 +273,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 into_datum_owned(pg_sys::INT2OID, DataType::Int16, DataValue::Int16(123)).unwrap(),
-                (false, pgx::Datum::from(123i16))
+                (false, pg_sys::Datum::from(123i16))
             );
         }
     }
@@ -276,7 +284,7 @@ mod tests {
             assert_eq!(
                 into_datum_owned(pg_sys::INT4OID, DataType::UInt16, DataValue::UInt16(1234))
                     .unwrap(),
-                (false, pgx::Datum::from(1234i32))
+                (false, pg_sys::Datum::from(1234i32))
             );
         }
     }
@@ -286,7 +294,7 @@ mod tests {
         unsafe {
             assert_eq!(
                 into_datum_owned(pg_sys::INT4OID, DataType::Int32, DataValue::Int32(123)).unwrap(),
-                (false, pgx::Datum::from(123i32))
+                (false, pg_sys::Datum::from(123i32))
             );
         }
     }
@@ -297,7 +305,7 @@ mod tests {
             assert_eq!(
                 into_datum_owned(pg_sys::INT8OID, DataType::UInt32, DataValue::UInt32(1234))
                     .unwrap(),
-                (false, pgx::Datum::from(1234i32))
+                (false, pg_sys::Datum::from(1234i32))
             );
         }
     }
@@ -308,7 +316,7 @@ mod tests {
             assert_eq!(
                 into_datum_owned(pg_sys::INT8OID, DataType::Int64, DataValue::Int64(-123456))
                     .unwrap(),
-                (false, pgx::Datum::from(-123456i64))
+                (false, pg_sys::Datum::from(-123456i64))
             );
         }
     }
@@ -324,8 +332,8 @@ mod tests {
             .unwrap();
             assert_eq!(is_null, false);
             assert_eq!(
-                Numeric::from_datum(datum, false).unwrap().0,
-                "12345678987654321".to_string()
+                AnyNumeric::from_datum(datum, false).unwrap().normalize(),
+                "12345678987654321"
             );
         }
     }
@@ -371,8 +379,8 @@ mod tests {
             .unwrap();
             assert_eq!(is_null, false);
             assert_eq!(
-                Numeric::from_datum(datum, false).unwrap().0,
-                "987654.321".to_string()
+                AnyNumeric::from_datum(datum, false).unwrap().normalize(),
+                "987654.321"
             );
         }
     }
@@ -480,7 +488,7 @@ mod tests {
                 into_datum_owned(
                     pg_sys::DATEOID,
                     DataType::Date,
-                    DataValue::Date(NaiveDate::from_ymd(2020, 1, 5))
+                    DataValue::Date(NaiveDate::from_ymd_opt(2020, 1, 5).unwrap())
                 )
                 .unwrap(),
                 (
@@ -503,7 +511,7 @@ mod tests {
                 into_datum_owned(
                     pg_sys::TIMEOID,
                     DataType::Time,
-                    DataValue::Time(NaiveTime::from_hms_milli(7, 43, 11, 123))
+                    DataValue::Time(NaiveTime::from_hms_milli_opt(7, 43, 11, 123).unwrap())
                 )
                 .unwrap(),
                 (
@@ -525,8 +533,8 @@ mod tests {
                     pg_sys::TIMESTAMPOID,
                     DataType::DateTime,
                     DataValue::DateTime(NaiveDateTime::new(
-                        NaiveDate::from_ymd(2020, 1, 5),
-                        NaiveTime::from_hms_milli(7, 43, 11, 123)
+                        NaiveDate::from_ymd_opt(2020, 1, 5).unwrap(),
+                        NaiveTime::from_hms_milli_opt(7, 43, 11, 123).unwrap()
                     ))
                 )
                 .unwrap(),
@@ -553,8 +561,8 @@ mod tests {
                     DataType::DateTimeWithTZ,
                     DataValue::DateTimeWithTZ(DateTimeWithTZ::new(
                         NaiveDateTime::new(
-                            NaiveDate::from_ymd(2020, 1, 5),
-                            NaiveTime::from_hms_milli(7, 43, 11, 123)
+                            NaiveDate::from_ymd_opt(2020, 1, 5).unwrap(),
+                            NaiveTime::from_hms_milli_opt(7, 43, 11, 123).unwrap()
                         ),
                         Tz::UTC
                     ))
@@ -633,7 +641,7 @@ mod tests {
                 into_datum_owned(
                     pg_sys::DATEOID,
                     DataType::Date,
-                    DataValue::Date(NaiveDate::from_ymd(2021, 1, 3))
+                    DataValue::Date(NaiveDate::from_ymd_opt(2021, 1, 3).unwrap())
                 )
                 .unwrap(),
                 (

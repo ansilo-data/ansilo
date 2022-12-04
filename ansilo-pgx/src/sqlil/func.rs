@@ -49,7 +49,7 @@ pub(super) unsafe fn convert_func_expr(
     let func_name = {
         let cached_func = PgSysCacheItem::<pg_sys::FormData_pg_proc>::search(
             pg_sys::SysCacheIdentifier_PROCOID as _,
-            [pgx::Datum::from((*node).funcid as Oid)],
+            [pg_sys::Datum::from((*node).funcid as Oid)],
         )
         .context("Failed to look up function from sys cache")?;
 

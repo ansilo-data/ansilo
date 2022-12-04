@@ -90,8 +90,9 @@ AS 'MODULE_PATHNAME', 'remote_query';
     name = "remote_query_functions"
 );
 
+#[no_mangle]
 #[pg_guard]
-pub fn remote_execute(fcinfo: FunctionCallInfo) -> Option<i64> {
+pub unsafe extern "C" fn remote_execute(fcinfo: FunctionCallInfo) -> pg_sys::Datum {
     let server_name = pg_getarg::<String>(fcinfo, 0).expect("server_name is null");
     let query = pg_getarg::<String>(fcinfo, 1).expect("query is null");
     let params = unsafe { parse_params(fcinfo, 2) }.unwrap();
@@ -100,6 +101,8 @@ pub fn remote_execute(fcinfo: FunctionCallInfo) -> Option<i64> {
 
     try_remote_execute(server_name, query.clone(), params)
         .with_context(|| format!("Failed to execute remote query: '{query}'"))
+        .unwrap()
+        .into_datum()
         .unwrap()
 }
 
@@ -120,8 +123,9 @@ fn try_remote_execute(
     Ok(query.execute_modify()?.map(|i| i as i64))
 }
 
+#[no_mangle]
 #[pg_guard]
-pub unsafe fn remote_query(fcinfo: FunctionCallInfo) -> Datum {
+pub unsafe extern "C" fn remote_query(fcinfo: FunctionCallInfo) -> Datum {
     // @see https://github.com/tcdi/pgx/blob/develop-v0.5.0/pgx-utils/src/rewriter.rs impl_table_srf
     struct ResultSetHolder {
         rs: *mut ResultSetReader<FdwResultSet>,
@@ -165,7 +169,7 @@ pub unsafe fn remote_query(fcinfo: FunctionCallInfo) -> Datum {
 
         let req_atts = (*funcctx.tuple_desc).natts as usize;
         let actual_atts = result.get_structure().cols.len();
-        
+
         if req_atts != actual_atts {
             pgx::error!("Failed to execute remote query: column count mismatch, defined {req_atts} columns on local query but remote query returned {actual_atts} columns");
         }

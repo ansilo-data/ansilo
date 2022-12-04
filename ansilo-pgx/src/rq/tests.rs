@@ -32,7 +32,7 @@ mod tests {
 
     fn setup_db(socket_path: impl Into<String>) {
         let socket_path = socket_path.into();
-        Spi::execute(|mut client| {
+        Spi::execute(|client| {
             client.update(
                 format!(
                     r#"
@@ -114,7 +114,7 @@ mod tests {
 
         let results = execute_query(
             r#"SELECT * FROM remote_query('sqlite_srv', 'SELECT 123.456') AS t(col DECIMAL(6, 3))"#,
-            |i| (i["col"].value::<pgx::Numeric>().unwrap().0,),
+            |i| (i["col"].value::<pgx::AnyNumeric>().unwrap().normalize().to_string(),),
         );
 
         assert_eq!(results, vec![("123.456".into(),)]);

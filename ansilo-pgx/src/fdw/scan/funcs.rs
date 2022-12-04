@@ -15,7 +15,7 @@ use ansilo_pg::fdw::{
 use itertools::Itertools;
 use pgx::{
     pg_sys::{
-        add_path, shm_toc, EquivalenceClass, EquivalenceMember, ForeignPath, ForeignScan,
+        add_path, shm_toc, Datum, EquivalenceClass, EquivalenceMember, ForeignPath, ForeignScan,
         ForeignScanState, JoinPathExtraData, List, Node, Oid, ParallelContext, Path, PathKey, Plan,
         PlannerInfo, RangeTblEntry, RelOptInfo, RestrictInfo, Size, TargetEntry, TupleTableSlot,
         UpperRelationKind,
@@ -296,7 +296,7 @@ pub unsafe extern "C" fn get_foreign_join_paths(
     {
         let epq_path = pg_sys::GetExistingLocalJoinPath(joinrel);
         if epq_path.is_null() {
-            elog(PgLogLevel::DEBUG3, "could not push down foreign join because a local path suitable for EPQ checks was not found");
+            pgx::debug3!("could not push down foreign join because a local path suitable for EPQ checks was not found");
             return;
         }
     }

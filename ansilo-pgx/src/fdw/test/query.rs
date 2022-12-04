@@ -33,7 +33,7 @@ pub(crate) fn explain_query_verbose(query: impl Into<String>) -> serde_json::Val
 
 fn explain_query_opt(query: impl Into<String>, verbose: bool) -> serde_json::Value {
     let query = query.into();
-    let json = Spi::connect(|mut client| {
+    let json = Spi::connect(|client| {
         let table = client
             .update(
                 &format!(

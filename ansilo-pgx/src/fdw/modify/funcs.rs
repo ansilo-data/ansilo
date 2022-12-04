@@ -8,7 +8,7 @@ use ansilo_core::{
 use ansilo_pg::fdw::proto::*;
 use pgx::{
     pg_sys::{
-        DropBehavior, EState, ExecRowMark, ForeignScan, ForeignScanState, Index, List,
+        Datum, DropBehavior, EState, ExecRowMark, ForeignScan, ForeignScanState, Index, List,
         LockClauseStrength, ModifyTable, ModifyTableState, Plan, PlanState, PlannerInfo,
         RangeTblEntry, Relation, ResultRelInfo, RowMarkType, TupleTableSlot,
     },

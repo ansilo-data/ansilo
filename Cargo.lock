@@ -3622,8 +3622,9 @@ dependencies = [
 
 [[package]]
 name = "pgx"
-version = "0.5.6"
-source = "git+https://github.com/tcdi/pgx.git?rev=4ad8a91#4ad8a91c450d5a3792ddf208f4789c68708f1125"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7652ea68f83ee6308d165826c0fde48d439bc6176b6ff91d202158840e58951f"
 dependencies = [
  "atomic-traits",
  "bitflags",
@@ -3651,8 +3652,9 @@ dependencies = [
 
 [[package]]
 name = "pgx-macros"
-version = "0.5.6"
-source = "git+https://github.com/tcdi/pgx.git?rev=4ad8a91#4ad8a91c450d5a3792ddf208f4789c68708f1125"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "893a2aa60e5172feea53db8ec17c5cd0e8c70aa68879fda4c8798fb74c67d7a0"
 dependencies = [
  "pgx-utils",
  "proc-macro2",
@@ -3663,8 +3665,9 @@ dependencies = [
 
 [[package]]
 name = "pgx-pg-config"
-version = "0.5.6"
-source = "git+https://github.com/tcdi/pgx.git?rev=4ad8a91#4ad8a91c450d5a3792ddf208f4789c68708f1125"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "604b0165c023ac7fa26d558b89caad6ce8e947dc37654c00356a5e72022e1db5"
 dependencies = [
  "dirs",
  "eyre",
@@ -3678,11 +3681,13 @@ dependencies = [
 
 [[package]]
 name = "pgx-pg-sys"
-version = "0.5.6"
-source = "git+https://github.com/tcdi/pgx.git?rev=4ad8a91#4ad8a91c450d5a3792ddf208f4789c68708f1125"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b56db285d63898b8b13ceeea3c63d269a46bdd302662312a120c743a5bf0036b"
 dependencies = [
  "bindgen",
  "eyre",
+ "libc",
  "memoffset 0.6.5",
  "once_cell",
  "pgx-macros",
@@ -3698,8 +3703,9 @@ dependencies = [
 
 [[package]]
 name = "pgx-tests"
-version = "0.5.6"
-source = "git+https://github.com/tcdi/pgx.git?rev=4ad8a91#4ad8a91c450d5a3792ddf208f4789c68708f1125"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b7359545fdddf10242c87f100502268ad155a9cd89c96b69813e6edd80863ac"
 dependencies = [
  "eyre",
  "libc",
@@ -3713,15 +3719,15 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "shutdown_hooks",
  "thiserror",
  "time 0.3.17",
 ]
 
 [[package]]
 name = "pgx-utils"
-version = "0.5.6"
-source = "git+https://github.com/tcdi/pgx.git?rev=4ad8a91#4ad8a91c450d5a3792ddf208f4789c68708f1125"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c63119438e1d7f44333908bacf40ec1aa1c6aaac5d8f5023d213a12f28f430e"
 dependencies = [
  "atty",
  "convert_case",
@@ -4812,12 +4818,6 @@ name = "shlex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43b2853a4d09f215c24cc5489c992ce46052d359b5109343cbafbf26bc62f8a3"
-
-[[package]]
-name = "shutdown_hooks"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6057adedbec913419c92996f395ba69931acbd50b7d56955394cd3f7bedbfa45"
 
 [[package]]
 name = "signal-hook"

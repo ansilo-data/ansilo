@@ -16,8 +16,9 @@ extension_sql!(
 
 /// In testing mode we create a "null_fdw" that returns no data
 /// This is useful for some tests
+#[no_mangle]
 #[pg_guard]
-pub fn null_fdw_handler() -> pg_sys::Datum {
+pub extern "C" fn null_fdw_handler() -> pg_sys::Datum {
     // Initialise the FDW routine struct with memory allocated by rust
     let mut handler = PgBox::<FdwRoutine>::alloc_node(pg_sys::NodeTag_T_FdwRoutine);
 

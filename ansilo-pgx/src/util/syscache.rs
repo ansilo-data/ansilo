@@ -1,7 +1,4 @@
-use pgx::{
-    pg_sys::{self, HeapTupleData, Oid},
-    *,
-};
+use pgx::pg_sys::{self, Datum, HeapTupleData, Oid};
 use std::ops::Deref;
 
 /// A reference to an item in the sys cache
@@ -59,9 +56,10 @@ impl<'a, T> Drop for PgSysCacheItem<'a, T> {
 }
 
 #[cfg(any(test, feature = "pg_test"))]
-#[pg_schema]
+#[pgx::pg_schema]
 mod tests {
     use super::*;
+    use pgx::*;
 
     #[pg_test]
     fn test_util_sys_cache_search_valid() {
@@ -70,7 +68,7 @@ mod tests {
         let func_name = {
             let cached_func = PgSysCacheItem::<pg_sys::FormData_pg_proc>::search(
                 pg_sys::SysCacheIdentifier_PROCOID as _,
-                [pgx::Datum::from(2108)], // oid for SUM(int)
+                [pg_sys::Datum::from(2108)], // oid for SUM(int)
             )
             .unwrap();
 
@@ -84,7 +82,7 @@ mod tests {
     fn test_util_sys_cache_search_invalid() {
         let cached_func = PgSysCacheItem::<pg_sys::FormData_pg_proc>::search(
             pg_sys::SysCacheIdentifier_PROCOID as _,
-            [pgx::Datum::from(999999)],
+            [Datum::from(999999)],
         );
 
         assert!(cached_func.is_none());

@@ -1,7 +1,7 @@
 use std::ffi::c_void;
 
 use pgx::{
-    pg_sys::{makeConst, List},
+    pg_sys::{makeConst, Datum, List},
     *,
 };
 

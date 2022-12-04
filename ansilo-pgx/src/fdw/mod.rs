@@ -39,7 +39,8 @@ use pgx::{
 /// The fdw handler initialisation function
 /// @see https://www.postgresql.org/docs/14/fdw-functions.html
 #[pg_guard]
-pub fn ansilo_fdw_handler() -> pg_sys::Datum {
+#[no_mangle]
+pub extern "C" fn ansilo_fdw_handler() -> pg_sys::Datum {
     // Initialise the FDW routine struct with memory allocated by rust
     let mut handler = PgBox::<FdwRoutine>::alloc_node(pg_sys::NodeTag_T_FdwRoutine);
 

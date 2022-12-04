@@ -3,7 +3,7 @@ use ansilo_core::{
     sqlil,
 };
 use pgx::{
-    pg_sys::{self, FormData_pg_operator, Node},
+    pg_sys::{self, Datum, FormData_pg_operator, Node},
     *,
 };
 

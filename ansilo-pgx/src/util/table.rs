@@ -66,7 +66,7 @@ mod tests {
 
     #[pg_test]
     fn test_util_open_get_table() {
-        let oid = Spi::connect(|mut client| {
+        let oid = Spi::connect(|client| {
             client.update(
                 r#"CREATE TABLE IF NOT EXISTS "dummy_table" (col INTEGER)"#,
                 None,

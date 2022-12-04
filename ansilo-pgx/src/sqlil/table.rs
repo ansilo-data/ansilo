@@ -480,7 +480,7 @@ mod tests {
 
     #[pg_test]
     fn test_fdw_common_get_entity_config_on_table() {
-        let entity: JsonB = Spi::connect(|mut client| {
+        let entity: JsonB = Spi::connect(|client| {
             client.update(
                 r#"
                 CREATE SERVER IF NOT EXISTS test_srv 
@@ -537,7 +537,7 @@ mod tests {
 
     #[pg_test]
     fn test_get_entity_config_on_base_table_oid_returns_null() {
-        let entity = Spi::connect(|mut client| {
+        let entity = Spi::connect(|client| {
             client.update(
                 r#"
                 CREATE TABLE IF NOT EXISTS "example_base_table" 

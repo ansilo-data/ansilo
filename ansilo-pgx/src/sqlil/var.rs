@@ -56,7 +56,7 @@ mod tests {
 
     #[pg_test]
     fn test_sqlil_convert_var_col() {
-        Spi::connect(|mut client| {
+        Spi::connect(|client| {
             let _ = client.update(
                 r#"
             CREATE SERVER dummy_srv FOREIGN DATA WRAPPER null_fdw;
@@ -74,7 +74,7 @@ mod tests {
 
     #[pg_test]
     fn test_sqlil_convert_var_col_with_explicit_version() {
-        Spi::connect(|mut client| {
+        Spi::connect(|client| {
             let _ = client.update(
                 r#"
             CREATE SERVER dummy_srv FOREIGN DATA WRAPPER null_fdw;

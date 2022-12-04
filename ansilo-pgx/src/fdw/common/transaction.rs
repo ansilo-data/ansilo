@@ -89,12 +89,11 @@ pub(crate) unsafe fn begin_remote_transaction(con: &Arc<FdwIpcConnection>) -> Re
             } else {
                 PgLogLevel::WARNING
             };
-            pgx::elog(
+            pgx::ereport!(
                 log_level,
-                &format!(
-                    "Transactions are not supported on connection {}",
-                    con.data_source_id.clone()
-                ),
+                PgSqlErrorCode::ERRCODE_INTERNAL_ERROR,
+                "Transactions are not supported on connection {}",
+                con.data_source_id.clone()
             );
         }
         Ok(res) => bail!(
