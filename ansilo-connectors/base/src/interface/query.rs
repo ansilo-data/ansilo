@@ -6,6 +6,7 @@ use ansilo_core::{
     sqlil,
 };
 use bincode::{Decode, Encode};
+use serde::{Deserialize, Serialize};
 
 use crate::common::data::QueryHandleWriter;
 
@@ -81,7 +82,7 @@ impl QueryInputStructure {
 }
 
 /// A string representation of a query, used mainly for logging
-#[derive(Debug, Clone, PartialEq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Encode, Decode)]
 pub struct LoggedQuery {
     query: String,
     params: Vec<String>,

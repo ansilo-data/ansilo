@@ -67,8 +67,9 @@ enum FdwQueryState<TConnector: Connector> {
     ExecutedQuery(
         QueryHandleWrite<TConnector::TQueryHandle>,
         ResultSetRead<TConnector::TResultSet>,
+        LoggedQuery,
     ),
-    ExecutedModify(QueryHandleWrite<TConnector::TQueryHandle>),
+    ExecutedModify(QueryHandleWrite<TConnector::TQueryHandle>, LoggedQuery),
 }
 
 impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
@@ -525,10 +526,10 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
 
         debug!("Logging query on {}", self.data_source_id);
         let query = handle.0.logged()?;
-        self.log.record(&self.data_source_id, query)?;
+        self.log.record(&self.data_source_id, query.clone())?;
 
         *Self::query(&mut self.queries, query_id)? =
-            FdwQueryState::ExecutedQuery(handle, ResultSetRead(result_set));
+            FdwQueryState::ExecutedQuery(handle, ResultSetRead(result_set), query);
 
         Ok(row_structure)
     }
@@ -544,9 +545,9 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         query
             .other_mut()
             .insert("affected".into(), format!("{:?}", affected_rows));
-        self.log.record(&self.data_source_id, query)?;
+        self.log.record(&self.data_source_id, query.clone())?;
 
-        *Self::query(&mut self.queries, query_id)? = FdwQueryState::ExecutedModify(handle);
+        *Self::query(&mut self.queries, query_id)? = FdwQueryState::ExecutedModify(handle, query);
 
         Ok(affected_rows)
     }
@@ -610,8 +611,8 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
         );
 
         *Self::query(&mut self.queries, query_id)? = match query {
-            FdwQueryState::ExecutedQuery(mut handle, _)
-            | FdwQueryState::ExecutedModify(mut handle) => {
+            FdwQueryState::ExecutedQuery(mut handle, _, _)
+            | FdwQueryState::ExecutedModify(mut handle, _) => {
                 handle.0.restart()?;
                 FdwQueryState::Prepared(handle)
             }
@@ -625,14 +626,26 @@ impl<'a, TConnector: Connector> FdwConnection<'a, TConnector> {
     }
 
     fn explain_query(&mut self, query_id: QueryId, verbose: bool) -> Result<String> {
-        let res = TConnector::TQueryPlanner::explain_query(
-            self.connection.get()?,
-            &*Self::entities(self.entities)?,
-            Self::query(&mut self.queries, query_id)?.current()?,
-            verbose,
-        )?;
+        let val = match Self::query(&mut self.queries, query_id)? {
+            // if planning phase, explain the query using the connector
+            FdwQueryState::Planning(q) => TConnector::TQueryPlanner::explain_query(
+                self.connection.get()?,
+                &*Self::entities(self.entities)?,
+                q,
+                verbose,
+            )?,
+            // if the query has executed, use the logged query
+            FdwQueryState::ExecutedQuery(_, _, q) | FdwQueryState::ExecutedModify(_, q) => {
+                if verbose {
+                    serde_json::to_value(q).context("Failed to convert LoggedQuery to JSON")?
+                } else {
+                    serde_json::Value::String(q.query().to_string())
+                }
+            }
+            q @ _ => bail!("Invalid state '{}' to explain query", q),
+        };
 
-        let json = serde_json::to_string(&res).context("Failed to encode explain state to JSON")?;
+        let json = serde_json::to_string(&val).context("Failed to encode explain state to JSON")?;
 
         Ok(json)
     }
@@ -773,7 +786,7 @@ impl<TConnector: Connector> FdwQueryState<TConnector> {
 
     fn result_set(&mut self) -> Result<&mut ResultSetRead<TConnector::TResultSet>> {
         Ok(match self {
-            FdwQueryState::ExecutedQuery(_, result_set) => result_set,
+            FdwQueryState::ExecutedQuery(_, result_set, _) => result_set,
             _ => bail!("Expecting query state to be 'executed' found {}", self),
         })
     }
@@ -786,8 +799,8 @@ impl<TConnector: Connector> Display for FdwQueryState<TConnector> {
             FdwQueryState::Planning(_) => "planning",
             FdwQueryState::Compiled(_) => "compiled",
             FdwQueryState::Prepared(_) => "prepared",
-            FdwQueryState::ExecutedQuery(_, _) => "executed-query",
-            FdwQueryState::ExecutedModify(_) => "executed-modify",
+            FdwQueryState::ExecutedQuery(_, _, _) => "executed-query",
+            FdwQueryState::ExecutedModify(_, _) => "executed-modify",
         })
     }
 }

@@ -8,3 +8,4 @@ pub mod t007_transactions;
 pub mod t008_remote_query;
 pub mod t009_remote_query_wrapper;
 pub mod t010_merge;
+pub mod t011_explain_query;
