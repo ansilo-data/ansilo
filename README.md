@@ -19,7 +19,7 @@ It enables efficient query execution by transpiling postgres-style SQL queries i
   <img alt="High-level design" src="https://uploads-ssl.webflow.com/634643648780f64459633a43/638ae11c9a1618e38b992c1b_Ansilo%20-%20Docs%20-%20System%20Architecture.png">
 </picture>
 
-## Just show me how
+## Show me how it works
 
 #### 1. Define your `ansilo.yml`:
 
@@ -81,6 +81,7 @@ COMMENT ON COLUMN public.customers.id IS 'UUIDv4 identifier';
 
 Use any postgres-compatible driver from any language, tool or `psql` to query your data.
 Ansilo also exposes a web interface which can be used to execute basic queries without installing additional software.
+Other Ansilo nodes may query or modify the data from your node by referencing it in their sources.
 
 ## Documentation
 

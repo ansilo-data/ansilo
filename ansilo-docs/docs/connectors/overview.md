@@ -5,7 +5,7 @@ sidebar_position: 1
 # Overview
 
 Ansilo supports the most prevalent relational, NoSQL and other types of data sources.
-We will keep adding support for new data sources, feel free to [contact us](/) and submit a feature request for your data store!
+We will keep adding support for new data sources, feel free to [contact us](https://ansilo.io/contact) and submit a feature request for your data store!
 
 ## Support Matrix
 
