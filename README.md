@@ -10,9 +10,9 @@ Check out [our getting started guide](https://docs.ansilo.io/getting-started/acc
 
 ## About
 
-Ansilo is designed to help you expose analytical data from your applications and make it easy for others to consume. It does this by exposing postgres views  into your underlying database. 
+Ansilo is designed to help you expose analytical data from your applications and make it easy for others to consume. It does this by exposing postgres views into your underlying database. 
 
-It enables efficient query execution by transpiling postgres-style SQL queries into the equivalent queries to be run on the underlying platform. Yet still supporting powerful postgres-specific SQL by running the necessary parts locally.
+It enables efficient query execution by transpiling postgres-style SQL queries into the equivalent queries to be run on the underlying platform. Yet still supporting powerful postgres-specific SQL by running the necessary parts locally. See [supported databases](https://docs.ansilo.io/connectors/overview/).
 
 #### Anatomy of a node
 
