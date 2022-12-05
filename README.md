@@ -58,7 +58,7 @@ build:
     - sql: ${dir}/sql/*.sql
 ```
 
-#### 2. Configure your postgres:
+#### 2. Define your sql:
 
 ```sql
 -- Create a schema for our data source
