@@ -14,10 +14,20 @@ Ansilo is designed to help you expose analytical data from your applications and
 
 It enables efficient query execution by transpiling postgres-style SQL queries into the equivalent queries to be run on the underlying platform. Yet still supporting powerful postgres-specific SQL by running the necessary parts locally.
 
+#### Anatomy of a node
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://uploads-ssl.webflow.com/634643648780f64459633a43/638ae11bc239dee569ad4cba_Ansilo%20-%20Docs%20-%20System%20Architecture-dark.png">
   <img alt="High-level design" src="https://uploads-ssl.webflow.com/634643648780f64459633a43/638ae11c9a1618e38b992c1b_Ansilo%20-%20Docs%20-%20System%20Architecture.png">
 </picture>
+
+#### Creating a data ecosystem
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://uploads-ssl.webflow.com/634643648780f64459633a43/638dac9157859fd453ee6c0d_Ansilo%20-%20Docs%20-%20Use%20case%20-%20Data%20Mesh-dark.png">
+  <img alt="Data Mesh" src="https://uploads-ssl.webflow.com/634643648780f64459633a43/638dac9026be9b2aebbbd3ac_Ansilo%20-%20Docs%20-%20Use%20case%20-%20Data%20Mesh.png">
+</picture>
+
 
 ## Show me how it works
 
